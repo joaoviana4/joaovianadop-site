@@ -79,9 +79,9 @@
       display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--gap);
       padding: 0 var(--pad) var(--pad); list-style: none;
     }
-    .card a { position: relative; display: block; aspect-ratio: 16 / 9; overflow: hidden; background: #111; }
+    .card a { position: relative; display: block; aspect-ratio: 4 / 3; overflow: hidden; background: #111; }
     .card .media { position: absolute; inset: 0; transition: transform 1.2s var(--ease), filter .6s var(--ease); }
-    .card .media img { filter: brightness(.92); }
+    .card .media img { filter: brightness(.92); object-position: var(--pos, 50% 30%); }
     .card .info {
       position: absolute; inset: 0; z-index: 2;
       display: flex; flex-direction: column; justify-content: space-between;
@@ -107,6 +107,7 @@
     .p-artist { font-family: "Instrument Serif", serif; font-style: italic; font-size: clamp(22px, 3vw, 36px); color: var(--muted); }
     .player { position: relative; margin-top: clamp(32px, 6vh, 64px); aspect-ratio: 16 / 9; width: 100%; overflow: hidden; background: #111; }
     .player > img, .player > .ph { position: absolute; inset: 0; }
+    .player > img { object-fit: contain; background: #000; }
     .player button { position: absolute; inset: 0; display: grid; place-items: center; z-index: 2; }
     .player .play { width: 84px; height: 84px; border-radius: 50%; border: 1px solid rgba(255,255,255,.5); display: grid; place-items: center; transition: transform .4s var(--ease), background .4s; backdrop-filter: blur(4px); }
     .player button:hover .play { transform: scale(1.08); background: rgba(255,255,255,.1); }
@@ -223,9 +224,9 @@
       { slug: "cartas-na-mesa", title: "Cartas na Mesa", artist: "Van Zee", type: "Music Video", year: 2026, dir: "Ruben Mendes, Tomás Freitas", role: "Director of Photography", yt: "B7VOs2LPC-Q", h: 350 },
       { slug: "quase-nada", title: "Quase Nada", artist: "Ed", type: "Music Video", year: 2026, dir: "Mário ARV", role: "Director of Photography", yt: "iVH0_Aq6lw4", h: 190 },
       { slug: "desculpa", title: "desculpa", artist: "Victoria Leuca", type: "Live Session", year: 2026, role: "Director of Photography", yt: "yvVUh4XmQJc", cover: "desculpa" },
-      { slug: "so", title: "só", artist: "Victoria Leuca", type: "Music Video", year: 2025, dir: "João Viana, João Barbosa, Vasco Souto", role: "Co-director, Director of Photography, Editor, Colorist", yt: "cEUa3SJD_sw", cover: "so" },
+      { slug: "so", title: "só", artist: "Victoria Leuca", type: "Music Video", year: 2025, dir: "João Viana, João Barbosa, Vasco Souto", role: "Co-director, Director of Photography, Editor, Colorist", yt: "cEUa3SJD_sw", cover: "so", pos: "40% 50%" },
       { slug: "nada-demais", title: "Nada Demais", artist: "Beatriz Caixinha feat. Rita Onofre", type: "Music Video", year: 2025, role: "Director of Photography", yt: "1KeOU6nRaD4", cover: "nada-demais" },
-      { slug: "auto-de-fe", title: "Auto de Fé", type: "Series Pilot", year: 2025, dir: "José P. Miguel", role: "Director of Photography, Colorist", cover: "auto-de-fe" },
+      { slug: "auto-de-fe", title: "Auto de Fé", type: "Series Pilot", year: 2025, dir: "José P. Miguel", role: "Director of Photography, Colorist", cover: "auto-de-fe", pos: "30% 50%" },
       { slug: "a-grande-viagem", title: "A Grande Viagem Rumo ao Recorde Mundial", type: "Documentary", year: 2025, dir: "João Viana", role: "Director, Director of Photography", yt: "wmvXtrDpZuk", cover: "a-grande-viagem" },
       { slug: "alegria", title: "Alegria", type: "", year: null, dir: "João Viana", role: "Director, Director of Photography", cover: "alegria" },
       { slug: "viarco", title: "Viarco", type: "Commercial", year: 2025, role: "Creative Director, Director of Photography", soon: true, cover: "viarco" },
@@ -243,7 +244,7 @@
     const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     const coverSrc = p => `assets/covers/${p.cover}.jpg`;
     const media = (p, label) => p.cover
-      ? `<img src="${coverSrc(p)}" alt="${esc(p.title)} — still" loading="lazy" decoding="async">`
+      ? `<img src="${coverSrc(p)}" alt="${esc(p.title)} — still" loading="lazy" decoding="async"${p.pos ? ` style="--pos:${p.pos}"` : ""}>`
       : `<div class="ph" style="position:absolute;inset:0;--h:${p.h ?? 30}"><span class="tag">${label}</span></div>`;
     $("#y").textContent = new Date().getFullYear();
 
