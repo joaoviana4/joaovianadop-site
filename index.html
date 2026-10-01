@@ -7,7 +7,7 @@
   <meta name="description" content="João Viana — Director of Photography based in Lisbon. Music videos, short films, commercials.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500&family=Instrument+Serif:ital@0;1&family=Unbounded:wght@800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #000;
@@ -43,7 +43,7 @@
     .mini { font-size: 13px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; opacity: 0; pointer-events: none; transition: opacity .3s; }
     body.small-name .mini { opacity: 1; pointer-events: auto; }
     .masthead { text-align: center; padding: clamp(40px, 9vh, 110px) var(--pad) clamp(48px, 10vh, 120px); }
-    .masthead h1 { font-weight: 300; font-size: clamp(52px, 10.5vw, 170px); line-height: .9; letter-spacing: -.04em; }
+    .masthead h1 { font-family: "Unbounded", sans-serif; font-weight: 800; text-transform: uppercase; font-size: clamp(34px, 7.6vw, 128px); line-height: .95; letter-spacing: -.01em; }
     .masthead p { margin-top: clamp(14px, 2vh, 24px); font-size: 12px; letter-spacing: .3em; text-transform: uppercase; color: var(--muted); }
     body.small-name .masthead { display: none; }
     nav a { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); transition: color .3s; }
@@ -76,28 +76,37 @@
 
     /* ---------- thumbnail grid ---------- */
     .grid {
-      display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--gap);
+      display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); column-gap: var(--gap); row-gap: clamp(28px, 3vw, 44px);
       padding: 0 var(--pad) var(--pad); list-style: none;
     }
-    .card a { position: relative; display: block; aspect-ratio: 4 / 3; overflow: hidden; background: #111; }
-    .card .media { position: absolute; inset: 0; transition: transform 1.2s var(--ease), filter .6s var(--ease); }
-    .card .media img { filter: brightness(.92); object-position: var(--pos, 50% 30%); }
-    .card .info {
-      position: absolute; inset: 0; z-index: 2;
-      display: flex; flex-direction: column; justify-content: space-between;
-      padding: clamp(16px, 2vw, 28px);
-      background: linear-gradient(to bottom, rgba(0,0,0,.6), rgba(0,0,0,0) 38%, rgba(0,0,0,0) 62%, rgba(0,0,0,.6));
-      opacity: 0; transition: opacity .5s var(--ease);
+    .card a { display: block; }
+    .card .label {
+      display: flex; gap: clamp(16px, 2vw, 28px); align-items: baseline;
+      font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; font-weight: 500;
+      letter-spacing: .04em; text-transform: uppercase; color: #fff;
+      margin-bottom: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    .card .info .t { font-size: clamp(22px, 2.4vw, 38px); line-height: 1.05; letter-spacing: -.02em; transform: translateY(-6px); transition: transform .6s var(--ease); }
-    .card .info .t small { display: block; margin-top: 6px; font-family: "Instrument Serif", serif; font-style: italic; font-size: .6em; color: rgba(255,255,255,.9); letter-spacing: 0; }
-    .card .info .kind { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: #fff; transform: translateY(6px); transition: transform .6s var(--ease); }
-    .card .info .kind span { color: rgba(255,255,255,.7); margin-left: .8em; }
-    .card .soon { position: absolute; top: 14px; right: 14px; z-index: 3; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--fg); border: 1px solid rgba(241,239,234,.35); padding: 3px 8px; border-radius: 99px; }
-    .card a:hover .info, .card a:focus-visible .info { opacity: 1; }
-    .card a:hover .info .t, .card a:focus-visible .info .t, .card a:hover .info .kind, .card a:focus-visible .info .kind { transform: none; }
-    .card a:hover .media { transform: scale(1.035); }
+    .card .label .num { flex: none; }
+    .card .label .txt { overflow: hidden; text-overflow: ellipsis; }
+    .card .frame { position: relative; aspect-ratio: 4 / 3; overflow: hidden; background: #111; }
+    .card .media { position: absolute; inset: 0; transition: transform 1.2s var(--ease), filter .6s var(--ease); }
+    .card .media img { filter: brightness(.95); object-position: var(--pos, 50% 30%); }
+    .card .info {
+      position: absolute; inset: auto 0 0 0; z-index: 2;
+      padding: 40px 16px 14px;
+      background: linear-gradient(to top, rgba(0,0,0,.7), rgba(0,0,0,0));
+      font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: #fff;
+      opacity: 0; transform: translateY(6px); transition: opacity .45s var(--ease), transform .6s var(--ease);
+    }
+    .card .info span { color: rgba(255,255,255,.75); margin-left: 1em; }
+    .card .soon { position: absolute; top: 12px; right: 12px; z-index: 3; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #fff; border: 1px solid rgba(255,255,255,.5); padding: 2px 8px; }
+    .card a:hover .info, .card a:focus-visible .info { opacity: 1; transform: none; }
+    .card a:hover .media { transform: scale(1.03); }
     .grid.hovering .card a:not(:hover) .media { filter: brightness(.45); }
+    .grid.hovering .card a:not(:hover) .label { color: #8a8a8a; }
+    .card .label { transition: color .4s var(--ease); }
+    @media (max-width: 1280px) { .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @media (max-width: 960px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
     /* ---------- project page ---------- */
     .project { padding: 32px var(--pad) 0; }
@@ -150,9 +159,7 @@
 
     /* ---------- touch / mobile: no hover, so title is always shown under the image ---------- */
     @media (hover: none), (max-width: 760px) {
-      .card .info { opacity: 1; }
-      .card .info .t, .card .info .kind { transform: none; }
-      .card .info .t { font-size: 22px; }
+      .card .info { opacity: 1; transform: none; }
     }
     @media (max-width: 760px) {
       header nav { margin: 0 auto; }
@@ -251,17 +258,19 @@
     // ----- grids -----
     function fillGrid(el, list, countEl, sec) {
       countEl.textContent = String(list.length).padStart(2, "0") + " projects";
-      el.innerHTML = list.map(p => `
+      el.innerHTML = list.map((p, i) => {
+        const label = p.artist && p.artist !== p.title ? `${p.artist} '${p.title}'` : `${p.title} '${p.type || ""}'`;
+        return `
         <li class="card">
-          <a href="#/${sec}/${p.slug}" aria-label="${esc(p.title)}${p.year ? ", " + p.year : ""}">
-            <div class="media">${media(p, "Still — " + esc(p.title))}</div>
-            ${p.soon ? `<span class="soon">Coming soon</span>` : ""}
-            <div class="info">
-              <span class="t">${esc(p.title)}${p.artist && p.artist !== p.title ? `<small>${esc(p.artist)}</small>` : ""}</span>
-              <span class="kind">${esc(p.type || "")}${p.year ? `<span>${p.year}</span>` : ""}</span>
+          <a href="#/${sec}/${p.slug}" aria-label="${esc(label)}${p.year ? ", " + p.year : ""}">
+            <div class="label"><span class="num">${String(i + 1).padStart(2, "0")}</span><span class="txt">${esc(label)}</span></div>
+            <div class="frame">
+              <div class="media">${media(p, "Still — " + esc(p.title))}</div>
+              ${p.soon ? `<span class="soon">Coming soon</span>` : ""}
+              <div class="info">${esc(p.type || "")}${p.year ? `<span>${p.year}</span>` : ""}</div>
             </div>
           </a>
-        </li>`).join("");
+        </li>`; }).join("");
       el.addEventListener("mouseover", e => { if (e.target.closest(".card a")) el.classList.add("hovering"); });
       el.addEventListener("mouseleave", () => el.classList.remove("hovering"));
     }
