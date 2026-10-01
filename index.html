@@ -16,10 +16,10 @@
       --faint: #3a3936;
       --line: rgba(241, 239, 234, 0.09);
       --pad: clamp(16px, 4vw, 56px);
+      --gap: clamp(8px, 1.2vw, 16px);
       --ease: cubic-bezier(.2, .7, .1, 1);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html { scroll-behavior: smooth; }
     body {
       background: var(--bg);
       color: var(--fg);
@@ -30,13 +30,14 @@
     }
     a { color: inherit; text-decoration: none; }
     button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+    img { display: block; width: 100%; height: 100%; object-fit: cover; }
 
-    /* film grain over everything */
+    /* subtle film grain */
     body::after {
       content: "";
       position: fixed; inset: -50%;
       pointer-events: none; z-index: 100;
-      opacity: .06;
+      opacity: .05;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
       animation: grain 1s steps(4) infinite;
     }
@@ -55,19 +56,16 @@
     .logo { font-size: 13px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; }
     .logo span { color: var(--muted); font-weight: 300; margin-left: 10px; letter-spacing: .1em; }
     nav { display: flex; gap: clamp(18px, 3vw, 40px); }
-    nav a {
-      font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
-      color: var(--muted); transition: color .3s;
-    }
+    nav a { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); transition: color .3s; }
     nav a:hover, nav a.active { color: var(--fg); }
 
-    /* ---------- views ---------- */
+    /* ---------- views (no intro animation) ---------- */
     .view { display: none; }
     .view.active { display: block; }
-    body.ready .view.active { animation: fade .4s var(--ease); } /* só ao mudar de página, nunca à entrada */
+    body.ready .view.active { animation: fade .4s var(--ease); }
     @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 
-    /* placeholder media */
+    /* placeholder media (until stills arrive) */
     .ph {
       position: relative; overflow: hidden;
       background:
@@ -75,71 +73,52 @@
         radial-gradient(100% 80% at 80% 90%, hsla(calc(var(--h, 30) + 40), 25%, 14%, .9), transparent 60%),
         #111;
     }
-    .ph .tag {
-      position: absolute; left: 14px; bottom: 12px;
-      font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: rgba(255,255,255,.35);
-    }
+    .ph .tag { position: absolute; left: 14px; bottom: 12px; font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: rgba(255,255,255,.35); }
 
-    /* ---------- home: hero ---------- */
+    /* ---------- hero ---------- */
     .hero {
       position: relative; height: 100svh; min-height: 520px;
       display: flex; align-items: flex-end;
       padding: 0 var(--pad) clamp(28px, 6vh, 64px);
     }
     .hero .ph { position: absolute; inset: 0; --h: 24; }
-    .hero .ph::after {
-      content: ""; position: absolute; inset: 0;
-      background: linear-gradient(to top, var(--bg) 0%, transparent 45%, rgba(0,0,0,.35) 100%);
-    }
+    .hero .ph::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, var(--bg) 0%, transparent 45%, rgba(0,0,0,.35) 100%); }
     .hero .ph .tag { left: auto; right: var(--pad); bottom: auto; top: 80px; }
     .hero-text { position: relative; z-index: 2; width: 100%; display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap; }
-    .hero h1 {
-      font-weight: 300; font-size: clamp(44px, 9vw, 140px);
-      line-height: .92; letter-spacing: -.035em;
-    }
+    .hero h1 { font-weight: 300; font-size: clamp(44px, 9vw, 140px); line-height: .92; letter-spacing: -.035em; }
     .hero h1 em { font-family: "Instrument Serif", serif; font-style: italic; font-weight: 400; letter-spacing: -.01em; }
     .hero .scroll { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
 
-    /* ---------- selected work index ---------- */
     .section-head {
       display: flex; justify-content: space-between; align-items: baseline;
       padding: clamp(64px, 12vh, 140px) var(--pad) 22px;
-      border-bottom: 1px solid var(--line);
       font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted);
     }
-    .index { list-style: none; position: relative; z-index: 2; }
-    .row a {
-      display: grid;
-      grid-template-columns: 56px 1fr minmax(120px, 220px) 120px 56px;
-      align-items: baseline; gap: 16px;
-      padding: clamp(18px, 2.6vw, 30px) var(--pad);
-      border-bottom: 1px solid var(--line);
-      transition: color .4s var(--ease), padding .4s var(--ease);
-    }
-    .row .n, .row .meta, .row .yr { font-size: 12px; letter-spacing: .08em; color: var(--muted); transition: color .4s; }
-    .row .yr { text-align: right; }
-    .row .t {
-      font-size: clamp(28px, 4.6vw, 68px); line-height: 1; letter-spacing: -.03em; font-weight: 300;
-    }
-    .row .t small {
-      font-family: "Instrument Serif", serif; font-style: italic; font-size: .5em; letter-spacing: 0;
-      color: var(--muted); margin-left: .5em; vertical-align: .25em;
-    }
-    .row .soon { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--faint); padding: 3px 7px; border-radius: 99px; justify-self: start; }
-    .index.hovering .row a { color: var(--faint); }
-    .index.hovering .row a .meta, .index.hovering .row a .n, .index.hovering .row a .yr, .index.hovering .row a small { color: var(--faint); }
-    .index.hovering .row a:hover, .index.hovering .row a:hover .meta, .index.hovering .row a:hover .n, .index.hovering .row a:hover .yr { color: var(--fg); }
-    .index.hovering .row a:hover small { color: var(--muted); }
+    .page-top { padding-top: 140px; }
 
-    /* full-screen hover preview (loop placeholder) */
-    .preview {
-      position: fixed; inset: 0; z-index: 1; pointer-events: none;
+    /* ---------- thumbnail grid ---------- */
+    .grid {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--gap);
+      padding: 0 var(--pad) var(--pad); list-style: none;
+    }
+    .card a { position: relative; display: block; aspect-ratio: 16 / 9; overflow: hidden; background: #111; }
+    .card .media { position: absolute; inset: 0; transition: transform 1.2s var(--ease), filter .6s var(--ease); }
+    .card .media img { filter: brightness(.92); }
+    .card .info {
+      position: absolute; inset: 0; z-index: 2;
+      display: flex; flex-direction: column; justify-content: flex-end; gap: 6px;
+      padding: clamp(16px, 2vw, 28px);
+      background: linear-gradient(to top, rgba(0,0,0,.65), rgba(0,0,0,0) 55%);
       opacity: 0; transition: opacity .5s var(--ease);
     }
-    .preview.on { opacity: .55; }
-    .preview .ph { position: absolute; inset: 0; transition: --h .4s; }
-    .preview .ph .tag { left: 50%; bottom: 50%; transform: translate(-50%, 50%); font-size: 11px; }
-    .row-thumb { display: none; }
+    .card .info .yr { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: rgba(241,239,234,.7); }
+    .card .info .t { font-size: clamp(22px, 2.6vw, 40px); line-height: 1; letter-spacing: -.02em; transform: translateY(8px); transition: transform .6s var(--ease); }
+    .card .info .t small { font-family: "Instrument Serif", serif; font-style: italic; font-size: .62em; color: rgba(241,239,234,.7); margin-left: .35em; letter-spacing: 0; }
+    .card .soon { position: absolute; top: 14px; right: 14px; z-index: 3; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--fg); border: 1px solid rgba(241,239,234,.35); padding: 3px 8px; border-radius: 99px; }
+    .card a:hover .info, .card a:focus-visible .info { opacity: 1; }
+    .card a:hover .info .t, .card a:focus-visible .info .t { transform: none; }
+    .card a:hover .media { transform: scale(1.035); }
+    .grid.hovering .card a:not(:hover) .media { filter: brightness(.45); }
 
     /* ---------- project page ---------- */
     .project { padding: 120px var(--pad) 0; }
@@ -147,16 +126,14 @@
     .back:hover { color: var(--fg); }
     .p-title { margin: 28px 0 10px; font-weight: 300; font-size: clamp(44px, 8vw, 120px); line-height: .95; letter-spacing: -.035em; }
     .p-artist { font-family: "Instrument Serif", serif; font-style: italic; font-size: clamp(22px, 3vw, 36px); color: var(--muted); }
-    .player { margin-top: clamp(32px, 6vh, 64px); aspect-ratio: 16 / 9; width: 100%; }
-    .player button { position: absolute; inset: 0; display: grid; place-items: center; }
-    .player .play {
-      width: 84px; height: 84px; border-radius: 50%; border: 1px solid rgba(255,255,255,.35);
-      display: grid; place-items: center; transition: transform .4s var(--ease), background .4s;
-    }
-    .player button:hover .play { transform: scale(1.08); background: rgba(255,255,255,.08); }
+    .player { position: relative; margin-top: clamp(32px, 6vh, 64px); aspect-ratio: 16 / 9; width: 100%; overflow: hidden; background: #111; }
+    .player > img, .player > .ph { position: absolute; inset: 0; }
+    .player button { position: absolute; inset: 0; display: grid; place-items: center; z-index: 2; }
+    .player .play { width: 84px; height: 84px; border-radius: 50%; border: 1px solid rgba(255,255,255,.5); display: grid; place-items: center; transition: transform .4s var(--ease), background .4s; backdrop-filter: blur(4px); }
+    .player button:hover .play { transform: scale(1.08); background: rgba(255,255,255,.1); }
     .player .play::before { content: ""; margin-left: 5px; border-left: 16px solid var(--fg); border-top: 10px solid transparent; border-bottom: 10px solid transparent; }
-    .player iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
-    .player .na { position: absolute; inset: 0; display: grid; place-items: center; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: rgba(255,255,255,.4); }
+    .player iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; z-index: 3; }
+    .player .na { position: absolute; inset: 0; display: grid; place-items: center; z-index: 2; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: rgba(255,255,255,.6); }
 
     .p-body { display: grid; grid-template-columns: 1fr 2fr; gap: clamp(32px, 6vw, 96px); padding: clamp(56px, 10vh, 120px) 0; border-bottom: 1px solid var(--line); }
     .credits dt { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin-top: 22px; }
@@ -165,7 +142,7 @@
     .process h2 { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); font-weight: 400; margin-bottom: 20px; }
     .process p { font-size: clamp(18px, 1.7vw, 23px); line-height: 1.55; color: #cfcdc8; max-width: 760px; }
     .process p + p { margin-top: 1em; }
-    .process .todo { color: var(--muted); font-family: "Instrument Serif", serif; font-style: italic; }
+    .todo { color: var(--muted) !important; font-family: "Instrument Serif", serif; font-style: italic; }
 
     .stills { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: clamp(40px, 8vh, 96px) 0; }
     .stills .ph { aspect-ratio: 2.39 / 1; }
@@ -176,10 +153,11 @@
     .next strong { display: block; margin-top: 14px; font-weight: 300; font-size: clamp(36px, 6vw, 92px); letter-spacing: -.03em; line-height: 1; transition: transform .6s var(--ease); }
     .next:hover strong { transform: translateX(18px); }
 
-    /* ---------- simple pages ---------- */
+    /* ---------- about ---------- */
     .page { min-height: 100svh; padding: 140px var(--pad) 80px; display: grid; grid-template-columns: 1fr 1.4fr; gap: clamp(32px, 6vw, 96px); align-items: start; }
-    .page h1 { font-weight: 300; font-size: clamp(44px, 8vw, 120px); line-height: .95; letter-spacing: -.035em; }
-    .page h1 em { font-family: "Instrument Serif", serif; font-style: italic; font-weight: 400; }
+    .page h1, .big { font-weight: 300; font-size: clamp(44px, 8vw, 120px); line-height: .95; letter-spacing: -.035em; }
+    .big { padding: 0 var(--pad); }
+    .big em, .page h1 em { font-family: "Instrument Serif", serif; font-style: italic; font-weight: 400; }
     .page .txt p { font-size: clamp(18px, 1.7vw, 23px); line-height: 1.55; color: #cfcdc8; }
     .page .txt p + p { margin-top: 1em; }
     .page .portrait { aspect-ratio: 4 / 5; margin-bottom: 36px; --h: 200; }
@@ -188,23 +166,18 @@
     .contact a span { color: var(--muted); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; }
     .contact a:hover { padding-left: 10px; }
 
-    footer {
-      display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
-      padding: 28px var(--pad); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
-      position: relative; z-index: 2;
-    }
+    footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 28px var(--pad); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 
-    /* ---------- mobile ---------- */
+    /* ---------- touch / mobile: no hover, so title is always shown under the image ---------- */
+    @media (hover: none), (max-width: 760px) {
+      .card .info { position: static; opacity: 1; background: none; padding: 12px 0 10px; flex-direction: column-reverse; }
+      .card .info .t { transform: none; font-size: 22px; }
+      .card a { aspect-ratio: auto; background: none; }
+      .card .media { position: relative; aspect-ratio: 16 / 9; }
+    }
     @media (max-width: 760px) {
       .logo span { display: none; }
-      .row a { grid-template-columns: 1fr auto; row-gap: 8px; }
-      .row .n { display: none; }
-      .row .t { grid-column: 1 / -1; grid-row: 2; }
-      .row-thumb { display: block; grid-column: 1 / -1; grid-row: 1; aspect-ratio: 16 / 9; margin-bottom: 8px; }
-      .row .meta { grid-row: 3; }
-      .row .yr { grid-row: 3; }
-      .row .soon { grid-row: 4; }
-      .preview { display: none; }
+      .grid { grid-template-columns: 1fr; }
       .p-body, .page { grid-template-columns: 1fr; }
       .stills { grid-template-columns: 1fr; }
     }
@@ -221,9 +194,7 @@
     </nav>
   </header>
 
-  <div class="preview" id="preview"><div class="ph"><span class="tag" id="preview-tag"></span></div></div>
-
-  <!-- HOME / SELECTED WORK -->
+  <!-- CINEMATOGRAPHY (home) -->
   <main class="view" id="view-work">
     <section class="hero">
       <div class="ph"><span class="tag">Showreel — loop</span></div>
@@ -232,23 +203,19 @@
         <span class="scroll">Selected work ↓</span>
       </div>
     </section>
-    <div class="section-head"><span>Selected work</span><span id="count"></span></div>
-    <ul class="index" id="index"></ul>
+    <div class="section-head"><span>Selected work</span><span id="count-dp"></span></div>
+    <ul class="grid" id="grid-dp"></ul>
+  </main>
+
+  <!-- DIRECTION -->
+  <main class="view" id="view-direction">
+    <div class="page-top"><h1 class="big">Direc<em>tion</em></h1></div>
+    <div class="section-head" style="padding-top:40px"><span>Documentary &amp; fiction</span><span id="count-dir"></span></div>
+    <ul class="grid" id="grid-dir"></ul>
   </main>
 
   <!-- PROJECT PAGE -->
   <main class="view" id="view-project"><article class="project" id="project"></article></main>
-
-  <!-- DIRECTION -->
-  <main class="view" id="view-direction">
-    <section class="page">
-      <h1>Direc<em>tion</em></h1>
-      <div class="txt">
-        <p>Documentary and fiction work as director.</p>
-        <p class="todo" style="color:var(--muted);font-family:'Instrument Serif',serif;font-style:italic">[Página por desenhar — os projetos de realização entram aqui, separados do Selected Work.]</p>
-      </div>
-    </section>
-  </main>
 
   <!-- ABOUT -->
   <main class="view" id="view-about">
@@ -257,7 +224,7 @@
       <div class="txt">
         <div class="ph portrait"><span class="tag">Retrato</span></div>
         <p>João Viana is a Director of Photography based in Lisbon, working mostly in music videos, short films and commercials. He also directs documentary and fiction.</p>
-        <p style="color:var(--muted);font-family:'Instrument Serif',serif;font-style:italic">[Bio por escrever.]</p>
+        <p class="todo">[Bio por escrever.]</p>
         <div class="contact">
           <a href="mailto:joao17viana@gmail.com"><span>Email</span>joao17viana@gmail.com</a>
           <a href="#/about"><span>Instagram</span>@—</a>
@@ -273,66 +240,77 @@
   </footer>
 
   <script>
-    // Projetos com Categoria = Direção de Fotografia e Publicado? = Sim (base Notion "Projetos do Portfolio")
-    const WORK = [
+    // Dados da base Notion "Projetos do Portfolio". cover = ficheiro em assets/covers (sem cover → placeholder).
+    const DP = [
       { slug: "top", title: "Top", artist: "JointOne", type: "Music video", year: 2026, dir: "Ruben Mendes", role: "Director of Photography", yt: "-UPNVRV8nXQ", h: 18 },
-      { slug: "ultimo-canto", title: "Último Canto", artist: "", type: "Short film", year: 2026, dir: "José P. Miguel", role: "Director of Photography, Editor", yt: "", h: 210 },
+      { slug: "ultimo-canto", title: "Último Canto", type: "Short film", year: 2026, dir: "José P. Miguel", role: "Director of Photography, Editor", h: 210 },
       { slug: "cartas-na-mesa", title: "Cartas na Mesa", artist: "Van Zee", type: "Music video", year: 2026, dir: "Ruben Mendes, Tomás Freitas", role: "Director of Photography", yt: "B7VOs2LPC-Q", h: 350 },
       { slug: "quase-nada", title: "Quase Nada", artist: "Ed", type: "Music video", year: 2026, dir: "Mário ARV", role: "Director of Photography", yt: "iVH0_Aq6lw4", h: 190 },
-      { slug: "auto-de-fe", title: "Auto de Fé", artist: "", type: "Series pilot", year: 2025, dir: "José P. Miguel", role: "Director of Photography, Colorist", yt: "", h: 0 },
-      { slug: "viarco", title: "Viarco", artist: "Viarco", type: "Commercial", year: 2025, dir: "Maria Flores", role: "Creative Director, Director of Photography", yt: "", soon: true, h: 45 },
-      { slug: "nunca-te-esqueco", title: "Nunca Te Esqueço, Meu Amor", artist: "Inês Monstro", type: "Music video", year: 2024, dir: "Vasco Souto", role: "Director of Photography, Editor, Colorist", yt: "m5fvunfNXOI", h: 330 }
+      { slug: "desculpa", title: "desculpa", artist: "Victoria Leuca", type: "Live session", year: 2026, role: "Director of Photography", yt: "yvVUh4XmQJc", cover: "desculpa" },
+      { slug: "so", title: "só", artist: "Victoria Leuca", type: "Music video", year: 2025, dir: "João Viana, João Barbosa, Vasco Souto", role: "Co-director, Director of Photography, Editor, Colorist", yt: "cEUa3SJD_sw", cover: "so" },
+      { slug: "nada-demais", title: "Nada Demais", artist: "Beatriz Caixinha feat. Rita Onofre", type: "Music video", year: 2025, role: "Director of Photography", yt: "1KeOU6nRaD4", cover: "nada-demais" },
+      { slug: "auto-de-fe", title: "Auto de Fé", type: "Series pilot", year: 2025, dir: "José P. Miguel", role: "Director of Photography, Colorist", cover: "auto-de-fe" },
+      { slug: "viarco", title: "Viarco", type: "Commercial", year: 2025, role: "Creative Director, Director of Photography", soon: true, h: 45 },
+      { slug: "nunca-te-esqueco", title: "Nunca Te Esqueço, Meu Amor", artist: "Inês Monstro", type: "Music video", year: 2024, dir: "Vasco Souto", role: "Director of Photography, Editor, Colorist", yt: "m5fvunfNXOI", cover: "nunca-te-esqueco" }
     ];
+    const DIRECTION = [
+      { slug: "severa", title: "Severa", type: "Fashion film", year: 2025, dir: "João Viana", role: "Director", cover: "severa" },
+      { slug: "a-grande-viagem", title: "A Grande Viagem Rumo ao Recorde Mundial", type: "Short documentary", year: 2025, dir: "João Viana", role: "Director", yt: "wmvXtrDpZuk", cover: "a-grande-viagem" },
+      { slug: "celia", title: "Célia", type: "Short film", year: 2024, dir: "João Viana, Vasco Souto", role: "Co-director", yt: "-GrhEE8KWl0", cover: "celia" }
+    ];
+    const ALL = [...DP.map(p => ({ ...p, sec: "work" })), ...DIRECTION.map(p => ({ ...p, sec: "direction" }))];
 
     const $ = s => document.querySelector(s);
-    const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const coverSrc = p => `assets/covers/${p.cover}.jpg`;
+    const media = (p, label) => p.cover
+      ? `<img src="${coverSrc(p)}" alt="${esc(p.title)} — still" loading="lazy" decoding="async">`
+      : `<div class="ph" style="position:absolute;inset:0;--h:${p.h ?? 30}"><span class="tag">${label}</span></div>`;
     $("#y").textContent = new Date().getFullYear();
 
-    // ----- index -----
-    const index = $("#index");
-    $("#count").textContent = String(WORK.length).padStart(2, "0") + " projects";
-    index.innerHTML = WORK.map((p, i) => `
-      <li class="row">
-        <a href="#/work/${p.slug}" data-i="${i}">
-          <div class="ph row-thumb" style="--h:${p.h}"><span class="tag">Loop — ${esc(p.title)}</span></div>
-          <span class="n">${String(i + 1).padStart(2, "0")}</span>
-          <span class="t">${esc(p.title)}${p.artist && p.artist !== p.title ? `<small>${esc(p.artist)}</small>` : ""}</span>
-          <span class="meta">${esc(p.type)}</span>
-          <span class="yr">${p.year}</span>
-          ${p.soon ? `<span class="soon">Coming soon</span>` : `<span></span>`}
-        </a>
-      </li>`).join("");
-
-    const preview = $("#preview");
-    index.addEventListener("mouseover", e => {
-      const a = e.target.closest("a[data-i]"); if (!a) return;
-      const p = WORK[a.dataset.i];
-      preview.querySelector(".ph").style.setProperty("--h", p.h);
-      $("#preview-tag").textContent = "Loop 3–5 s — " + p.title;
-      preview.classList.add("on"); index.classList.add("hovering");
-    });
-    index.addEventListener("mouseleave", () => { preview.classList.remove("on"); index.classList.remove("hovering"); });
+    // ----- grids -----
+    function fillGrid(el, list, countEl) {
+      countEl.textContent = String(list.length).padStart(2, "0") + " projects";
+      el.innerHTML = list.map(p => `
+        <li class="card">
+          <a href="#/work/${p.slug}" aria-label="${esc(p.title)}, ${p.year}">
+            <div class="media">${media(p, "Still — " + esc(p.title))}</div>
+            ${p.soon ? `<span class="soon">Coming soon</span>` : ""}
+            <div class="info">
+              <span class="yr">${p.year}</span>
+              <span class="t">${esc(p.title)}${p.artist && p.artist !== p.title ? `<small>${esc(p.artist)}</small>` : ""}</span>
+            </div>
+          </a>
+        </li>`).join("");
+      el.addEventListener("mouseover", e => { if (e.target.closest(".card a")) el.classList.add("hovering"); });
+      el.addEventListener("mouseleave", () => el.classList.remove("hovering"));
+    }
+    fillGrid($("#grid-dp"), DP, $("#count-dp"));
+    fillGrid($("#grid-dir"), DIRECTION, $("#count-dir"));
 
     // ----- project page -----
     function renderProject(slug) {
-      const i = WORK.findIndex(p => p.slug === slug);
-      if (i < 0) return false;
-      const p = WORK[i], nx = WORK[(i + 1) % WORK.length];
+      const p = ALL.find(x => x.slug === slug);
+      if (!p) return null;
+      const list = p.sec === "work" ? DP : DIRECTION;
+      const i = list.findIndex(x => x.slug === slug), nx = list[(i + 1) % list.length];
+      const backTo = p.sec === "work" ? ["#/", "Selected work"] : ["#/direction", "Direction"];
+      const cover = media(p, "Capa — still escolhido");
       const player = p.yt
-        ? `<button aria-label="Play ${esc(p.title)}" data-yt="${p.yt}"><span class="play"></span></button><span class="tag">Capa — still escolhido</span>`
-        : `<span class="na">${p.soon ? "Coming soon" : "Vídeo por carregar"}</span>`;
+        ? `${cover}<button aria-label="Play ${esc(p.title)}" data-yt="${p.yt}"><span class="play"></span></button>`
+        : `${cover}<span class="na">${p.soon ? "Coming soon" : "Vídeo por carregar"}</span>`;
       $("#project").innerHTML = `
-        <a class="back" href="#/">← Selected work</a>
+        <a class="back" href="${backTo[0]}">← ${backTo[1]}</a>
         <h1 class="p-title">${esc(p.title)}</h1>
         ${p.artist && p.artist !== p.title ? `<div class="p-artist">${esc(p.artist)}</div>` : ""}
-        <div class="ph player" style="--h:${p.h}">${player}</div>
+        <div class="player">${player}</div>
         <div class="p-body">
           <dl class="credits">
-            <dt>Director</dt><dd>${esc(p.dir)}</dd>
+            <dt>Director</dt><dd${p.dir ? "" : ' class="todo"'}>${esc(p.dir || "—")}</dd>
             <dt>Role</dt><dd>${esc(p.role)}</dd>
             <dt>Type</dt><dd>${esc(p.type)}</dd>
             <dt>Year</dt><dd>${p.year}</dd>
-            <dt>Camera / Lenses</dt><dd class="todo" style="color:var(--muted)">—</dd>
+            <dt>Camera / Lenses</dt><dd class="todo">—</dd>
           </dl>
           <div class="process">
             <h2>Process</h2>
@@ -341,27 +319,28 @@
           </div>
         </div>
         <div class="stills">
-          ${[0, 1, 2, 3, 4, 5].map(k => `<div class="ph" style="--h:${p.h + k * 12}"><span class="tag">Still ${k + 1}</span></div>`).join("")}
+          ${[0, 1, 2, 3, 4, 5].map(k => `<div class="ph" style="--h:${(p.h ?? 30) + k * 12}"><span class="tag">Still ${k + 1}</span></div>`).join("")}
         </div>
         <a class="next" href="#/work/${nx.slug}"><span>Next project</span><strong>${esc(nx.title)} →</strong></a>`;
       const btn = $("#project button[data-yt]");
       if (btn) btn.addEventListener("click", () => {
-        btn.parentElement.innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${btn.dataset.yt}?autoplay=1&rel=0&modestbranding=1" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen title="${esc(p.title)}"></iframe>`;
+        btn.insertAdjacentHTML("afterend", `<iframe src="https://www.youtube-nocookie.com/embed/${btn.dataset.yt}?autoplay=1&rel=0&modestbranding=1" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen title="${esc(p.title)}"></iframe>`);
+        btn.remove();
       });
-      return true;
+      return p.sec;
     }
 
     // ----- router -----
     function route() {
       const h = location.hash.replace(/^#\/?/, "");
-      let view = "work";
-      if (h.startsWith("work/") && renderProject(h.slice(5))) view = "project";
-      else if (h === "direction") view = "direction";
-      else if (h === "about") view = "about";
+      let view = "work", navKey = "work";
+      if (h.startsWith("work/")) {
+        const sec = renderProject(h.slice(5));
+        if (sec) { view = "project"; navKey = sec; }
+      } else if (h === "direction") view = navKey = "direction";
+      else if (h === "about") view = navKey = "about";
       document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + view));
-      document.querySelectorAll("nav a").forEach(a => a.classList.toggle("active",
-        a.dataset.nav === (view === "project" ? "work" : view)));
-      preview.classList.remove("on"); index.classList.remove("hovering");
+      document.querySelectorAll("nav a").forEach(a => a.classList.toggle("active", a.dataset.nav === navKey));
       window.scrollTo(0, 0);
     }
     window.addEventListener("hashchange", () => { document.body.classList.add("ready"); route(); });
