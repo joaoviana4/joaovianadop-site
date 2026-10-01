@@ -358,10 +358,10 @@
       const near = () => { const [cx, cy] = clusters[Math.floor(r() * clusters.length)]; return [cx + (r() - .5) * 260, cy + (r() - .5) * 220]; };
       for (let i = 0; i < 160; i++) {                       // specks
         const [x, y] = r() < .55 ? near() : pt();
-        dirt += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(.5 + Math.pow(r(), 3) * 2.8).toFixed(2)}" fill="#fff" fill-opacity="${(.22 + r() * .38).toFixed(2)}" stroke="none"/>`;
+        dirt += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(.3 + Math.pow(r(), 3) * 1.6).toFixed(2)}" fill="#fff" fill-opacity="${(.22 + r() * .38).toFixed(2)}" stroke="none"/>`;
       }
       for (let i = 0; i < 22; i++) {                        // irregular blobs
-        const [x, y] = r() < .6 ? near() : pt(), k = 1.5 + r() * 5;
+        const [x, y] = r() < .6 ? near() : pt(), k = 1 + r() * 2.8;
         let d = "";
         for (let a = 0; a < 7; a++) {
           const ang = a / 7 * Math.PI * 2, rr = k * (.55 + r() * .7);
@@ -371,8 +371,8 @@
       }
       for (let i = 0; i < 9; i++) {                         // hairs
         const [x, y] = i < 2 ? [rail + r() * (W - 2 * rail), r() * firstView] : pt();
-        const L = 20 + r() * 70;
-        dirt += `<path d="M${x.toFixed(1)} ${y.toFixed(1)} c${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)}" stroke-width="${(.6 + r() * .6).toFixed(2)}" stroke-opacity="${(.22 + r() * .22).toFixed(2)}" stroke="#fff" fill="none"/>`;
+        const L = 12 + r() * 40;
+        dirt += `<path d="M${x.toFixed(1)} ${y.toFixed(1)} c${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)}" stroke-width="${(.4 + r() * .4).toFixed(2)}" stroke-opacity="${(.22 + r() * .22).toFixed(2)}" stroke="#fff" fill="none"/>`;
       }
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">` +
         `<g stroke="#fff" fill="none">${scratches}${dirt}</g></svg>`;
