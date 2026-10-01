@@ -514,15 +514,6 @@
     };
     let leakStyle = "surge";  // which leak the site uses
     let leaking = 0;
-    // idle life for the smear: even without a leak it never sits perfectly still (12 fps, tiny range)
-    function smearIdle() {
-      const mast = $(".masthead");
-      if (!mast || leaking) return;
-      mast.style.setProperty("--sx", (1 + Math.random() * .07).toFixed(3));
-      mast.style.setProperty("--jx", ((Math.random() - .5) * 1.4).toFixed(2) + "px");
-      mast.style.setProperty("--gs", (1 + Math.random() * .03).toFixed(3));
-    }
-    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) setInterval(smearIdle, 1000 / 12);
     function leakOnce(style) {
       const leak = $("#leak"), mast = $(".masthead");
       if (!leak || !mast || document.body.classList.contains("small-name")) return;
