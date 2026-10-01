@@ -205,7 +205,10 @@
     /* ---------- moving film-strip background ---------- */
     .filmbg, .grainbg { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
     .filmbg { background-repeat: repeat-y; }
-    .grainbg { opacity: .14; background-repeat: repeat;
+    /* grain only in random patches (masked by a soft, low-frequency noise), never as a flat grey veil */
+    .grainbg { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='900'%3E%3Cfilter id='m'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.0045' numOctaves='2' seed='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 5.5 0 0 0 -2.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23m)'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='900'%3E%3Cfilter id='m'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.0045' numOctaves='2' seed='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 5.5 0 0 0 -2.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23m)'/%3E%3C/svg%3E");
+      -webkit-mask-size: 900px 900px; mask-size: 900px 900px; -webkit-mask-repeat: repeat; mask-repeat: repeat; }
+    .grainbg { opacity: .22; background-repeat: repeat;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1.4 -.35'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
     header, .masthead, main.view, footer { position: relative; z-index: 1; }
     header { z-index: 50; }
@@ -338,6 +341,9 @@
         { duration: (H / speed) * 1000, iterations: Infinity, easing: "linear" }));
       filmAnims.push(grain.animate([{ backgroundPosition: "0 0" }, { backgroundPosition: "0 -220px" }],
         { duration: (220 / speed) * 1000, iterations: Infinity, easing: "linear" }));
+      // the grain patches drift up too, a bit slower and sideways, so they appear and fade at random
+      filmAnims.push(grain.animate([{ maskPosition: "0 0", webkitMaskPosition: "0 0" }, { maskPosition: "-300px -900px", webkitMaskPosition: "-300px -900px" }],
+        { duration: (900 / speed) * 1000 * 1.6, iterations: Infinity, easing: "linear" }));
     }
     let filmT; window.addEventListener("resize", () => { clearTimeout(filmT); filmT = setTimeout(buildFilm, 200); });
     (document.fonts ? document.fonts.ready : Promise.resolve()).then(buildFilm);
