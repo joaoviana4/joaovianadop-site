@@ -96,12 +96,8 @@
     body.small-name .masthead { display: none; }
     /* light leak around the name, 16mm-style: red/orange fog bleeding in from one edge with a hot yellow-white core,
        flickering frame by frame (driven at 24 fps from JS), kept inside a soft area around the name */
-    .namewrap .leak { position: absolute; inset: -28% -6%; z-index: 3; pointer-events: none; opacity: 0; mix-blend-mode: screen;
-      -webkit-mask-image: radial-gradient(70% 75% at 50% 50%, #000 55%, transparent 100%); mask-image: radial-gradient(70% 75% at 50% 50%, #000 55%, transparent 100%);
-      background:
-        radial-gradient(18% 62% at var(--lx, 8%) var(--ly, 50%), rgba(255, 246, 214, .95), rgba(255, 196, 96, .85) 22%, rgba(255, 112, 44, .6) 48%, rgba(196, 34, 40, .28) 70%, transparent 88%),
-        radial-gradient(34% 90% at var(--lx2, 0%) var(--ly2, 40%), rgba(214, 52, 38, .55), rgba(150, 20, 40, .2) 55%, transparent 80%),
-        linear-gradient(90deg, rgba(255, 150, 90, var(--fog, .0)), transparent 60%); }
+    .namewrap .leak { position: absolute; inset: -70% -14%; z-index: 3; pointer-events: none; opacity: 0; mix-blend-mode: screen;
+      -webkit-mask-image: radial-gradient(60% 60% at 50% 50%, #000 45%, transparent 100%); mask-image: radial-gradient(60% 60% at 50% 50%, #000 45%, transparent 100%); }
     .masthead .namewrap { z-index: 1; }
     nav a { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: color-mix(in srgb, var(--accent) 80%, #000); transition: color .3s; }
     nav a:hover, nav a.active { color: var(--accent); }
@@ -436,30 +432,50 @@
     // ----- light leak around the name, like a 16mm camera leak: it bleeds in from one edge, flickers frame by
     //       frame at 24 fps (stepped, not smooth), sometimes with a flash frame, then dies. While it burns, the
     //       anamorphic smear stretches and shakes a little, very fast and within a tight range. -----
-    function leakOnce() {
+    // Leak styles. Each draws one frame: t = 0..1 through the leak, side = 1 (left) or -1 (right), y = height %.
+    const HOT = "rgba(255, 246, 214, .95)", GOLD = "rgba(255, 196, 96, .85)", ORANGE = "rgba(255, 112, 44, .65)", RED = "rgba(200, 34, 40, .35)";
+    const at = (side, x) => (side > 0 ? x : 100 - x);
+    const LEAKS = {
+      // big red-orange burn bleeding in from one edge
+      edge:   { frames: [8, 14], flash: .35, draw: (t, side, y) =>
+        `radial-gradient(28% 85% at ${at(side, 6 + t * 30)}% ${y}%, ${HOT}, ${GOLD} 20%, ${ORANGE} 45%, ${RED} 68%, transparent 88%),` +
+        `radial-gradient(45% 100% at ${at(side, 0)}% ${y - 10}%, rgba(214, 52, 38, .6), transparent 75%)` },
+      // one or two overexposed frames: the whole name area blows out
+      flash:  { frames: [3, 5], flash: 1, draw: (t, side, y) =>
+        `radial-gradient(70% 80% at 50% ${y}%, rgba(255, 250, 230, 1), rgba(255, 210, 140, .8) 40%, rgba(255, 120, 60, .35) 70%, transparent 95%)` },
+      // end-of-roll fog: a red/magenta wash sweeping across
+      roll:   { frames: [10, 16], flash: .2, draw: (t, side, y) =>
+        `linear-gradient(${side > 0 ? 90 : 270}deg, transparent ${-40 + t * 120}%, rgba(214, 40, 70, .55) ${-20 + t * 120}%, rgba(255, 130, 70, .8) ${-8 + t * 120}%, rgba(255, 220, 160, .9) ${t * 120}%, transparent ${18 + t * 120}%)` },
+      // vertical streaks racing across, like light through the gate
+      streak: { frames: [6, 10], flash: .3, draw: (t, side, y) => {
+        const x = at(side, -10 + t * 120);
+        return `linear-gradient(90deg, transparent ${x - 9}%, rgba(255, 110, 50, .7) ${x - 4}%, rgba(255, 235, 190, .95) ${x}%, rgba(255, 110, 50, .7) ${x + 3}%, transparent ${x + 8}%),` +
+               `linear-gradient(90deg, transparent ${x - 26}%, rgba(220, 50, 40, .45) ${x - 22}%, transparent ${x - 17}%)`; } },
+      // both edges burning at once, amber
+      double: { frames: [8, 14], flash: .25, draw: (t, side, y) =>
+        `radial-gradient(26% 80% at ${4 + t * 22}% ${y}%, ${HOT}, ${GOLD} 22%, ${ORANGE} 48%, transparent 85%),` +
+        `radial-gradient(26% 80% at ${96 - t * 22}% ${100 - y}%, ${HOT}, ${GOLD} 22%, ${ORANGE} 48%, transparent 85%)` },
+      // hot gold burst blooming from the middle of the name
+      burst:  { frames: [6, 11], flash: .4, draw: (t, side, y) =>
+        `radial-gradient(${18 + t * 60}% ${30 + t * 70}% at ${at(side, 40 + Math.random() * 20)}% ${y}%, ${HOT}, ${GOLD} 25%, ${ORANGE} 50%, ${RED} 72%, transparent 92%)` }
+    };
+    let leakStyle = "edge";   // which leak the site uses
+    function leakOnce(style) {
       const leak = $("#leak"), mast = $(".masthead");
       if (!leak || !mast || document.body.classList.contains("small-name")) return;
-      const fromLeft = Math.random() < .5;
-      const frames = 14 + Math.floor(Math.random() * 16);       // ~0.6 to 1.2 s at 24 fps
-      const flash = Math.random() < .45 ? 3 + Math.floor(Math.random() * 5) : -1;
-      const peak = .55 + Math.random() * .45;
-      const y = 30 + Math.random() * 40;
+      const L = LEAKS[style || leakStyle];
+      const side = Math.random() < .5 ? 1 : -1, y = 30 + Math.random() * 40;
+      const frames = L.frames[0] + Math.floor(Math.random() * (L.frames[1] - L.frames[0] + 1));
+      const flash = Math.random() < L.flash ? 1 + Math.floor(Math.random() * Math.max(1, frames - 2)) : -1;
+      const peak = .7 + Math.random() * .3;
       let f = 0;
       const tick = setInterval(() => {
         const t = f / frames;
-        // envelope: fast attack, flickering body, quick decay; each frame gets its own random value
-        const env = t < .15 ? t / .15 : t > .7 ? Math.max(0, (1 - t) / .3) : 1;
-        let v = peak * env * (.55 + Math.random() * .45);
-        if (f === flash) v = Math.min(1, peak + .35);
-        const reach = 4 + t * 26 + Math.random() * 6;           // creeps in from the edge
+        const env = t < .12 ? t / .12 : t > .7 ? Math.max(0, (1 - t) / .3) : 1;
+        let v = peak * env * (.6 + Math.random() * .4);       // frame-by-frame flicker
+        if (f === flash) v = 1;
+        leak.style.background = L.draw(t, side, y + (Math.random() - .5) * 6);
         leak.style.opacity = v.toFixed(2);
-        leak.style.setProperty("--lx", reach + "%");                 // drawn from the left; mirrored below for the right edge
-        leak.style.setProperty("--ly", (y + (Math.random() - .5) * 8) + "%");
-        leak.style.setProperty("--lx2", "0%");
-        leak.style.setProperty("--ly2", (y - 8 + Math.random() * 16) + "%");
-        leak.style.setProperty("--fog", (v * .18).toFixed(3));
-        leak.style.transform = fromLeft ? "" : "scaleX(-1)";
-        // smear stretch + shake, tight range
         mast.style.setProperty("--sx", (1 + v * (.15 + Math.random() * .3)).toFixed(3));
         mast.style.setProperty("--jx", ((Math.random() - .5) * 4 * v).toFixed(2) + "px");
         mast.style.setProperty("--njx", ((Math.random() - .5) * 2 * v).toFixed(2) + "px");
