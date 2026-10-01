@@ -474,11 +474,25 @@
         return `linear-gradient(90deg, transparent ${x - 7}%, rgba(255, 246, 214, .95) ${x}%, transparent ${x + 5}%),` +
                `linear-gradient(90deg, transparent ${x + d * 2 - 4}%, rgba(225, 40, 50, .75) ${x + d * 4}%, transparent ${x + d * 7 + 2}%),` +
                `linear-gradient(90deg, transparent ${x - d * 5 - 4}%, rgba(255, 190, 80, .7) ${x - d * 4}%, transparent ${x - d * 2 + 3}%)`; } },
-      // goes in, hesitates and flickers in place, then shoots out
-      surge:  { frames: [8, 12], flash: .35, draw: (t, side, y) => {
-        const p = t < .3 ? t / .3 * .45 : t < .7 ? .45 + (Math.random() - .5) * .06 : .45 + (t - .7) / .3 * .75;
-        const x = at(side, -10 + p * 120);
-        return `linear-gradient(90deg, transparent ${x - 8}%, rgba(255, 110, 50, .7) ${x - 3}%, rgba(255, 238, 195, .95) ${x}%, rgba(255, 110, 50, .7) ${x + 3}%, transparent ${x + 8}%)`; } },
+      // goes in, hesitates and flickers in place, then shoots out — with a fully random, aggressive path
+      // and a pale, mostly white light (only a faint warm/rose edge)
+      surge:  { frames: [9, 15], flash: .3,
+        init: (n) => {
+          const path = [], dir = Math.random() < .5 ? 1 : -1;
+          let x = dir > 0 ? -12 : 112;
+          const stops = 1 + Math.floor(Math.random() * 3);          // how many times it hesitates
+          for (let i = 0; i <= n; i++) {
+            const left = n - i, toExit = (dir > 0 ? 115 : -15) - x;
+            if (left <= 2) x += toExit / Math.max(1, left);           // always shoots out at the end
+            else if (Math.random() < stops / n * 2.2) x += (Math.random() - .5) * 5;   // hesitate, jitter in place
+            else x += dir * (8 + Math.random() * 30) * (Math.random() < .22 ? -.6 : 1); // jumps, sometimes kicks back
+            path.push({ x, w: 2 + Math.random() * 7 });
+          }
+          return path;
+        },
+        draw: (t, side, y, path, f) => {
+          const { x, w } = path[Math.min(f, path.length - 1)];
+          return `linear-gradient(90deg, transparent ${x - w * 2.2}%, rgba(236, 176, 176, .32) ${x - w * 1.4}%, rgba(255, 228, 205, .78) ${x - w * .5}%, rgba(255, 252, 242, .98) ${x}%, rgba(255, 228, 205, .78) ${x + w * .5}%, rgba(236, 176, 176, .3) ${x + w * 1.3}%, transparent ${x + w * 2}%)`; } },
       // both edges burning at once, amber
       double: { frames: [8, 14], flash: .25, draw: (t, side, y) =>
         `radial-gradient(26% 80% at ${4 + t * 22}% ${y}%, ${HOT}, ${GOLD} 22%, ${ORANGE} 48%, transparent 85%),` +
@@ -487,7 +501,7 @@
       burst:  { frames: [6, 11], flash: .4, draw: (t, side, y) =>
         `radial-gradient(${18 + t * 60}% ${30 + t * 70}% at ${at(side, 40 + Math.random() * 20)}% ${y}%, ${HOT}, ${GOLD} 25%, ${ORANGE} 50%, ${RED} 72%, transparent 92%)` }
     };
-    let leakStyle = "edge";   // which leak the site uses
+    let leakStyle = "surge";  // which leak the site uses
     function leakOnce(style) {
       const leak = $("#leak"), mast = $(".masthead");
       if (!leak || !mast || document.body.classList.contains("small-name")) return;
@@ -496,15 +510,16 @@
       const frames = L.frames[0] + Math.floor(Math.random() * (L.frames[1] - L.frames[0] + 1));
       const flash = Math.random() < L.flash ? 1 + Math.floor(Math.random() * Math.max(1, frames - 2)) : -1;
       const peak = .7 + Math.random() * .3;
+      const state = L.init ? L.init(frames) : null;
       let f = 0;
       const tick = setInterval(() => {
         const t = f / frames;
         const env = t < .12 ? t / .12 : t > .7 ? Math.max(0, (1 - t) / .3) : 1;
         let v = peak * env * (.6 + Math.random() * .4);       // frame-by-frame flicker
         if (f === flash) v = 1;
-        leak.style.background = L.draw(t, side, y + (Math.random() - .5) * 6);
+        leak.style.background = L.draw(t, side, y + (Math.random() - .5) * 6, state, f);
         leak.style.opacity = v.toFixed(2);
-        mast.style.setProperty("--sx", (1 + v * (.15 + Math.random() * .3)).toFixed(3));
+        mast.style.setProperty("--sx", (1 + v * (.2 + Math.random() * .4)).toFixed(3));
         mast.style.setProperty("--jx", ((Math.random() - .5) * 4 * v).toFixed(2) + "px");
         mast.style.setProperty("--njx", ((Math.random() - .5) * 2 * v).toFixed(2) + "px");
         mast.style.setProperty("--njy", ((Math.random() - .5) * 1.4 * v).toFixed(2) + "px");
