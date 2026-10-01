@@ -203,7 +203,10 @@
     body { padding: 0 var(--rail); }
     @media (max-width: 760px) { .rail { display: none; } body { padding: 0; } }
     /* ---------- moving film-strip background ---------- */
-    .filmbg { position: fixed; inset: 0; z-index: 0; pointer-events: none; background-repeat: repeat-y; }
+    .filmbg, .grainbg { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+    .filmbg { background-repeat: repeat-y; }
+    .grainbg { opacity: .07; background-repeat: repeat;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1.4 -.35'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
     header, .masthead, main.view, footer { position: relative; z-index: 1; }
     header { z-index: 50; }
     @media (prefers-reduced-motion: reduce) { body::after { animation: none; } * { transition: none !important; animation: none !important; } }
@@ -211,6 +214,7 @@
 </head>
 <body>
   <div class="filmbg" id="filmbg" aria-hidden="true"></div>
+  <div class="grainbg" id="grainbg" aria-hidden="true"></div>
   <div class="rail left" aria-hidden="true"><div class="track" id="rail-l"></div></div>
   <div class="rail right" aria-hidden="true"><div class="track" id="rail-r"></div></div>
   <header>
@@ -300,27 +304,38 @@
     const railText = Array(24).fill("João Viana + ").join("");
     $("#rail-l").textContent = $("#rail-r").textContent = railText + railText;
 
-    // ----- film-strip background: black, with the rounded frame and sprocket outlines in the accent colour,
-    //       moving at the same speed as the side rails -----
+    // ----- film-strip background: the whole page is a strip moving up at the rails' speed.
+    //       The rails are the perforations; across the middle, the horizontal line between frames
+    //       (accent colour, rounded ends) passes now and then, with faint scratches, dust and grain. -----
     const RAIL_SECONDS = 360; // keep equal to the .rail .track animation duration
-    let filmAnim = null;
+    let filmAnims = [];
+    function rand(seed) { return () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }; }
     function buildFilm() {
-      const el = $("#filmbg");
-      const W = window.innerWidth, H = Math.round(window.innerHeight * 1.2);
+      const el = $("#filmbg"), grain = $("#grainbg");
+      const W = window.innerWidth, H = Math.round(window.innerHeight * 1.25);
       const c = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#AFC2A2";
-      const m = W < 760 ? 24 : 72, gap = 70;
-      // only the central strip: one rounded frame outline per tile, no sprocket holes
+      const rail = W < 760 ? 0 : 30, r = rand(7);
+      let marks = "";
+      for (let i = 0; i < 6; i++) {            // scratches
+        const x = rail + r() * (W - 2 * rail), y = r() * H, len = 60 + r() * 420;
+        marks += `<line x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" x2="${(x + (r() - .5) * 3).toFixed(1)}" y2="${(y + len).toFixed(1)}" stroke-width="${(.5 + r() * .8).toFixed(2)}" stroke-opacity="${(.05 + r() * .09).toFixed(2)}"/>`;
+      }
+      for (let i = 0; i < 14; i++) {           // dust
+        marks += `<circle cx="${(rail + r() * (W - 2 * rail)).toFixed(1)}" cy="${(r() * H).toFixed(1)}" r="${(.5 + r() * 1.3).toFixed(2)}" fill="#fff" fill-opacity="${(.08 + r() * .18).toFixed(2)}" stroke="none"/>`;
+      }
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">` +
-        `<rect x="${m}" y="${gap / 2}" width="${W - 2 * m}" height="${H - gap}" rx="26" fill="none" stroke="${c}" stroke-width="1.2" stroke-opacity=".22"/></svg>`;
+        `<g stroke="#fff" fill="none">${marks}</g>` +
+        `<line x1="${rail + 14}" y1="2" x2="${W - rail - 14}" y2="2" stroke="${c}" stroke-width="2.4" stroke-linecap="round" stroke-opacity=".5"/></svg>`;
       el.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
       el.style.backgroundSize = `${W}px ${H}px`;
+      filmAnims.forEach(a => a.cancel()); filmAnims = [];
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
       const track = $("#rail-r");
-      const railHalf = (track && track.offsetHeight / 2) || 4000;
-      const speed = railHalf / RAIL_SECONDS;            // px per second, same as the rails
-      if (filmAnim) filmAnim.cancel();
-      filmAnim = el.animate([{ backgroundPosition: "0 0" }, { backgroundPosition: `0 -${H}px` }],
-                            { duration: (H / speed) * 1000, iterations: Infinity, easing: "linear" });
+      const speed = ((track && track.offsetHeight / 2) || 4000) / RAIL_SECONDS;   // px/s, same as the rails
+      filmAnims.push(el.animate([{ backgroundPosition: "0 0" }, { backgroundPosition: `0 -${H}px` }],
+        { duration: (H / speed) * 1000, iterations: Infinity, easing: "linear" }));
+      filmAnims.push(grain.animate([{ backgroundPosition: "0 0" }, { backgroundPosition: "0 -220px" }],
+        { duration: (220 / speed) * 1000, iterations: Infinity, easing: "linear" }));
     }
     let filmT; window.addEventListener("resize", () => { clearTimeout(filmT); filmT = setTimeout(buildFilm, 200); });
     (document.fonts ? document.fonts.ready : Promise.resolve()).then(buildFilm);
