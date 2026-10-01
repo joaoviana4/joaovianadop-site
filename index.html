@@ -90,13 +90,18 @@
       background: radial-gradient(40% 70% at 8% 40%, rgba(255, 120, 50, .55), transparent 70%), radial-gradient(30% 60% at 95% 70%, rgba(255, 200, 120, .25), transparent 70%); filter: blur(10px); }
     .masthead[data-fx="leak"] h1 { filter: blur(.3px) drop-shadow(0 0 10px rgba(255, 120, 60, .25)); }
     /* anamorphic smear: copies stretched sideways */
-    .masthead[data-fx="smear"] .ghost { opacity: calc(.26 - var(--i) * .04); transform: translateX(calc((var(--i) - 3.5) * 9px)); filter: blur(calc(1px + var(--i) * .5px)); }
+    .masthead[data-fx="smear"] .ghost { opacity: calc(.26 - var(--i) * .04); transform: translateX(calc((var(--i) - 3.5) * 9px * var(--sx, 1) + var(--jx, 0px))); filter: blur(calc(1px + var(--i) * .5px)); }
+    .masthead .namewrap { transform: translate(var(--njx, 0px), var(--njy, 0px)); }
     .masthead p { margin-top: clamp(14px, 2vh, 24px); font-size: 12px; letter-spacing: .3em; text-transform: uppercase; color: var(--muted); }
     body.small-name .masthead { display: none; }
-    /* occasional light leak burning in behind the name */
-    .masthead .leak { position: absolute; inset: -15% 0; z-index: 0; pointer-events: none; opacity: 0; mix-blend-mode: screen; filter: blur(24px);
-      background: radial-gradient(38% 60% at var(--lx, 15%) var(--ly, 45%), rgba(255, 120, 45, .9), rgba(255, 70, 30, .35) 45%, transparent 75%),
-                  radial-gradient(26% 45% at calc(var(--lx, 15%) + 18%) calc(var(--ly, 45%) + 12%), rgba(255, 205, 130, .55), transparent 70%); }
+    /* light leak around the name, 16mm-style: red/orange fog bleeding in from one edge with a hot yellow-white core,
+       flickering frame by frame (driven at 24 fps from JS), kept inside a soft area around the name */
+    .namewrap .leak { position: absolute; inset: -28% -6%; z-index: 3; pointer-events: none; opacity: 0; mix-blend-mode: screen;
+      -webkit-mask-image: radial-gradient(70% 75% at 50% 50%, #000 55%, transparent 100%); mask-image: radial-gradient(70% 75% at 50% 50%, #000 55%, transparent 100%);
+      background:
+        radial-gradient(18% 62% at var(--lx, 8%) var(--ly, 50%), rgba(255, 246, 214, .95), rgba(255, 196, 96, .85) 22%, rgba(255, 112, 44, .6) 48%, rgba(196, 34, 40, .28) 70%, transparent 88%),
+        radial-gradient(34% 90% at var(--lx2, 0%) var(--ly2, 40%), rgba(214, 52, 38, .55), rgba(150, 20, 40, .2) 55%, transparent 80%),
+        linear-gradient(90deg, rgba(255, 150, 90, var(--fog, .0)), transparent 60%); }
     .masthead .namewrap { z-index: 1; }
     nav a { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: color-mix(in srgb, var(--accent) 80%, #000); transition: color .3s; }
     nav a:hover, nav a.active { color: var(--accent); }
@@ -274,8 +279,8 @@
   </header>
 
   <section class="masthead" data-fx="smear">
-    <div class="leak" id="leak" aria-hidden="true"></div>
     <div class="namewrap">
+      <div class="leak" id="leak" aria-hidden="true"></div>
       <h1>João Viana</h1>
       <div class="ghost" aria-hidden="true" style="--i:1">João Viana</div>
       <div class="ghost" aria-hidden="true" style="--i:2">João Viana</div>
@@ -428,24 +433,46 @@
       filmAnims.push(el.animate([{ backgroundPosition: "0 0" }, { backgroundPosition: `0 -${H}px` }],
         { duration: (H / speed) * 1000, iterations: Infinity, easing: "linear" }));
     }
-    // ----- light leak: every so often a warm burn flares behind the name, quickly, then fades -----
+    // ----- light leak around the name, like a 16mm camera leak: it bleeds in from one edge, flickers frame by
+    //       frame at 24 fps (stepped, not smooth), sometimes with a flash frame, then dies. While it burns, the
+    //       anamorphic smear stretches and shakes a little, very fast and within a tight range. -----
     function leakOnce() {
-      const el = $("#leak");
-      if (!el || document.body.classList.contains("small-name")) return;
-      const left = Math.random() < .5;
-      el.style.setProperty("--lx", (left ? 5 + Math.random() * 25 : 70 + Math.random() * 25) + "%");
-      el.style.setProperty("--ly", (25 + Math.random() * 50) + "%");
-      const peak = .45 + Math.random() * .4, drift = (left ? 1 : -1) * (40 + Math.random() * 80);
-      el.animate([
-        { opacity: 0, transform: "translateX(0) scale(.92)" },
-        { opacity: peak, offset: .18 },
-        { opacity: peak * .55, offset: .32 },
-        { opacity: peak * .9, offset: .45 },
-        { opacity: 0, transform: `translateX(${drift}px) scale(1.12)` }
-      ], { duration: 1800 + Math.random() * 1600, easing: "ease-out" });
+      const leak = $("#leak"), mast = $(".masthead");
+      if (!leak || !mast || document.body.classList.contains("small-name")) return;
+      const fromLeft = Math.random() < .5;
+      const frames = 14 + Math.floor(Math.random() * 16);       // ~0.6 to 1.2 s at 24 fps
+      const flash = Math.random() < .45 ? 3 + Math.floor(Math.random() * 5) : -1;
+      const peak = .55 + Math.random() * .45;
+      const y = 30 + Math.random() * 40;
+      let f = 0;
+      const tick = setInterval(() => {
+        const t = f / frames;
+        // envelope: fast attack, flickering body, quick decay; each frame gets its own random value
+        const env = t < .15 ? t / .15 : t > .7 ? Math.max(0, (1 - t) / .3) : 1;
+        let v = peak * env * (.55 + Math.random() * .45);
+        if (f === flash) v = Math.min(1, peak + .35);
+        const reach = 4 + t * 26 + Math.random() * 6;           // creeps in from the edge
+        leak.style.opacity = v.toFixed(2);
+        leak.style.setProperty("--lx", reach + "%");                 // drawn from the left; mirrored below for the right edge
+        leak.style.setProperty("--ly", (y + (Math.random() - .5) * 8) + "%");
+        leak.style.setProperty("--lx2", "0%");
+        leak.style.setProperty("--ly2", (y - 8 + Math.random() * 16) + "%");
+        leak.style.setProperty("--fog", (v * .18).toFixed(3));
+        leak.style.transform = fromLeft ? "" : "scaleX(-1)";
+        // smear stretch + shake, tight range
+        mast.style.setProperty("--sx", (1 + v * (.15 + Math.random() * .3)).toFixed(3));
+        mast.style.setProperty("--jx", ((Math.random() - .5) * 4 * v).toFixed(2) + "px");
+        mast.style.setProperty("--njx", ((Math.random() - .5) * 2 * v).toFixed(2) + "px");
+        mast.style.setProperty("--njy", ((Math.random() - .5) * 1.4 * v).toFixed(2) + "px");
+        if (++f > frames) {
+          clearInterval(tick);
+          leak.style.opacity = 0;
+          ["--sx", "--jx", "--njx", "--njy"].forEach(k => mast.style.removeProperty(k));
+        }
+      }, 1000 / 24);
     }
     function scheduleLeak(first) {
-      setTimeout(() => { leakOnce(); scheduleLeak(false); }, first ? 2500 + Math.random() * 2000 : 9000 + Math.random() * 11000);
+      setTimeout(() => { leakOnce(); scheduleLeak(false); }, first ? 2500 + Math.random() * 2000 : 7000 + Math.random() * 11000);
     }
     if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) scheduleLeak(true);
 
