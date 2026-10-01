@@ -224,9 +224,30 @@
     .page .txt p + p { margin-top: 1em; }
     .page .portrait { display: block; width: 100%; max-width: 400px; height: auto; aspect-ratio: 1 / 1; margin-top: clamp(28px, 4vh, 48px); }
     .contact { margin-top: 40px; border-top: 1px solid var(--line); }
-    .contact a { display: flex; justify-content: space-between; padding: 18px 0; border-bottom: 1px solid var(--line); font-size: 16px; transition: padding .4s var(--ease); }
-    .contact a span { color: var(--muted); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; }
+    .contact a, .contact .row { display: flex; justify-content: space-between; padding: 18px 0; border-bottom: 1px solid var(--line); font-size: 16px; transition: padding .4s var(--ease); }
+    .contact a span, .contact .row span { color: var(--muted); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; }
     .contact a:hover { padding-left: 10px; }
+
+    /* contact form */
+    .cform { margin-top: clamp(40px, 6vh, 64px); display: grid; gap: 22px; }
+    .cform h2 { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: var(--accent); }
+    .cform label { display: grid; gap: 8px; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+    .cform input, .cform textarea {
+      font: inherit; font-size: 16px; letter-spacing: normal; text-transform: none; color: var(--fg);
+      background: transparent; border: 0; border-bottom: 1px solid var(--line); padding: 10px 0; border-radius: 0; outline: none; transition: border-color .3s;
+    }
+    .cform textarea { min-height: 140px; resize: vertical; border: 1px solid var(--line); padding: 12px; }
+    .cform input:focus, .cform textarea:focus { border-color: var(--accent); }
+    .cform .hp { position: absolute; left: -9999px; }
+    .cform button {
+      justify-self: start; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase;
+      color: #000; background: var(--accent); padding: 12px 22px; transition: opacity .3s;
+    }
+    .cform button:hover { opacity: .85; }
+    .cform button[disabled] { opacity: .5; cursor: default; }
+    .cform .msg { font-size: 14px; color: var(--muted); min-height: 1.4em; }
+    .cform .msg.ok { color: var(--accent); }
+    .cform .msg.err { color: #e08a7a; }
 
     footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 28px var(--pad); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 
@@ -325,10 +346,19 @@
         <p>João Viana is a Director of Photography based in Lisbon, working mostly in music videos, short films and commercials. He also directs documentary and fiction.</p>
         <p class="todo">[Bio por escrever.]</p>
         <div class="contact">
-          <a href="mailto:joao17viana@gmail.com"><span>Email</span>joao17viana@gmail.com</a>
+          <div class="row"><span>Email</span>joao17viana@gmail.com</div>
           <a href="https://www.instagram.com/joao17viana_/" target="_blank" rel="noopener"><span>Instagram</span>@joao17viana_</a>
           <a href="#/about"><span>Based in</span>Lisbon, Portugal</a>
         </div>
+        <form class="cform" id="cform" novalidate>
+          <h2>Get in touch</h2>
+          <label>Name<input name="name" type="text" autocomplete="name" required></label>
+          <label>Email<input name="email" type="email" autocomplete="email" required></label>
+          <label>Message<textarea name="message" required></textarea></label>
+          <input class="hp" type="text" name="_honey" tabindex="-1" autocomplete="off" aria-hidden="true">
+          <button type="submit">Send message</button>
+          <p class="msg" id="cform-msg" role="status"></p>
+        </form>
       </div>
     </section>
   </main>
@@ -642,6 +672,30 @@
       });
       return sec;
     }
+
+    // ----- contact form: delivered by FormSubmit to the Gmail inbox (no backend needed) -----
+    const FORM_ENDPOINT = "https://formsubmit.co/ajax/joao17viana@gmail.com";
+    $("#cform").addEventListener("submit", async e => {
+      e.preventDefault();
+      const f = e.target, msg = $("#cform-msg"), btn = f.querySelector("button");
+      const data = Object.fromEntries(new FormData(f));
+      if (data._honey) return;                                   // bot
+      if (!data.name.trim() || !/^\S+@\S+\.\S+$/.test(data.email) || !data.message.trim()) {
+        msg.className = "msg err"; msg.textContent = "Please fill in your name, a valid email and a message."; return;
+      }
+      btn.disabled = true; msg.className = "msg"; msg.textContent = "Sending…";
+      try {
+        const r = await fetch(FORM_ENDPOINT, {
+          method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({ name: data.name, email: data.email, message: data.message,
+            _subject: "New message from joaovianadop.com", _replyto: data.email, _template: "table", _captcha: "false" })
+        });
+        if (!r.ok) throw new Error(r.status);
+        f.reset(); msg.className = "msg ok"; msg.textContent = "Thank you — your message was sent. I'll get back to you soon.";
+      } catch (err) {
+        msg.className = "msg err"; msg.textContent = "Something went wrong. Please try again, or email joao17viana@gmail.com.";
+      } finally { btn.disabled = false; }
+    });
 
     // ----- router -----
     function route() {
