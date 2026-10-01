@@ -585,10 +585,16 @@
         delay += 260 + Math.random() * 520;
       }
     }
-    function scheduleLeak(first) {
-      setTimeout(() => { leakBurst(); scheduleLeak(false); }, first ? 1800 + Math.random() * 1500 : 3000 + Math.random() * 4500);
+    // leaks only happen while someone hovers a thumbnail (when the rest of the grid goes dark):
+    // a burst right away, then another every few seconds for as long as the cursor stays on the thumbnails
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let leakTimer = null;
+    function startLeaks() {
+      if (reduceMotion || leakTimer) return;
+      const loop = () => { leakBurst(); leakTimer = setTimeout(loop, 2200 + Math.random() * 2600); };
+      leakTimer = setTimeout(loop, 120 + Math.random() * 250);
     }
-    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) scheduleLeak(true);
+    function stopLeaks() { clearTimeout(leakTimer); leakTimer = null; }
 
     let filmT; window.addEventListener("resize", () => { clearTimeout(filmT); filmT = setTimeout(buildFilm, 200); });
     (document.fonts ? document.fonts.ready : Promise.resolve()).then(buildFilm);
@@ -630,8 +636,8 @@
         const c = b.dataset.cat;
         renderGrid(gridEl, c === "All" ? list : list.filter(p => catOf(p) === c), countEl, sec);
       });
-      gridEl.addEventListener("mouseover", e => { if (e.target.closest(".card a")) gridEl.classList.add("hovering"); });
-      gridEl.addEventListener("mouseleave", () => gridEl.classList.remove("hovering"));
+      gridEl.addEventListener("mouseover", e => { if (e.target.closest(".card a")) { gridEl.classList.add("hovering"); startLeaks(); } });
+      gridEl.addEventListener("mouseout", e => { if (!e.relatedTarget || !e.relatedTarget.closest || !e.relatedTarget.closest(".card a")) { gridEl.classList.remove("hovering"); stopLeaks(); } });
       renderGrid(gridEl, list, countEl, sec);
     }
     setupGrid($("#grid-dp"), $("#filters-dp"), $("#count-dp"), DP, "work");
@@ -708,6 +714,7 @@
       } else if (h === "direction") view = navKey = "direction";
       else if (h === "about") view = navKey = "about";
       document.body.classList.toggle("small-name", view === "project" || view === "about");
+      stopLeaks(); document.querySelectorAll(".grid.hovering").forEach(g => g.classList.remove("hovering"));
       document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + view));
       document.querySelectorAll("nav a").forEach(a => a.classList.toggle("active", a.dataset.nav === navKey));
       window.scrollTo(0, 0);
