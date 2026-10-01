@@ -202,10 +202,15 @@
     @keyframes rail { from { translate: 0 0; } to { translate: 0 -50%; } }
     body { padding: 0 var(--rail); }
     @media (max-width: 760px) { .rail { display: none; } body { padding: 0; } }
+    /* ---------- moving film-strip background ---------- */
+    .filmbg { position: fixed; inset: 0; z-index: 0; pointer-events: none; background-repeat: repeat-y; }
+    header, .masthead, main.view, footer { position: relative; z-index: 1; }
+    header { z-index: 50; }
     @media (prefers-reduced-motion: reduce) { body::after { animation: none; } * { transition: none !important; animation: none !important; } }
   </style>
 </head>
 <body>
+  <div class="filmbg" id="filmbg" aria-hidden="true"></div>
   <div class="rail left" aria-hidden="true"><div class="track" id="rail-l"></div></div>
   <div class="rail right" aria-hidden="true"><div class="track" id="rail-r"></div></div>
   <header>
@@ -294,6 +299,37 @@
     $("#y").textContent = new Date().getFullYear();
     const railText = Array(24).fill("João Viana + ").join("");
     $("#rail-l").textContent = $("#rail-r").textContent = railText + railText;
+
+    // ----- film-strip background: black, with the rounded frame and sprocket outlines in the accent colour,
+    //       moving at the same speed as the side rails -----
+    const RAIL_SECONDS = 360; // keep equal to the .rail .track animation duration
+    let filmAnim = null;
+    function buildFilm() {
+      const el = $("#filmbg");
+      const W = window.innerWidth, H = Math.round(window.innerHeight * 1.2);
+      const c = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#AFC2A2";
+      const narrow = W < 760;
+      const sx = narrow ? 6 : 40, sw = narrow ? 10 : 16, sh = narrow ? 7 : 11, step = narrow ? 26 : 34;
+      const m = narrow ? 24 : 72, gap = 70;
+      let holes = "";
+      for (let y = 12; y < H; y += step) {
+        holes += `<rect x="${sx}" y="${y}" width="${sw}" height="${sh}" rx="3"/><rect x="${W - sx - sw}" y="${y}" width="${sw}" height="${sh}" rx="3"/>`;
+      }
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><g fill="none" stroke="${c}" stroke-width="1.2">` +
+        `<g stroke-opacity=".16">${holes}</g>` +
+        `<rect x="${m}" y="${gap / 2}" width="${W - 2 * m}" height="${H - gap}" rx="26" stroke-opacity=".2"/></g></svg>`;
+      el.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+      el.style.backgroundSize = `${W}px ${H}px`;
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      const track = $("#rail-r");
+      const railHalf = (track && track.offsetHeight / 2) || 4000;
+      const speed = railHalf / RAIL_SECONDS;            // px per second, same as the rails
+      if (filmAnim) filmAnim.cancel();
+      filmAnim = el.animate([{ backgroundPosition: "0 0" }, { backgroundPosition: `0 -${H}px` }],
+                            { duration: (H / speed) * 1000, iterations: Infinity, easing: "linear" });
+    }
+    let filmT; window.addEventListener("resize", () => { clearTimeout(filmT); filmT = setTimeout(buildFilm, 200); });
+    (document.fonts ? document.fonts.ready : Promise.resolve()).then(buildFilm);
 
     // ----- grids + filtro por tipo -----
     // Cada tipo de projeto entra numa destas categorias do filtro.
