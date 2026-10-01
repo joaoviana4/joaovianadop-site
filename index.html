@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>João Viana — Director of Photography</title>
+  <meta name="description" content="João Viana — Director of Photography and Director based in Lisbon.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0b0b;
+      --fg: #ededed;
+      --muted: #8a8a8a;
+      --line: #222;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: "Inter", system-ui, sans-serif;
+      font-weight: 300;
+      letter-spacing: 0.01em;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 24px;
+      padding: 28px clamp(16px, 4vw, 48px);
+      border-bottom: 1px solid var(--line);
+      flex-wrap: wrap;
+    }
+    .name {
+      font-weight: 500;
+      font-size: 15px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--fg);
+      text-decoration: none;
+    }
+    nav { display: flex; gap: clamp(16px, 3vw, 36px); flex-wrap: wrap; }
+    nav a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      transition: color .2s;
+    }
+    nav a:hover, nav a.active { color: var(--fg); }
+    main {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      padding: clamp(32px, 8vw, 96px) clamp(16px, 4vw, 48px);
+    }
+    section { display: none; max-width: 640px; }
+    section.active { display: block; }
+    h1 {
+      font-weight: 300;
+      font-size: clamp(32px, 6vw, 64px);
+      line-height: 1.05;
+      margin-bottom: 24px;
+    }
+    p { color: var(--muted); font-size: 15px; line-height: 1.7; }
+    p + p { margin-top: 12px; }
+    a.mail { color: var(--fg); }
+    footer {
+      padding: 20px clamp(16px, 4vw, 48px);
+      border-top: 1px solid var(--line);
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="name" href="#home">João Viana</a>
+    <nav>
+      <a href="#cinematography">Cinematography</a>
+      <a href="#direction">Direction</a>
+      <a href="#about">About</a>
+    </nav>
+  </header>
+
+  <main>
+    <section id="home">
+      <h1>Director of Photography<br>&amp; Director</h1>
+      <p>New website coming soon.</p>
+    </section>
+
+    <section id="cinematography">
+      <h1>Cinematography</h1>
+      <p>Selected work as Director of Photography — coming soon.</p>
+    </section>
+
+    <section id="direction">
+      <h1>Direction</h1>
+      <p>Documentary and fiction work as director — coming soon.</p>
+    </section>
+
+    <section id="about">
+      <h1>About</h1>
+      <p>João Viana is a Director of Photography and Director based in Lisbon, working mostly in music videos and documentary.</p>
+      <p><a class="mail" href="mailto:joao17viana@gmail.com">joao17viana@gmail.com</a></p>
+    </section>
+  </main>
+
+  <footer>
+    <span>Lisbon, Portugal</span>
+    <span>© <span id="y"></span> João Viana</span>
+  </footer>
+
+  <script>
+    document.getElementById('y').textContent = new Date().getFullYear();
+    const ids = ['home', 'cinematography', 'direction', 'about'];
+    function show() {
+      const id = ids.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'home';
+      ids.forEach(s => document.getElementById(s).classList.toggle('active', s === id));
+      document.querySelectorAll('nav a').forEach(a =>
+        a.classList.toggle('active', a.getAttribute('href') === '#' + id));
+    }
+    window.addEventListener('hashchange', show);
+    show();
+  </script>
+</body>
+</html>
