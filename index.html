@@ -308,16 +308,10 @@
       const el = $("#filmbg");
       const W = window.innerWidth, H = Math.round(window.innerHeight * 1.2);
       const c = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#AFC2A2";
-      const narrow = W < 760;
-      const sx = narrow ? 6 : 40, sw = narrow ? 10 : 16, sh = narrow ? 7 : 11, step = narrow ? 26 : 34;
-      const m = narrow ? 24 : 72, gap = 70;
-      let holes = "";
-      for (let y = 12; y < H; y += step) {
-        holes += `<rect x="${sx}" y="${y}" width="${sw}" height="${sh}" rx="3"/><rect x="${W - sx - sw}" y="${y}" width="${sw}" height="${sh}" rx="3"/>`;
-      }
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><g fill="none" stroke="${c}" stroke-width="1.2">` +
-        `<g stroke-opacity=".16">${holes}</g>` +
-        `<rect x="${m}" y="${gap / 2}" width="${W - 2 * m}" height="${H - gap}" rx="26" stroke-opacity=".2"/></g></svg>`;
+      const m = W < 760 ? 24 : 72, gap = 70;
+      // only the central strip: one rounded frame outline per tile, no sprocket holes
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">` +
+        `<rect x="${m}" y="${gap / 2}" width="${W - 2 * m}" height="${H - gap}" rx="26" fill="none" stroke="${c}" stroke-width="1.2" stroke-opacity=".22"/></svg>`;
       el.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
       el.style.backgroundSize = `${W}px ${H}px`;
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
