@@ -203,13 +203,9 @@
     body { padding: 0 var(--rail); }
     @media (max-width: 760px) { .rail { display: none; } body { padding: 0; } }
     /* ---------- moving film-strip background ---------- */
-    .filmbg, .grainbg { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+    .filmbg { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
     .filmbg { background-repeat: repeat-y; }
-    /* grain only in random patches (masked by a soft, low-frequency noise), never as a flat grey veil */
-    .grainbg { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='900'%3E%3Cfilter id='m'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.0045' numOctaves='2' seed='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 5.5 0 0 0 -2.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23m)'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='900'%3E%3Cfilter id='m'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.0045' numOctaves='2' seed='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 5.5 0 0 0 -2.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23m)'/%3E%3C/svg%3E");
       -webkit-mask-size: 900px 900px; mask-size: 900px 900px; -webkit-mask-repeat: repeat; mask-repeat: repeat; }
-    .grainbg { opacity: .22; background-repeat: repeat;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1.4 -.35'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
     header, .masthead, main.view, footer { position: relative; z-index: 1; }
     header { z-index: 50; }
     @media (prefers-reduced-motion: reduce) { body::after { animation: none; } * { transition: none !important; animation: none !important; } }
@@ -217,7 +213,6 @@
 </head>
 <body>
   <div class="filmbg" id="filmbg" aria-hidden="true"></div>
-  <div class="grainbg" id="grainbg" aria-hidden="true"></div>
   <div class="rail left" aria-hidden="true"><div class="track" id="rail-l"></div></div>
   <div class="rail right" aria-hidden="true"><div class="track" id="rail-r"></div></div>
   <header>
@@ -307,27 +302,45 @@
     const railText = Array(24).fill("João Viana + ").join("");
     $("#rail-l").textContent = $("#rail-r").textContent = railText + railText;
 
-    // ----- film background: scratches, dust and grain rising at the rails' speed, like a projected print -----
+    // ----- film background: scratches and film dirt rising at the rails' speed, like a projected print -----
     const RAIL_SECONDS = 240; // keep equal to the .rail .track animation duration
     let filmAnims = [];
     function rand(seed) { return () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }; }
     function buildFilm() {
-      const el = $("#filmbg"), grain = $("#grainbg");
+      const el = $("#filmbg");
       const W = window.innerWidth, F = Math.round(window.innerHeight * 1.25), H = F * 3;  // tile = 3 frames, so the marks don't repeat every frame
       const rail = W < 760 ? 0 : 30, r = rand(11);
       let marks = "";
       const nScratch = 12 + Math.floor(r() * 5);  // scattered over the tall tile
       const firstView = window.innerHeight;
       for (let i = 0; i < nScratch; i++) {
-        // the first four always land on the opening screen, so grain and scratches are there from the start
+        // the first four always land on the opening screen, so scratches and dirt are there from the start
         const y = i < 4 ? r() * firstView * .85 : r() * H;
         const x = rail + r() * (W - 2 * rail), len = 15 + Math.pow(r(), 2) * 320;
         const bend = (r() - .5) * 10;
         marks += `<path d="M${x.toFixed(1)} ${y.toFixed(1)} q${bend.toFixed(1)} ${(len / 2).toFixed(1)} ${(bend * .4).toFixed(1)} ${len.toFixed(1)}" stroke-width="${(.4 + r() * .7).toFixed(2)}" stroke-opacity="${(.04 + r() * .08).toFixed(2)}"/>`;
       }
-      const nDust = 40 + Math.floor(r() * 20);
-      for (let i = 0; i < nDust; i++) {
-        marks += `<circle cx="${(rail + r() * (W - 2 * rail)).toFixed(1)}" cy="${(r() * H).toFixed(1)}" r="${(.4 + r() * 1.4).toFixed(2)}" fill="#fff" fill-opacity="${(.06 + r() * .16).toFixed(2)}" stroke="none"/>`;
+      // film dirt: specks, irregular blobs and hairs, denser in random clusters
+      const pt = () => [rail + r() * (W - 2 * rail), r() < .25 ? r() * firstView : r() * H];
+      const clusters = Array.from({ length: 7 }, (_, i) => [rail + r() * (W - 2 * rail), i < 2 ? r() * firstView : r() * H]);
+      const near = () => { const [cx, cy] = clusters[Math.floor(r() * clusters.length)]; return [cx + (r() - .5) * 260, cy + (r() - .5) * 220]; };
+      for (let i = 0; i < 160; i++) {                       // specks
+        const [x, y] = r() < .55 ? near() : pt();
+        marks += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(.4 + Math.pow(r(), 3) * 2.4).toFixed(2)}" fill="#fff" fill-opacity="${(.08 + r() * .25).toFixed(2)}" stroke="none"/>`;
+      }
+      for (let i = 0; i < 22; i++) {                        // irregular blobs
+        const [x, y] = r() < .6 ? near() : pt(), k = 1.5 + r() * 5;
+        let d = "";
+        for (let a = 0; a < 7; a++) {
+          const ang = a / 7 * Math.PI * 2, rr = k * (.55 + r() * .7);
+          d += (a ? "L" : "M") + (x + Math.cos(ang) * rr).toFixed(1) + " " + (y + Math.sin(ang) * rr * (.6 + r() * .8)).toFixed(1);
+        }
+        marks += `<path d="${d}Z" fill="#fff" fill-opacity="${(.06 + r() * .16).toFixed(2)}" stroke="none"/>`;
+      }
+      for (let i = 0; i < 9; i++) {                         // hairs
+        const [x, y] = i < 2 ? [rail + r() * (W - 2 * rail), r() * firstView] : pt();
+        const L = 20 + r() * 70;
+        marks += `<path d="M${x.toFixed(1)} ${y.toFixed(1)} c${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)}" stroke-width="${(.5 + r() * .6).toFixed(2)}" stroke-opacity="${(.08 + r() * .14).toFixed(2)}"/>`;
       }
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">` +
         `<g stroke="#fff" fill="none">${marks}</g></svg>`;
@@ -339,11 +352,6 @@
       const speed = ((track && track.offsetHeight / 2) || 4000) / RAIL_SECONDS;   // px/s, same as the rails
       filmAnims.push(el.animate([{ backgroundPosition: "0 0" }, { backgroundPosition: `0 -${H}px` }],
         { duration: (H / speed) * 1000, iterations: Infinity, easing: "linear" }));
-      filmAnims.push(grain.animate([{ backgroundPosition: "0 0" }, { backgroundPosition: "0 -220px" }],
-        { duration: (220 / speed) * 1000, iterations: Infinity, easing: "linear" }));
-      // the grain patches drift up too, a bit slower and sideways, so they appear and fade at random
-      filmAnims.push(grain.animate([{ maskPosition: "0 0", webkitMaskPosition: "0 0" }, { maskPosition: "-300px -900px", webkitMaskPosition: "-300px -900px" }],
-        { duration: (900 / speed) * 1000 * 1.6, iterations: Infinity, easing: "linear" }));
     }
     let filmT; window.addEventListener("resize", () => { clearTimeout(filmT); filmT = setTimeout(buildFilm, 200); });
     (document.fonts ? document.fonts.ready : Promise.resolve()).then(buildFilm);
