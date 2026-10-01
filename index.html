@@ -197,9 +197,9 @@
     .player iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; z-index: 3; }
     .player .na { position: absolute; inset: 0; display: grid; place-items: center; z-index: 2; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: rgba(255,255,255,.6); }
 
-    .p-body { display: grid; grid-template-columns: 1fr 2fr; gap: clamp(32px, 6vw, 96px); padding: clamp(56px, 10vh, 120px) 0; border-bottom: 1px solid var(--line); }
-    .credits dt { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin-top: 22px; }
-    .credits dt:first-child { margin-top: 0; }
+    .p-body { padding: clamp(40px, 7vh, 80px) 0; border-bottom: 1px solid var(--line); }
+    .credits { display: flex; flex-wrap: wrap; gap: 28px clamp(32px, 5vw, 80px); }
+    .credits dt { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
     .credits dd { font-size: 16px; margin-top: 6px; }
     .process h2 { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); font-weight: 400; margin-bottom: 20px; }
     .process p { font-size: clamp(18px, 1.7vw, 23px); line-height: 1.55; color: #f2f2f2; max-width: 760px; }
@@ -623,17 +623,11 @@
         <div class="player">${player}</div>
         <div class="p-body">
           <dl class="credits">
-            <dt>Director</dt><dd${p.dir ? "" : ' class="todo"'}>${esc(p.dir || "—")}</dd>
-            <dt>Role</dt><dd>${esc(p.role)}</dd>
-            <dt>Type</dt><dd${p.type ? "" : ' class="todo"'}>${esc(p.type || "—")}</dd>
-            <dt>Year</dt><dd${p.year ? "" : ' class="todo"'}>${p.year ?? "—"}</dd>
-            <dt>Camera / Lenses</dt><dd class="todo">—</dd>
+            ${p.dir ? `<div><dt>Director</dt><dd>${esc(p.dir)}</dd></div>` : ""}
+            <div><dt>Role</dt><dd>${esc(p.role)}</dd></div>
+            ${p.type ? `<div><dt>Type</dt><dd>${esc(p.type)}</dd></div>` : ""}
+            ${p.year ? `<div><dt>Year</dt><dd>${p.year}</dd></div>` : ""}
           </dl>
-          <div class="process">
-            <h2>Process</h2>
-            <p class="todo">[Texto sobre o processo: o conceito, a abordagem à luz e à câmara, as escolhas de lentes e formato, os desafios da rodagem.]</p>
-            <p class="todo">[Dois ou três parágrafos curtos chegam.]</p>
-          </div>
         </div>
         <div class="stills">
           ${[0, 1, 2, 3, 4, 5].map(k => `<div class="ph" style="--h:${(p.h ?? 30) + k * 12}"><span class="tag">Still ${k + 1}</span></div>`).join("")}
