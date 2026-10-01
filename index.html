@@ -292,7 +292,7 @@
       ? `<img src="${coverSrc(p)}" alt="${esc(p.title)} — still" loading="lazy" decoding="async"${p.pos ? ` style="--pos:${p.pos}"` : ""}>`
       : `<div class="ph" style="position:absolute;inset:0;--h:${p.h ?? 30}"><span class="tag">${label}</span></div>`;
     $("#y").textContent = new Date().getFullYear();
-    const railText = Array(24).fill("João Viana \u2014 ").join("");
+    const railText = Array(24).fill("João Viana + ").join("");
     $("#rail-l").textContent = $("#rail-r").textContent = railText + railText;
 
     // ----- grids + filtro por tipo -----
