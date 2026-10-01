@@ -13,6 +13,7 @@
       --bg: #000;
       --fg: #ffffff;
       --accent: #AFC2A2;  /* sálvia, um pouco mais clara que a sálvia escura #8FA083 */
+      --name: color-mix(in srgb, var(--accent) 74%, #fff);  /* nome um pouco mais luminoso */
       --glow: 0 0 14px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 36px color-mix(in srgb, var(--accent) 25%, transparent);   /* cor de destaque: nome, menu, filtros, barras laterais */
       --rail: 30px;
       --muted: #c9c9c9;
@@ -46,7 +47,30 @@
     .mini { font-size: 13px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; opacity: 0; pointer-events: none; transition: opacity .3s; }
     body.small-name .mini { opacity: 1; pointer-events: auto; }
     .masthead { text-align: center; padding: clamp(40px, 9vh, 110px) var(--pad) clamp(48px, 10vh, 120px); }
-    .masthead h1 { color: var(--accent); filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 18%, transparent)) drop-shadow(0 0 20px color-mix(in srgb, var(--accent) 6%, transparent)); font-family: "Unbounded", sans-serif; font-weight: 800; text-transform: uppercase; font-size: clamp(34px, 7.6vw, 128px); line-height: .95; letter-spacing: -.01em; }
+    .masthead h1, .masthead .ghost { font-family: "Unbounded", sans-serif; font-weight: 800; text-transform: uppercase; font-size: clamp(34px, 7.6vw, 128px); line-height: .95; letter-spacing: -.01em; margin: 0; }
+    .masthead h1 { position: relative; color: var(--name); filter: drop-shadow(0 0 8px color-mix(in srgb, var(--name) 30%, transparent)) drop-shadow(0 0 22px color-mix(in srgb, var(--name) 11%, transparent)); }
+    .namewrap { position: relative; isolation: isolate; }
+    .masthead .ghost { position: absolute; inset: 0; z-index: -1; color: var(--name); pointer-events: none; opacity: 0; transition: opacity .3s; }
+
+    /* ---------- name edge effects (choose one via data-fx on .masthead) ---------- */
+    /* vertical motion trail: the strip moves up, so the name leaves faint copies below it */
+    .masthead[data-fx="trail"] .ghost { opacity: calc(.34 - var(--i) * .055); transform: translateY(calc(var(--i) * 7px)); filter: blur(calc(var(--i) * .7px)); }
+    /* zoom blur: copies growing out from the centre */
+    .masthead[data-fx="zoom"] .ghost { opacity: calc(.3 - var(--i) * .045); transform: scale(calc(1 + var(--i) * .014)); filter: blur(calc(var(--i) * .6px)); }
+    /* halation: the red bloom film gives around bright edges */
+    .masthead[data-fx="halation"] h1 { filter: blur(.35px) drop-shadow(0 0 3px rgba(255, 92, 60, .55)) drop-shadow(0 0 14px rgba(255, 60, 30, .32)) drop-shadow(0 0 30px rgba(255, 60, 30, .14)); }
+    /* gate weave: the projector gate jitters the frame by a pixel */
+    .masthead[data-fx="weave"] .namewrap { animation: weave .9s steps(1) infinite; filter: blur(.4px); }
+    @keyframes weave { 0% { transform: translate(0, 0); } 20% { transform: translate(.8px, -1px); } 40% { transform: translate(-.6px, .7px); } 60% { transform: translate(.4px, 1px); } 80% { transform: translate(-1px, -.4px); } }
+    /* chromatic fringing: red and cyan slightly out of register */
+    .masthead[data-fx="chroma"] .ghost:nth-of-type(1) { opacity: .55; color: #ff4a3d; transform: translateX(-3px); mix-blend-mode: screen; }
+    .masthead[data-fx="chroma"] .ghost:nth-of-type(2) { opacity: .55; color: #3fd4ff; transform: translateX(3px); mix-blend-mode: screen; }
+    /* diffusion (Pro-Mist): a soft blurred copy blooms around the letters */
+    .masthead[data-fx="mist"] .ghost:nth-of-type(1) { opacity: .7; filter: blur(12px); }
+    .masthead[data-fx="mist"] .ghost:nth-of-type(2) { opacity: .45; filter: blur(4px); }
+    .masthead[data-fx="mist"] h1 { filter: blur(.3px); }
+    /* anamorphic smear: copies stretched sideways */
+    .masthead[data-fx="smear"] .ghost { opacity: calc(.26 - var(--i) * .04); transform: translateX(calc((var(--i) - 3.5) * 9px)); filter: blur(calc(1px + var(--i) * .5px)); }
     .masthead p { margin-top: clamp(14px, 2vh, 24px); font-size: 12px; letter-spacing: .3em; text-transform: uppercase; color: var(--muted); }
     body.small-name .masthead { display: none; }
     nav a { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: color-mix(in srgb, var(--accent) 80%, #000); transition: color .3s; }
@@ -225,7 +249,15 @@
   </header>
 
   <section class="masthead">
-    <h1>João Viana</h1>
+    <div class="namewrap">
+      <h1>João Viana</h1>
+      <div class="ghost" aria-hidden="true" style="--i:1">João Viana</div>
+      <div class="ghost" aria-hidden="true" style="--i:2">João Viana</div>
+      <div class="ghost" aria-hidden="true" style="--i:3">João Viana</div>
+      <div class="ghost" aria-hidden="true" style="--i:4">João Viana</div>
+      <div class="ghost" aria-hidden="true" style="--i:5">João Viana</div>
+      <div class="ghost" aria-hidden="true" style="--i:6">João Viana</div>
+    </div>
     <p>Director of Photography &amp; Director</p>
   </section>
 
@@ -310,15 +342,15 @@
       const el = $("#filmbg");
       const W = window.innerWidth, F = Math.round(window.innerHeight * 1.25), H = F * 3;  // tile = 3 frames, so the marks don't repeat every frame
       const rail = W < 760 ? 0 : 30, r = rand(11);
-      let marks = "";
-      const nScratch = 12 + Math.floor(r() * 5);  // scattered over the tall tile
+      let scratches = "", dirt = "";
+      const nScratch = 20 + Math.floor(r() * 7);  // scattered over the tall tile
       const firstView = window.innerHeight;
       for (let i = 0; i < nScratch; i++) {
-        // the first four always land on the opening screen, so scratches and dirt are there from the start
-        const y = i < 4 ? r() * firstView * .85 : r() * H;
+        // the first six always land on the opening screen, so scratches and dirt are there from the start
+        const y = i < 6 ? r() * firstView * .85 : r() * H;
         const x = rail + r() * (W - 2 * rail), len = 15 + Math.pow(r(), 2) * 320;
         const bend = (r() - .5) * 10;
-        marks += `<path d="M${x.toFixed(1)} ${y.toFixed(1)} q${bend.toFixed(1)} ${(len / 2).toFixed(1)} ${(bend * .4).toFixed(1)} ${len.toFixed(1)}" stroke-width="${(.4 + r() * .7).toFixed(2)}" stroke-opacity="${(.04 + r() * .08).toFixed(2)}"/>`;
+        scratches += `<path d="M${x.toFixed(1)} ${y.toFixed(1)} q${bend.toFixed(1)} ${(len / 2).toFixed(1)} ${(bend * .4).toFixed(1)} ${len.toFixed(1)}" stroke-width="${(.4 + r() * .7).toFixed(2)}" stroke-opacity="${(.05 + r() * .1).toFixed(2)}"/>`;
       }
       // film dirt: specks, irregular blobs and hairs, denser in random clusters
       const pt = () => [rail + r() * (W - 2 * rail), r() < .25 ? r() * firstView : r() * H];
@@ -326,7 +358,7 @@
       const near = () => { const [cx, cy] = clusters[Math.floor(r() * clusters.length)]; return [cx + (r() - .5) * 260, cy + (r() - .5) * 220]; };
       for (let i = 0; i < 160; i++) {                       // specks
         const [x, y] = r() < .55 ? near() : pt();
-        marks += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(.4 + Math.pow(r(), 3) * 2.4).toFixed(2)}" fill="#fff" fill-opacity="${(.08 + r() * .25).toFixed(2)}" stroke="none"/>`;
+        dirt += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(.5 + Math.pow(r(), 3) * 2.8).toFixed(2)}" fill="#fff" fill-opacity="${(.22 + r() * .38).toFixed(2)}" stroke="none"/>`;
       }
       for (let i = 0; i < 22; i++) {                        // irregular blobs
         const [x, y] = r() < .6 ? near() : pt(), k = 1.5 + r() * 5;
@@ -335,26 +367,26 @@
           const ang = a / 7 * Math.PI * 2, rr = k * (.55 + r() * .7);
           d += (a ? "L" : "M") + (x + Math.cos(ang) * rr).toFixed(1) + " " + (y + Math.sin(ang) * rr * (.6 + r() * .8)).toFixed(1);
         }
-        marks += `<path d="${d}Z" fill="#fff" fill-opacity="${(.06 + r() * .16).toFixed(2)}" stroke="none"/>`;
+        dirt += `<path d="${d}Z" fill="#fff" fill-opacity="${(.2 + r() * .3).toFixed(2)}" stroke="none"/>`;
       }
       for (let i = 0; i < 9; i++) {                         // hairs
         const [x, y] = i < 2 ? [rail + r() * (W - 2 * rail), r() * firstView] : pt();
         const L = 20 + r() * 70;
-        marks += `<path d="M${x.toFixed(1)} ${y.toFixed(1)} c${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)}" stroke-width="${(.5 + r() * .6).toFixed(2)}" stroke-opacity="${(.08 + r() * .14).toFixed(2)}"/>`;
+        dirt += `<path d="M${x.toFixed(1)} ${y.toFixed(1)} c${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)}" stroke-width="${(.6 + r() * .6).toFixed(2)}" stroke-opacity="${(.22 + r() * .22).toFixed(2)}" stroke="#fff" fill="none"/>`;
       }
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">` +
-        `<g stroke="#fff" fill="none">${marks}</g></svg>`;
+        `<g stroke="#fff" fill="none">${scratches}${dirt}</g></svg>`;
       el.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
       el.style.backgroundSize = `${W}px ${H}px`;
 
-      // the same dirt, in black, printed inside the letters of the name: where it crosses the name it turns dark
-      const dark = marks.replace(/fill="#fff"/g, 'fill="#000"')
-        .replace(/(fill|stroke)-opacity="([\d.]+)"/g, (m, a, v) => `${a}-opacity="${Math.min(.85, v * 3.2).toFixed(2)}"`);
+      // only the dirt (not the scratches), in black, printed inside the letters: where it crosses the name it turns dark
+      const dark = dirt.replace(/fill="#fff"/g, 'fill="#000"').replace(/stroke="#fff"/g, 'stroke="#000"')
+        .replace(/(fill|stroke)-opacity="([\d.]+)"/g, (m, a, v) => `${a}-opacity="${Math.min(.9, v * 1.8).toFixed(2)}"`);
       const darkSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><g stroke="#000" fill="none">${dark}</g></svg>`;
       const name = $(".masthead h1");
       if (name) {
         const st = name.style;
-        st.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(darkSvg)}"), linear-gradient(var(--accent), var(--accent))`;
+        st.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(darkSvg)}"), linear-gradient(var(--name), var(--name))`;
         st.backgroundSize = `${W}px ${H}px, auto`;
         st.backgroundRepeat = "repeat-y, no-repeat";
         st.backgroundAttachment = "fixed, scroll";   // fixed = lined up with the moving background
