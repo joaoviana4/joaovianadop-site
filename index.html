@@ -90,11 +90,11 @@
       background: radial-gradient(40% 70% at 8% 40%, rgba(255, 120, 50, .55), transparent 70%), radial-gradient(30% 60% at 95% 70%, rgba(255, 200, 120, .25), transparent 70%); filter: blur(10px); }
     .masthead[data-fx="leak"] h1 { filter: blur(.3px) drop-shadow(0 0 10px rgba(255, 120, 60, .25)); }
     /* anamorphic smear: copies stretched sideways */
-    .masthead[data-fx="smear"] .ghost { opacity: calc(.28 - var(--i) * .038); transform: translateX(calc((var(--i) - 3.5) * 9px * var(--sx, 1) + var(--jx, 0px))) scaleX(var(--gs, 1)); }
+    .masthead[data-fx="smear"] .ghost { opacity: calc(.28 - var(--i) * .038); transform: translateX(calc(var(--i) * -6px * var(--sx, 1) + var(--jx, 0px))); }  /* trails only to the left of each letter */
     /* directional (horizontal-only) blur on the smear copies, stronger on the outer ones */
-    .masthead[data-fx="smear"] .ghost:nth-of-type(1), .masthead[data-fx="smear"] .ghost:nth-of-type(6) { filter: url(#hblur3); }
-    .masthead[data-fx="smear"] .ghost:nth-of-type(2), .masthead[data-fx="smear"] .ghost:nth-of-type(5) { filter: url(#hblur2); }
-    .masthead[data-fx="smear"] .ghost:nth-of-type(3), .masthead[data-fx="smear"] .ghost:nth-of-type(4) { filter: url(#hblur1); }
+    .masthead[data-fx="smear"] .ghost:nth-of-type(1), .masthead[data-fx="smear"] .ghost:nth-of-type(2) { filter: url(#hblur1); }
+    .masthead[data-fx="smear"] .ghost:nth-of-type(3), .masthead[data-fx="smear"] .ghost:nth-of-type(4) { filter: url(#hblur2); }
+    .masthead[data-fx="smear"] .ghost:nth-of-type(5), .masthead[data-fx="smear"] .ghost:nth-of-type(6) { filter: url(#hblur3); }
     .masthead[data-fx="smear"] h1 { filter: url(#hblur0) drop-shadow(0 0 8px color-mix(in srgb, var(--name) 30%, transparent)) drop-shadow(0 0 22px color-mix(in srgb, var(--name) 11%, transparent)); }
     .masthead .namewrap { transform: translate(var(--njx, 0px), var(--njy, 0px)); }
     .masthead p { margin-top: clamp(14px, 2vh, 24px); font-size: 12px; letter-spacing: .3em; text-transform: uppercase; color: var(--muted); }
@@ -268,10 +268,10 @@
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-    <filter id="hblur0" x="-5%" width="110%"><feGaussianBlur stdDeviation="1.1 0"/></filter>
-    <filter id="hblur1" x="-20%" width="140%"><feGaussianBlur stdDeviation="4 0.4"/></filter>
-    <filter id="hblur2" x="-25%" width="150%"><feGaussianBlur stdDeviation="8 0.6"/></filter>
-    <filter id="hblur3" x="-30%" width="160%"><feGaussianBlur stdDeviation="13 0.8"/></filter>
+    <filter id="hblur0" x="-5%" width="110%"><feGaussianBlur stdDeviation=".5 0"/></filter>
+    <filter id="hblur1" x="-20%" width="140%"><feGaussianBlur stdDeviation="1.6 0.2"/></filter>
+    <filter id="hblur2" x="-25%" width="150%"><feGaussianBlur stdDeviation="3 0.3"/></filter>
+    <filter id="hblur3" x="-30%" width="160%"><feGaussianBlur stdDeviation="5 0.4"/></filter>
   </svg>
   <div class="filmbg" id="filmbg" aria-hidden="true"></div>
   <div class="rail left" aria-hidden="true"><div class="track" id="rail-l"></div></div>
