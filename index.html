@@ -223,15 +223,18 @@
       { slug: "so", title: "só", artist: "Victoria Leuca", type: "Music video", year: 2025, dir: "João Viana, João Barbosa, Vasco Souto", role: "Co-director, Director of Photography, Editor, Colorist", yt: "cEUa3SJD_sw", cover: "so" },
       { slug: "nada-demais", title: "Nada Demais", artist: "Beatriz Caixinha feat. Rita Onofre", type: "Music video", year: 2025, role: "Director of Photography", yt: "1KeOU6nRaD4", cover: "nada-demais" },
       { slug: "auto-de-fe", title: "Auto de Fé", type: "Series pilot", year: 2025, dir: "José P. Miguel", role: "Director of Photography, Colorist", cover: "auto-de-fe" },
+      { slug: "a-grande-viagem", title: "A Grande Viagem Rumo ao Recorde Mundial", type: "Short documentary", year: 2025, dir: "João Viana", role: "Director, Director of Photography", yt: "wmvXtrDpZuk", cover: "a-grande-viagem" },
+      { slug: "alegria", title: "Alegria", type: "", year: null, dir: "João Viana", role: "Director, Director of Photography", cover: "alegria" },
       { slug: "viarco", title: "Viarco", type: "Commercial", year: 2025, role: "Creative Director, Director of Photography", soon: true, h: 45 },
       { slug: "nunca-te-esqueco", title: "Nunca Te Esqueço, Meu Amor", artist: "Inês Monstro", type: "Music video", year: 2024, dir: "Vasco Souto", role: "Director of Photography, Editor, Colorist", yt: "m5fvunfNXOI", cover: "nunca-te-esqueco" }
     ];
     const DIRECTION = [
       { slug: "severa", title: "Severa", type: "Fashion film", year: 2025, dir: "João Viana", role: "Director", cover: "severa" },
-      { slug: "a-grande-viagem", title: "A Grande Viagem Rumo ao Recorde Mundial", type: "Short documentary", year: 2025, dir: "João Viana", role: "Director", yt: "wmvXtrDpZuk", cover: "a-grande-viagem" },
+      { slug: "a-grande-viagem", title: "A Grande Viagem Rumo ao Recorde Mundial", type: "Short documentary", year: 2025, dir: "João Viana", role: "Director, Director of Photography", yt: "wmvXtrDpZuk", cover: "a-grande-viagem" },
+      { slug: "alegria", title: "Alegria", type: "", year: null, dir: "João Viana", role: "Director, Director of Photography", cover: "alegria" },
       { slug: "celia", title: "Célia", type: "Short film", year: 2024, dir: "João Viana, Vasco Souto", role: "Co-director", yt: "-GrhEE8KWl0", cover: "celia" }
     ];
-    const ALL = [...DP.map(p => ({ ...p, sec: "work" })), ...DIRECTION.map(p => ({ ...p, sec: "direction" }))];
+    const LISTS = { work: DP, direction: DIRECTION };
 
     const $ = s => document.querySelector(s);
     const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -242,15 +245,15 @@
     $("#y").textContent = new Date().getFullYear();
 
     // ----- grids -----
-    function fillGrid(el, list, countEl) {
+    function fillGrid(el, list, countEl, sec) {
       countEl.textContent = String(list.length).padStart(2, "0") + " projects";
       el.innerHTML = list.map(p => `
         <li class="card">
-          <a href="#/work/${p.slug}" aria-label="${esc(p.title)}, ${p.year}">
+          <a href="#/${sec}/${p.slug}" aria-label="${esc(p.title)}${p.year ? ", " + p.year : ""}">
             <div class="media">${media(p, "Still — " + esc(p.title))}</div>
             ${p.soon ? `<span class="soon">Coming soon</span>` : ""}
             <div class="info">
-              <span class="yr">${p.year}</span>
+              <span class="yr">${p.year ?? ""}</span>
               <span class="t">${esc(p.title)}${p.artist && p.artist !== p.title ? `<small>${esc(p.artist)}</small>` : ""}</span>
             </div>
           </a>
@@ -258,16 +261,16 @@
       el.addEventListener("mouseover", e => { if (e.target.closest(".card a")) el.classList.add("hovering"); });
       el.addEventListener("mouseleave", () => el.classList.remove("hovering"));
     }
-    fillGrid($("#grid-dp"), DP, $("#count-dp"));
-    fillGrid($("#grid-dir"), DIRECTION, $("#count-dir"));
+    fillGrid($("#grid-dp"), DP, $("#count-dp"), "work");
+    fillGrid($("#grid-dir"), DIRECTION, $("#count-dir"), "direction");
 
     // ----- project page -----
-    function renderProject(slug) {
-      const p = ALL.find(x => x.slug === slug);
-      if (!p) return null;
-      const list = p.sec === "work" ? DP : DIRECTION;
-      const i = list.findIndex(x => x.slug === slug), nx = list[(i + 1) % list.length];
-      const backTo = p.sec === "work" ? ["#/", "Selected work"] : ["#/direction", "Direction"];
+    function renderProject(sec, slug) {
+      const list = LISTS[sec]; if (!list) return null;
+      const i = list.findIndex(x => x.slug === slug);
+      if (i < 0) return null;
+      const p = list[i], nx = list[(i + 1) % list.length];
+      const backTo = sec === "work" ? ["#/", "Selected work"] : ["#/direction", "Direction"];
       const cover = media(p, "Capa — still escolhido");
       const player = p.yt
         ? `${cover}<button aria-label="Play ${esc(p.title)}" data-yt="${p.yt}"><span class="play"></span></button>`
@@ -281,8 +284,8 @@
           <dl class="credits">
             <dt>Director</dt><dd${p.dir ? "" : ' class="todo"'}>${esc(p.dir || "—")}</dd>
             <dt>Role</dt><dd>${esc(p.role)}</dd>
-            <dt>Type</dt><dd>${esc(p.type)}</dd>
-            <dt>Year</dt><dd>${p.year}</dd>
+            <dt>Type</dt><dd${p.type ? "" : ' class="todo"'}>${esc(p.type || "—")}</dd>
+            <dt>Year</dt><dd${p.year ? "" : ' class="todo"'}>${p.year ?? "—"}</dd>
             <dt>Camera / Lenses</dt><dd class="todo">—</dd>
           </dl>
           <div class="process">
@@ -294,21 +297,22 @@
         <div class="stills">
           ${[0, 1, 2, 3, 4, 5].map(k => `<div class="ph" style="--h:${(p.h ?? 30) + k * 12}"><span class="tag">Still ${k + 1}</span></div>`).join("")}
         </div>
-        <a class="next" href="#/work/${nx.slug}"><span>Next project</span><strong>${esc(nx.title)} →</strong></a>`;
+        <a class="next" href="#/${sec}/${nx.slug}"><span>Next project</span><strong>${esc(nx.title)} →</strong></a>`;
       const btn = $("#project button[data-yt]");
       if (btn) btn.addEventListener("click", () => {
         btn.insertAdjacentHTML("afterend", `<iframe src="https://www.youtube-nocookie.com/embed/${btn.dataset.yt}?autoplay=1&rel=0&modestbranding=1" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen title="${esc(p.title)}"></iframe>`);
         btn.remove();
       });
-      return p.sec;
+      return sec;
     }
 
     // ----- router -----
     function route() {
       const h = location.hash.replace(/^#\/?/, "");
       let view = "work", navKey = "work";
-      if (h.startsWith("work/")) {
-        const sec = renderProject(h.slice(5));
+      const m = h.match(/^(work|direction)\/(.+)$/);
+      if (m) {
+        const sec = renderProject(m[1], m[2]);
         if (sec) { view = "project"; navKey = sec; }
       } else if (h === "direction") view = navKey = "direction";
       else if (h === "about") view = navKey = "about";
