@@ -222,7 +222,7 @@
     .big em, .page h1 em { font-family: "Instrument Serif", serif; font-style: italic; font-weight: 400; }
     .page .txt p { font-size: clamp(18px, 1.7vw, 23px); line-height: 1.55; color: #f2f2f2; }
     .page .txt p + p { margin-top: 1em; }
-    .page .portrait { aspect-ratio: 4 / 5; margin-bottom: 36px; --h: 200; }
+    .page .portrait { display: block; width: 100%; max-width: 400px; height: auto; aspect-ratio: 1 / 1; margin-top: clamp(28px, 4vh, 48px); }
     .contact { margin-top: 40px; border-top: 1px solid var(--line); }
     .contact a { display: flex; justify-content: space-between; padding: 18px 0; border-bottom: 1px solid var(--line); font-size: 16px; transition: padding .4s var(--ease); }
     .contact a span { color: var(--muted); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; }
@@ -317,9 +317,11 @@
   <!-- ABOUT -->
   <main class="view" id="view-about">
     <section class="page">
-      <h1>About</h1>
+      <div class="about-left">
+        <h1>About</h1>
+        <img class="portrait" src="assets/about/portrait.jpg" alt="João Viana" width="400" height="400" loading="lazy">
+      </div>
       <div class="txt">
-        <div class="ph portrait"><span class="tag">Retrato</span></div>
         <p>João Viana is a Director of Photography based in Lisbon, working mostly in music videos, short films and commercials. He also directs documentary and fiction.</p>
         <p class="todo">[Bio por escrever.]</p>
         <div class="contact">
