@@ -195,7 +195,7 @@
       font-family: "Unbounded", sans-serif; font-weight: 800; font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
       height: max-content;
       color: var(--accent); text-shadow: var(--glow);
-      animation: rail 360s linear infinite;
+      animation: rail 240s linear infinite;
     }
     /* left rail: the whole strip is flipped, so the text reads bottom-up and moves the other way, with no empty start */
     .rail.left { transform: rotate(180deg); }
@@ -307,25 +307,34 @@
     // ----- film-strip background: the whole page is a strip moving up at the rails' speed.
     //       The rails are the perforations; across the middle, the horizontal line between frames
     //       (accent colour, rounded ends) passes now and then, with faint scratches, dust and grain. -----
-    const RAIL_SECONDS = 360; // keep equal to the .rail .track animation duration
+    const RAIL_SECONDS = 240; // keep equal to the .rail .track animation duration
     let filmAnims = [];
     function rand(seed) { return () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }; }
     function buildFilm() {
       const el = $("#filmbg"), grain = $("#grainbg");
-      const W = window.innerWidth, H = Math.round(window.innerHeight * 1.25);
+      const W = window.innerWidth, F = Math.round(window.innerHeight * 1.25), H = F * 3;  // tile = 3 frames, so the marks don't repeat every frame
       const c = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#AFC2A2";
-      const rail = W < 760 ? 0 : 30, r = rand(7);
+      const rail = W < 760 ? 0 : 30, r = rand(11);
       let marks = "";
-      for (let i = 0; i < 6; i++) {            // scratches
-        const x = rail + r() * (W - 2 * rail), y = r() * H, len = 60 + r() * 420;
-        marks += `<line x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" x2="${(x + (r() - .5) * 3).toFixed(1)}" y2="${(y + len).toFixed(1)}" stroke-width="${(.5 + r() * .8).toFixed(2)}" stroke-opacity="${(.05 + r() * .09).toFixed(2)}"/>`;
+      const nScratch = 3 + Math.floor(r() * 2);   // only a few, scattered over 3 frames
+      for (let i = 0; i < nScratch; i++) {
+        const x = rail + r() * (W - 2 * rail), y = r() * H, len = 15 + Math.pow(r(), 2) * 320;
+        const bend = (r() - .5) * 10;
+        marks += `<path d="M${x.toFixed(1)} ${y.toFixed(1)} q${bend.toFixed(1)} ${(len / 2).toFixed(1)} ${(bend * .4).toFixed(1)} ${len.toFixed(1)}" stroke-width="${(.4 + r() * .7).toFixed(2)}" stroke-opacity="${(.04 + r() * .08).toFixed(2)}"/>`;
       }
-      for (let i = 0; i < 14; i++) {           // dust
-        marks += `<circle cx="${(rail + r() * (W - 2 * rail)).toFixed(1)}" cy="${(r() * H).toFixed(1)}" r="${(.5 + r() * 1.3).toFixed(2)}" fill="#fff" fill-opacity="${(.08 + r() * .18).toFixed(2)}" stroke="none"/>`;
+      const nDust = 10 + Math.floor(r() * 14);
+      for (let i = 0; i < nDust; i++) {
+        marks += `<circle cx="${(rail + r() * (W - 2 * rail)).toFixed(1)}" cy="${(r() * H).toFixed(1)}" r="${(.4 + r() * 1.4).toFixed(2)}" fill="#fff" fill-opacity="${(.06 + r() * .16).toFixed(2)}" stroke="none"/>`;
+      }
+      let lines = "";
+      for (let k = 0; k < 3; k++) {
+        const y = k * F + 2;
+        lines += `<line x1="${rail + 14}" y1="${y}" x2="${W - rail - 14}" y2="${y}"/>`;
       }
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">` +
+        `<defs><filter id="soft" x="-5%" y="-400%" width="110%" height="900%"><feGaussianBlur stdDeviation="2.2"/></filter></defs>` +
         `<g stroke="#fff" fill="none">${marks}</g>` +
-        `<line x1="${rail + 14}" y1="2" x2="${W - rail - 14}" y2="2" stroke="${c}" stroke-width="2.4" stroke-linecap="round" stroke-opacity=".5"/></svg>`;
+        `<g stroke="${c}" stroke-width="2" stroke-linecap="round" stroke-opacity=".28" filter="url(#soft)">${lines}</g></svg>`;
       el.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
       el.style.backgroundSize = `${W}px ${H}px`;
       filmAnims.forEach(a => a.cancel()); filmAnims = [];
