@@ -93,6 +93,11 @@
     .masthead[data-fx="smear"] .ghost { opacity: calc(.26 - var(--i) * .04); transform: translateX(calc((var(--i) - 3.5) * 9px)); filter: blur(calc(1px + var(--i) * .5px)); }
     .masthead p { margin-top: clamp(14px, 2vh, 24px); font-size: 12px; letter-spacing: .3em; text-transform: uppercase; color: var(--muted); }
     body.small-name .masthead { display: none; }
+    /* occasional light leak burning in behind the name */
+    .masthead .leak { position: absolute; inset: -15% 0; z-index: 0; pointer-events: none; opacity: 0; mix-blend-mode: screen; filter: blur(24px);
+      background: radial-gradient(38% 60% at var(--lx, 15%) var(--ly, 45%), rgba(255, 120, 45, .9), rgba(255, 70, 30, .35) 45%, transparent 75%),
+                  radial-gradient(26% 45% at calc(var(--lx, 15%) + 18%) calc(var(--ly, 45%) + 12%), rgba(255, 205, 130, .55), transparent 70%); }
+    .masthead .namewrap { z-index: 1; }
     nav a { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: color-mix(in srgb, var(--accent) 80%, #000); transition: color .3s; }
     nav a:hover, nav a.active { color: var(--accent); }
     .mini { color: var(--accent); }
@@ -268,7 +273,8 @@
     </nav>
   </header>
 
-  <section class="masthead">
+  <section class="masthead" data-fx="smear">
+    <div class="leak" id="leak" aria-hidden="true"></div>
     <div class="namewrap">
       <h1>João Viana</h1>
       <div class="ghost" aria-hidden="true" style="--i:1">João Viana</div>
@@ -422,6 +428,27 @@
       filmAnims.push(el.animate([{ backgroundPosition: "0 0" }, { backgroundPosition: `0 -${H}px` }],
         { duration: (H / speed) * 1000, iterations: Infinity, easing: "linear" }));
     }
+    // ----- light leak: every so often a warm burn flares behind the name, quickly, then fades -----
+    function leakOnce() {
+      const el = $("#leak");
+      if (!el || document.body.classList.contains("small-name")) return;
+      const left = Math.random() < .5;
+      el.style.setProperty("--lx", (left ? 5 + Math.random() * 25 : 70 + Math.random() * 25) + "%");
+      el.style.setProperty("--ly", (25 + Math.random() * 50) + "%");
+      const peak = .45 + Math.random() * .4, drift = (left ? 1 : -1) * (40 + Math.random() * 80);
+      el.animate([
+        { opacity: 0, transform: "translateX(0) scale(.92)" },
+        { opacity: peak, offset: .18 },
+        { opacity: peak * .55, offset: .32 },
+        { opacity: peak * .9, offset: .45 },
+        { opacity: 0, transform: `translateX(${drift}px) scale(1.12)` }
+      ], { duration: 1800 + Math.random() * 1600, easing: "ease-out" });
+    }
+    function scheduleLeak(first) {
+      setTimeout(() => { leakOnce(); scheduleLeak(false); }, first ? 2500 + Math.random() * 2000 : 9000 + Math.random() * 11000);
+    }
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) scheduleLeak(true);
+
     let filmT; window.addEventListener("resize", () => { clearTimeout(filmT); filmT = setTimeout(buildFilm, 200); });
     (document.fonts ? document.fonts.ready : Promise.resolve()).then(buildFilm);
 
