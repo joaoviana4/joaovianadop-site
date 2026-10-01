@@ -330,12 +330,12 @@
     // Ordem cronológica (mais recente primeiro), pelas datas de publicação no YouTube.
     // Projetos sem data no YouTube ficam no fim do respetivo ano; Alegria (sem ano) no fim.
     const DP = [
-      { slug: "ultimo-canto", title: "Último Canto", type: "Short Film", year: 2026, dir: "José P. Miguel", role: "Director of Photography, Editor", soon: true, h: 210 },
-      { slug: "cartas-na-mesa", title: "Cartas na Mesa", artist: "Van Zee", type: "Music Video", year: 2026, dir: "Ruben Mendes, Tomás Freitas", role: "Director of Photography", yt: "B7VOs2LPC-Q", h: 350 },
+      { slug: "ultimo-canto", title: "Último Canto", type: "Short Film", year: 2026, dir: "José P. Miguel", role: "Director of Photography, Editor", soon: true, cover: "ultimo-canto" },
+      { slug: "cartas-na-mesa", title: "Cartas na Mesa", artist: "Van Zee", type: "Music Video", year: 2026, dir: "Ruben Mendes, Tomás Freitas", role: "Director of Photography", yt: "B7VOs2LPC-Q", cover: "cartas-na-mesa", pos: "62% 50%" },
       { slug: "viarco", title: "Viarco", type: "Commercial", year: 2025, role: "Creative Director, Director of Photography", soon: true, cover: "viarco" },
       { slug: "auto-de-fe", title: "Auto de Fé", type: "Series Pilot", year: 2025, dir: "José P. Miguel", role: "Director of Photography, Colorist", cover: "auto-de-fe", pos: "30% 50%" },
-      { slug: "quase-nada", title: "Quase Nada", artist: "Ed", type: "Music Video", year: 2026, dir: "Mário ARV", role: "Director of Photography", yt: "iVH0_Aq6lw4", h: 190 },
-      { slug: "top", title: "Top", artist: "JointOne", type: "Music Video", year: 2026, dir: "Ruben Mendes", role: "Director of Photography", yt: "-UPNVRV8nXQ", h: 18 },
+      { slug: "quase-nada", title: "Quase Nada", artist: "Ed", type: "Music Video", year: 2026, dir: "Mário ARV", role: "Director of Photography", yt: "iVH0_Aq6lw4", cover: "quase-nada" },
+      { slug: "top", title: "Top", artist: "JointOne", type: "Music Video", year: 2026, dir: "Ruben Mendes", role: "Director of Photography", yt: "-UPNVRV8nXQ", cover: "top" },
       { slug: "a-grande-viagem", title: "A Grande Viagem Rumo ao Recorde Mundial", type: "Documentary", year: 2026, dir: "João Viana", role: "Director, Director of Photography", yt: "wmvXtrDpZuk", cover: "a-grande-viagem" },
       { slug: "desculpa", title: "desculpa", artist: "Victoria Leuca", type: "Live Session", year: 2026, role: "Director of Photography", yt: "yvVUh4XmQJc", cover: "desculpa" },
       { slug: "so", title: "só", artist: "Victoria Leuca", type: "Music Video", year: 2025, dir: "João Viana, João Barbosa, Vasco Souto", role: "Co-director, Director of Photography, Editor, Colorist", yt: "cEUa3SJD_sw", cover: "so", pos: "40% 50%" },
@@ -479,7 +479,7 @@
       surge:  { frames: [9, 15], flash: .3,
         init: (n) => {
           const path = [], dir = Math.random() < .5 ? 1 : -1;
-          let x = dir > 0 ? -12 : 112;
+          let x = 30 + Math.random() * 40;                      // starts around the middle of the name
           const stops = 1 + Math.floor(Math.random() * 3);          // how many times it hesitates
           for (let i = 0; i <= n; i++) {
             const left = n - i, toExit = (dir > 0 ? 115 : -15) - x;
@@ -530,8 +530,17 @@
         }
       }, 1000 / 24);
     }
+    // leaks come in bursts: two to four in a row, a few frames apart
+    function leakBurst() {
+      const n = 2 + Math.floor(Math.random() * 3);
+      let delay = 0;
+      for (let i = 0; i < n; i++) {
+        setTimeout(() => leakOnce(), delay);
+        delay += 260 + Math.random() * 520;
+      }
+    }
     function scheduleLeak(first) {
-      setTimeout(() => { leakOnce(); scheduleLeak(false); }, first ? 2500 + Math.random() * 2000 : 7000 + Math.random() * 11000);
+      setTimeout(() => { leakBurst(); scheduleLeak(false); }, first ? 2500 + Math.random() * 2000 : 8000 + Math.random() * 12000);
     }
     if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) scheduleLeak(true);
 
