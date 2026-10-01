@@ -12,6 +12,8 @@
     :root {
       --bg: #000;
       --fg: #ffffff;
+      --accent: #ffffff;   /* cor de destaque: nome, menu, filtros, barras laterais */
+      --rail: 30px;
       --muted: #c9c9c9;
       --faint: #5a5a5a;
       --line: rgba(255, 255, 255, 0.14);
@@ -43,11 +45,12 @@
     .mini { font-size: 13px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; opacity: 0; pointer-events: none; transition: opacity .3s; }
     body.small-name .mini { opacity: 1; pointer-events: auto; }
     .masthead { text-align: center; padding: clamp(40px, 9vh, 110px) var(--pad) clamp(48px, 10vh, 120px); }
-    .masthead h1 { font-family: "Unbounded", sans-serif; font-weight: 800; text-transform: uppercase; font-size: clamp(34px, 7.6vw, 128px); line-height: .95; letter-spacing: -.01em; }
+    .masthead h1 { color: var(--accent); font-family: "Unbounded", sans-serif; font-weight: 800; text-transform: uppercase; font-size: clamp(34px, 7.6vw, 128px); line-height: .95; letter-spacing: -.01em; }
     .masthead p { margin-top: clamp(14px, 2vh, 24px); font-size: 12px; letter-spacing: .3em; text-transform: uppercase; color: var(--muted); }
     body.small-name .masthead { display: none; }
-    nav a { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); transition: color .3s; }
-    nav a:hover, nav a.active { color: var(--fg); }
+    nav a { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: color-mix(in srgb, var(--accent) 62%, #000); transition: color .3s; }
+    nav a:hover, nav a.active { color: var(--accent); }
+    .mini { color: var(--accent); }
 
     /* ---------- views (no intro animation) ---------- */
     .view { display: none; }
@@ -80,8 +83,8 @@
       letter-spacing: .04em; text-transform: uppercase; color: #8a8a8a;
       padding: 2px 0; border-bottom: 1px solid transparent; transition: color .3s, border-color .3s;
     }
-    .filters button:hover { color: #fff; }
-    .filters button[aria-pressed="true"] { color: #fff; border-bottom-color: #fff; }
+    .filters button:hover { color: var(--accent); }
+    .filters button[aria-pressed="true"] { color: var(--accent); border-bottom-color: var(--accent); }
     @media (max-width: 760px) {
       .section-head { flex-direction: column; align-items: flex-start; gap: 14px; }
       .section-head .right { align-items: flex-start; }
@@ -182,10 +185,27 @@
       .p-body, .page { grid-template-columns: 1fr; }
       .stills { grid-template-columns: 1fr; }
     }
+    /* ---------- side rails: name scrolling slowly ---------- */
+    .rail { position: fixed; top: 0; bottom: 0; width: var(--rail); z-index: 60; overflow: hidden; pointer-events: none; display: flex; justify-content: center; }
+    .rail.left { left: 0; }
+    .rail.right { right: 0; }
+    .rail .track {
+      writing-mode: vertical-rl; white-space: nowrap;
+      font-family: "Unbounded", sans-serif; font-weight: 800; font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+      color: color-mix(in srgb, var(--accent) 55%, #000);
+      animation: rail 90s linear infinite;
+    }
+    .rail.left .track { transform: rotate(180deg); animation-name: rail-rev; }
+    @keyframes rail { from { translate: 0 0; } to { translate: 0 -50%; } }
+    @keyframes rail-rev { from { translate: 0 -50%; } to { translate: 0 0; } }
+    body { padding: 0 var(--rail); }
+    @media (max-width: 760px) { .rail { display: none; } body { padding: 0; } }
     @media (prefers-reduced-motion: reduce) { body::after { animation: none; } * { transition: none !important; animation: none !important; } }
   </style>
 </head>
 <body>
+  <div class="rail left" aria-hidden="true"><div class="track" id="rail-l"></div></div>
+  <div class="rail right" aria-hidden="true"><div class="track" id="rail-r"></div></div>
   <header>
     <a class="mini" href="#/">João Viana</a>
     <nav>
@@ -270,6 +290,8 @@
       ? `<img src="${coverSrc(p)}" alt="${esc(p.title)} — still" loading="lazy" decoding="async"${p.pos ? ` style="--pos:${p.pos}"` : ""}>`
       : `<div class="ph" style="position:absolute;inset:0;--h:${p.h ?? 30}"><span class="tag">${label}</span></div>`;
     $("#y").textContent = new Date().getFullYear();
+    const railText = Array(24).fill("João Viana \u2014 ").join("");
+    $("#rail-l").textContent = $("#rail-r").textContent = railText + railText;
 
     // ----- grids + filtro por tipo -----
     // Cada tipo de projeto entra numa destas categorias do filtro.
