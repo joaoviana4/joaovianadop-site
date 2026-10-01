@@ -451,6 +451,34 @@
         const x = at(side, -10 + t * 120);
         return `linear-gradient(90deg, transparent ${x - 9}%, rgba(255, 110, 50, .7) ${x - 4}%, rgba(255, 235, 190, .95) ${x}%, rgba(255, 110, 50, .7) ${x + 3}%, transparent ${x + 8}%),` +
                `linear-gradient(90deg, transparent ${x - 26}%, rgba(220, 50, 40, .45) ${x - 22}%, transparent ${x - 17}%)`; } },
+      // --- streak variations ---
+      // a single razor-thin hot line, very fast
+      thin:   { frames: [4, 6], flash: .15, draw: (t, side, y) => {
+        const x = at(side, -5 + t * 110);
+        return `linear-gradient(90deg, transparent ${x - 3}%, rgba(255, 120, 50, .75) ${x - 1}%, rgba(255, 248, 225, 1) ${x}%, rgba(255, 120, 50, .75) ${x + 1}%, transparent ${x + 3}%)`; } },
+      // several bars of different widths, staggered, like light through the gate
+      bars:   { frames: [6, 9], flash: .25, draw: (t, side, y) => {
+        const b = (o, w, a) => { const x = at(side, -20 + t * 140 - o); return `linear-gradient(90deg, transparent ${x - w}%, rgba(255, 110, 50, ${a * .7}) ${x - w / 2}%, rgba(255, 236, 190, ${a}) ${x}%, rgba(255, 110, 50, ${a * .7}) ${x + w / 2}%, transparent ${x + w}%)`; };
+        return [b(0, 6, .95), b(14, 2.5, .8), b(23, 9, .55), b(38, 3.5, .7)].join(","); } },
+      // a wide soft band with a hot core
+      wide:   { frames: [7, 11], flash: .3, draw: (t, side, y) => {
+        const x = at(side, -15 + t * 130);
+        return `linear-gradient(90deg, transparent ${x - 22}%, rgba(200, 34, 40, .35) ${x - 15}%, rgba(255, 112, 44, .7) ${x - 7}%, rgba(255, 246, 214, .95) ${x}%, rgba(255, 112, 44, .7) ${x + 6}%, rgba(200, 34, 40, .3) ${x + 12}%, transparent ${x + 18}%)`; } },
+      // diagonal streak
+      tilt:   { frames: [5, 8], flash: .2, draw: (t, side, y) => {
+        const x = -10 + t * 120;
+        return `linear-gradient(${side > 0 ? 72 : 108}deg, transparent ${x - 8}%, rgba(255, 110, 50, .7) ${x - 3}%, rgba(255, 240, 200, .95) ${x}%, rgba(255, 110, 50, .7) ${x + 3}%, transparent ${x + 8}%)`; } },
+      // red leading edge, gold trailing: a split, chromatic streak
+      split:  { frames: [5, 8], flash: .2, draw: (t, side, y) => {
+        const x = at(side, -10 + t * 120), d = side > 0 ? 1 : -1;
+        return `linear-gradient(90deg, transparent ${x - 7}%, rgba(255, 246, 214, .95) ${x}%, transparent ${x + 5}%),` +
+               `linear-gradient(90deg, transparent ${x + d * 2 - 4}%, rgba(225, 40, 50, .75) ${x + d * 4}%, transparent ${x + d * 7 + 2}%),` +
+               `linear-gradient(90deg, transparent ${x - d * 5 - 4}%, rgba(255, 190, 80, .7) ${x - d * 4}%, transparent ${x - d * 2 + 3}%)`; } },
+      // goes in, hesitates and flickers in place, then shoots out
+      surge:  { frames: [8, 12], flash: .35, draw: (t, side, y) => {
+        const p = t < .3 ? t / .3 * .45 : t < .7 ? .45 + (Math.random() - .5) * .06 : .45 + (t - .7) / .3 * .75;
+        const x = at(side, -10 + p * 120);
+        return `linear-gradient(90deg, transparent ${x - 8}%, rgba(255, 110, 50, .7) ${x - 3}%, rgba(255, 238, 195, .95) ${x}%, rgba(255, 110, 50, .7) ${x + 3}%, transparent ${x + 8}%)`; } },
       // both edges burning at once, amber
       double: { frames: [8, 14], flash: .25, draw: (t, side, y) =>
         `radial-gradient(26% 80% at ${4 + t * 22}% ${y}%, ${HOT}, ${GOLD} 22%, ${ORANGE} 48%, transparent 85%),` +
