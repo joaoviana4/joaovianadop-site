@@ -257,6 +257,49 @@
     .p-video .label-sm, .p-body .label-sm { display: block; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: var(--accent); margin-bottom: 18px; }
     .p-video .player { margin-top: 0; }
 
+    /* ---------- "let me know more": expandable deep-dive ---------- */
+    .deep { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 1.1s var(--ease); }
+    .deep.open { grid-template-rows: 1fr; }
+    .deep > .deep-in { overflow: hidden; min-height: 0; }
+    .deep-inner { padding-top: clamp(56px, 10vh, 120px); display: grid; gap: clamp(56px, 10vh, 128px); }
+    .deep .blk { opacity: 0; transform: translateY(24px); transition: opacity .9s var(--ease), transform 1.1s var(--ease); }
+    .deep.open .blk { opacity: 1; transform: none; }
+    .deep.open .blk:nth-child(2) { transition-delay: .12s; } .deep.open .blk:nth-child(3) { transition-delay: .22s; }
+    .deep.open .blk:nth-child(n+4) { transition-delay: .3s; }
+    .blk-label { display: flex; align-items: baseline; gap: 14px; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin-bottom: 22px; }
+    .blk-label i { font-style: normal; color: var(--muted); }
+    .blk-lead { font-family: "Instrument Serif", serif; font-size: clamp(28px, 3.6vw, 56px); line-height: 1.12; letter-spacing: -.01em; max-width: 22ch; }
+    .blk-lead.wide { max-width: 30ch; }
+    .blk-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: clamp(28px, 6vw, 110px); align-items: start; }
+    .blk-cols p { font-size: clamp(16px, 1.35vw, 19px); line-height: 1.6; color: #e6e6e6; max-width: 60ch; }
+    .blk-cols p + p { margin-top: 1em; }
+    .spec { display: grid; grid-template-columns: auto 1fr; gap: 12px 28px; font-size: 15px; }
+    .spec dt { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding-top: 3px; }
+    .ph-txt { color: var(--muted) !important; font-family: "Instrument Serif", serif; font-style: italic; }
+    .img-full { margin-left: calc(-1 * var(--pad)); margin-right: calc(-1 * var(--pad)); }
+    .img-full img, .img-pair img, .img-trio img, .bts img { display: block; width: 100%; height: auto; background: #111; }
+    .img-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: end; }
+    .img-pair.offset > :last-child { margin-bottom: clamp(40px, 8vh, 110px); }
+    .img-trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    figure figcaption { margin-top: 10px; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+    .ph-box { aspect-ratio: var(--ar, 4 / 3); background: repeating-linear-gradient(135deg, #0e0e0e 0 14px, #121212 14px 28px); border: 1px solid #1c1c1c; display: grid; place-items: center;
+      font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: #5a5a5a; text-align: center; padding: 12px; }
+    .bts { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; }
+    .bts > :nth-child(1) { grid-column: span 7; } .bts > :nth-child(2) { grid-column: span 5; align-self: end; }
+    .bts > :nth-child(3) { grid-column: 2 / span 4; } .bts > :nth-child(4) { grid-column: span 6; }
+    .ba { position: relative; overflow: hidden; user-select: none; touch-action: pan-y; cursor: ew-resize; margin-left: calc(-1 * var(--pad)); margin-right: calc(-1 * var(--pad)); }
+    .ba img { display: block; width: 100%; height: auto; }
+    .ba .ba-top { position: absolute; inset: 0; clip-path: inset(0 calc(100% - var(--x, 50%)) 0 0); }
+    .ba .ba-top img { filter: saturate(.25) contrast(.82) brightness(1.08); }
+    .ba .ba-line { position: absolute; top: 0; bottom: 0; left: var(--x, 50%); width: 1px; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+    .ba .ba-tag { position: absolute; top: 14px; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #fff; background: rgba(0,0,0,.45); padding: 3px 8px; }
+    .ba .ba-tag.l { left: calc(var(--pad) + 2px); } .ba .ba-tag.r { right: calc(var(--pad) + 2px); }
+    .deep-end { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 20px; border-top: 1px solid var(--line); padding-top: 28px; }
+    .deep-end p { font-family: "Instrument Serif", serif; font-style: italic; font-size: clamp(22px, 2.4vw, 32px); }
+    .more-btn .arr { display: inline-block; margin-left: 10px; transition: transform .6s var(--ease); }
+    .more-btn[aria-expanded="true"] .arr { transform: rotate(180deg); }
+    @media (max-width: 760px) { .blk-cols, .img-pair, .img-trio { grid-template-columns: 1fr; } .img-pair.offset > :last-child { margin-bottom: 0; } .bts > * { grid-column: 1 / -1 !important; } }
+
     .next { display: block; margin-top: clamp(56px, 10vh, 120px); padding: clamp(56px, 10vh, 120px) 0; border-top: 1px solid var(--line); }
     .next span { display: block; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
     .next strong { display: block; margin-top: 14px; font-weight: 300; font-size: clamp(36px, 6vw, 92px); letter-spacing: -.03em; line-height: 1; transition: transform .6s var(--ease); }
@@ -424,7 +467,7 @@
     // Ordem cronológica (mais recente primeiro), pelas datas de publicação no YouTube.
     // Projetos sem data no YouTube ficam no fim do respetivo ano; Alegria (sem ano) no fim.
     const DP = [
-      { slug: "ultimo-canto", title: "Último Canto", type: "Short Film", year: 2026, dir: "José P. Miguel", role: "Director of Photography", soon: true, cover: "ultimo-canto", more: true, stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg", "07.jpg", "08.jpg", "09.jpg", "10.jpg"] },
+      { slug: "ultimo-canto", title: "Último Canto", type: "Short Film", year: 2026, dir: "José P. Miguel", role: "Director of Photography", soon: true, cover: "ultimo-canto", more: true, deep: "ultimo-canto", stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg", "07.jpg", "08.jpg", "09.jpg", "10.jpg"] },
       { slug: "cartas-na-mesa", title: "Cartas na Mesa", artist: "Van Zee", type: "Music Video", year: 2026, dir: "Ruben Mendes, Tomás Freitas", role: "Director of Photography", yt: "B7VOs2LPC-Q", cover: "cartas-na-mesa", pos: "62% 50%", rows: 3, stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg", "07.jpg", "08.jpg", "09.jpg"] },
       { slug: "viarco", title: "Viarco", type: "Commercial", year: 2025, role: "Creative Director, Director of Photography", soon: true, cover: "viarco", more: true, rows: 1, stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg"] },
       { slug: "auto-de-fe", title: "Auto de Fé", type: "Series Pilot", year: 2025, dir: "José P. Miguel", role: "Director of Photography, Colorist", cover: "auto-de-fe", pos: "30% 50%", more: true, stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg"] },
@@ -695,6 +738,43 @@
     setupGrid($("#grid-dp"), $("#filters-dp"), $("#count-dp"), DP, "work");
     setupGrid($("#grid-dir"), $("#filters-dir"), $("#count-dir"), DIRECTION, "direction");
 
+
+    // ----- "let me know more" deep-dive content, keyed by project. Blocks render in order.
+    // Placeholders ("[...]") and striped boxes are stand-ins until the real text, BTS and references arrive.
+    const DEEP = {
+      "ultimo-canto": [
+        { t: "lead", n: "01", label: "The film", text: "[Logline / sinopse curta — uma ou duas frases sobre o filme.]" },
+        { t: "full", src: "07.jpg" },
+        { t: "cols", n: "02", label: "Visual approach",
+          spec: [["Camera", "[câmara]"], ["Lenses", "[lentes]"], ["Format", "[formato / resolução]"], ["Aspect", "[aspect ratio]"], ["Grade", "[colorista / ferramenta]"]],
+          text: ["[Abordagem visual: como foi pensada a imagem, a luz, a câmara.]", "[Referências, decisões, o que se quis evitar.]"] },
+        { t: "pair", src: ["03.jpg", "09.jpg"], offset: true },
+        { t: "trio", n: "03", label: "References", ph: ["Reference 01", "Reference 02", "Reference 03"], cap: ["[filme / fotógrafo]", "[filme / fotógrafo]", "[filme / fotógrafo]"] },
+        { t: "bts", n: "04", label: "Behind the scenes", ph: ["BTS 01", "BTS 02", "BTS 03", "BTS 04"], ar: ["16 / 10", "4 / 5", "3 / 4", "16 / 9"] },
+        { t: "ba", n: "05", label: "Before / After grade", src: "05.jpg" },
+        { t: "lead", n: "06", label: "Note", text: "[Uma nota final, citação do realizador ou do DP, festivais, estreia…]", wide: true },
+      ],
+    };
+    function deepHtml(p) {
+      const blocks = DEEP[p.deep] || [];
+      const src = f => `assets/stills/${p.slug}/${f}`;
+      const lab = b => b.label ? `<div class="blk-label">${b.n ? `<i>${b.n}</i>` : ""}${esc(b.label)}</div>` : "";
+      const txt = v => `<span class="${/^\[/.test(v) ? "ph-txt" : ""}">${esc(v)}</span>`;
+      const ph = (label, ar) => `<div class="ph-box" style="--ar:${ar || "4 / 3"}">${esc(label)}</div>`;
+      const html = blocks.map(b => {
+        if (b.t === "lead") return `<section class="blk">${lab(b)}<p class="blk-lead${b.wide ? " wide" : ""}">${txt(b.text)}</p></section>`;
+        if (b.t === "full") return `<section class="blk img-full"><img src="${src(b.src)}" alt="${esc(p.title)}" loading="lazy" decoding="async"></section>`;
+        if (b.t === "cols") return `<section class="blk">${lab(b)}<div class="blk-cols"><dl class="spec">${b.spec.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${txt(v)}</dd>`).join("")}</dl><div>${b.text.map(t => `<p>${txt(t)}</p>`).join("")}</div></div></section>`;
+        if (b.t === "pair") return `<section class="blk img-pair${b.offset ? " offset" : ""}">${b.src.map(f => `<img src="${src(f)}" alt="${esc(p.title)}" loading="lazy" decoding="async">`).join("")}</section>`;
+        if (b.t === "trio") return `<section class="blk">${lab(b)}<div class="img-trio">${b.ph.map((l, k) => `<figure>${ph(l, "4 / 3")}<figcaption>${txt(b.cap[k])}</figcaption></figure>`).join("")}</div></section>`;
+        if (b.t === "bts") return `<section class="blk">${lab(b)}<div class="bts">${b.ph.map((l, k) => ph(l, b.ar[k])).join("")}</div></section>`;
+        if (b.t === "ba") return `<section class="blk">${lab(b)}<div class="ba" style="--x:50%"><img src="${src(b.src)}" alt="${esc(p.title)} — graded" loading="lazy" decoding="async"><div class="ba-top"><img src="${src(b.src)}" alt="${esc(p.title)} — log" loading="lazy" decoding="async"></div><div class="ba-line"></div><span class="ba-tag l">Log</span><span class="ba-tag r">Graded</span></div></section>`;
+        return "";
+      }).join("");
+      return `<div class="deep" id="deep"><div class="deep-in"><div class="deep-inner">${html}
+        <div class="blk deep-end"><p>Want to talk about this project?</p><button type="button" class="more-btn" data-contact="${esc(p.title)}">Get in touch</button></div></div></div></div>`;
+    }
+
     // ----- project page -----
     function renderProject(sec, slug) {
       const list = LISTS[sec]; if (!list) return null;
@@ -735,8 +815,9 @@
             ${p.year ? `<div><dt>Year</dt><dd>${p.year}</dd></div>` : ""}
           </dl>
           ${p.soon ? `<div class="soon-big">Coming soon</div>` : ""}
-          ${p.more ? `<button type="button" class="more-btn" data-more="${esc(p.title)}">Let me know more</button>` : ""}
+          ${p.more ? `<button type="button" class="more-btn" data-more="${esc(p.title)}"${p.deep ? ` aria-expanded="false" aria-controls="deep"` : ""}>Let me know more${p.deep ? `<span class="arr">↓</span>` : ""}</button>` : ""}
         </div>
+        ${p.deep ? deepHtml(p) : ""}
         ${video}
         <a class="next" href="#/${sec}/${nx.slug}"><span>Next project</span><strong>${esc(nx.title)} →</strong></a>`;
       const setReelSpeed = () => document.querySelectorAll("#project .reel-row").forEach(row => {
@@ -745,15 +826,29 @@
       });
       document.querySelectorAll("#project .reel-row img").forEach(img => img.addEventListener("load", setReelSpeed, { once: true }));
       setReelSpeed();
-      const more = $("#project .more-btn");
-      if (more) more.addEventListener("click", () => {
+      const toContact = title => {
         go("#/about");
         setTimeout(() => {
           const ta = $("#cform textarea[name=message]");
-          if (ta && !ta.value) ta.value = `Hi João, I'd like to know more about "${more.dataset.more}".`;
+          if (ta && !ta.value) ta.value = `Hi João, I'd like to know more about "${title}".`;
           $("#cform").scrollIntoView({ behavior: "smooth", block: "start" });
           setTimeout(() => $("#cform input[name=name]").focus({ preventScroll: true }), 500);
         }, 60);
+      };
+      const more = $("#project .more-btn[data-more]"), deep = $("#deep");
+      if (more) more.addEventListener("click", () => {
+        if (!deep) return toContact(more.dataset.more);           // projects without a deep-dive still go to the contact form
+        const open = !deep.classList.contains("open");
+        deep.classList.toggle("open", open);
+        more.setAttribute("aria-expanded", open);
+        more.firstChild.textContent = open ? "Show less" : "Let me know more";
+        if (open) setTimeout(() => deep.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
+      });
+      const contact = $("#project [data-contact]");
+      if (contact) contact.addEventListener("click", () => toContact(contact.dataset.contact));
+      document.querySelectorAll("#project .ba").forEach(ba => {
+        const set = e => { const r = ba.getBoundingClientRect(); ba.style.setProperty("--x", Math.min(100, Math.max(0, (e.clientX - r.left) / r.width * 100)) + "%"); };
+        ba.addEventListener("pointermove", set); ba.addEventListener("pointerdown", set);
       });
       const btn = $("#project button[data-yt]");
       if (btn) btn.addEventListener("click", () => {
