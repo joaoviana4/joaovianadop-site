@@ -200,7 +200,7 @@
     .back:hover { color: var(--fg); }
     .p-title { margin: 28px 0 10px; font-weight: 300; font-size: clamp(44px, 8vw, 120px); line-height: .95; letter-spacing: -.035em; }
     .p-artist { font-family: "Instrument Serif", serif; font-style: italic; font-size: clamp(22px, 3vw, 36px); color: var(--muted); }
-    .player { position: relative; margin-top: clamp(32px, 6vh, 64px); aspect-ratio: 16 / 9; width: 100%; overflow: hidden; background: #111; }
+    .player { position: relative; aspect-ratio: 16 / 9; width: 100%; overflow: hidden; background: #111; }
     .player > img, .player > .ph { position: absolute; inset: 0; }
     .player > img { object-fit: contain; background: #000; }
     .player button { position: absolute; inset: 0; display: grid; place-items: center; z-index: 2; }
@@ -210,7 +210,7 @@
     .player iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; z-index: 3; }
     .player .na { position: absolute; inset: 0; display: grid; place-items: center; z-index: 2; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: rgba(255,255,255,.6); }
 
-    .p-body { padding: clamp(40px, 7vh, 80px) 0; border-bottom: 1px solid var(--line); }
+    .p-body { padding: clamp(40px, 7vh, 80px) 0 0; }
     .credits { display: flex; flex-wrap: wrap; gap: 28px clamp(32px, 5vw, 80px); }
     .credits dt { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
     .credits dd { font-size: 16px; margin-top: 6px; }
@@ -219,11 +219,15 @@
     .process p + p { margin-top: 1em; }
     .todo { color: var(--muted) !important; font-family: "Instrument Serif", serif; font-style: italic; }
 
-    .stills { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: clamp(40px, 8vh, 96px) 0; }
-    .stills .ph { aspect-ratio: 2.39 / 1; }
-    .stills .ph:nth-child(3n) { grid-column: 1 / -1; }
+    /* stills gallery: first still full width, the rest in pairs, each at its own aspect ratio */
+    .stills { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: clamp(32px, 6vh, 64px); align-items: start; }
+    .stills img { display: block; width: 100%; height: auto; object-fit: initial; background: #111; }
+    .stills .full { grid-column: 1 / -1; }
+    .p-video { padding: clamp(40px, 7vh, 80px) 0 0; }
+    .p-video .label-sm, .p-body .label-sm { display: block; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: var(--accent); margin-bottom: 18px; }
+    .p-video .player { margin-top: 0; }
 
-    .next { display: block; padding: clamp(56px, 10vh, 120px) 0; border-top: 1px solid var(--line); }
+    .next { display: block; margin-top: clamp(56px, 10vh, 120px); padding: clamp(56px, 10vh, 120px) 0; border-top: 1px solid var(--line); }
     .next span { display: block; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
     .next strong { display: block; margin-top: 14px; font-weight: 300; font-size: clamp(36px, 6vw, 92px); letter-spacing: -.03em; line-height: 1; transition: transform .6s var(--ease); }
     .next:hover strong { transform: translateX(18px); }
@@ -663,26 +667,33 @@
       if (i < 0) return null;
       const p = list[i], nx = list[(i + 1) % list.length];
       const backTo = sec === "work" ? ["#/", "Selected work"] : ["#/direction", "Direction"];
-      const cover = media(p, "Capa — still escolhido");
-      const player = p.yt
-        ? `${cover}<button aria-label="Play ${esc(p.title)}" data-yt="${p.yt}"><span class="play"></span></button>`
-        : `${cover}<span class="na">${p.soon ? "Coming soon" : "Vídeo por carregar"}</span>`;
+      // stills: files in assets/stills/<slug>/ listed in p.stills; until they exist, the cover is the only still
+      const stills = (p.stills && p.stills.length) ? p.stills.map(f => `assets/stills/${p.slug}/${f}`) : (p.cover ? [coverSrc(p)] : []);
+      const rest = stills.length - 1;
+      const gallery = stills.map((src, k) => {
+        const full = k === 0 || (rest % 2 === 1 && k === stills.length - 1);
+        return `<img class="${full ? "full" : ""}" src="${src}" alt="${esc(p.title)} — still ${k + 1}" loading="${k ? "lazy" : "eager"}" decoding="async">`;
+      }).join("");
+      const video = p.yt ? `
+        <section class="p-video">
+          <span class="label-sm">Watch</span>
+          <div class="player">${media(p, "")}<button aria-label="Play ${esc(p.title)}" data-yt="${p.yt}"><span class="play"></span></button></div>
+        </section>` : "";
       $("#project").innerHTML = `
         <a class="back" href="${backTo[0]}">← ${backTo[1]}</a>
         <h1 class="p-title">${esc(p.title)}</h1>
         ${p.artist && p.artist !== p.title ? `<div class="p-artist">${esc(p.artist)}</div>` : ""}
-        <div class="player">${player}</div>
+        ${gallery ? `<div class="stills">${gallery}</div>` : ""}
         <div class="p-body">
           <dl class="credits">
             ${p.dir ? `<div><dt>Director</dt><dd>${esc(p.dir)}</dd></div>` : ""}
             <div><dt>Role</dt><dd>${esc(p.role)}</dd></div>
             ${p.type ? `<div><dt>Type</dt><dd>${esc(p.type)}</dd></div>` : ""}
             ${p.year ? `<div><dt>Year</dt><dd>${p.year}</dd></div>` : ""}
+            ${p.soon ? `<div><dt>Status</dt><dd>Coming soon</dd></div>` : ""}
           </dl>
         </div>
-        <div class="stills">
-          ${[0, 1, 2, 3, 4, 5].map(k => `<div class="ph" style="--h:${(p.h ?? 30) + k * 12}"><span class="tag">Still ${k + 1}</span></div>`).join("")}
-        </div>
+        ${video}
         <a class="next" href="#/${sec}/${nx.slug}"><span>Next project</span><strong>${esc(nx.title)} →</strong></a>`;
       const btn = $("#project button[data-yt]");
       if (btn) btn.addEventListener("click", () => {
