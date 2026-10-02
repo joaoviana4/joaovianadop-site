@@ -20,7 +20,7 @@
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500&family=Instrument+Serif:ital@0;1&family=Unbounded:wght@800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500&family=Instrument+Serif:ital@0;1&family=Unbounded:wght@800&family=IBM+Plex+Mono:wght@400;500&family=Reenie+Beanie&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #000;
@@ -56,6 +56,26 @@
       display: flex; justify-content: space-between; align-items: center;
       padding: 24px var(--pad);
     }
+
+    /* ---------- handwritten "contact me" note pointing at About (home only) ---------- */
+    .about-wrap { position: relative; display: inline-flex; }
+    .hand { position: absolute; top: calc(100% + 4px); right: 18px; display: flex; align-items: flex-end; gap: 0; pointer-events: none;
+      color: var(--accent); opacity: 0; transition: opacity .5s var(--ease); }
+    body.home .hand { opacity: 1; pointer-events: auto; }
+    body.home.scrolled .hand { opacity: 0; pointer-events: none; }
+    .hand-txt { font-family: "Reenie Beanie", cursive; font-size: 21px; line-height: 1; letter-spacing: .01em; white-space: nowrap; transform: rotate(-5deg) translateY(6px); text-transform: none; }
+    .hand-arrow { width: 30px; height: 25px; margin-left: 1px; overflow: visible; }
+    .hand-arrow path { fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+    .hand-arrow .shaft { stroke-dasharray: 60; stroke-dashoffset: 60; }
+    .hand-arrow .head { stroke-dasharray: 20; stroke-dashoffset: 20; }
+    body.home .hand-arrow .shaft { animation: hand-draw .9s .5s var(--ease) forwards; }
+    body.home .hand-arrow .head { animation: hand-draw .35s 1.3s ease-out forwards; }
+    .hand-txt { clip-path: inset(0 100% 0 0); }
+    body.home .hand-txt { animation: hand-write 1s .1s steps(14) forwards; }
+    @keyframes hand-draw { to { stroke-dashoffset: 0; } }
+    @keyframes hand-write { to { clip-path: inset(0 0 0 0); } }
+    .hand:hover { color: var(--name); }
+    @media (max-width: 700px) { .hand { display: none; } }
     header nav { display: flex; gap: clamp(20px, 3vw, 44px); margin-left: auto; }
     .mini { font-size: 13px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; opacity: 0; pointer-events: none; transition: opacity .3s; }
     body.small-name .mini { opacity: 1; pointer-events: auto; }
@@ -393,7 +413,11 @@
     <nav>
       <a href="#/" data-nav="work">Cinematography</a>
       <a href="#/direction" data-nav="direction">Direction</a>
-      <a href="#/about" data-nav="about">About</a>
+      <span class="about-wrap"><a href="#/about" data-nav="about">About</a>
+        <a class="hand" href="#/about" aria-label="Contact me">
+          <span class="hand-txt">contact me</span>
+          <svg class="hand-arrow" viewBox="0 0 48 40" aria-hidden="true"><path class="shaft" d="M3 34 C 14 36, 27 31, 34 20 S 40 8, 39 4"/><path class="head" d="M32.5 9.5 L 39 3.5 L 43.5 11"/></svg>
+        </a></span>
     </nav>
   </header>
 
@@ -934,6 +958,7 @@
       } else if (h === "direction") view = navKey = "direction";
       else if (h === "about") view = navKey = "about";
       document.body.classList.toggle("small-name", view === "project" || view === "about");
+      document.body.classList.toggle("home", view === "work");
       stopLeaks(); document.querySelectorAll(".grid.hovering").forEach(g => g.classList.remove("hovering"));
       document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + view));
       document.querySelectorAll("nav a").forEach(a => a.classList.toggle("active", a.dataset.nav === navKey));
@@ -952,6 +977,8 @@
       if (!a || e.metaKey || e.ctrlKey || e.shiftKey) return;
       e.preventDefault(); go(a.getAttribute("href"));
     }, true);
+    const onScroll = () => document.body.classList.toggle("scrolled", window.scrollY > 60);
+    window.addEventListener("scroll", onScroll, { passive: true }); onScroll();
     route();
   </script>
 </body>
