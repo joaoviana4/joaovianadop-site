@@ -872,7 +872,7 @@
     lb.addEventListener("touchend", e => { if (tx === null) return; const dx = e.changedTouches[0].clientX - tx; if (Math.abs(dx) > 40) lbShow(LB.i + (dx < 0 ? 1 : -1)); tx = null; });
     window.addEventListener("hashchange", () => lbClose(true));
 
-    // ----- carousel "frame rate": 18fps is the normal speed; 24 / 25 / 50 speed every row up proportionally (choice is kept between projects)
+    // ----- carousel "frame rate": 18fps is the normal speed; 24 / 25 / 50 speed every row up proportionally (resets to 18 on each project)
     const FPS_OPTS = [18, 24, 25, 50], FPS = { v: 18 };
     function applyFps() {
       const rate = FPS.v / 18;
@@ -902,6 +902,7 @@
         const imgs = Array.from({ length: rep }, () => list.map((src, k) => [src, start + k])).flat().map(([src, n]) => `<img data-i="${n}" src="${src}" alt="${esc(p.title)} — still ${n + 1}" loading="eager" decoding="async">`).join("");
         return `<div class="reel-row ${dir}">${imgs}${imgs}</div>`;
       };
+      FPS.v = 18;   // every project starts at the normal speed
       const fpsBar = `<div class="fps" role="group" aria-label="Carousel speed">${FPS_OPTS.map(f => `<button type="button" data-fps="${f}" aria-pressed="${f === FPS.v}"${f === FPS.v ? ' class="on"' : ""}>${f}fps</button>`).join("")}</div>`;
       const reel = fpsBar + `<div class="reel${nRows === 1 ? " single" : ""}" aria-label="${esc(p.title)} stills">${Array.from({ length: nRows }, (_, r) => rowHtml(stills.slice(r * per, (r + 1) * per), r % 2 ? "r" : "l", r * per)).join("")}</div>`;
       const video = p.yt ? `
