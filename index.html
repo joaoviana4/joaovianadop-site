@@ -230,7 +230,6 @@
     .reel-row img { height: clamp(150px, 22vw, 340px); width: auto; flex: none; object-fit: initial; background: #111; }
     .reel-row.l { animation: reel-l var(--dur, 40s) linear infinite; }
     .reel-row.r { animation: reel-r var(--dur, 40s) linear infinite; }
-    .reel:hover .reel-row { animation-play-state: paused; }
     @keyframes reel-l { from { transform: translateX(0); } to { transform: translateX(-50%); } }
     @keyframes reel-r { from { transform: translateX(-50%); } to { transform: translateX(0); } }
     @media (prefers-reduced-motion: reduce) { .reel { overflow-x: auto; } .reel-row { animation: none !important; } }
