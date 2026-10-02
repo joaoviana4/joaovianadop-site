@@ -1015,6 +1015,7 @@
     // ----- router -----
     function route(hash) {
       const h = (hash ?? location.hash).replace(/^#\/?/, "");
+      document.querySelectorAll("#project iframe").forEach(f => f.remove());   // stop any playing video when leaving a project
       let view = "work", navKey = "work";
       const m = h.match(/^(work|direction)\/(.+)$/);
       if (m) {
