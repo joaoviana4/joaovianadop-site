@@ -239,10 +239,9 @@
     .surprise:hover { background: var(--accent); color: #000; }
     .roulette { position: fixed; inset: 0; z-index: 90; background: rgba(0,0,0,.92); display: none; align-items: center; overflow: hidden; }
     .roulette.on { display: flex; }
-    .r-strip { display: flex; gap: clamp(40px, 6vw, 90px); white-space: nowrap; will-change: transform; padding-left: 50vw; }
+    .r-strip { filter: url(#rblur); display: flex; gap: clamp(40px, 6vw, 90px); white-space: nowrap; will-change: transform; padding-left: 50vw; }
     .r-strip span { font-family: "Unbounded", sans-serif; font-weight: 800; text-transform: uppercase; font-size: clamp(26px, 4.4vw, 64px); color: #4a4a4a; transition: color .2s; }
     .r-strip span.hit { color: var(--accent); filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent) 35%, transparent)); }
-    .r-mark { position: absolute; left: 50%; top: 18%; bottom: 18%; width: 1px; background: var(--accent); opacity: .5; }
  { .reel { overflow-x: auto; } .reel-row { animation: none !important; } }
     .p-video { padding: clamp(40px, 7vh, 80px) 0 0; }
     .more-btn {
@@ -332,6 +331,7 @@
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <filter id="rblur" x="-10%" width="120%"><feGaussianBlur id="rblur-g" stdDeviation="0 0"/></filter>
     <filter id="hblur0" x="-5%" width="110%"><feGaussianBlur stdDeviation=".5 0"/></filter>
     <filter id="hblur1" x="-20%" width="140%"><feGaussianBlur stdDeviation="1.6 0.2"/></filter>
     <filter id="hblur2" x="-25%" width="150%"><feGaussianBlur stdDeviation="3 0.3"/></filter>
@@ -411,7 +411,6 @@
     <button type="button" class="surprise" id="surprise">Surprise me</button>
   </footer>
   <div class="roulette" id="roulette" aria-hidden="true">
-    <div class="r-mark"></div>
     <div class="r-strip" id="r-strip"></div>
   </div>
 
@@ -802,6 +801,19 @@
         const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         strip.style.transition = reduce ? "none" : "transform 3.2s cubic-bezier(.12,.72,.12,1)";
         strip.style.transform = `translateX(${-dx}px)`;
+        // motion blur that follows the speed: heavy while it races, fading out as it settles
+        const g = document.getElementById("rblur-g");
+        let last = 0, lastT = performance.now(), blurring = true;
+        const readX = () => new DOMMatrixReadOnly(getComputedStyle(strip).transform).m41;
+        last = readX();
+        const blurTick = now => {
+          const x = readX(), v = Math.abs(x - last) / Math.max(1, now - lastT);   // px per ms
+          last = x; lastT = now;
+          g.setAttribute("stdDeviation", `${Math.min(42, v * 9).toFixed(1)} 0`);
+          if (blurring) requestAnimationFrame(blurTick);
+        };
+        requestAnimationFrame(blurTick);
+        setTimeout(() => { blurring = false; g.setAttribute("stdDeviation", "0 0"); }, reduce ? 200 : 3300);
         setTimeout(() => {
           hit.classList.add("hit");
           setTimeout(() => { box.classList.remove("on"); go(`#/${target.sec}/${target.p.slug}`); }, 750);
