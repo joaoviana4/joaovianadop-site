@@ -232,6 +232,7 @@
       -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); }
     .reel-row { display: flex; gap: 12px; width: max-content; will-change: transform; }
     .reel-row img { height: clamp(150px, 22vw, 340px); width: auto; flex: none; object-fit: initial; background: #111; }
+    .reel.single .reel-row img { height: clamp(190px, 27.5vw, 425px); }
     .reel-row.l { animation: reel-l var(--dur, 40s) linear infinite; }
     .reel-row.r { animation: reel-r var(--dur, 40s) linear infinite; }
     @keyframes reel-l { from { transform: translateX(0); } to { transform: translateX(-50%); } }
@@ -714,7 +715,7 @@
         const imgs = Array.from({ length: rep }, () => list).flat().map(src => `<img src="${src}" alt="${esc(p.title)} — still" loading="eager" decoding="async">`).join("");
         return `<div class="reel-row ${dir}">${imgs}${imgs}</div>`;
       };
-      const reel = `<div class="reel" aria-label="${esc(p.title)} stills">${Array.from({ length: nRows }, (_, r) => rowHtml(stills.slice(r * per, (r + 1) * per), r % 2 ? "r" : "l")).join("")}</div>`;
+      const reel = `<div class="reel${nRows === 1 ? " single" : ""}" aria-label="${esc(p.title)} stills">${Array.from({ length: nRows }, (_, r) => rowHtml(stills.slice(r * per, (r + 1) * per), r % 2 ? "r" : "l")).join("")}</div>`;
       const video = p.yt ? `
         <section class="p-video">
           <span class="label-sm">Watch</span>
