@@ -224,6 +224,11 @@
     .stills img { display: block; width: 100%; height: auto; object-fit: initial; background: #111; }
     .stills .full { grid-column: 1 / -1; }
     .p-video { padding: clamp(40px, 7vh, 80px) 0 0; }
+    .more-btn {
+      margin-top: 32px; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase;
+      color: var(--accent); border: 1px solid var(--accent); padding: 12px 22px; transition: background .3s, color .3s;
+    }
+    .more-btn:hover { background: var(--accent); color: #000; }
     .p-video .label-sm, .p-body .label-sm { display: block; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: var(--accent); margin-bottom: 18px; }
     .p-video .player { margin-top: 0; }
 
@@ -390,13 +395,13 @@
     // Ordem cronológica (mais recente primeiro), pelas datas de publicação no YouTube.
     // Projetos sem data no YouTube ficam no fim do respetivo ano; Alegria (sem ano) no fim.
     const DP = [
-      { slug: "ultimo-canto", title: "Último Canto", type: "Short Film", year: 2026, dir: "José P. Miguel", role: "Director of Photography, Editor", soon: true, cover: "ultimo-canto" },
+      { slug: "ultimo-canto", title: "Último Canto", type: "Short Film", year: 2026, dir: "José P. Miguel", role: "Director of Photography, Editor", soon: true, cover: "ultimo-canto", more: true },
       { slug: "cartas-na-mesa", title: "Cartas na Mesa", artist: "Van Zee", type: "Music Video", year: 2026, dir: "Ruben Mendes, Tomás Freitas", role: "Director of Photography", yt: "B7VOs2LPC-Q", cover: "cartas-na-mesa", pos: "62% 50%" },
-      { slug: "viarco", title: "Viarco", type: "Commercial", year: 2025, role: "Creative Director, Director of Photography", soon: true, cover: "viarco" },
-      { slug: "auto-de-fe", title: "Auto de Fé", type: "Series Pilot", year: 2025, dir: "José P. Miguel", role: "Director of Photography, Colorist", cover: "auto-de-fe", pos: "30% 50%" },
-      { slug: "quase-nada", title: "Quase Nada", artist: "Ed", type: "Music Video", year: 2026, dir: "Mário ARV", role: "Director of Photography", yt: "iVH0_Aq6lw4", cover: "quase-nada" },
+      { slug: "viarco", title: "Viarco", type: "Commercial", year: 2025, role: "Creative Director, Director of Photography", soon: true, cover: "viarco", more: true },
+      { slug: "auto-de-fe", title: "Auto de Fé", type: "Series Pilot", year: 2025, dir: "José P. Miguel", role: "Director of Photography, Colorist", cover: "auto-de-fe", pos: "30% 50%", more: true },
+      { slug: "quase-nada", title: "Quase Nada", artist: "Ed", type: "Music Video", year: 2026, dir: "Mário ARV", role: "Director of Photography", yt: "iVH0_Aq6lw4", cover: "quase-nada", more: true },
       { slug: "top", title: "Top", artist: "JointOne", type: "Music Video", year: 2026, dir: "Ruben Mendes", role: "Director of Photography", yt: "-UPNVRV8nXQ", cover: "top" },
-      { slug: "a-grande-viagem", title: "A Grande Viagem Rumo ao Recorde Mundial", type: "Documentary", year: 2026, dir: "João Viana", role: "Director, Director of Photography", yt: "wmvXtrDpZuk", cover: "a-grande-viagem" },
+      { slug: "a-grande-viagem", title: "A Grande Viagem Rumo ao Recorde Mundial", type: "Documentary", year: 2026, dir: "João Viana", role: "Director, Director of Photography", yt: "wmvXtrDpZuk", cover: "a-grande-viagem", more: true },
       { slug: "desculpa", title: "desculpa", artist: "Victoria Leuca", type: "Live Session", year: 2026, role: "Director of Photography", yt: "yvVUh4XmQJc", cover: "desculpa" },
       { slug: "so", title: "só", artist: "Victoria Leuca", type: "Music Video", year: 2025, dir: "João Viana, João Barbosa, Vasco Souto", role: "Co-director, Director of Photography, Editor, Colorist", yt: "cEUa3SJD_sw", cover: "so", pos: "40% 50%" },
       { slug: "nada-demais", title: "Nada Demais", artist: "Beatriz Caixinha feat. Rita Onofre", type: "Music Video", year: 2025, role: "Director of Photography", yt: "1KeOU6nRaD4", cover: "nada-demais" },
@@ -404,7 +409,7 @@
       { slug: "alegria", title: "Alegria", type: "Short Film", year: null, dir: "João Viana", role: "Director, Director of Photography", cover: "alegria" }
     ];
     const DIRECTION = [
-      { slug: "a-grande-viagem", title: "A Grande Viagem Rumo ao Recorde Mundial", type: "Documentary", year: 2026, dir: "João Viana", role: "Director, Director of Photography", yt: "wmvXtrDpZuk", cover: "a-grande-viagem" },
+      { slug: "a-grande-viagem", title: "A Grande Viagem Rumo ao Recorde Mundial", type: "Documentary", year: 2026, dir: "João Viana", role: "Director, Director of Photography", yt: "wmvXtrDpZuk", cover: "a-grande-viagem", more: true },
       { slug: "severa", title: "Severa", type: "Fashion Film", year: 2025, dir: "João Viana", role: "Director", cover: "severa" },
       { slug: "celia", title: "Célia", type: "Short Film", year: 2024, dir: "João Viana, Vasco Souto", role: "Co-director", yt: "-GrhEE8KWl0", cover: "celia" },
       { slug: "alegria", title: "Alegria", type: "Short Film", year: null, dir: "João Viana", role: "Director, Director of Photography", cover: "alegria" }
@@ -692,9 +697,20 @@
             ${p.year ? `<div><dt>Year</dt><dd>${p.year}</dd></div>` : ""}
             ${p.soon ? `<div><dt>Status</dt><dd>Coming soon</dd></div>` : ""}
           </dl>
+          ${p.more ? `<button type="button" class="more-btn" data-more="${esc(p.title)}">Let me know more</button>` : ""}
         </div>
         ${video}
         <a class="next" href="#/${sec}/${nx.slug}"><span>Next project</span><strong>${esc(nx.title)} →</strong></a>`;
+      const more = $("#project .more-btn");
+      if (more) more.addEventListener("click", () => {
+        location.hash = "#/about";
+        setTimeout(() => {
+          const ta = $("#cform textarea[name=message]");
+          if (ta && !ta.value) ta.value = `Hi João, I'd like to know more about "${more.dataset.more}".`;
+          $("#cform").scrollIntoView({ behavior: "smooth", block: "start" });
+          setTimeout(() => $("#cform input[name=name]").focus({ preventScroll: true }), 500);
+        }, 60);
+      });
       const btn = $("#project button[data-yt]");
       if (btn) btn.addEventListener("click", () => {
         btn.insertAdjacentHTML("afterend", `<iframe src="https://www.youtube-nocookie.com/embed/${btn.dataset.yt}?autoplay=1&rel=0&modestbranding=1" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen title="${esc(p.title)}"></iframe>`);
