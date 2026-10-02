@@ -134,6 +134,7 @@
     body.small-name .masthead { display: none; }
     /* light leak around the name, 16mm-style: red/orange fog bleeding in from one edge with a hot yellow-white core,
        flickering frame by frame (driven at 24 fps from JS), kept inside a soft area around the name */
+    .masthead { overflow-x: clip; }
     .namewrap .leak { position: absolute; inset: -70% -14%; z-index: 3; pointer-events: none; opacity: 0; mix-blend-mode: screen;
       -webkit-mask-image: radial-gradient(60% 60% at 50% 50%, #000 45%, transparent 100%); mask-image: radial-gradient(60% 60% at 50% 50%, #000 45%, transparent 100%); }
     .masthead .namewrap { z-index: 1; }
@@ -257,6 +258,23 @@
     .reel-row.r { animation: reel-r var(--dur, 40s) linear infinite; }
     @keyframes reel-l { from { transform: translateX(0); } to { transform: translateX(-50%); } }
     @keyframes reel-r { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+
+    /* ---------- stills lightbox ---------- */
+    .reel-row img, .stills img { cursor: zoom-in; }
+    .lb { position: fixed; inset: 0; z-index: 95; background: rgba(0,0,0,.985); display: grid; grid-template-columns: 72px 1fr 72px; grid-template-rows: auto 1fr; align-items: center;
+      opacity: 0; transition: opacity .35s var(--ease); }
+    .lb[hidden] { display: none; }
+    .lb.on { opacity: 1; }
+    .lb-top { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; padding: 20px var(--pad); }
+    .lb-count, .lb-close, .lb-nav { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+    .lb button:focus:not(:focus-visible) { outline: none; }
+    .lb-close { padding: 6px 0; transition: color .3s; } .lb-close:hover { color: var(--name); }
+    .lb-stage { grid-column: 2; height: 100%; display: grid; place-items: center; padding: 0 0 4vh; min-height: 0; }
+    .lb-stage img { max-width: 100%; max-height: calc(100svh - 120px); object-fit: contain; display: block; transition: opacity .25s var(--ease), transform .45s var(--ease); }
+    .lb-stage img.swap { opacity: 0; transform: scale(.985); }
+    .lb-nav { height: 100%; font-size: 22px; transition: color .3s, transform .3s var(--ease); }
+    .lb-nav:hover { color: var(--name); } .lb-nav.prev:hover { transform: translateX(-4px); } .lb-nav.next:hover { transform: translateX(4px); }
+    @media (max-width: 700px) { .lb { grid-template-columns: 0 1fr 0; } .lb-nav { position: absolute; bottom: 18px; height: auto; padding: 10px 18px; } .lb-nav.prev { left: 8px; } .lb-nav.next { right: 8px; } }
     /* ---------- surprise me ---------- */
     footer { align-items: center; }
     .surprise { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase;
@@ -368,7 +386,7 @@
     @media (max-width: 760px) {
       header nav { margin: 0 auto; }
       body.small-name header { flex-direction: column; gap: 12px; }
-      .grid { grid-template-columns: 1fr; }
+      .grid { grid-template-columns: minmax(0, 1fr); }
       .p-body, .page { grid-template-columns: 1fr; }
       .stills { grid-template-columns: 1fr; }
     }
@@ -388,6 +406,7 @@
     @keyframes rail { from { translate: 0 0; } to { translate: 0 -50%; } }
     body { padding: 0 var(--rail); }
     @media (max-width: 760px) { .rail { display: none; } body { padding: 0; } }
+    html, body { overflow-x: clip; }   /* nothing decorative (leaks, rails) may widen the page on phones */
     /* ---------- moving film-strip background ---------- */
     .filmbg { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
     .filmbg { background-repeat: repeat-y; }
@@ -482,6 +501,12 @@
     <span>João Viana — Lisbon · © <span id="y"></span></span>
     <button type="button" class="surprise" id="surprise">Surprise me</button>
   </footer>
+  <div class="lb" id="lb" role="dialog" aria-modal="true" aria-label="Stills viewer" hidden>
+    <div class="lb-top"><span class="lb-count" id="lb-count"></span><button type="button" class="lb-close" id="lb-close" aria-label="Close">Close ✕</button></div>
+    <button type="button" class="lb-nav prev" id="lb-prev" aria-label="Previous still">←</button>
+    <figure class="lb-stage"><img id="lb-img" alt=""></figure>
+    <button type="button" class="lb-nav next" id="lb-next" aria-label="Next still">→</button>
+  </div>
   <div class="roulette" id="roulette" aria-hidden="true">
     <div class="r-strip" id="r-strip"></div>
   </div>
@@ -493,11 +518,11 @@
     const DP = [
       { slug: "ultimo-canto", title: "Último Canto", type: "Short Film", year: 2026, dir: "José P. Miguel", role: "Director of Photography", soon: true, cover: "ultimo-canto", moreLater: true, deep: "ultimo-canto", stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg", "07.jpg", "08.jpg", "09.jpg", "10.jpg"] },
       { slug: "cartas-na-mesa", title: "Cartas na Mesa", artist: "Van Zee", type: "Music Video", year: 2026, dir: "Ruben Mendes, Tomás Freitas", role: "Director of Photography", yt: "B7VOs2LPC-Q", cover: "cartas-na-mesa", pos: "62% 50%", rows: 3, stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg", "07.jpg", "08.jpg", "09.jpg"] },
-      { slug: "viarco", title: "Viarco", type: "Commercial", year: 2025, role: "Creative Director, Director of Photography", soon: true, cover: "viarco", moreLater: true, rows: 1, stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg"] },
+      { slug: "viarco", title: "Viarco", type: "Commercial", year: 2025, dir: "Maria Flores", role: "Creative Director, Director of Photography", soon: true, cover: "viarco", moreLater: true, rows: 1, stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg"] },
       { slug: "auto-de-fe", title: "Auto de Fé", type: "Series Pilot", year: 2025, dir: "José P. Miguel", role: "Director of Photography, Colorist", cover: "auto-de-fe", pos: "30% 50%", moreLater: true, stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg"] },
       { slug: "quase-nada", title: "Quase Nada", artist: "Ed", type: "Music Video", year: 2026, dir: "Mário ARV", role: "Director of Photography", yt: "iVH0_Aq6lw4", cover: "quase-nada", moreLater: true, stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg"] },
       { slug: "top", title: "Top", artist: "JointOne", type: "Music Video", year: 2026, dir: "Ruben Mendes", role: "Director of Photography", yt: "-UPNVRV8nXQ", cover: "top", stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg", "07.jpg", "08.jpg"] },
-      { slug: "a-grande-viagem", title: "A Grande Viagem Rumo ao Recorde Mundial", type: "Documentary", year: 2026, dir: "João Viana", role: "Director, Director of Photography", cover: "a-grande-viagem", moreLater: true, stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg"] },
+      { slug: "a-grande-viagem", title: "A Grande Viagem Rumo ao Recorde Mundial", type: "Documentary", year: 2026, dir: "João Viana, Maria Flores", role: "Director, Director of Photography", cover: "a-grande-viagem", moreLater: true, stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg"] },
       { slug: "novidades", title: "Novidades", artist: "ATJ", type: "Music Video", year: 2026, dir: "Ruben Mendes", role: "Director of Photography", yt: "FZgvb9HioW0", cover: "novidades", stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg", "07.jpg", "08.jpg"] },
       { slug: "desculpa", title: "desculpa", artist: "Victoria Leuca", type: "Live Session", year: 2026, role: "Director of Photography", yt: "yvVUh4XmQJc", cover: "desculpa", rows: 1, stills: ["01.jpg", "02.jpg", "03.jpg"] },
       { slug: "so", title: "só", artist: "Victoria Leuca", type: "Music Video", year: 2025, dir: "João Viana, João Barbosa, Vasco Souto", role: "Co-director, Director of Photography, Editor, Colorist", yt: "cEUa3SJD_sw", cover: "so", pos: "40% 50%", stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg"] },
@@ -506,7 +531,7 @@
       { slug: "nunca-te-esqueco", title: "Nunca Te Esqueço, Meu Amor", artist: "Inês Monstro", type: "Music Video", year: 2024, dir: "Vasco Souto", role: "Director of Photography, Editor, Colorist", yt: "m5fvunfNXOI", cover: "nunca-te-esqueco", stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg"] }
     ];
     const DIRECTION = [
-      { slug: "a-grande-viagem", title: "A Grande Viagem Rumo ao Recorde Mundial", type: "Documentary", year: 2026, dir: "João Viana", role: "Director, Director of Photography", cover: "a-grande-viagem", moreLater: true, stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg"] },
+      { slug: "a-grande-viagem", title: "A Grande Viagem Rumo ao Recorde Mundial", type: "Documentary", year: 2026, dir: "João Viana, Maria Flores", role: "Director, Director of Photography", cover: "a-grande-viagem", moreLater: true, stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg"] },
       { slug: "severa", title: "Severa", type: "Fashion Film", year: 2025, dir: "João Viana", role: "Director", cover: "severa", stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg", "07.jpg"] },
       { slug: "alegria", title: "Alegria", type: "Short Film", year: 2025, dir: "João Viana", role: "Director, Director of Photography", cover: "alegria", stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg", "07.jpg"] },
       { slug: "celia", title: "Célia", type: "Short Film", year: 2024, dir: "João Viana, Vasco Souto", role: "Co-director", yt: "-GrhEE8KWl0", cover: "celia", stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg"] }
@@ -799,6 +824,37 @@
         <div class="blk deep-end"><p>Want to talk about this project?</p><button type="button" class="more-btn" data-contact="${esc(p.title)}">Get in touch</button></div></div></div></div>`;
     }
 
+    // ----- stills lightbox: click any still on a project page to view it large; arrows / keys / swipe to move -----
+    const LB = { list: [], i: 0, title: "" };
+    const lb = $("#lb"), lbImg = $("#lb-img");
+    function lbShow(i, instant) {
+      const n = LB.list.length; if (!n) return;
+      LB.i = (i + n) % n;
+      const set = () => { lbImg.src = LB.list[LB.i]; lbImg.alt = `${LB.title} — still ${LB.i + 1}`; $("#lb-count").textContent = `${LB.title} — ${String(LB.i + 1).padStart(2, "0")} / ${String(n).padStart(2, "0")}`; };
+      if (instant) return set();
+      lbImg.classList.add("swap");
+      setTimeout(() => { set(); lbImg.onload = () => lbImg.classList.remove("swap"); if (lbImg.complete) lbImg.classList.remove("swap"); }, 180);
+      [-1, 1].forEach(d => { const im = new Image(); im.src = LB.list[(LB.i + d + n) % n]; });   // preload neighbours
+    }
+    function lbOpen(i) { lbShow(i, true); lb.hidden = false; requestAnimationFrame(() => lb.classList.add("on")); document.documentElement.style.overflow = "hidden"; $("#lb-close").focus({ preventScroll: true }); }
+    function lbClose() { lb.classList.remove("on"); document.documentElement.style.overflow = ""; setTimeout(() => { lb.hidden = true; }, 350); }
+    document.addEventListener("click", e => {
+      const im = e.target.closest && e.target.closest("#project .reel-row img, #project .stills img");
+      if (im) lbOpen(+im.dataset.i || 0);
+    });
+    $("#lb-prev").onclick = () => lbShow(LB.i - 1);
+    $("#lb-next").onclick = () => lbShow(LB.i + 1);
+    $("#lb-close").onclick = lbClose;
+    lb.addEventListener("click", e => { if (e.target === lb || e.target.classList.contains("lb-stage")) lbClose(); });
+    document.addEventListener("keydown", e => {
+      if (lb.hidden) return;
+      if (e.key === "Escape") lbClose(); else if (e.key === "ArrowRight") lbShow(LB.i + 1); else if (e.key === "ArrowLeft") lbShow(LB.i - 1);
+    });
+    let tx = null;
+    lb.addEventListener("touchstart", e => { tx = e.touches[0].clientX; }, { passive: true });
+    lb.addEventListener("touchend", e => { if (tx === null) return; const dx = e.changedTouches[0].clientX - tx; if (Math.abs(dx) > 40) lbShow(LB.i + (dx < 0 ? 1 : -1)); tx = null; });
+    window.addEventListener("hashchange", () => { if (!lb.hidden) lbClose(); });
+
     // ----- project page -----
     function renderProject(sec, slug) {
       const list = LISTS[sec]; if (!list) return null;
@@ -811,16 +867,16 @@
       const rest = stills.length - 1;
       const gallery = stills.map((src, k) => {
         const full = k === 0 || (rest % 2 === 1 && k === stills.length - 1);
-        return `<img class="${full ? "full" : ""}" src="${src}" alt="${esc(p.title)} — still ${k + 1}" loading="${k ? "lazy" : "eager"}" decoding="async">`;
+        return `<img class="${full ? "full" : ""}" data-i="${k}" src="${src}" alt="${esc(p.title)} — still ${k + 1}" loading="${k ? "lazy" : "eager"}" decoding="async">`;
       }).join("");
       // 4 or more stills: two rows (first half / second half) sliding in opposite directions, each row doubled for a seamless loop
       const nRows = p.rows || 2, per = Math.ceil(stills.length / nRows);
-      const rowHtml = (list, dir) => {
+      const rowHtml = (list, dir, start) => {
         const rep = Math.max(1, Math.ceil(8 / list.length));
-        const imgs = Array.from({ length: rep }, () => list).flat().map(src => `<img src="${src}" alt="${esc(p.title)} — still" loading="eager" decoding="async">`).join("");
+        const imgs = Array.from({ length: rep }, () => list.map((src, k) => [src, start + k])).flat().map(([src, n]) => `<img data-i="${n}" src="${src}" alt="${esc(p.title)} — still ${n + 1}" loading="eager" decoding="async">`).join("");
         return `<div class="reel-row ${dir}">${imgs}${imgs}</div>`;
       };
-      const reel = `<div class="reel${nRows === 1 ? " single" : ""}" aria-label="${esc(p.title)} stills">${Array.from({ length: nRows }, (_, r) => rowHtml(stills.slice(r * per, (r + 1) * per), r % 2 ? "r" : "l")).join("")}</div>`;
+      const reel = `<div class="reel${nRows === 1 ? " single" : ""}" aria-label="${esc(p.title)} stills">${Array.from({ length: nRows }, (_, r) => rowHtml(stills.slice(r * per, (r + 1) * per), r % 2 ? "r" : "l", r * per)).join("")}</div>`;
       const video = p.yt ? `
         <section class="p-video">
           <span class="label-sm">Watch</span>
@@ -874,6 +930,7 @@
         const set = e => { const r = ba.getBoundingClientRect(); ba.style.setProperty("--x", Math.min(100, Math.max(0, (e.clientX - r.left) / r.width * 100)) + "%"); };
         ba.addEventListener("pointermove", set); ba.addEventListener("pointerdown", set);
       });
+      LB.list = stills; LB.title = p.title;
       const btn = $("#project button[data-yt]");
       if (btn) btn.addEventListener("click", () => {
         btn.insertAdjacentHTML("afterend", `<iframe src="https://www.youtube-nocookie.com/embed/${btn.dataset.yt}?autoplay=1&rel=0&modestbranding=1" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen title="${esc(p.title)}"></iframe>`);
