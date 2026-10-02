@@ -425,12 +425,12 @@
     const DP = [
       { slug: "ultimo-canto", title: "Último Canto", type: "Short Film", year: 2026, dir: "José P. Miguel", role: "Director of Photography", soon: true, cover: "ultimo-canto", more: true, stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg", "07.jpg", "08.jpg", "09.jpg", "10.jpg"] },
       { slug: "cartas-na-mesa", title: "Cartas na Mesa", artist: "Van Zee", type: "Music Video", year: 2026, dir: "Ruben Mendes, Tomás Freitas", role: "Director of Photography", yt: "B7VOs2LPC-Q", cover: "cartas-na-mesa", pos: "62% 50%", rows: 3, stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg", "07.jpg", "08.jpg", "09.jpg"] },
-      { slug: "viarco", title: "Viarco", type: "Commercial", year: 2025, role: "Creative Director, Director of Photography", soon: true, cover: "viarco", more: true },
+      { slug: "viarco", title: "Viarco", type: "Commercial", year: 2025, role: "Creative Director, Director of Photography", soon: true, cover: "viarco", more: true, rows: 1, stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg"] },
       { slug: "auto-de-fe", title: "Auto de Fé", type: "Series Pilot", year: 2025, dir: "José P. Miguel", role: "Director of Photography, Colorist", cover: "auto-de-fe", pos: "30% 50%", more: true },
       { slug: "quase-nada", title: "Quase Nada", artist: "Ed", type: "Music Video", year: 2026, dir: "Mário ARV", role: "Director of Photography", yt: "iVH0_Aq6lw4", cover: "quase-nada", more: true },
       { slug: "top", title: "Top", artist: "JointOne", type: "Music Video", year: 2026, dir: "Ruben Mendes", role: "Director of Photography", yt: "-UPNVRV8nXQ", cover: "top", stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg", "07.jpg", "08.jpg"] },
       { slug: "a-grande-viagem", title: "A Grande Viagem Rumo ao Recorde Mundial", type: "Documentary", year: 2026, dir: "João Viana", role: "Director, Director of Photography", cover: "a-grande-viagem", more: true },
-      { slug: "desculpa", title: "desculpa", artist: "Victoria Leuca", type: "Live Session", year: 2026, role: "Director of Photography", yt: "yvVUh4XmQJc", cover: "desculpa" },
+      { slug: "desculpa", title: "desculpa", artist: "Victoria Leuca", type: "Live Session", year: 2026, role: "Director of Photography", yt: "yvVUh4XmQJc", cover: "desculpa", rows: 1, stills: ["01.jpg", "02.jpg", "03.jpg"] },
       { slug: "so", title: "só", artist: "Victoria Leuca", type: "Music Video", year: 2025, dir: "João Viana, João Barbosa, Vasco Souto", role: "Co-director, Director of Photography, Editor, Colorist", yt: "cEUa3SJD_sw", cover: "so", pos: "40% 50%" },
       { slug: "nada-demais", title: "Nada Demais", artist: "Beatriz Caixinha feat. Rita Onofre", type: "Music Video", year: 2025, role: "Director of Photography", yt: "1KeOU6nRaD4", cover: "nada-demais" },
       { slug: "alegria", title: "Alegria", type: "Short Film", year: 2025, dir: "João Viana", role: "Director, Director of Photography", cover: "alegria" },
@@ -710,7 +710,8 @@
       // 4 or more stills: two rows (first half / second half) sliding in opposite directions, each row doubled for a seamless loop
       const nRows = p.rows || 2, per = Math.ceil(stills.length / nRows);
       const rowHtml = (list, dir) => {
-        const imgs = list.map((src, k) => `<img src="${src}" alt="${esc(p.title)} — still" loading="eager" decoding="async">`).join("");
+        const rep = Math.max(1, Math.ceil(8 / list.length));
+        const imgs = Array.from({ length: rep }, () => list).flat().map(src => `<img src="${src}" alt="${esc(p.title)} — still" loading="eager" decoding="async">`).join("");
         return `<div class="reel-row ${dir}">${imgs}${imgs}</div>`;
       };
       const reel = `<div class="reel" aria-label="${esc(p.title)} stills">${Array.from({ length: nRows }, (_, r) => rowHtml(stills.slice(r * per, (r + 1) * per), r % 2 ? "r" : "l")).join("")}</div>`;
@@ -723,7 +724,7 @@
         <a class="back" href="${backTo[0]}">← ${backTo[1]}</a>
         <h1 class="p-title">${esc(p.title)}</h1>
         ${p.artist && p.artist !== p.title ? `<div class="p-artist">${esc(p.artist)}</div>` : ""}
-        ${stills.length >= 4 ? reel : gallery ? `<div class="stills">${gallery}</div>` : ""}
+        ${(stills.length >= 4 || p.rows === 1 && stills.length > 1) ? reel : gallery ? `<div class="stills">${gallery}</div>` : ""}
         <div class="p-body">
           <dl class="credits">
             ${p.dir ? `<div><dt>Director</dt><dd>${esc(p.dir)}</dd></div>` : ""}
