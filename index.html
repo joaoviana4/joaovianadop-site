@@ -836,15 +836,24 @@
       setTimeout(() => { set(); lbImg.onload = () => lbImg.classList.remove("swap"); if (lbImg.complete) lbImg.classList.remove("swap"); }, 180);
       [-1, 1].forEach(d => { const im = new Image(); im.src = LB.list[(LB.i + d + n) % n]; });   // preload neighbours
     }
-    function lbOpen(i) { lbShow(i, true); lb.hidden = false; requestAnimationFrame(() => lb.classList.add("on")); document.documentElement.style.overflow = "hidden"; $("#lb-close").focus({ preventScroll: true }); }
-    function lbClose() { lb.classList.remove("on"); document.documentElement.style.overflow = ""; setTimeout(() => { lb.hidden = true; }, 350); }
+    // opening adds a history entry, so the phone's back button / back swipe closes the viewer instead of leaving the project
+    function lbOpen(i) {
+      lbShow(i, true); lb.hidden = false; requestAnimationFrame(() => lb.classList.add("on")); document.documentElement.style.overflow = "hidden"; $("#lb-close").focus({ preventScroll: true });
+      try { history.pushState({ lb: true }, ""); } catch (e) {}
+    }
+    function lbClose(fromHistory) {
+      if (lb.hidden) return;
+      if (!fromHistory && history.state && history.state.lb) { history.back(); return; }   // popstate below does the closing
+      lb.classList.remove("on"); document.documentElement.style.overflow = ""; setTimeout(() => { lb.hidden = true; }, 350);
+    }
+    window.addEventListener("popstate", () => lbClose(true));
     document.addEventListener("click", e => {
       const im = e.target.closest && e.target.closest("#project .reel-row img, #project .stills img");
       if (im) lbOpen(+im.dataset.i || 0);
     });
     $("#lb-prev").onclick = () => lbShow(LB.i - 1);
     $("#lb-next").onclick = () => lbShow(LB.i + 1);
-    $("#lb-close").onclick = lbClose;
+    $("#lb-close").onclick = () => lbClose();
     lb.addEventListener("click", e => { if (e.target === lb || e.target.classList.contains("lb-stage")) lbClose(); });
     document.addEventListener("keydown", e => {
       if (lb.hidden) return;
@@ -853,7 +862,7 @@
     let tx = null;
     lb.addEventListener("touchstart", e => { tx = e.touches[0].clientX; }, { passive: true });
     lb.addEventListener("touchend", e => { if (tx === null) return; const dx = e.changedTouches[0].clientX - tx; if (Math.abs(dx) > 40) lbShow(LB.i + (dx < 0 ? 1 : -1)); tx = null; });
-    window.addEventListener("hashchange", () => { if (!lb.hidden) lbClose(); });
+    window.addEventListener("hashchange", () => lbClose(true));
 
     // ----- project page -----
     function renderProject(sec, slug) {
