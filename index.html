@@ -424,7 +424,7 @@
     // Projetos sem data no YouTube ficam no fim do respetivo ano; Alegria (sem ano) no fim.
     const DP = [
       { slug: "ultimo-canto", title: "Último Canto", type: "Short Film", year: 2026, dir: "José P. Miguel", role: "Director of Photography", soon: true, cover: "ultimo-canto", more: true, stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg", "07.jpg", "08.jpg", "09.jpg", "10.jpg"] },
-      { slug: "cartas-na-mesa", title: "Cartas na Mesa", artist: "Van Zee", type: "Music Video", year: 2026, dir: "Ruben Mendes, Tomás Freitas", role: "Director of Photography", yt: "B7VOs2LPC-Q", cover: "cartas-na-mesa", pos: "62% 50%" },
+      { slug: "cartas-na-mesa", title: "Cartas na Mesa", artist: "Van Zee", type: "Music Video", year: 2026, dir: "Ruben Mendes, Tomás Freitas", role: "Director of Photography", yt: "B7VOs2LPC-Q", cover: "cartas-na-mesa", pos: "62% 50%", rows: 3, stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg", "07.jpg", "08.jpg", "09.jpg"] },
       { slug: "viarco", title: "Viarco", type: "Commercial", year: 2025, role: "Creative Director, Director of Photography", soon: true, cover: "viarco", more: true },
       { slug: "auto-de-fe", title: "Auto de Fé", type: "Series Pilot", year: 2025, dir: "José P. Miguel", role: "Director of Photography, Colorist", cover: "auto-de-fe", pos: "30% 50%", more: true },
       { slug: "quase-nada", title: "Quase Nada", artist: "Ed", type: "Music Video", year: 2026, dir: "Mário ARV", role: "Director of Photography", yt: "iVH0_Aq6lw4", cover: "quase-nada", more: true },
@@ -708,12 +708,12 @@
         return `<img class="${full ? "full" : ""}" src="${src}" alt="${esc(p.title)} — still ${k + 1}" loading="${k ? "lazy" : "eager"}" decoding="async">`;
       }).join("");
       // 4 or more stills: two rows (first half / second half) sliding in opposite directions, each row doubled for a seamless loop
-      const half = Math.ceil(stills.length / 2);
+      const nRows = p.rows || 2, per = Math.ceil(stills.length / nRows);
       const rowHtml = (list, dir) => {
         const imgs = list.map((src, k) => `<img src="${src}" alt="${esc(p.title)} — still" loading="eager" decoding="async">`).join("");
         return `<div class="reel-row ${dir}">${imgs}${imgs}</div>`;
       };
-      const reel = `<div class="reel" aria-label="${esc(p.title)} stills">${rowHtml(stills.slice(0, half), "l")}${rowHtml(stills.slice(half), "r")}</div>`;
+      const reel = `<div class="reel" aria-label="${esc(p.title)} stills">${Array.from({ length: nRows }, (_, r) => rowHtml(stills.slice(r * per, (r + 1) * per), r % 2 ? "r" : "l")).join("")}</div>`;
       const video = p.yt ? `
         <section class="p-video">
           <span class="label-sm">Watch</span>
