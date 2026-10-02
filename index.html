@@ -57,7 +57,7 @@
       padding: 24px var(--pad);
     }
 
-    /* ---------- handwritten "contact me" note pointing at About (home only) ---------- */
+    /* ---------- handwritten "contact me" note pointing at About (all pages except About) ---------- */
     .about-wrap { position: relative; display: inline-flex; }
     .hand { position: absolute; top: calc(100% + 4px); right: 18px; display: flex; align-items: flex-end; gap: 0; pointer-events: none;
       color: var(--accent); opacity: 0; transition: opacity .5s var(--ease); }
@@ -1050,7 +1050,7 @@
       } else if (h === "direction") view = navKey = "direction";
       else if (h === "about") view = navKey = "about";
       document.body.classList.toggle("small-name", view === "project" || view === "about");
-      document.body.classList.toggle("home", view === "work");
+      document.body.classList.toggle("home", view !== "about");   // "contact me" note: everywhere except About itself
       stopLeaks(); document.querySelectorAll(".grid.hovering").forEach(g => g.classList.remove("hovering"));
       document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + view));
       document.querySelectorAll("nav a").forEach(a => a.classList.toggle("active", a.dataset.nav === navKey));
