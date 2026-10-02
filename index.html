@@ -232,7 +232,18 @@
     .reel-row.r { animation: reel-r var(--dur, 40s) linear infinite; }
     @keyframes reel-l { from { transform: translateX(0); } to { transform: translateX(-50%); } }
     @keyframes reel-r { from { transform: translateX(-50%); } to { transform: translateX(0); } }
-    @media (prefers-reduced-motion: reduce) { .reel { overflow-x: auto; } .reel-row { animation: none !important; } }
+    /* ---------- surprise me ---------- */
+    footer { align-items: center; }
+    .surprise { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase;
+      color: var(--accent); border: 1px solid var(--accent); padding: 8px 14px; transition: background .3s, color .3s; }
+    .surprise:hover { background: var(--accent); color: #000; }
+    .roulette { position: fixed; inset: 0; z-index: 90; background: rgba(0,0,0,.92); display: none; align-items: center; overflow: hidden; }
+    .roulette.on { display: flex; }
+    .r-strip { display: flex; gap: clamp(40px, 6vw, 90px); white-space: nowrap; will-change: transform; padding-left: 50vw; }
+    .r-strip span { font-family: "Unbounded", sans-serif; font-weight: 800; text-transform: uppercase; font-size: clamp(26px, 4.4vw, 64px); color: #4a4a4a; transition: color .2s; }
+    .r-strip span.hit { color: var(--accent); filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent) 35%, transparent)); }
+    .r-mark { position: absolute; left: 50%; top: 18%; bottom: 18%; width: 1px; background: var(--accent); opacity: .5; }
+ { .reel { overflow-x: auto; } .reel-row { animation: none !important; } }
     .p-video { padding: clamp(40px, 7vh, 80px) 0 0; }
     .more-btn {
       margin-top: 32px; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase;
@@ -396,9 +407,13 @@
   </main>
 
   <footer>
-    <span>João Viana — Lisbon</span>
-    <span>© <span id="y"></span></span>
+    <span>João Viana — Lisbon · © <span id="y"></span></span>
+    <button type="button" class="surprise" id="surprise">Surprise me</button>
   </footer>
+  <div class="roulette" id="roulette" aria-hidden="true">
+    <div class="r-mark"></div>
+    <div class="r-strip" id="r-strip"></div>
+  </div>
 
   <script>
     // Dados da base Notion "Projetos do Portfolio". cover = ficheiro em assets/covers (sem cover → placeholder).
@@ -411,7 +426,7 @@
       { slug: "auto-de-fe", title: "Auto de Fé", type: "Series Pilot", year: 2025, dir: "José P. Miguel", role: "Director of Photography, Colorist", cover: "auto-de-fe", pos: "30% 50%", more: true },
       { slug: "quase-nada", title: "Quase Nada", artist: "Ed", type: "Music Video", year: 2026, dir: "Mário ARV", role: "Director of Photography", yt: "iVH0_Aq6lw4", cover: "quase-nada", more: true },
       { slug: "top", title: "Top", artist: "JointOne", type: "Music Video", year: 2026, dir: "Ruben Mendes", role: "Director of Photography", yt: "-UPNVRV8nXQ", cover: "top", stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg", "07.jpg", "08.jpg"] },
-      { slug: "a-grande-viagem", title: "A Grande Viagem Rumo ao Recorde Mundial", type: "Documentary", year: 2026, dir: "João Viana", role: "Director, Director of Photography", yt: "wmvXtrDpZuk", cover: "a-grande-viagem", more: true },
+      { slug: "a-grande-viagem", title: "A Grande Viagem Rumo ao Recorde Mundial", type: "Documentary", year: 2026, dir: "João Viana", role: "Director, Director of Photography", cover: "a-grande-viagem", more: true },
       { slug: "desculpa", title: "desculpa", artist: "Victoria Leuca", type: "Live Session", year: 2026, role: "Director of Photography", yt: "yvVUh4XmQJc", cover: "desculpa" },
       { slug: "so", title: "só", artist: "Victoria Leuca", type: "Music Video", year: 2025, dir: "João Viana, João Barbosa, Vasco Souto", role: "Co-director, Director of Photography, Editor, Colorist", yt: "cEUa3SJD_sw", cover: "so", pos: "40% 50%" },
       { slug: "nada-demais", title: "Nada Demais", artist: "Beatriz Caixinha feat. Rita Onofre", type: "Music Video", year: 2025, role: "Director of Photography", yt: "1KeOU6nRaD4", cover: "nada-demais" },
@@ -419,7 +434,7 @@
       { slug: "nunca-te-esqueco", title: "Nunca Te Esqueço, Meu Amor", artist: "Inês Monstro", type: "Music Video", year: 2024, dir: "Vasco Souto", role: "Director of Photography, Editor, Colorist", yt: "m5fvunfNXOI", cover: "nunca-te-esqueco" }
     ];
     const DIRECTION = [
-      { slug: "a-grande-viagem", title: "A Grande Viagem Rumo ao Recorde Mundial", type: "Documentary", year: 2026, dir: "João Viana", role: "Director, Director of Photography", yt: "wmvXtrDpZuk", cover: "a-grande-viagem", more: true },
+      { slug: "a-grande-viagem", title: "A Grande Viagem Rumo ao Recorde Mundial", type: "Documentary", year: 2026, dir: "João Viana", role: "Director, Director of Photography", cover: "a-grande-viagem", more: true },
       { slug: "severa", title: "Severa", type: "Fashion Film", year: 2025, dir: "João Viana", role: "Director", cover: "severa" },
       { slug: "alegria", title: "Alegria", type: "Short Film", year: 2025, dir: "João Viana", role: "Director, Director of Photography", cover: "alegria" },
       { slug: "celia", title: "Célia", type: "Short Film", year: 2024, dir: "João Viana, Vasco Souto", role: "Co-director", yt: "-GrhEE8KWl0", cover: "celia" }
@@ -764,6 +779,34 @@
       } catch (err) {
         msg.className = "msg err"; msg.textContent = "Something went wrong. Please try again, or email joao17viana@gmail.com.";
       } finally { btn.disabled = false; }
+    });
+
+    // ----- surprise me: a roulette of project names rushing right to left, landing on a random project -----
+    $("#surprise").addEventListener("click", () => {
+      const seen = new Set(), pool = [];
+      [["work", DP], ["direction", DIRECTION]].forEach(([sec, list]) => list.forEach(p => { if (!seen.has(p.slug)) { seen.add(p.slug); pool.push({ sec, p }); } }));
+      const current = (location.hash.match(/^#\/(?:work|direction)\/(.+)$/) || [])[1];
+      const choices = pool.filter(x => x.p.slug !== current);
+      const target = choices[Math.floor(Math.random() * choices.length)];
+      const names = [];
+      for (let i = 0; i < 34; i++) names.push(pool[Math.floor(Math.random() * pool.length)].p.title);
+      names.push(target.p.title);
+      for (let i = 0; i < 6; i++) names.push(pool[Math.floor(Math.random() * pool.length)].p.title);
+      const strip = $("#r-strip"), box = $("#roulette");
+      strip.innerHTML = names.map(n => `<span>${esc(n)}</span>`).join("");
+      strip.style.transition = "none"; strip.style.transform = "translateX(0)";
+      box.classList.add("on");
+      const hit = strip.children[34];
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const dx = hit.offsetLeft + hit.offsetWidth / 2 - window.innerWidth / 2;
+        const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        strip.style.transition = reduce ? "none" : "transform 3.2s cubic-bezier(.12,.72,.12,1)";
+        strip.style.transform = `translateX(${-dx}px)`;
+        setTimeout(() => {
+          hit.classList.add("hit");
+          setTimeout(() => { box.classList.remove("on"); go(`#/${target.sec}/${target.p.slug}`); }, 750);
+        }, reduce ? 200 : 3250);
+      }));
     });
 
     // ----- router -----
