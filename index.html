@@ -400,7 +400,7 @@
       { slug: "viarco", title: "Viarco", type: "Commercial", year: 2025, role: "Creative Director, Director of Photography", soon: true, cover: "viarco", more: true },
       { slug: "auto-de-fe", title: "Auto de Fé", type: "Series Pilot", year: 2025, dir: "José P. Miguel", role: "Director of Photography, Colorist", cover: "auto-de-fe", pos: "30% 50%", more: true },
       { slug: "quase-nada", title: "Quase Nada", artist: "Ed", type: "Music Video", year: 2026, dir: "Mário ARV", role: "Director of Photography", yt: "iVH0_Aq6lw4", cover: "quase-nada", more: true },
-      { slug: "top", title: "Top", artist: "JointOne", type: "Music Video", year: 2026, dir: "Ruben Mendes", role: "Director of Photography", yt: "-UPNVRV8nXQ", cover: "top" },
+      { slug: "top", title: "Top", artist: "JointOne", type: "Music Video", year: 2026, dir: "Ruben Mendes", role: "Director of Photography", yt: "-UPNVRV8nXQ", cover: "top", stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg", "07.jpg", "08.jpg"] },
       { slug: "a-grande-viagem", title: "A Grande Viagem Rumo ao Recorde Mundial", type: "Documentary", year: 2026, dir: "João Viana", role: "Director, Director of Photography", yt: "wmvXtrDpZuk", cover: "a-grande-viagem", more: true },
       { slug: "desculpa", title: "desculpa", artist: "Victoria Leuca", type: "Live Session", year: 2026, role: "Director of Photography", yt: "yvVUh4XmQJc", cover: "desculpa" },
       { slug: "so", title: "só", artist: "Victoria Leuca", type: "Music Video", year: 2025, dir: "João Viana, João Barbosa, Vasco Souto", role: "Co-director, Director of Photography, Editor, Colorist", yt: "cEUa3SJD_sw", cover: "so", pos: "40% 50%" },
@@ -703,7 +703,7 @@
         <a class="next" href="#/${sec}/${nx.slug}"><span>Next project</span><strong>${esc(nx.title)} →</strong></a>`;
       const more = $("#project .more-btn");
       if (more) more.addEventListener("click", () => {
-        location.hash = "#/about";
+        go("#/about");
         setTimeout(() => {
           const ta = $("#cform textarea[name=message]");
           if (ta && !ta.value) ta.value = `Hi João, I'd like to know more about "${more.dataset.more}".`;
@@ -744,8 +744,8 @@
     });
 
     // ----- router -----
-    function route() {
-      const h = location.hash.replace(/^#\/?/, "");
+    function route(hash) {
+      const h = (hash ?? location.hash).replace(/^#\/?/, "");
       let view = "work", navKey = "work";
       const m = h.match(/^(work|direction)\/(.+)$/);
       if (m) {
@@ -760,6 +760,18 @@
       window.scrollTo(0, 0);
     }
     window.addEventListener("hashchange", () => { document.body.classList.add("ready"); route(); });
+    // internal links: go through the router directly too, so pages also open in embedded previews
+    // where changing the address bar isn't allowed
+    function go(hash) {
+      document.body.classList.add("ready");
+      try { if (location.hash !== hash) location.hash = hash; } catch (e) {}
+      if (location.hash !== hash) route(hash);
+    }
+    document.addEventListener("click", e => {
+      const a = e.target.closest && e.target.closest('a[href^="#/"]');
+      if (!a || e.metaKey || e.ctrlKey || e.shiftKey) return;
+      e.preventDefault(); go(a.getAttribute("href"));
+    }, true);
     route();
   </script>
 </body>
