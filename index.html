@@ -80,10 +80,12 @@
     .mini { font-size: 13px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; opacity: 0; pointer-events: none; transition: opacity .3s; }
     body.small-name .mini { opacity: 1; pointer-events: auto; }
     .masthead { text-align: center; padding: clamp(40px, 9vh, 110px) var(--pad) clamp(48px, 10vh, 120px); }
-    .masthead h1, .masthead .ghost { font-family: "Unbounded", sans-serif; font-weight: 800; text-transform: uppercase; font-size: clamp(34px, 7.6vw, 128px); line-height: .95; letter-spacing: -.01em; margin: 0; padding: .22em 0 .06em; }
+    .masthead h1, .masthead .ghost, .masthead .namedirt { font-family: "Unbounded", sans-serif; font-weight: 800; text-transform: uppercase; font-size: clamp(34px, 7.6vw, 128px); line-height: .95; letter-spacing: -.01em; margin: 0; padding: .22em 0 .06em; }
     .namewrap { margin: -.22em 0 -.06em; }
     .masthead h1 { position: relative; color: var(--name); filter: drop-shadow(0 0 8px color-mix(in srgb, var(--name) 30%, transparent)) drop-shadow(0 0 22px color-mix(in srgb, var(--name) 11%, transparent)); }
     .namewrap { position: relative; isolation: isolate; }
+    /* dark film dirt printed over the letters: its own unfiltered layer, so moving it never repaints the glowing name */
+    .masthead .namedirt { position: absolute; inset: 0; z-index: 2; pointer-events: none; color: transparent; transform: translateZ(0); will-change: transform; }
     .masthead .ghost { position: absolute; inset: 0; z-index: -1; color: var(--name); pointer-events: none; opacity: 0; transition: opacity .3s; }
 
     /* ---------- name edge effects (choose one via data-fx on .masthead) ---------- */
@@ -417,7 +419,8 @@
     html, body { overflow-x: clip; }   /* nothing decorative (leaks, rails) may widen the page on phones */
     /* ---------- moving film-strip background ---------- */
     .filmbg { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
-    .filmbg { background-repeat: repeat-y; }
+    .filmbg { overflow: hidden; }
+    .filmtile { position: absolute; left: 0; top: 0; width: 100%; background-repeat: repeat-y; will-change: transform; }
       -webkit-mask-size: 900px 900px; mask-size: 900px 900px; -webkit-mask-repeat: repeat; mask-repeat: repeat; }
     header, .masthead, main.view, footer { position: relative; z-index: 1; }
     header { z-index: 50; }
@@ -452,6 +455,7 @@
     <div class="namewrap">
       <div class="leak" id="leak" aria-hidden="true"></div>
       <h1>João Viana</h1>
+      <div class="namedirt" aria-hidden="true">João Viana</div>
       <div class="ghost" aria-hidden="true" style="--i:1">João Viana</div>
       <div class="ghost" aria-hidden="true" style="--i:2">João Viana</div>
       <div class="ghost" aria-hidden="true" style="--i:3">João Viana</div>
@@ -549,8 +553,9 @@
     const $ = s => document.querySelector(s);
     const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     const coverSrc = p => `assets/covers/${p.cover}.jpg`;
-    const media = (p, label) => p.cover
-      ? `<img src="${coverSrc(p)}" alt="${esc(p.title)} — still" loading="lazy" decoding="async"${p.pos ? ` style="--pos:${p.pos}"` : ""}>`
+    const thumbSrc = p => `assets/thumbs/${p.cover}.jpg`;   // 960px version for the grid
+    const media = (p, label, big) => p.cover
+      ? `<img src="${big ? coverSrc(p) : thumbSrc(p)}" alt="${esc(p.title)} — still" loading="lazy" decoding="async"${p.pos ? ` style="--pos:${p.pos}"` : ""}>`
       : `<div class="ph" style="position:absolute;inset:0;--h:${p.h ?? 30}"><span class="tag">${label}</span></div>`;
     $("#y").textContent = new Date().getFullYear();
     const railText = Array(24).fill("João Viana + ").join("");
@@ -598,30 +603,43 @@
       }
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">` +
         `<g stroke="#fff" fill="none">${scratches}${dirt}</g></svg>`;
-      el.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
-      el.style.backgroundSize = `${W}px ${H}px`;
+      // the dirt lives on a tall inner layer that is moved with a GPU transform (cheap), instead of
+      // animating background-position on the full-screen layer (which repainted the whole screen every frame)
+      el.innerHTML = '<div class="filmtile"></div>';
+      const tile = el.firstChild;
+      tile.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+      tile.style.backgroundSize = `${W}px ${H}px`;
+      tile.style.height = (H * 2 + window.innerHeight) + "px";
 
       // only the dirt (not the scratches), in black, printed inside the letters: where it crosses the name it turns dark
       const dark = dirt.replace(/fill="#fff"/g, 'fill="#000"').replace(/stroke="#fff"/g, 'stroke="#000"')
         .replace(/(fill|stroke)-opacity="([\d.]+)"/g, (m, a, v) => `${a}-opacity="${Math.min(.9, v * 1.8).toFixed(2)}"`);
       const darkSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><g stroke="#000" fill="none">${dark}</g></svg>`;
-      const name = $(".masthead h1");
+      const name = $(".masthead .namedirt");
       if (name) {
         const st = name.style;
-        st.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(darkSvg)}"), linear-gradient(var(--name), var(--name))`;
-        st.backgroundSize = `${W}px ${H}px, auto`;
-        st.backgroundRepeat = "repeat-y, no-repeat";
-        st.backgroundAttachment = "fixed, scroll";   // fixed = lined up with the moving background
+        st.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(darkSvg)}")`;
+        st.backgroundSize = `${W}px ${H}px`;
+        st.backgroundRepeat = "repeat-y";
+        st.backgroundAttachment = "fixed";   // fixed = lined up with the moving background
         st.webkitBackgroundClip = "text"; st.backgroundClip = "text";
-        st.color = "transparent";
       }
       filmAnims.forEach(a => a.cancel()); filmAnims = [];
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
       const track = $("#rail-r");
       const speed = ((track && track.offsetHeight / 2) || 4000) / RAIL_SECONDS;   // px/s, same as the rails
-      if (name) filmAnims.push(name.animate([{ backgroundPosition: "0 0, 0 0" }, { backgroundPosition: `0 -${H}px, 0 0` }],
-        { duration: (H / speed) * 1000, iterations: Infinity, easing: "linear" }));
-      filmAnims.push(el.animate([{ backgroundPosition: "0 0" }, { backgroundPosition: `0 -${H}px` }],
+      // the dark dirt over the name moves with the background; it stops while the name is off screen
+      if (name) {
+        const dur = H / speed, nameAnim = name.animate([{ backgroundPosition: "0 0" }, { backgroundPosition: `0 -${H}px` }],
+          { duration: dur * 1000, iterations: Infinity, easing: "linear" });
+        filmAnims.push(nameAnim);
+        if (window.IntersectionObserver) {
+          if (window._nameIO) window._nameIO.disconnect();
+          window._nameIO = new IntersectionObserver(es => es.forEach(e => e.isIntersecting ? nameAnim.play() : nameAnim.pause()));
+          window._nameIO.observe(name);
+        }
+      }
+      filmAnims.push(tile.animate([{ transform: "translate3d(0, 0, 0)" }, { transform: `translate3d(0, -${H}px, 0)` }],
         { duration: (H / speed) * 1000, iterations: Infinity, easing: "linear" }));
     }
     // ----- light leak around the name, like a 16mm camera leak: it bleeds in from one edge, flickers frame by
@@ -890,6 +908,8 @@
       const backTo = sec === "work" ? ["#/", "Selected work"] : ["#/direction", "Direction"];
       // stills: files in assets/stills/<slug>/ listed in p.stills; until they exist, the cover is the only still
       const stills = (p.stills && p.stills.length) ? p.stills.map(f => `assets/stills/${p.slug}/${f}`) : (p.cover ? [coverSrc(p)] : []);
+      // the sliding carousel uses lighter 760px-tall copies (stills/<slug>/m/); the lightbox opens the full-size files
+      const mids = (p.stills && p.stills.length) ? p.stills.map(f => `assets/stills/${p.slug}/m/${f}`) : stills;
       const rest = stills.length - 1;
       const gallery = stills.map((src, k) => {
         const full = k === 0 || (rest % 2 === 1 && k === stills.length - 1);
@@ -904,11 +924,11 @@
       };
       FPS.v = 18;   // every project starts at the normal speed
       const fpsBar = `<div class="fps" role="group" aria-label="Carousel speed">${FPS_OPTS.map(f => `<button type="button" data-fps="${f}" aria-pressed="${f === FPS.v}"${f === FPS.v ? ' class="on"' : ""}>${f}fps</button>`).join("")}</div>`;
-      const reel = fpsBar + `<div class="reel${nRows === 1 ? " single" : ""}" aria-label="${esc(p.title)} stills">${Array.from({ length: nRows }, (_, r) => rowHtml(stills.slice(r * per, (r + 1) * per), r % 2 ? "r" : "l", r * per)).join("")}</div>`;
+      const reel = fpsBar + `<div class="reel${nRows === 1 ? " single" : ""}" aria-label="${esc(p.title)} stills">${Array.from({ length: nRows }, (_, r) => rowHtml(mids.slice(r * per, (r + 1) * per), r % 2 ? "r" : "l", r * per)).join("")}</div>`;
       const video = p.yt ? `
         <section class="p-video">
           <span class="label-sm">Watch</span>
-          <div class="player">${media(p, "")}<button aria-label="Play ${esc(p.title)}" data-yt="${p.yt}"><span class="play"></span></button></div>
+          <div class="player">${media(p, "", true)}<button aria-label="Play ${esc(p.title)}" data-yt="${p.yt}"><span class="play"></span></button></div>
         </section>` : "";
       $("#project").innerHTML = `
         <a class="back" href="${backTo[0]}">← ${backTo[1]}</a>
