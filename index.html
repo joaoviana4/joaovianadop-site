@@ -265,18 +265,18 @@
     .ftile.viana { top: calc(var(--gap) * 3 + var(--th) * 2); }
     .ftile span { font-family: "Pirata One", serif; color: var(--name); line-height: 1; font-size: calc(var(--th) * .55); }
     .ftile.joao span { font-size: calc(var(--th) * .5); }
-    .ftile .vw { position: relative; z-index: 1; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--name) 40%, transparent)) drop-shadow(0 0 22px color-mix(in srgb, var(--name) 16%, transparent)); animation: vweave 1s steps(1) infinite, vbreathe 7s ease-in-out infinite alternate; }
-    @keyframes vweave { 0%{translate:0 0} 12%{translate:1px -1px} 25%{translate:-1px 1px} 37%{translate:0 1px} 50%{translate:1px 0} 62%{translate:-1px -1px} 75%{translate:0 -1px} 87%{translate:-1px 0} }
-    @keyframes vbreathe { from { scale: 1; } to { scale: 1.04; } }
+    .ftile .vw { position: relative; z-index: 1; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--name) 40%, transparent)) drop-shadow(0 0 22px color-mix(in srgb, var(--name) 16%, transparent)); animation: vweave 2s steps(1) infinite, vbreathe 9s ease-in-out infinite alternate; }
+    @keyframes vweave { 0%{translate:0 0} 25%{translate:.5px -.5px} 50%{translate:-.5px .5px} 75%{translate:0 .5px} }
+    @keyframes vbreathe { from { scale: 1; } to { scale: 1.015; } }
     .ftile .vbox { position: relative; z-index: 1; display: inline-block; }
     .ftile .vj { position: absolute; right: .1em; bottom: 100%; margin-bottom: -.12em; font-family: "Pirata One", serif; font-size: calc(var(--th) * .2); line-height: 1; color: var(--name); opacity: 0; transition: opacity .6s ease .35s;
       filter: drop-shadow(0 0 6px color-mix(in srgb, var(--name) 35%, transparent)); }
     #home.done .vj { opacity: 1; }
     .ftile .vw { display: inline-block; }
     .ftile .vg { position: absolute; opacity: 0; pointer-events: none; }
-    .ftile .vg1 { filter: url(#vmb); animation: vsmear 4.2s steps(1) infinite; }
-    .ftile .vg2 { filter: url(#imb); color: #fff; animation: vsmear 4.2s steps(1) infinite .07s; }
-    @keyframes vsmear { 0%,86%,100% { opacity: 0; transform: none; } 88% { opacity: .5; transform: translateX(-10px); } 90% { opacity: .25; transform: translateX(7px); } 92% { opacity: .4; transform: translateX(-4px); } 94% { opacity: 0; } }
+    .ftile .vg1 { filter: url(#vmb); animation: vsmear 8s steps(1) infinite; }
+    .ftile .vg2 { filter: url(#imb); color: #fff; animation: vsmear 8s steps(1) infinite .07s; }
+    @keyframes vsmear { 0%,93%,100% { opacity: 0; transform: none; } 94% { opacity: .3; transform: translateX(-5px); } 95% { opacity: .15; transform: translateX(3px); } 96% { opacity: 0; } }
     .ftile .grain { position: absolute; inset: -40%; z-index: 2; pointer-events: none; opacity: .55; mix-blend-mode: overlay; animation: hgrain .5s steps(6) infinite; }
     @keyframes hgrain { 0%{transform:translate(0,0)} 17%{transform:translate(-7%,4%)} 33%{transform:translate(5%,-8%)} 50%{transform:translate(-3%,9%)} 67%{transform:translate(8%,2%)} 83%{transform:translate(-9%,-5%)} }
     /* the intro: black screen, broken letters one at a time, then "Viana" shrinks into its tile */
