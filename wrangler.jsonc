@@ -1,0 +1,8 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "joaovianadop-site",
+  "compatibility_date": "2026-10-01",
+  "observability": { "enabled": true },
+  // the site is the repo root; .assetsignore keeps .git (and other non-site files) out of the upload
+  "assets": { "directory": "." }
+}
