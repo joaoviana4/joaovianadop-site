@@ -560,13 +560,6 @@
     /* light mode: film grain over the whole background (a GPU-moved layer, no repaints) */
     .bggrain { position: absolute; inset: -50%; pointer-events: none; display: none; mix-blend-mode: multiply; opacity: .16; animation: hgrain .5s steps(6) infinite; will-change: transform; }
     html[data-theme="light"] .bggrain { display: block; }
-    /* light mode: an old-TV scan bar rising slowly up the screen (a thin dark line with a soft trailing glow) */
-    .scanbar { position: fixed; left: 0; right: 0; top: 0; height: 180px; z-index: 0; pointer-events: none; display: none; mix-blend-mode: multiply;
-      background: linear-gradient(to bottom, transparent 0, rgba(0,0,0,.08) 5%, rgba(0,0,0,.3) 9.5%, rgba(0,0,0,.5) 10.5%, rgba(0,0,0,.22) 12%, rgba(0,0,0,.13) 30%, rgba(0,0,0,.06) 60%, transparent 100%);
-      animation: scanup 7s linear infinite; will-change: transform; }
-    .scanbar::after { content: ""; position: absolute; left: 0; right: 0; top: 11%; height: 6px; background: rgba(255,255,255,.5); mix-blend-mode: screen; filter: blur(2px); }
-    html[data-theme="light"] .scanbar { display: block; }
-    @keyframes scanup { from { transform: translateY(100vh); } to { transform: translateY(-180px); } }
     html[data-theme="light"] header { overflow: hidden; }
     html[data-theme="light"] header::before { content: ""; position: absolute; inset: -50%; z-index: -1; pointer-events: none; background-image: var(--grain); mix-blend-mode: multiply; opacity: .16; animation: hgrain .5s steps(6) infinite; }
     html[data-theme="light"] header { isolation: isolate; }
@@ -613,7 +606,6 @@
     <filter id="hblur3" x="-30%" width="160%"><feGaussianBlur stdDeviation="5 0.4"/></filter>
   </svg>
   <div class="filmbg" id="filmbg" aria-hidden="true"></div>
-  <div class="scanbar" aria-hidden="true"></div>
   <div class="rail left" aria-hidden="true"><div class="track" id="rail-l"></div></div>
   <div class="rail right" aria-hidden="true"><div class="track" id="rail-r"></div></div>
   <header>
@@ -741,14 +733,14 @@
       const rail = W < 760 ? 0 : 30, r = rand(11);
       let scratches = "", dirt = "";
       const LIGHT = document.documentElement.dataset.theme === "light", D = LIGHT ? 2.6 : 1;   // light mode: denser dirt and scratches
-      const nScratch = Math.round((20 + Math.floor(r() * 7)) * D);  // scattered over the tall tile
+      const nScratch = Math.round((20 + Math.floor(r() * 7)) * (LIGHT ? 6 : 1));   // light mode: many more scratches  // scattered over the tall tile
       const firstView = window.innerHeight;
       for (let i = 0; i < nScratch; i++) {
         // the first six always land on the opening screen, so scratches and dirt are there from the start
         const y = i < 6 ? r() * firstView * .85 : r() * H;
         const x = rail + r() * (W - 2 * rail), len = 15 + Math.pow(r(), 2) * 320;
         const bend = (r() - .5) * 10;
-        scratches += `<path d="M${x.toFixed(1)} ${y.toFixed(1)} q${bend.toFixed(1)} ${(len / 2).toFixed(1)} ${(bend * .4).toFixed(1)} ${len.toFixed(1)}" stroke-width="${(.4 + r() * .7).toFixed(2)}" stroke-opacity="${((.05 + r() * .1) * (LIGHT ? 1.8 : 1)).toFixed(2)}"/>`;
+        scratches += `<path d="M${x.toFixed(1)} ${y.toFixed(1)} q${bend.toFixed(1)} ${(len / 2).toFixed(1)} ${(bend * .4).toFixed(1)} ${len.toFixed(1)}" stroke-width="${(.4 + r() * .7).toFixed(2)}" stroke-opacity="${((.05 + r() * .1) * (LIGHT ? 2.2 : 1)).toFixed(2)}"/>`;
       }
       // film dirt: specks, irregular blobs and hairs, denser in random clusters
       const pt = () => [rail + r() * (W - 2 * rail), r() < .25 ? r() * firstView : r() * H];
