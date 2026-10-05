@@ -1000,15 +1000,20 @@
     // ----- home: five rows of stills sliding in alternate directions, more stills from the first four projects -----
     function homeBuild() {
       const rows = $("#rows"); if (!rows) return;
-      const pool = [];
-      DP.forEach((p, i) => (p.stills || []).forEach(f => pool.push({ p, src: `assets/stills/${p.slug}/s/${f}`, w: i < 4 ? 3 : 1 })));
-      const weighted = pool.flatMap(o => Array(o.w).fill(o));
-      const rnd = rand(7);
-      const pick = n => { const out = []; let last = null; while (out.length < n) { const o = weighted[Math.floor(rnd() * weighted.length)]; if (o === last) continue; out.push(o); last = o; } return out; };
+      // every still appears only once on the whole homepage (so the same still is never on screen twice);
+      // all stills of the first four projects are always in, the rest are drawn at random to fill the rows
+      const rnd = rand(Date.now() % 100000 + 1);
+      const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+      const top = [], rest = [];
+      DP.forEach((p, i) => (p.stills || []).forEach(f => (i < 4 ? top : rest).push({ p, src: `assets/stills/${p.slug}/s/${f}` })));
       // the row tiles are --tw wide; a "link" tile is repeated every k tiles so that one is always on screen
       const narrow = window.innerWidth <= 760, th = (window.innerHeight - (narrow ? 48 : 60)) / 5, tw = th * (narrow ? .75 : 1.6) + (narrow ? 8 : 10);
       const k = Math.max(2, Math.floor(window.innerWidth / tw));
       const perRow = k * Math.max(3, Math.ceil(2.2 * window.innerWidth / (k * tw)));      // a multiple of k, at least ~2 screens
+      const need = 5 * perRow;
+      let deck = shuffle([...top, ...shuffle(rest).slice(0, Math.max(0, need - top.length))]);
+      const pick = n => { const out = []; while (out.length < n) { if (!deck.length) deck = shuffle([...top, ...rest]);   // last resort: only if a huge screen needs more tiles than there are stills
+        out.push(deck.pop()); } return out; };
       const tile = o => `<a class="htile" href="#/work/${o.p.slug}" aria-label="${esc(o.p.title)}"><img src="${o.src}" alt="" loading="eager" decoding="async"></a>`;
       const link = (href, label) => `<a class="htile link" href="${href}"><span class="lt">${label}</span><span class="grain" aria-hidden="true"></span></a>`;
       rows.innerHTML = [0, 1, 2, 3, 4].map(r => {

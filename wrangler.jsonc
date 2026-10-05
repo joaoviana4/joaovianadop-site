@@ -4,5 +4,7 @@
   "compatibility_date": "2026-10-01",
   "observability": { "enabled": true },
   // the site is the repo root; .assetsignore keeps .git (and other non-site files) out of the upload
-  "assets": { "directory": "." }
+  "assets": { "directory": "." },
+  // lets the mockup branch build as a preview (otherwise its build fails and GitHub shows a red check)
+  "previews": {}
 }
