@@ -77,6 +77,13 @@
     @keyframes hand-write { to { clip-path: inset(0 0 0 0); } }
     .hand:hover { color: var(--name); }
     @media (max-width: 700px) { .hand { display: none; } }
+    /* the otter drawing, small, at the top centre of the inner pages */
+    .hotter { position: absolute; left: 50%; top: 8px; width: 52px; aspect-ratio: 1907 / 2207; transform: translateX(-50%); background: var(--name);
+      -webkit-mask: url(assets/otter.svg) center / contain no-repeat; mask: url(assets/otter.svg) center / contain no-repeat;
+      filter: drop-shadow(0 0 6px color-mix(in srgb, var(--name) 35%, transparent)); transition: transform .3s cubic-bezier(.2,.8,.3,1); }
+    html[data-theme="light"] .hotter { background: #000; filter: none; }
+    .hotter:hover { transform: translateX(-50%) rotate(-6deg) scale(1.06); }
+    @media (max-width: 760px) { .hotter { position: static; transform: none; width: 44px; margin: 0 auto -4px; } .hotter:hover { transform: rotate(-6deg); } }
     header nav { display: flex; gap: clamp(20px, 3vw, 44px); margin-left: auto; }
     .mini { font-size: 13px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; opacity: 0; pointer-events: none; transition: opacity .3s; }
     body.small-name .mini { opacity: 1; pointer-events: auto; }
@@ -287,10 +294,10 @@
     .otter-wrap > .otter { grid-area: 1 / 1; }
     /* two jalapeños orbiting the otter, spinning, gone before the clap */
     .otter-wrap { position: relative; --oh: min(58svh, 72vw); }
-    .jala { position: absolute; left: 50%; top: 50%; width: calc(var(--oh) * .2); margin: calc(var(--oh) * -.17) 0 0 calc(var(--oh) * -.1); color: var(--name); opacity: 0; pointer-events: none; }
+    .jala { position: absolute; left: 50%; top: 50%; width: calc(var(--oh) * .14); margin: calc(var(--oh) * -.117) 0 0 calc(var(--oh) * -.07); color: var(--name); opacity: 0; pointer-events: none; }
     html[data-theme="light"] .jala { color: #000; }
     .jala svg { display: block; width: 100%; height: auto; overflow: visible; }
-    .jala .jb { fill: #4f8a2b; } .jala .jst { fill: #3d6b22; } .jala path { stroke: currentColor; stroke-width: 6; } .jala path:not(.jb):not(.jst) { fill: none; } .jala path { stroke-linecap: round; stroke-linejoin: round; }
+    .jala path { fill: none; stroke: currentColor; stroke-width: 10; } .jala path { stroke-linecap: round; stroke-linejoin: round; }
     .otter-wrap { filter: drop-shadow(0 0 10px color-mix(in srgb, var(--name) 35%, transparent)) drop-shadow(0 0 28px color-mix(in srgb, var(--name) 14%, transparent)); }
     html[data-theme="light"] .otter-wrap { filter: drop-shadow(0 0 8px rgba(0,0,0,.18)); }
     .otter.main { filter: url(#onoise); }
@@ -537,6 +544,7 @@
     @media (max-width: 760px) {
       header nav { margin: 0 auto; }
       body.small-name header { flex-direction: column; gap: 12px; }
+      header nav { gap: 8px 18px; flex-wrap: wrap; justify-content: center; }
       .grid { grid-template-columns: minmax(0, 1fr); }
       .p-body, .page { grid-template-columns: 1fr; }
       .stills { grid-template-columns: 1fr; }
@@ -643,6 +651,7 @@
   <div class="rail right" aria-hidden="true"><div class="track" id="rail-r"></div></div>
   <header>
     <a class="mini" href="#/">João Viana</a>
+    <a class="hotter" href="#/" aria-label="Home"></a>
     <nav>
       <a href="#/cinematography" data-nav="work">Cinematography</a>
       <a href="#/direction" data-nav="direction">Direction</a>
