@@ -552,7 +552,7 @@
     html[data-theme="light"] .theme-switch button.on { color: #fff; }
     @media (max-width: 760px) { .theme-switch { top: 12px; right: 12px; } .theme-switch button { width: 54px; font-size: 10px; padding: 6px 0; } }
     html[data-theme="light"] {
-      --bg: #ECEAE4; --fg: #000; --accent: #2346A8; --name: #000;
+      --bg: #ECEAE4; --fg: #000; --accent: #000; --name: #000;
       --glow: 0 0 10px color-mix(in srgb, var(--accent) 22%, transparent);
       --muted: #55554f; --faint: #9a9a94; --line: rgba(0, 0, 0, .16);
     }
@@ -560,6 +560,13 @@
     /* light mode: film grain over the whole background (a GPU-moved layer, no repaints) */
     .bggrain { position: absolute; inset: -50%; pointer-events: none; display: none; mix-blend-mode: multiply; opacity: .16; animation: hgrain .5s steps(6) infinite; will-change: transform; }
     html[data-theme="light"] .bggrain { display: block; }
+    /* light mode: an old-TV scan bar rising slowly up the screen (a thin dark line with a soft trailing glow) */
+    .scanbar { position: fixed; left: 0; right: 0; top: 0; height: 180px; z-index: 80; pointer-events: none; display: none; mix-blend-mode: multiply;
+      background: linear-gradient(to bottom, transparent 0, rgba(0,0,0,.08) 5%, rgba(0,0,0,.3) 9.5%, rgba(0,0,0,.5) 10.5%, rgba(0,0,0,.22) 12%, rgba(0,0,0,.13) 30%, rgba(0,0,0,.06) 60%, transparent 100%);
+      animation: scanup 7s linear infinite; will-change: transform; }
+    .scanbar::after { content: ""; position: absolute; left: 0; right: 0; top: 11%; height: 6px; background: rgba(255,255,255,.5); mix-blend-mode: screen; filter: blur(2px); }
+    html[data-theme="light"] .scanbar { display: block; }
+    @keyframes scanup { from { transform: translateY(100vh); } to { transform: translateY(-180px); } }
     html[data-theme="light"] header { overflow: hidden; }
     html[data-theme="light"] header::before { content: ""; position: absolute; inset: -50%; z-index: -1; pointer-events: none; background-image: var(--grain); mix-blend-mode: multiply; opacity: .16; animation: hgrain .5s steps(6) infinite; }
     html[data-theme="light"] header { isolation: isolate; }
@@ -590,7 +597,9 @@
     html[data-theme="light"] .cform button, html[data-theme="light"] .surprise:hover, html[data-theme="light"] .hero-cta a:hover, html[data-theme="light"] .more-btn:hover { color: #fff; }
     html[data-theme="light"] .ph-box { background: repeating-linear-gradient(135deg, #e2e0d9 0 14px, #dddbd4 14px 28px); border-color: #d2d0c8; color: #8a8a84; }
     html[data-theme="light"] .player, html[data-theme="light"] .card .frame { background: #dcdad3; }
-    html[data-theme="light"] nav a { color: color-mix(in srgb, var(--accent) 75%, #fff); }
+    html[data-theme="light"] nav a { color: #000; opacity: .55; transition: opacity .3s; }
+    html[data-theme="light"] nav a:hover, html[data-theme="light"] nav a.active { opacity: 1; }
+    html[data-theme="light"] .mini, html[data-theme="light"] .theme-btn, html[data-theme="light"] .rail .track { color: #000; }
     html[data-theme="light"] nav a:hover, html[data-theme="light"] nav a.active { color: var(--accent); }
     @media (prefers-reduced-motion: reduce) { body::after { animation: none; } * { transition: none !important; animation: none !important; } }
   </style>
@@ -604,6 +613,7 @@
     <filter id="hblur3" x="-30%" width="160%"><feGaussianBlur stdDeviation="5 0.4"/></filter>
   </svg>
   <div class="filmbg" id="filmbg" aria-hidden="true"></div>
+  <div class="scanbar" aria-hidden="true"></div>
   <div class="rail left" aria-hidden="true"><div class="track" id="rail-l"></div></div>
   <div class="rail right" aria-hidden="true"><div class="track" id="rail-r"></div></div>
   <header>
