@@ -546,7 +546,13 @@
       --muted: #55554f; --faint: #9a9a94; --line: rgba(0, 0, 0, .16);
     }
     html[data-theme="light"] body { color-scheme: light; }
-    html[data-theme="light"] #home, html[data-theme="light"] .theme-home { --accent: #AFC2A2; --name: color-mix(in srgb, #AFC2A2 74%, #fff); }
+    /* homepage tiles in light mode: white, with dark sage lettering and black grain */
+    html[data-theme="light"] .htile.link, html[data-theme="light"] .ftile { background: #fff; }
+    html[data-theme="light"] .htile.link .grain, html[data-theme="light"] .ftile .grain { mix-blend-mode: multiply; opacity: .12; }
+    html[data-theme="light"] .htile.link .lt, html[data-theme="light"] .ftile .vw, html[data-theme="light"] .ftile .vj { filter: none; }
+    html[data-theme="light"] .htile.link:hover .lt { color: #000; }
+    html[data-theme="light"] .ftile .vg2 { color: #000; }
+    html[data-theme="light"] .theme-home { background: #fff; color: #111; }
     html[data-theme="light"] .intro { background: rgba(236, 234, 228, .8); }
     html[data-theme="light"] #home.ready .intro { background: transparent; }
     html[data-theme="light"] .ione, html[data-theme="light"] .iword { color: #111; }
