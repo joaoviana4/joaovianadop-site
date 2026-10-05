@@ -548,15 +548,21 @@
     .theme-switch button.on { color: #000; }
     html[data-theme="light"] .theme-switch { background: rgba(255,255,255,.88); box-shadow: 0 0 0 1px rgba(0,0,0,.12); }
     html[data-theme="light"] .theme-switch::before { transform: translateX(100%); background: #111; }
-    html[data-theme="light"] .theme-switch button { color: #3E4F35; }
+    html[data-theme="light"] .theme-switch button { color: #000; }
     html[data-theme="light"] .theme-switch button.on { color: #fff; }
     @media (max-width: 760px) { .theme-switch { top: 12px; right: 12px; } .theme-switch button { width: 54px; font-size: 10px; padding: 6px 0; } }
     html[data-theme="light"] {
-      --bg: #ECEAE4; --fg: #111; --accent: #55694A; --name: #3E4F35;
+      --bg: #ECEAE4; --fg: #000; --accent: #2346A8; --name: #000;
       --glow: 0 0 10px color-mix(in srgb, var(--accent) 22%, transparent);
       --muted: #55554f; --faint: #9a9a94; --line: rgba(0, 0, 0, .16);
     }
     html[data-theme="light"] body { color-scheme: light; }
+    /* light mode: film grain over the whole background (a GPU-moved layer, no repaints) */
+    .bggrain { position: absolute; inset: -50%; pointer-events: none; display: none; mix-blend-mode: multiply; opacity: .16; animation: hgrain .5s steps(6) infinite; will-change: transform; }
+    html[data-theme="light"] .bggrain { display: block; }
+    html[data-theme="light"] header { overflow: hidden; }
+    html[data-theme="light"] header::before { content: ""; position: absolute; inset: -50%; z-index: -1; pointer-events: none; background-image: var(--grain); mix-blend-mode: multiply; opacity: .16; animation: hgrain .5s steps(6) infinite; }
+    html[data-theme="light"] header { isolation: isolate; }
     /* homepage tiles in light mode: white, with dark sage lettering and black grain */
     html[data-theme="light"] .htile.link, html[data-theme="light"] .ftile { background: #fff; }
     html[data-theme="light"] .htile.link .grain, html[data-theme="light"] .ftile .grain { mix-blend-mode: multiply; opacity: .12; }
@@ -724,24 +730,25 @@
       const W = window.innerWidth, F = Math.round(window.innerHeight * 1.25), H = F * 3;  // tile = 3 frames, so the marks don't repeat every frame
       const rail = W < 760 ? 0 : 30, r = rand(11);
       let scratches = "", dirt = "";
-      const nScratch = 20 + Math.floor(r() * 7);  // scattered over the tall tile
+      const LIGHT = document.documentElement.dataset.theme === "light", D = LIGHT ? 2.6 : 1;   // light mode: denser dirt and scratches
+      const nScratch = Math.round((20 + Math.floor(r() * 7)) * D);  // scattered over the tall tile
       const firstView = window.innerHeight;
       for (let i = 0; i < nScratch; i++) {
         // the first six always land on the opening screen, so scratches and dirt are there from the start
         const y = i < 6 ? r() * firstView * .85 : r() * H;
         const x = rail + r() * (W - 2 * rail), len = 15 + Math.pow(r(), 2) * 320;
         const bend = (r() - .5) * 10;
-        scratches += `<path d="M${x.toFixed(1)} ${y.toFixed(1)} q${bend.toFixed(1)} ${(len / 2).toFixed(1)} ${(bend * .4).toFixed(1)} ${len.toFixed(1)}" stroke-width="${(.4 + r() * .7).toFixed(2)}" stroke-opacity="${(.05 + r() * .1).toFixed(2)}"/>`;
+        scratches += `<path d="M${x.toFixed(1)} ${y.toFixed(1)} q${bend.toFixed(1)} ${(len / 2).toFixed(1)} ${(bend * .4).toFixed(1)} ${len.toFixed(1)}" stroke-width="${(.4 + r() * .7).toFixed(2)}" stroke-opacity="${((.05 + r() * .1) * (LIGHT ? 1.8 : 1)).toFixed(2)}"/>`;
       }
       // film dirt: specks, irregular blobs and hairs, denser in random clusters
       const pt = () => [rail + r() * (W - 2 * rail), r() < .25 ? r() * firstView : r() * H];
       const clusters = Array.from({ length: 7 }, (_, i) => [rail + r() * (W - 2 * rail), i < 2 ? r() * firstView : r() * H]);
       const near = () => { const [cx, cy] = clusters[Math.floor(r() * clusters.length)]; return [cx + (r() - .5) * 260, cy + (r() - .5) * 220]; };
-      for (let i = 0; i < 160; i++) {                       // specks
+      for (let i = 0; i < 160 * D; i++) {                       // specks
         const [x, y] = r() < .55 ? near() : pt();
         dirt += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(.3 + Math.pow(r(), 3) * 1.6).toFixed(2)}" fill="#fff" fill-opacity="${(.22 + r() * .38).toFixed(2)}" stroke="none"/>`;
       }
-      for (let i = 0; i < 22; i++) {                        // irregular blobs
+      for (let i = 0; i < 22 * D; i++) {                        // irregular blobs
         const [x, y] = r() < .6 ? near() : pt(), k = 1 + r() * 2.8;
         let d = "";
         for (let a = 0; a < 7; a++) {
@@ -750,7 +757,7 @@
         }
         dirt += `<path d="${d}Z" fill="#fff" fill-opacity="${(.2 + r() * .3).toFixed(2)}" stroke="none"/>`;
       }
-      for (let i = 0; i < 9; i++) {                         // hairs
+      for (let i = 0; i < 9 * D; i++) {                         // hairs
         const [x, y] = i < 2 ? [rail + r() * (W - 2 * rail), r() * firstView] : pt();
         const L = 12 + r() * 40;
         dirt += `<path d="M${x.toFixed(1)} ${y.toFixed(1)} c${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)}" stroke-width="${(.4 + r() * .4).toFixed(2)}" stroke-opacity="${(.22 + r() * .22).toFixed(2)}" stroke="#fff" fill="none"/>`;
@@ -760,8 +767,9 @@
         `<g stroke="#fff" fill="none">${scratches}${dirt}</g></svg>`).replace(/#fff/g, ink);
       // the dirt lives on a tall inner layer that is moved with a GPU transform (cheap), instead of
       // animating background-position on the full-screen layer (which repainted the whole screen every frame)
-      el.innerHTML = '<div class="filmtile"></div>';
+      el.innerHTML = '<div class="filmtile"></div><div class="bggrain"></div>';
       const tile = el.firstChild;
+      if (window.GRAIN) el.lastChild.style.backgroundImage = `url(${GRAIN})`;
       tile.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
       tile.style.backgroundSize = `${W}px ${H}px`;
       tile.style.height = (H * 2 + window.innerHeight) + "px";
@@ -1131,7 +1139,7 @@
     // grain texture for the Viana tile
     (() => { const c = document.createElement("canvas"); c.width = c.height = 160; const x = c.getContext("2d"), d = x.createImageData(160, 160);
       for (let i = 0; i < d.data.length; i += 4) { const v = Math.random() * 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
-      x.putImageData(d, 0, 0); window.GRAIN = c.toDataURL(); document.querySelectorAll(".grain").forEach(g => g.style.backgroundImage = `url(${GRAIN})`); })();
+      x.putImageData(d, 0, 0); window.GRAIN = c.toDataURL(); document.documentElement.style.setProperty("--grain", `url(${window.GRAIN})`); document.querySelectorAll(".grain, .bggrain").forEach(g => g.style.backgroundImage = `url(${GRAIN})`); })();
 
     // ----- project page -----
     function renderProject(sec, slug) {
