@@ -244,7 +244,7 @@
     body.home-top { height: 100svh; overflow: hidden; }
     body.home-top header, body.home-top footer, body.home-top .rail { display: none; }
     #home { position: fixed; inset: 0; z-index: 2; --gap: 10px; --th: calc((100svh - 6 * var(--gap)) / 5); --tw: calc(var(--th) * 1.6); --fw: var(--tw); }
-    @media (max-width: 760px) { #home { --gap: 8px; --tw: calc(var(--th) * .75); --fw: min(calc(var(--th) * 1.6), 78vw); } #home .htile.link { width: calc(var(--th) * 1.25); } #home .htile.link > span { font-size: calc(var(--th) * .14); } }
+    @media (max-width: 760px) { #home { --gap: 8px; --tw: calc(var(--th) * .75); --fw: min(calc(var(--th) * 1.6), 78vw); } #home .htile.link { width: calc(var(--th) * 1.25); } #home .htile.link > span { font-size: calc(var(--th) * .075); } #home .ftile span:not(.vj) { font-size: min(calc(var(--th) * .3), 11vw); } }
     .rows { position: absolute; inset: var(--gap) 0; display: grid; grid-template-rows: repeat(5, var(--th)); gap: var(--gap); }
     .hrow { overflow: hidden; }
     .htrack { display: flex; gap: var(--gap); width: max-content; height: 100%; will-change: transform; }
@@ -254,7 +254,7 @@
     .htile img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .6s var(--ease), filter .4s; filter: brightness(.82); }
     .htile:hover img { transform: scale(1.05); filter: brightness(1); }
     .htile.link { background: #000; display: grid; place-items: center; text-align: center; }
-    .htile.link > span { grid-area: 1 / 1; font-family: "Pirata One", serif; font-size: calc(var(--th) * .2); line-height: .95; color: var(--name); }
+    .htile.link > span { grid-area: 1 / 1; font-family: "Unbounded", sans-serif; font-weight: 800; text-transform: uppercase; letter-spacing: .02em; font-size: calc(var(--th) * .1); line-height: 1.1; color: var(--name); }
     .htile.link .lt { position: relative; z-index: 1; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--name) 40%, transparent)) drop-shadow(0 0 18px color-mix(in srgb, var(--name) 16%, transparent)); }
     .htile.link .lg { opacity: 0; pointer-events: none; }
     .htile.link .grain { position: absolute; inset: -40%; z-index: 2; pointer-events: none; opacity: .55; mix-blend-mode: overlay; animation: hgrain .5s steps(6) infinite; }
@@ -263,13 +263,13 @@
     #home.ready .ftile { opacity: 1; }
     .ftile.joao { top: calc(var(--gap) * 2 + var(--th)); border: 1px solid var(--accent); }
     .ftile.viana { top: calc(var(--gap) * 3 + var(--th) * 2); }
-    .ftile span { font-family: "Pirata One", serif; color: var(--name); line-height: 1; font-size: calc(var(--th) * .55); }
+    .ftile span { font-family: "Unbounded", sans-serif; font-weight: 800; text-transform: uppercase; letter-spacing: -.01em; color: var(--name); line-height: 1; font-size: calc(var(--th) * .3); }
     .ftile.joao span { font-size: calc(var(--th) * .5); }
     .ftile .vw { position: relative; z-index: 1; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--name) 40%, transparent)) drop-shadow(0 0 22px color-mix(in srgb, var(--name) 16%, transparent)); animation: vweave 2s steps(1) infinite, vbreathe 9s ease-in-out infinite alternate; }
     @keyframes vweave { 0%{translate:0 0} 25%{translate:.5px -.5px} 50%{translate:-.5px .5px} 75%{translate:0 .5px} }
     @keyframes vbreathe { from { scale: 1; } to { scale: 1.015; } }
     .ftile .vbox { position: relative; z-index: 1; display: inline-block; }
-    .ftile .vj { position: absolute; right: .1em; bottom: 100%; margin-bottom: -.12em; font-family: "Pirata One", serif; font-size: calc(var(--th) * .2); line-height: 1; color: var(--name); opacity: 0; transition: opacity .6s ease .35s;
+    .ftile .vj { position: absolute; right: .1em; bottom: 100%; margin-bottom: .35em; font-family: "Unbounded", sans-serif; font-weight: 800; letter-spacing: .04em; font-size: calc(var(--th) * .085); line-height: 1; color: var(--name); opacity: 0; transition: opacity .6s ease .35s;
       filter: drop-shadow(0 0 6px color-mix(in srgb, var(--name) 35%, transparent)); }
     #home.done .vj { opacity: 1; }
     .ftile .vw { display: inline-block; }
@@ -284,6 +284,13 @@
     #home.ready .intro { background: transparent; }
     #home.done .intro { display: none; }
     /* the otter slate: drawn line by line, claps, then the VIANA letters follow */
+    .otter-wrap > .otter { grid-area: 1 / 1; }
+    .otter-wrap { filter: drop-shadow(0 0 10px color-mix(in srgb, var(--name) 35%, transparent)) drop-shadow(0 0 28px color-mix(in srgb, var(--name) 14%, transparent)); }
+    html[data-theme="light"] .otter-wrap { filter: drop-shadow(0 0 8px rgba(0,0,0,.18)); }
+    .otter.main { filter: url(#onoise); }
+    .otter.ghost { opacity: .22; filter: url(#omb); animation: osmear .9s steps(1) infinite; pointer-events: none; }
+    .otter.ghost.g2 { opacity: .12; animation-delay: .3s; }
+    @keyframes osmear { 0% { translate: -5px 0; } 33% { translate: 4px 0; } 66% { translate: -2px 0; } }
     .otter-wrap { display: grid; place-items: center; transition: transform .22s cubic-bezier(.5,0,.8,.4), opacity .22s ease; }
     .otter { height: min(58svh, 72vw); width: auto; overflow: visible; color: var(--name); }
     html[data-theme="light"] .otter { color: #000; }
@@ -646,7 +653,7 @@
     <div class="ftile viana" aria-hidden="true"><span class="vbox"><span class="vj">João</span><span class="vw" id="vw">Viana</span></span><span class="vg vg1" aria-hidden="true">Viana</span><span class="vg vg2" aria-hidden="true">Viana</span><span class="grain" aria-hidden="true"></span></div>
     <div class="intro" id="intro" aria-hidden="true"><div class="intro-stage glowname" id="intro-stage"></div></div>
   </section>
-  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="imb" x="-50%" y="-10%" width="200%" height="120%"><feGaussianBlur stdDeviation="22 0"/></filter><filter id="imb2" x="-80%" y="-10%" width="260%" height="120%"><feGaussianBlur stdDeviation="48 1"/></filter><filter id="vmb" x="-50%" y="-10%" width="200%" height="120%"><feGaussianBlur stdDeviation="8 0"/></filter></svg>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="imb" x="-50%" y="-10%" width="200%" height="120%"><feGaussianBlur stdDeviation="22 0"/></filter><filter id="imb2" x="-80%" y="-10%" width="260%" height="120%"><feGaussianBlur stdDeviation="48 1"/></filter><filter id="vmb" x="-50%" y="-10%" width="200%" height="120%"><feGaussianBlur stdDeviation="8 0"/></filter><filter id="omb" x="-20%" y="-5%" width="140%" height="110%"><feGaussianBlur stdDeviation="14 0"/></filter><filter id="onoise" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="1" seed="1" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -2.2 1.75" result="m"/><feComposite in="SourceGraphic" in2="m" operator="in"/></filter></svg>
 
   <!-- CINEMATOGRAPHY (home) -->
   <main class="view" id="view-work">
@@ -1159,12 +1166,17 @@
       const slate = svg => {
         if (!svg) return run();
         const intro = $("#intro");
-        stage.innerHTML = `<div class="otter-wrap">${svg}</div>`;
-        const wrap = stage.firstChild, o = wrap.firstChild;
-        requestAnimationFrame(() => o.classList.add("draw"));
-        setTimeout(() => o.classList.add("inked"), 950);
-        setTimeout(() => o.classList.add("open"), 1250);
-        setTimeout(() => o.classList.add("snap"), 1700);
+        const tag = c => svg.replace('class="otter"', `class="otter ${c}"`);
+        stage.innerHTML = `<div class="otter-wrap">${tag("ghost g1")}${tag("ghost g2")}${tag("main")}</div>`;
+        const wrap = stage.firstChild, os = [...wrap.children], cls = c => os.forEach(o => o.classList.add(c));
+        // living grain on the ink: re-seed the noise a few times a second
+        const turb = document.querySelector("#onoise feTurbulence"); let seed = 1;
+        const grainT = setInterval(() => turb && turb.setAttribute("seed", ++seed), 90);
+        setTimeout(() => clearInterval(grainT), 3000);
+        requestAnimationFrame(() => cls("draw"));
+        setTimeout(() => cls("inked"), 950);
+        setTimeout(() => cls("open"), 1250);
+        setTimeout(() => cls("snap"), 1700);
         setTimeout(() => { intro.classList.add("flash"); wrap.classList.add("shake"); }, 1770);
         // test: the otter alone, no VIANA letters after it (the run() sequence is kept for later)
         setTimeout(() => { intro.classList.remove("flash"); wrap.classList.add("out"); home.classList.add("ready"); }, 1960);
