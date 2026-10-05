@@ -537,9 +537,20 @@
     .theme-btn { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: color-mix(in srgb, var(--accent) 80%, #000); display: inline-flex; align-items: center; gap: 8px; transition: color .3s; }
     .theme-btn:hover { color: var(--accent); }
     .theme-btn i { width: 11px; height: 11px; border-radius: 50%; border: 1px solid currentColor; background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
-    .theme-home { position: fixed; z-index: 6; right: 14px; bottom: 12px; display: none; width: 30px; height: 30px; border-radius: 50%; background: #000; justify-content: center; color: #AFC2A2; }
-    .theme-home i { width: 12px; height: 12px; }
-    body.home-top .theme-home { display: inline-flex; }
+    /* homepage light / dark switch: a small pill in the top-right corner, visible from the first second */
+    .theme-switch { position: fixed; z-index: 7; top: 16px; right: 16px; display: none; padding: 3px; border-radius: 999px; background: rgba(0,0,0,.82);
+      box-shadow: 0 0 0 1px rgba(175,194,162,.35); backdrop-filter: blur(6px); }
+    body.home-top .theme-switch { display: inline-flex; }
+    .theme-switch::before { content: ""; position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: 999px; background: #AFC2A2;
+      transition: transform .45s cubic-bezier(.2,.7,.1,1); }
+    .theme-switch button { position: relative; z-index: 1; width: 64px; padding: 7px 0; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; font-weight: 500;
+      letter-spacing: .12em; text-transform: uppercase; color: #AFC2A2; transition: color .35s; }
+    .theme-switch button.on { color: #000; }
+    html[data-theme="light"] .theme-switch { background: rgba(255,255,255,.88); box-shadow: 0 0 0 1px rgba(0,0,0,.12); }
+    html[data-theme="light"] .theme-switch::before { transform: translateX(100%); background: #111; }
+    html[data-theme="light"] .theme-switch button { color: #3E4F35; }
+    html[data-theme="light"] .theme-switch button.on { color: #fff; }
+    @media (max-width: 760px) { .theme-switch { top: 12px; right: 12px; } .theme-switch button { width: 54px; font-size: 10px; padding: 6px 0; } }
     html[data-theme="light"] {
       --bg: #ECEAE4; --fg: #111; --accent: #55694A; --name: #3E4F35;
       --glow: 0 0 10px color-mix(in srgb, var(--accent) 22%, transparent);
@@ -552,7 +563,6 @@
     html[data-theme="light"] .htile.link .lt, html[data-theme="light"] .ftile .vw, html[data-theme="light"] .ftile .vj { filter: none; }
     html[data-theme="light"] .htile.link:hover .lt { color: #000; }
     html[data-theme="light"] .ftile .vg2 { color: #000; }
-    html[data-theme="light"] .theme-home { background: #fff; color: #111; }
     html[data-theme="light"] .intro { background: rgba(236, 234, 228, .8); }
     html[data-theme="light"] #home.ready .intro { background: transparent; }
     html[data-theme="light"] .ione, html[data-theme="light"] .iword { color: #111; }
@@ -602,7 +612,7 @@
 
   <!-- HOME: rows of stills sliding left/right; "João" and "Viana" tiles stay in the middle while the stills pass behind them.
        The site opens on a black screen with the VIANA intro, which then shrinks into the Viana tile. -->
-  <button class="theme-btn theme-home" type="button" aria-label="Switch light / dark"><i></i></button>
+  <div class="theme-switch" role="group" aria-label="Light / dark mode"><button type="button" data-t="dark">Dark</button><button type="button" data-t="light">Light</button></div>
   <section class="homepage" id="home" aria-label="João Viana — Director of Photography">
     <div class="rows" id="rows"></div>
     <div class="ftile viana" aria-hidden="true"><span class="vbox"><span class="vj">João</span><span class="vw" id="vw">Viana</span></span><span class="vg vg1" aria-hidden="true">Viana</span><span class="vg vg2" aria-hidden="true">Viana</span><span class="grain" aria-hidden="true"></span></div>
@@ -1322,10 +1332,16 @@
       if (t === "light") root.dataset.theme = "light"; else delete root.dataset.theme;
       try { localStorage.setItem("theme", t); } catch (e) {}
       document.querySelectorAll(".theme-btn .tl").forEach(s => s.textContent = t === "light" ? "Dark" : "Light");
+      document.querySelectorAll(".theme-switch button").forEach(b => { b.classList.toggle("on", b.dataset.t === t); b.setAttribute("aria-pressed", b.dataset.t === t); });
       buildFilm();
     }
     document.querySelectorAll(".theme-btn").forEach(b => b.addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light")));
     document.querySelectorAll(".theme-btn .tl").forEach(s => s.textContent = document.documentElement.dataset.theme === "light" ? "Dark" : "Light");
+    document.querySelectorAll(".theme-switch button").forEach(b => {
+      const cur = document.documentElement.dataset.theme === "light" ? "light" : "dark";
+      b.classList.toggle("on", b.dataset.t === cur); b.setAttribute("aria-pressed", b.dataset.t === cur);
+      b.addEventListener("click", () => setTheme(b.dataset.t));
+    });
     homeBuild();
     let _rz; window.addEventListener("resize", () => { clearTimeout(_rz); _rz = setTimeout(homeBuild, 300); });
     route();
