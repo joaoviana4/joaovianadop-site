@@ -243,9 +243,8 @@
     body.home-top { height: 100svh; overflow: hidden; }
     body.home-top header, body.home-top footer, body.home-top .rail { display: none; }
     #home { position: fixed; inset: 0; z-index: 2; --gap: 10px; --th: calc((100svh - 6 * var(--gap)) / 5); --tw: calc(var(--th) * 1.6); --fw: var(--tw); }
-    @media (max-width: 760px) { #home { --gap: 8px; --tw: calc(var(--th) * .75); --fw: min(calc(var(--th) * 1.6), 78vw); } #home .htile.link > span { font-size: calc(var(--th) * .15); } }
-    .rows { position: absolute; inset: var(--gap) 0; display: grid; grid-template-rows: repeat(5, var(--th)); gap: var(--gap); opacity: 0; transition: opacity .9s ease; }
-    #home.ready .rows { opacity: 1; }
+    @media (max-width: 760px) { #home { --gap: 8px; --tw: calc(var(--th) * .75); --fw: min(calc(var(--th) * 1.6), 78vw); } #home .htile.link { width: calc(var(--th) * 1.25); } #home .htile.link > span { font-size: calc(var(--th) * .14); } }
+    .rows { position: absolute; inset: var(--gap) 0; display: grid; grid-template-rows: repeat(5, var(--th)); gap: var(--gap); }
     .hrow { overflow: hidden; }
     .htrack { display: flex; gap: var(--gap); width: max-content; height: 100%; will-change: transform; }
     .htrack.l { animation: reel-l var(--dur, 120s) linear infinite; }
@@ -280,15 +279,15 @@
     .ftile .grain { position: absolute; inset: -40%; z-index: 2; pointer-events: none; opacity: .55; mix-blend-mode: overlay; animation: hgrain .5s steps(6) infinite; }
     @keyframes hgrain { 0%{transform:translate(0,0)} 17%{transform:translate(-7%,4%)} 33%{transform:translate(5%,-8%)} 50%{transform:translate(-3%,9%)} 67%{transform:translate(8%,2%)} 83%{transform:translate(-9%,-5%)} }
     /* the intro: black screen, broken letters one at a time, then "Viana" shrinks into its tile */
-    .intro { position: absolute; inset: 0; z-index: 4; background: #000; display: grid; place-items: center; transition: background .6s ease; pointer-events: none; }
+    .intro { position: absolute; inset: 0; z-index: 4; background: rgba(0,0,0,.72); display: grid; place-items: center; transition: background .6s ease; pointer-events: none; }
     #home.ready .intro { background: transparent; }
     #home.done .intro { display: none; }
     .glowname { filter: drop-shadow(0 0 12px color-mix(in srgb, var(--name) 40%, transparent)) drop-shadow(0 0 36px color-mix(in srgb, var(--name) 16%, transparent)); }
-    .ione { display: grid; font-family: "New Rocker", serif; font-size: clamp(170px, 50vh, 520px); line-height: 1; color: var(--name); }
+    .ione { display: grid; font-family: "New Rocker", serif; font-size: calc(var(--th) * 1.25); line-height: 1; color: var(--name); }
     .ione > * { grid-area: 1 / 1; display: block; }
     .ione .g1 { filter: url(#imb); opacity: .55; } .ione .g2 { filter: url(#imb2); opacity: .3; color: #fff; }
     .ione.flash .sl { color: #fff; }
-    .iword { font-family: "Pirata One", serif; color: var(--name); line-height: 1; font-size: clamp(90px, 18vw, 300px); white-space: nowrap; transition: transform .6s cubic-bezier(.2,.9,.1,1); }
+    .iword { font-family: "Pirata One", serif; color: var(--name); line-height: 1; font-size: calc(var(--th) * .85); white-space: nowrap; transition: transform .6s cubic-bezier(.2,.9,.1,1); }
     .iword span { display: inline-block; transition: transform .6s cubic-bezier(.2,.9,.1,1), opacity .25s, filter .4s; }
     .iword.fold { transform: scale(2); }
     /* ---------- thumbnail grid ---------- */
@@ -1000,26 +999,30 @@
     // ----- home: five rows of stills sliding in alternate directions, more stills from the first four projects -----
     function homeBuild() {
       const rows = $("#rows"); if (!rows) return;
-      // every still appears only once on the whole homepage (so the same still is never on screen twice);
-      // all stills of the first four projects are always in, the rest are drawn at random to fill the rows
-      const rnd = rand(Date.now() % 100000 + 1);
-      const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-      const top = [], rest = [];
-      DP.forEach((p, i) => (p.stills || []).forEach(f => (i < 4 ? top : rest).push({ p, src: `assets/stills/${p.slug}/s/${f}` })));
-      // the row tiles are --tw wide; a "link" tile is repeated every k tiles so that one is always on screen
+      // each row plays whole projects, one after another (all the stills of a project in a run, then the next project);
+      // a project only ever lives in one row, so the same project is never in two rows at once.
+      // The first four projects are spread over different rows; the rest are dealt to whichever row is shortest.
+      const projs = DP.filter(p => p.stills && p.stills.length);
+      const rowsP = [[], [], [], [], []], len = [0, 0, 0, 0, 0];
+      const order = [1, 3, 0, 4, 2];                                   // rows for the top four (row 2 = the Viana row gets one later)
+      projs.forEach((p, i) => {
+        const r = i < 4 ? order[i] : len.indexOf(Math.min(...len));
+        rowsP[r].push(p); len[r] += p.stills.length;
+      });
       const narrow = window.innerWidth <= 760, th = (window.innerHeight - (narrow ? 48 : 60)) / 5, tw = th * (narrow ? .75 : 1.6) + (narrow ? 8 : 10);
-      const k = Math.max(2, Math.floor(window.innerWidth / tw));
-      const perRow = k * Math.max(3, Math.ceil(2.2 * window.innerWidth / (k * tw)));      // a multiple of k, at least ~2 screens
-      const need = 5 * perRow;
-      let deck = shuffle([...top, ...shuffle(rest).slice(0, Math.max(0, need - top.length))]);
-      const pick = n => { const out = []; while (out.length < n) { if (!deck.length) deck = shuffle([...top, ...rest]);   // last resort: only if a huge screen needs more tiles than there are stills
-        out.push(deck.pop()); } return out; };
-      const tile = o => `<a class="htile" href="#/work/${o.p.slug}" aria-label="${esc(o.p.title)}"><img src="${o.src}" alt="" loading="eager" decoding="async"></a>`;
+      const k = Math.max(2, Math.floor(window.innerWidth / tw) - (narrow ? 0 : 0));   // a link tile at most every k tiles, so one is always on screen
+      const tile = (p, f) => `<a class="htile" href="#/work/${p.slug}" aria-label="${esc(p.title)}"><img src="assets/stills/${p.slug}/s/${f}" alt="" loading="eager" decoding="async"></a>`;
       const link = (href, label) => `<a class="htile link" href="${href}"><span class="lt">${label}</span><span class="grain" aria-hidden="true"></span></a>`;
-      rows.innerHTML = [0, 1, 2, 3, 4].map(r => {
-        const items = pick(perRow).map(tile);
-        if (r === 0) for (let j = 1; j < perRow; j += k) items[j] = link("#/cinematography", "Cinematography<br>Work");       // starts on the left
-        if (r === 4) for (let j = k - 2; j < perRow; j += k) items[j] = link("#/about", "About<br>Me");                        // starts on the right
+      rows.innerHTML = rowsP.map((list, r) => {
+        let items = list.flatMap(p => p.stills.map(f => tile(p, f)));
+        // a row must be longer than ~2 screens so a still is never on screen twice; repeat the row's projects if it is short
+        const base = items.slice(); while (items.length * tw < 2.2 * window.innerWidth) items = items.concat(base);
+        // link tiles spread evenly around the loop (including across the wrap), never more than k tiles apart
+        const withLinks = (href, label, first) => { const N = items.length, m = Math.ceil(N / Math.max(1, k - 2));
+          const at = new Set(Array.from({ length: m }, (_, i) => (first + Math.round(i * N / m)) % N));
+          const out = []; items.forEach((t, j) => { if (at.has(j)) out.push(link(href, label)); out.push(t); }); return out; };
+        if (r === 0) items = withLinks("#/cinematography", "Cinematography<br>Work", 1);          // starts on the left
+        if (r === 4) items = withLinks("#/about", "About<br>Me", Math.max(1, k - 2));              // starts on the right
         const html = items.join("");
         return `<div class="hrow"><div class="htrack ${r % 2 ? "l" : "r"}">${html}${html}</div></div>`;
       }).join("");
@@ -1058,10 +1061,10 @@
           setTimeout(() => {
             const from = W.getBoundingClientRect(), to = $("#vw").getBoundingClientRect();
             const sc = to.height / from.height, dx = (to.left + to.width / 2) - (from.left + from.width / 2), dy = (to.top + to.height / 2) - (from.top + from.height / 2);
-            W.style.transition = "transform .7s cubic-bezier(.7,0,.2,1)"; W.style.transform = `translate(${dx}px, ${dy}px) scale(${sc})`;
+            W.style.transition = "transform .5s cubic-bezier(.6,0,.2,1)"; W.style.transform = `translate(${dx}px, ${dy}px) scale(${sc})`;
             home.classList.add("ready");
             setTimeout(() => home.classList.add("done"), 750);
-          }, 900);
+          }, 700);
         }, SEQ.length * STEP);
       };
       const fonts = document.fonts ? Promise.race([Promise.all([document.fonts.load('80px "New Rocker"'), document.fonts.load('80px "Pirata One"')]), new Promise(r => setTimeout(r, 1500))]) : Promise.resolve();
