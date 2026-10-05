@@ -1166,8 +1166,9 @@
         setTimeout(() => o.classList.add("open"), 1250);
         setTimeout(() => o.classList.add("snap"), 1700);
         setTimeout(() => { intro.classList.add("flash"); wrap.classList.add("shake"); }, 1770);
-        setTimeout(() => { intro.classList.remove("flash"); wrap.classList.add("out"); }, 1960);
-        setTimeout(run, 2200);
+        // test: the otter alone, no VIANA letters after it (the run() sequence is kept for later)
+        setTimeout(() => { intro.classList.remove("flash"); wrap.classList.add("out"); home.classList.add("ready"); }, 1960);
+        setTimeout(() => home.classList.add("done"), 2700);
       };
       const otter = fetch("assets/otter.svg").then(r => r.ok ? r.text() : "").catch(() => "");
       const fonts = document.fonts ? Promise.race([Promise.all([document.fonts.load('80px "New Rocker"'), document.fonts.load('80px "Pirata One"')]), new Promise(r => setTimeout(r, 1500))]) : Promise.resolve();
