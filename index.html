@@ -21,6 +21,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500&family=Instrument+Serif:ital@0;1&family=Unbounded:wght@800&family=IBM+Plex+Mono:wght@400;500&family=New+Rocker&family=Pirata+One&family=Reenie+Beanie&display=swap" rel="stylesheet">
+  <script>try { if (localStorage.getItem("theme") === "light") document.documentElement.dataset.theme = "light"; } catch (e) {}</script>
   <style>
     :root {
       --bg: #000;
@@ -531,6 +532,44 @@
       -webkit-mask-size: 900px 900px; mask-size: 900px 900px; -webkit-mask-repeat: repeat; mask-repeat: repeat; }
     header, .masthead, main.view, footer { position: relative; z-index: 1; }
     header { z-index: 50; }
+
+    /* ---------- light mode: paper background, ink text, film dirt and noise printed in black; the homepage tiles stay black ---------- */
+    .theme-btn { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: color-mix(in srgb, var(--accent) 80%, #000); display: inline-flex; align-items: center; gap: 8px; transition: color .3s; }
+    .theme-btn:hover { color: var(--accent); }
+    .theme-btn i { width: 11px; height: 11px; border-radius: 50%; border: 1px solid currentColor; background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
+    .theme-home { position: fixed; z-index: 6; right: 14px; bottom: 12px; display: none; width: 30px; height: 30px; border-radius: 50%; background: #000; justify-content: center; color: #AFC2A2; }
+    .theme-home i { width: 12px; height: 12px; }
+    body.home-top .theme-home { display: inline-flex; }
+    html[data-theme="light"] {
+      --bg: #ECEAE4; --fg: #111; --accent: #55694A; --name: #3E4F35;
+      --glow: 0 0 10px color-mix(in srgb, var(--accent) 22%, transparent);
+      --muted: #55554f; --faint: #9a9a94; --line: rgba(0, 0, 0, .16);
+    }
+    html[data-theme="light"] body { color-scheme: light; }
+    html[data-theme="light"] #home, html[data-theme="light"] .theme-home { --accent: #AFC2A2; --name: color-mix(in srgb, #AFC2A2 74%, #fff); }
+    html[data-theme="light"] .intro { background: rgba(236, 234, 228, .8); }
+    html[data-theme="light"] #home.ready .intro { background: transparent; }
+    html[data-theme="light"] .ione, html[data-theme="light"] .iword { color: #111; }
+    html[data-theme="light"] .ione .g2 { color: #000; }
+    html[data-theme="light"] .ione.flash .sl { color: #000; }
+    html[data-theme="light"] .glowname { filter: none; }
+    html[data-theme="light"] #home.ready .iword { color: var(--name); transition: transform .6s cubic-bezier(.2,.9,.1,1), color .5s ease; }
+    html[data-theme="light"] .card .label, html[data-theme="light"] .card .soon { color: var(--fg); }
+    html[data-theme="light"] .card .soon { border-color: rgba(0,0,0,.4); }
+    html[data-theme="light"] .process p, html[data-theme="light"] .page .txt p, html[data-theme="light"] .blk-cols p { color: #1a1a1a; }
+    html[data-theme="light"] .filters button { color: #7a7a74; }
+    html[data-theme="light"] .grid.hovering .card a:not(:hover) .label { color: #a5a5a0; }
+    html[data-theme="light"] .grid.hovering .card a:not(:hover) .media { filter: brightness(.6) saturate(.6); }
+    html[data-theme="light"] .fps button { color: #9a9a94; }
+    html[data-theme="light"] .fps button.on { color: var(--accent); text-shadow: 0 0 10px color-mix(in srgb, var(--accent) 35%, transparent); }
+    html[data-theme="light"] .lb { background: rgba(236, 234, 228, .985); }
+    html[data-theme="light"] .rail .track { text-shadow: none; }
+    html[data-theme="light"] .soon-big { filter: none; }
+    html[data-theme="light"] .cform button, html[data-theme="light"] .surprise:hover, html[data-theme="light"] .hero-cta a:hover, html[data-theme="light"] .more-btn:hover { color: #fff; }
+    html[data-theme="light"] .ph-box { background: repeating-linear-gradient(135deg, #e2e0d9 0 14px, #dddbd4 14px 28px); border-color: #d2d0c8; color: #8a8a84; }
+    html[data-theme="light"] .player, html[data-theme="light"] .card .frame { background: #dcdad3; }
+    html[data-theme="light"] nav a { color: color-mix(in srgb, var(--accent) 75%, #fff); }
+    html[data-theme="light"] nav a:hover, html[data-theme="light"] nav a.active { color: var(--accent); }
     @media (prefers-reduced-motion: reduce) { body::after { animation: none; } * { transition: none !important; animation: none !important; } }
   </style>
 </head>
@@ -551,11 +590,13 @@
       <a href="#/cinematography" data-nav="work">Cinematography</a>
       <a href="#/direction" data-nav="direction">Direction</a>
       <span class="about-wrap"><a href="#/about" data-nav="about">About</a></span>
+      <button class="theme-btn" type="button" aria-label="Switch light / dark"><i></i><span class="tl">Light</span></button>
     </nav>
   </header>
 
   <!-- HOME: rows of stills sliding left/right; "João" and "Viana" tiles stay in the middle while the stills pass behind them.
        The site opens on a black screen with the VIANA intro, which then shrinks into the Viana tile. -->
+  <button class="theme-btn theme-home" type="button" aria-label="Switch light / dark"><i></i></button>
   <section class="homepage" id="home" aria-label="João Viana — Director of Photography">
     <div class="rows" id="rows"></div>
     <div class="ftile viana" aria-hidden="true"><span class="vbox"><span class="vj">João</span><span class="vw" id="vw">Viana</span></span><span class="vg vg1" aria-hidden="true">Viana</span><span class="vg vg2" aria-hidden="true">Viana</span><span class="grain" aria-hidden="true"></span></div>
@@ -698,8 +739,9 @@
         const L = 12 + r() * 40;
         dirt += `<path d="M${x.toFixed(1)} ${y.toFixed(1)} c${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)}" stroke-width="${(.4 + r() * .4).toFixed(2)}" stroke-opacity="${(.22 + r() * .22).toFixed(2)}" stroke="#fff" fill="none"/>`;
       }
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">` +
-        `<g stroke="#fff" fill="none">${scratches}${dirt}</g></svg>`;
+      const ink = document.documentElement.dataset.theme === "light" ? "#000" : "#fff";   // light mode: the marks are printed in black
+      const svg = (`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">` +
+        `<g stroke="#fff" fill="none">${scratches}${dirt}</g></svg>`).replace(/#fff/g, ink);
       // the dirt lives on a tall inner layer that is moved with a GPU transform (cheap), instead of
       // animating background-position on the full-screen layer (which repainted the whole screen every frame)
       el.innerHTML = '<div class="filmtile"></div>';
@@ -1268,6 +1310,16 @@
     }, true);
     const onScroll = () => document.body.classList.toggle("scrolled", window.scrollY > 60);
     window.addEventListener("scroll", onScroll, { passive: true }); onScroll();
+    // ----- light / dark -----
+    function setTheme(t) {
+      const root = document.documentElement;
+      if (t === "light") root.dataset.theme = "light"; else delete root.dataset.theme;
+      try { localStorage.setItem("theme", t); } catch (e) {}
+      document.querySelectorAll(".theme-btn .tl").forEach(s => s.textContent = t === "light" ? "Dark" : "Light");
+      buildFilm();
+    }
+    document.querySelectorAll(".theme-btn").forEach(b => b.addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light")));
+    document.querySelectorAll(".theme-btn .tl").forEach(s => s.textContent = document.documentElement.dataset.theme === "light" ? "Dark" : "Light");
     homeBuild();
     let _rz; window.addEventListener("resize", () => { clearTimeout(_rz); _rz = setTimeout(homeBuild, 300); });
     route();
