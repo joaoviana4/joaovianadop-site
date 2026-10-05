@@ -185,9 +185,11 @@
 
 
     /* ---------- home hero ---------- */
-    .hero, .intro { display: none; }
-    body.home-top .hero, body.home-top .intro { display: block; }
-    .hero { position: relative; height: calc(100svh - 74px); min-height: 460px; margin: 0 var(--pad); overflow: hidden; }
+    .hero { display: none; }
+    body.home-top .hero { display: block; }
+    body.home-top { height: 100svh; overflow: hidden; }          /* the homepage is one screen: no scrolling */
+    body.home-top footer { display: none; }
+    .hero { position: relative; height: calc(100svh - 74px - var(--pad)); min-height: 420px; margin: 0 var(--pad); overflow: hidden; }
     .hero-frame { position: absolute; inset: 0; }
     .hero-media, .hero-media img { position: absolute; inset: 0; width: 100%; height: 100%; }
     .hero-media img { object-fit: cover; opacity: 0; transition: opacity 1.2s ease; transform: scale(1.04); }
@@ -202,20 +204,18 @@
     .hero-bars button.done::after { width: 100%; }
     .hero-bars button.on::after { animation: hero-bar var(--d, 4s) linear forwards; }
     @keyframes hero-bar { to { width: 100%; } }
-    .hero-cap { position: absolute; z-index: 3; left: 22px; bottom: 22px; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: #fff; display: flex; gap: 14px; }
+    .hero-id { position: absolute; z-index: 3; left: 28px; bottom: 26px; max-width: 34em; }
+    .hero-id h1 { font-weight: 300; font-size: clamp(40px, 6vw, 96px); letter-spacing: -.035em; line-height: .95; color: #fff; }
+    .hero-role { margin-top: 12px; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+    .hero-intro { margin-top: 14px; font-size: clamp(15px, 1.25vw, 19px); line-height: 1.5; color: rgba(255,255,255,.85); max-width: 30em; }
+    .hero-cta { margin-top: 22px; display: flex; gap: 12px; flex-wrap: wrap; }
+    .hero-cta a { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: var(--accent); border: 1px solid var(--accent); padding: 10px 16px; transition: background .3s, color .3s; backdrop-filter: blur(6px); background: rgba(0,0,0,.25); }
+    .hero-cta a span { display: inline-block; margin-left: 6px; transition: transform .4s var(--ease); }
+    .hero-cta a:hover { background: var(--accent); color: #000; } .hero-cta a:hover span { transform: translateX(4px); }
+    .hero-cap { position: absolute; z-index: 3; right: 28px; bottom: 28px; text-align: right; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #fff; display: flex; flex-direction: column; gap: 4px; }
+    .hero-cap i { font-style: normal; color: var(--accent); }
     .hero-cap .a { color: rgba(255,255,255,.6); }
     .hero-cap:hover .t { color: var(--accent); }
-    .hero-id { position: absolute; z-index: 3; right: 22px; bottom: 18px; text-align: right; }
-    .hero-id h1 { font-weight: 300; font-size: clamp(30px, 4vw, 58px); letter-spacing: -.03em; line-height: 1; color: #fff; }
-    .hero-id p { margin-top: 8px; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
-    .hero-scroll { position: absolute; z-index: 3; left: 50%; bottom: 20px; transform: translateX(-50%); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.75); display: flex; flex-direction: column; align-items: center; gap: 4px; }
-    .hero-scroll span { animation: hero-bob 1.8s ease-in-out infinite; }
-    @keyframes hero-bob { 50% { transform: translateY(5px); } }
-    .intro { padding: clamp(80px, 16vh, 180px) var(--pad) clamp(70px, 12vh, 140px); }
-    .intro-big { font-weight: 300; font-size: clamp(30px, 4.4vw, 72px); line-height: 1.08; letter-spacing: -.03em; max-width: 21em; color: #f2f2f2; }
-    .intro-meta { margin-top: clamp(36px, 6vh, 64px); display: flex; flex-wrap: wrap; gap: 18px clamp(32px, 5vw, 80px); font-size: 15px; }
-    .intro-meta i { display: block; font-style: normal; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
-    .intro-meta a:hover { color: var(--accent); }
     /* variant "gate": the stills cut hard inside a 2.39 frame on black, with a camera-monitor readout around it */
     .hero[data-v="gate"]::after { display: none; }
     .hero[data-v="gate"] .hero-frame { inset: 50% auto auto 50%; width: min(1180px, 86%); aspect-ratio: 2.39 / 1; transform: translate(-50%, -56%); }
@@ -227,13 +227,13 @@
         linear-gradient(var(--accent), var(--accent)) top right / 18px 1px, linear-gradient(var(--accent), var(--accent)) top right / 1px 18px,
         linear-gradient(var(--accent), var(--accent)) bottom left / 18px 1px, linear-gradient(var(--accent), var(--accent)) bottom left / 1px 18px,
         linear-gradient(var(--accent), var(--accent)) bottom right / 18px 1px, linear-gradient(var(--accent), var(--accent)) bottom right / 1px 18px; background-repeat: no-repeat; }
-    .hero[data-v="gate"] .hero-bars { top: auto; bottom: 70px; }
-    .hero[data-v="gate"] .hero-cap, .hero[data-v="gate"] .hero-id { bottom: 22px; }
-    .hero[data-v="gate"] .hero-cap { left: 0; } .hero[data-v="gate"] .hero-id { right: 0; }
+    .hero[data-v="gate"] .hero-frame { transform: translate(-50%, -84%); width: min(1000px, 72%); }
+    .hero[data-v="gate"] .hero-bars { top: auto; bottom: 8px; }
+    .hero[data-v="gate"] .hero-id { left: 0; bottom: 30px; }
+    .hero[data-v="gate"] .hero-cap { right: 0; bottom: 34px; }
     .hero[data-v="gate"] { margin: 0 var(--pad); }
     @media (max-width: 760px) {
-      .hero { height: 78svh; margin: 0; }
-      .hero-id { right: 16px; } .hero-cap { left: 16px; bottom: 70px; flex-direction: column; gap: 4px; } .hero-scroll { display: none; }
+      .hero { height: calc(100svh - 120px); margin: 0; } .hero-id { left: 16px; right: 16px; bottom: 20px; } .hero-cap { right: 16px; top: 40px; bottom: auto; }
       .hero[data-v="gate"] .hero-frame { width: 92%; } .hero[data-v="gate"] .hero-hud { font-size: 9px; }
     }
     /* ---------- thumbnail grid ---------- */
@@ -494,7 +494,7 @@
   <header>
     <a class="mini" href="#/">João Viana</a>
     <nav>
-      <a href="#/" data-nav="work">Cinematography</a>
+      <a href="#/cinematography" data-nav="work">Cinematography</a>
       <a href="#/direction" data-nav="direction">Direction</a>
       <span class="about-wrap"><a href="#/about" data-nav="about">About</a>
         <a class="hand" href="#/about" aria-label="Contact me">
@@ -504,20 +504,20 @@
     </nav>
   </header>
 
-  <!-- HOME HERO: stills from the work play full screen, then a short introduction, then the work -->
+  <!-- HOME: a single screen. Stills from the work play behind a short introduction; the work itself lives on #/cinematography -->
   <section class="hero" id="hero" data-v="reel" aria-label="Showreel stills">
     <div class="hero-frame">
       <div class="hero-media"><img id="hero-a" alt=""><img id="hero-b" alt=""></div>
       <div class="hero-hud" aria-hidden="true"><span>A-CAM</span><span id="hero-fps">18 FPS</span><span>180°</span><span id="hero-tc">00:00:00:00</span></div>
     </div>
     <div class="hero-bars" id="hero-bars" role="tablist" aria-label="Projects"></div>
-    <a class="hero-cap" id="hero-cap" href="#/"><span class="t"></span><span class="a"></span></a>
-    <div class="hero-id"><h1>João Viana</h1><p>Director of Photography</p></div>
-    <button type="button" class="hero-scroll" id="hero-scroll">Scroll<span>↓</span></button>
-  </section>
-  <section class="intro" id="intro">
-    <p class="intro-big">João Viana is a Lisbon-based director of photography, shooting music videos, short films and commercials, and directing documentary and fiction of his own.</p>
-    <div class="intro-meta"><span><i>Based in</i>Lisbon, Portugal</span><span><i>Available</i>Worldwide</span><a href="#/about"><i>Contact</i>joao17viana@gmail.com</a></div>
+    <div class="hero-id">
+      <h1>João Viana</h1>
+      <p class="hero-role">Director of Photography · Lisbon</p>
+      <p class="hero-intro">Shooting music videos, short films and commercials, and directing documentary and fiction of his own.</p>
+      <div class="hero-cta"><a href="#/cinematography">Cinematography <span>→</span></a><a href="#/direction">Direction <span>→</span></a></div>
+    </div>
+    <a class="hero-cap" id="hero-cap" href="#/"><i>Now showing</i><span class="t"></span><span class="a"></span></a>
   </section>
 
   <!-- CINEMATOGRAPHY (home) -->
@@ -962,7 +962,6 @@
       HERO.list = DP.filter(p => p.cover);
       $("#hero-bars").innerHTML = HERO.list.map((p, k) => `<button type="button" role="tab" aria-label="${esc(p.title)}" data-k="${k}"></button>`).join("");
       $("#hero-bars").addEventListener("click", e => { const b = e.target.closest("button"); if (b) heroGo(+b.dataset.k); });
-      $("#hero-scroll").addEventListener("click", () => $("#intro").scrollIntoView({ behavior: "smooth" }));
       heroGo(0);
       // timecode readout for the "gate" variant
       setInterval(() => { if (!document.body.classList.contains("home-top")) return; HERO.tc++; const f = HERO.tc % 24, s = Math.floor(HERO.tc / 24);
@@ -991,7 +990,7 @@
       const i = list.findIndex(x => x.slug === slug);
       if (i < 0) return null;
       const p = list[i], nx = list[(i + 1) % list.length];
-      const backTo = sec === "work" ? ["#/", "Selected work"] : ["#/direction", "Direction"];
+      const backTo = sec === "work" ? ["#/cinematography", "Selected work"] : ["#/direction", "Direction"];
       // stills: files in assets/stills/<slug>/ listed in p.stills; until they exist, the cover is the only still
       const stills = (p.stills && p.stills.length) ? p.stills.map(f => `assets/stills/${p.slug}/${f}`) : (p.cover ? [coverSrc(p)] : []);
       // the sliding carousel uses lighter 760px-tall copies (stills/<slug>/m/); the lightbox opens the full-size files
@@ -1148,15 +1147,15 @@
     function route(hash) {
       const h = (hash ?? location.hash).replace(/^#\/?/, "");
       document.querySelectorAll("#project iframe").forEach(f => f.remove());   // stop any playing video when leaving a project
-      let view = "work", navKey = "work";
+      let view = h === "" ? "home" : "work", navKey = h === "" ? "" : "work";
       const m = h.match(/^(work|direction)\/(.+)$/);
       if (m) {
         const sec = renderProject(m[1], m[2]);
         if (sec) { view = "project"; navKey = sec; }
       } else if (h === "direction") view = navKey = "direction";
       else if (h === "about") view = navKey = "about";
-      document.body.classList.toggle("small-name", view !== "work");
-      document.body.classList.toggle("home-top", view === "work");
+      document.body.classList.toggle("small-name", view !== "home");
+      document.body.classList.toggle("home-top", view === "home");
       document.body.classList.toggle("home", view !== "about");   // "contact me" note: everywhere except About itself
       stopLeaks(); document.querySelectorAll(".grid.hovering").forEach(g => g.classList.remove("hovering"));
       document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + view));
