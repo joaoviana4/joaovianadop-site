@@ -285,6 +285,12 @@
     #home.done .intro { display: none; }
     /* the otter slate: drawn line by line, claps, then the VIANA letters follow */
     .otter-wrap > .otter { grid-area: 1 / 1; }
+    /* two jalapeños orbiting the otter, spinning, gone before the clap */
+    .otter-wrap { position: relative; --oh: min(58svh, 72vw); }
+    .jala { position: absolute; left: 50%; top: 50%; width: calc(var(--oh) * .2); margin: calc(var(--oh) * -.17) 0 0 calc(var(--oh) * -.1); color: var(--name); opacity: 0; pointer-events: none; }
+    html[data-theme="light"] .jala { color: #000; }
+    .jala svg { display: block; width: 100%; height: auto; overflow: visible; }
+    .jala .jb { fill: #4f8a2b; } .jala .jst { fill: #3d6b22; } .jala path { stroke: currentColor; stroke-width: 6; } .jala path:not(.jb):not(.jst) { fill: none; } .jala path { stroke-linecap: round; stroke-linejoin: round; }
     .otter-wrap { filter: drop-shadow(0 0 10px color-mix(in srgb, var(--name) 35%, transparent)) drop-shadow(0 0 28px color-mix(in srgb, var(--name) 14%, transparent)); }
     html[data-theme="light"] .otter-wrap { filter: drop-shadow(0 0 8px rgba(0,0,0,.18)); }
     .otter.main { filter: url(#onoise); }
@@ -1167,8 +1173,19 @@
         if (!svg) return run();
         const intro = $("#intro");
         const tag = c => svg.replace('class="otter"', `class="otter ${c}"`);
-        stage.innerHTML = `<div class="otter-wrap">${tag("ghost g1")}${tag("ghost g2")}${tag("main")}</div>`;
-        const wrap = stage.firstChild, os = [...wrap.children], cls = c => os.forEach(o => o.classList.add(c));
+        const JALA = `<div class="jala"><svg viewBox="0 0 120 200"><path class="jb" d="M58,44 C92,40 104,84 98,126 C92,166 66,192 40,196 C48,182 46,162 40,132 C32,92 30,48 58,44 Z"/><path class="jst" d="M38,54 C46,38 70,34 84,48 C74,52 50,56 38,54 Z"/><path d="M60,40 C58,24 64,12 80,4"/><path d="M80,74 C87,98 85,128 76,152"/></svg></div>`;
+        stage.innerHTML = `<div class="otter-wrap">${tag("ghost g1")}${tag("ghost g2")}${tag("main")}${JALA}${JALA}</div>`;
+        const wrap = stage.firstChild, os = [...wrap.querySelectorAll(".otter")], cls = c => os.forEach(o => o.classList.add(c));
+        // the jalapeños: orbit around the otter while it is drawn, spinning, then fly out of frame before the clap
+        wrap.querySelectorAll(".jala").forEach((j, k) => {
+          const a0 = k ? 200 : 20, R = "calc(var(--oh) * .56)", out = "120vmax";
+          j.animate([
+            { opacity: 0, transform: `rotate(${a0}deg) translateX(calc(var(--oh) * .3)) rotate(0deg)` },
+            { opacity: 1, offset: .12, transform: `rotate(${a0 + 40}deg) translateX(${R}) rotate(-120deg)` },
+            { opacity: 1, offset: .72, transform: `rotate(${a0 + 300}deg) translateX(${R}) rotate(-560deg)` },
+            { opacity: 1, transform: `rotate(${a0 + 330}deg) translateX(${out}) rotate(-900deg)` }
+          ], { duration: 1350, delay: 300, easing: "cubic-bezier(.35,.1,.6,1)", fill: "forwards" });
+        });
         // living grain on the ink: re-seed the noise a few times a second
         const turb = document.querySelector("#onoise feTurbulence"); let seed = 1;
         const grainT = setInterval(() => turb && turb.setAttribute("seed", ++seed), 90);
