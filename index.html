@@ -253,14 +253,11 @@
     .htile { flex: none; width: var(--tw); height: var(--th); position: relative; overflow: hidden; background: #111; display: block; }
     .htile img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .6s var(--ease), filter .4s; filter: brightness(.82); }
     .htile:hover img { transform: scale(1.05); filter: brightness(1); }
-    .htile.link { background: #000; border: 1px solid var(--accent); display: grid; place-items: center; text-align: center; }
+    .htile.link { background: #000; display: grid; place-items: center; text-align: center; }
     .htile.link > span { grid-area: 1 / 1; font-family: "Pirata One", serif; font-size: calc(var(--th) * .2); line-height: .95; color: var(--name); }
-    .htile.link .lt { position: relative; z-index: 1; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--name) 40%, transparent)) drop-shadow(0 0 18px color-mix(in srgb, var(--name) 16%, transparent)); animation: vweave 1s steps(1) infinite; }
+    .htile.link .lt { position: relative; z-index: 1; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--name) 40%, transparent)) drop-shadow(0 0 18px color-mix(in srgb, var(--name) 16%, transparent)); }
     .htile.link .lg { opacity: 0; pointer-events: none; }
-    .htile.link .lg1 { filter: url(#vmb); animation: vsmear 4.2s steps(1) infinite 1.3s; }
-    .htile.link .lg2 { filter: url(#imb); color: #fff; animation: vsmear 4.2s steps(1) infinite 1.37s; }
     .htile.link .grain { position: absolute; inset: -40%; z-index: 2; pointer-events: none; opacity: .55; mix-blend-mode: overlay; animation: hgrain .5s steps(6) infinite; }
-    .htile.link:hover { box-shadow: inset 0 0 0 1px var(--accent), 0 0 18px color-mix(in srgb, var(--accent) 40%, transparent); }
     .htile.link:hover .lt { color: #fff; }
     .ftile { position: absolute; z-index: 3; left: calc(50% - var(--fw) / 2); width: var(--fw); height: var(--th); background: #000; display: grid; place-items: center; overflow: hidden; opacity: 0; transition: opacity .5s ease; }
     #home.ready .ftile { opacity: 1; }
@@ -1017,7 +1014,7 @@
       const k = Math.max(2, Math.floor(window.innerWidth / tw));
       const perRow = k * Math.max(3, Math.ceil(2.2 * window.innerWidth / (k * tw)));      // a multiple of k, at least ~2 screens
       const tile = o => `<a class="htile" href="#/work/${o.p.slug}" aria-label="${esc(o.p.title)}"><img src="${o.src}" alt="" loading="eager" decoding="async"></a>`;
-      const link = (href, label) => `<a class="htile link" href="${href}"><span class="lt">${label}</span><span class="lg lg1" aria-hidden="true">${label}</span><span class="lg lg2" aria-hidden="true">${label}</span><span class="grain" aria-hidden="true"></span></a>`;
+      const link = (href, label) => `<a class="htile link" href="${href}"><span class="lt">${label}</span><span class="grain" aria-hidden="true"></span></a>`;
       rows.innerHTML = [0, 1, 2, 3, 4].map(r => {
         const items = pick(perRow).map(tile);
         if (r === 0) for (let j = 1; j < perRow; j += k) items[j] = link("#/cinematography", "Cinematography<br>Work");       // starts on the left
