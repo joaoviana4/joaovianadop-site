@@ -561,7 +561,7 @@
     .bggrain { position: absolute; inset: -50%; pointer-events: none; display: none; mix-blend-mode: multiply; opacity: .16; animation: hgrain .5s steps(6) infinite; will-change: transform; }
     html[data-theme="light"] .bggrain { display: block; }
     /* light mode: an old-TV scan bar rising slowly up the screen (a thin dark line with a soft trailing glow) */
-    .scanbar { position: fixed; left: 0; right: 0; top: 0; height: 180px; z-index: 80; pointer-events: none; display: none; mix-blend-mode: multiply;
+    .scanbar { position: fixed; left: 0; right: 0; top: 0; height: 180px; z-index: 0; pointer-events: none; display: none; mix-blend-mode: multiply;
       background: linear-gradient(to bottom, transparent 0, rgba(0,0,0,.08) 5%, rgba(0,0,0,.3) 9.5%, rgba(0,0,0,.5) 10.5%, rgba(0,0,0,.22) 12%, rgba(0,0,0,.13) 30%, rgba(0,0,0,.06) 60%, transparent 100%);
       animation: scanup 7s linear infinite; will-change: transform; }
     .scanbar::after { content: ""; position: absolute; left: 0; right: 0; top: 11%; height: 6px; background: rgba(255,255,255,.5); mix-blend-mode: screen; filter: blur(2px); }
