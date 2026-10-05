@@ -265,7 +265,7 @@
     .ftile.viana { top: calc(var(--gap) * 3 + var(--th) * 2); }
     .ftile span { font-family: "Unbounded", sans-serif; font-weight: 800; text-transform: uppercase; letter-spacing: -.01em; color: var(--name); line-height: 1; font-size: calc(var(--th) * .3); }
     .ftile.joao span { font-size: calc(var(--th) * .5); }
-    .ftile .vw { position: relative; z-index: 1; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--name) 40%, transparent)) drop-shadow(0 0 22px color-mix(in srgb, var(--name) 16%, transparent)); animation: vweave 2s steps(1) infinite, vbreathe 9s ease-in-out infinite alternate; }
+    .ftile .vw { position: relative; z-index: 1; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--name) 40%, transparent)) drop-shadow(0 0 22px color-mix(in srgb, var(--name) 16%, transparent)); }
     @keyframes vweave { 0%{translate:0 0} 25%{translate:.5px -.5px} 50%{translate:-.5px .5px} 75%{translate:0 .5px} }
     @keyframes vbreathe { from { scale: 1; } to { scale: 1.015; } }
     .ftile .vbox { position: relative; z-index: 1; display: inline-block; }
@@ -273,7 +273,7 @@
       filter: drop-shadow(0 0 6px color-mix(in srgb, var(--name) 35%, transparent)); }
     #home.done .vj { opacity: 1; }
     .ftile .vw { display: inline-block; }
-    .ftile .vg { position: absolute; opacity: 0; pointer-events: none; }
+    .ftile .vg { position: absolute; opacity: 0; pointer-events: none; display: none; }   /* no smear / oscillation on the Viana tile */
     .ftile .vg1 { filter: url(#vmb); animation: vsmear 8s steps(1) infinite; }
     .ftile .vg2 { filter: url(#imb); color: #fff; animation: vsmear 8s steps(1) infinite .07s; }
     @keyframes vsmear { 0%,93%,100% { opacity: 0; transform: none; } 94% { opacity: .3; transform: translateX(-5px); } 95% { opacity: .15; transform: translateX(3px); } 96% { opacity: 0; } }
