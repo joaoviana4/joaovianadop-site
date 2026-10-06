@@ -25,7 +25,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500&family=Instrument+Serif:ital@0;1&family=Unbounded:wght@800&family=IBM+Plex+Mono:wght@400;500&family=New+Rocker&family=Pirata+One&family=Reenie+Beanie&display=swap" rel="stylesheet">
-  <script>try { if (localStorage.getItem("theme") === "light") document.documentElement.dataset.theme = "light"; } catch (e) {}</script>
+  <script>try { if (localStorage.getItem("theme") === "light") document.documentElement.dataset.theme = "light"; } catch (e) {}
+  /* Safari / iPhone: SVG filters referenced from CSS can make an element vanish, so use plain CSS effects there */
+  if (/iP(hone|ad|od)/.test(navigator.userAgent) || (/Safari/.test(navigator.userAgent) && !/Chrome|Chromium|Android/.test(navigator.userAgent))) document.documentElement.classList.add("webkit");</script>
   <style>
     :root {
       --bg: #000;
@@ -307,6 +309,8 @@
     .otter.main { filter: url(#onoise); }
     .otter.ghost { opacity: .22; filter: url(#omb); animation: osmear .9s steps(1) infinite; pointer-events: none; }
     .otter.ghost.g2 { opacity: .12; animation-delay: .3s; }
+    html.webkit .otter.main { filter: none; }
+    html.webkit .otter.ghost { filter: blur(3px); }
     @keyframes osmear { 0% { translate: -5px 0; } 33% { translate: 4px 0; } 66% { translate: -2px 0; } }
     .otter-wrap { display: grid; place-items: center; transition: transform .22s cubic-bezier(.5,0,.8,.4), opacity .22s ease; }
     .otter { height: min(58svh, 72vw); width: auto; overflow: visible; color: var(--name); }
