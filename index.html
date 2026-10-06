@@ -692,7 +692,7 @@
   <header>
     <a class="mini" href="#/about">João Viana</a>
     <span class="hotter" aria-hidden="true"></span>
-    <span class="egg" aria-hidden="true"><svg class="egg-arrow" viewBox="0 0 30 26"><path class="shaft" d="M28,22 C20,22 10,18 4,6"/><path class="head" d="M2,13 L4,5 L11,8"/></svg><span class="egg-txt"></span></span>
+    <span class="egg" aria-hidden="true"><svg class="egg-arrow" viewBox="0 0 30 26"><path class="shaft" d="M28,24 C27,13 18,7 4,7"/><path class="head" d="M10,2 L3,7 L10,12"/></svg><span class="egg-txt"></span></span>
     <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav">Menu</button>
     <nav id="site-nav">
       <a href="#/cinematography" data-nav="work">Cinematography</a>
@@ -1463,7 +1463,7 @@
         if (n === 1) say("I do like otters");
         else if (n === 2) {
           const show = svg => { ho.innerHTML = svg; ho.classList.add("jal"); say("and jalapeños"); };
-          if (jal) show(jal); else fetch("assets/egg/jalapeno-C.svg").then(r => r.text()).then(t => { jal = t; show(t); });
+          if (jal) show(jal); else fetch("assets/egg/jalapeno-A.svg").then(r => r.text()).then(t => { jal = t; show(t); });
         } else { ho.classList.remove("jal"); ho.innerHTML = ""; egg.classList.remove("on"); document.body.classList.remove("egg-on"); }
       }); }
     // ----- phone menu -----
