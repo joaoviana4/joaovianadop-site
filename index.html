@@ -1153,7 +1153,7 @@
     function homeIntro() {
       const home = $("#home"), stage = $("#intro-stage"); if (!home || !stage) return;
       const skip = () => { home.classList.add("ready", "done"); };
-      try { if (sessionStorage.getItem("introSeen")) return skip(); sessionStorage.setItem("introSeen", "1"); } catch (e) {}
+      // the intro plays on every load of the homepage (every refresh)
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return skip();
       const R = (a, b) => a + Math.random() * (b - a), STEP = 150, SEQ = ["V", "I", "A", "N", "A"];
       const broken = c => {
