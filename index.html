@@ -90,6 +90,7 @@
     html[data-theme="light"] .hotter { background: #000; filter: none; }
     .hotter:hover { transform: translateX(-50%) rotate(-6deg) scale(1.06); }
     @media (max-width: 760px) { .hotter { position: static; transform: none; width: 44px; margin: 0 auto -4px; } .hotter:hover { transform: rotate(-6deg); } }
+    .menu-btn { display: none; }
     header nav { display: flex; gap: clamp(20px, 3vw, 44px); margin-left: auto; }
     .mini { font-size: 13px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; opacity: 0; pointer-events: none; transition: opacity .3s; }
     body.small-name .mini { opacity: 1; pointer-events: auto; }
@@ -551,8 +552,22 @@
     }
     @media (max-width: 760px) {
       header nav { margin: 0 auto; }
-      body.small-name header { flex-direction: column; gap: 12px; }
-      header nav { gap: 8px 18px; flex-wrap: wrap; justify-content: center; }
+      /* phones: one compact bar (name · otter · MENU); the menu opens full screen */
+      header { padding: 14px 16px; min-height: 58px; }
+      body.small-name header { flex-direction: row; gap: 0; }
+      .mini { font-size: 11px; letter-spacing: .18em; }
+      .hotter { position: absolute; left: 50%; top: 7px; width: 38px; margin: 0; transform: translateX(-50%); }
+      .hotter:hover { transform: translateX(-50%); }
+      .menu-btn { display: inline-flex; margin-left: auto; position: relative; z-index: 102; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); padding: 6px 0; }
+      header nav { display: none; }
+      body.menu-open header nav { display: flex; position: fixed; inset: 0; z-index: 101; margin: 0; flex-direction: column; align-items: center; justify-content: center; gap: 30px; background: var(--bg); }
+      body.menu-open header nav a { font-size: 20px; letter-spacing: .16em; }
+      body.menu-open header nav .theme-btn { margin-top: 18px; font-size: 13px; }
+      body.menu-open { overflow: hidden; }
+      .filters { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; scrollbar-width: none; gap: 18px; padding-bottom: 4px; }
+      .filters::-webkit-scrollbar { display: none; }
+      .filters button { flex: none; font-size: 12px; }
+      .section-head { gap: 10px; }
       .grid { grid-template-columns: minmax(0, 1fr); }
       .p-body, .page { grid-template-columns: 1fr; }
       .stills { grid-template-columns: 1fr; }
@@ -660,7 +675,8 @@
   <header>
     <a class="mini" href="#/">João Viana</a>
     <span class="hotter" aria-hidden="true"></span>
-    <nav>
+    <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav">Menu</button>
+    <nav id="site-nav">
       <a href="#/cinematography" data-nav="work">Cinematography</a>
       <a href="#/direction" data-nav="direction">Direction</a>
       <span class="about-wrap"><a href="#/about" data-nav="about">About</a></span>
@@ -783,7 +799,8 @@
       const rail = W < 760 ? 0 : 30, r = rand(11);
       let scratches = "", dirt = "";
       const LIGHT = document.documentElement.dataset.theme === "light", D = LIGHT ? 2.6 : 1;   // light mode: denser dirt and scratches
-      const nScratch = Math.round((20 + Math.floor(r() * 7)) * (LIGHT ? 6 : 1));   // light mode: many more scratches  // scattered over the tall tile
+      const AREA = Math.min(1, W / 1300), SZ = W < 760 ? .55 : 1;   // phones: fewer marks (scaled to width) and smaller dirt
+      const nScratch = Math.max(6, Math.round((20 + Math.floor(r() * 7)) * (LIGHT ? 6 : 1) * AREA * (W < 760 ? .7 : 1)));   // light mode: many more scratches  // scattered over the tall tile
       const firstView = window.innerHeight;
       for (let i = 0; i < nScratch; i++) {
         // the first six always land on the opening screen, so scratches and dirt are there from the start
@@ -796,12 +813,12 @@
       const pt = () => [rail + r() * (W - 2 * rail), r() < .25 ? r() * firstView : r() * H];
       const clusters = Array.from({ length: 7 }, (_, i) => [rail + r() * (W - 2 * rail), i < 2 ? r() * firstView : r() * H]);
       const near = () => { const [cx, cy] = clusters[Math.floor(r() * clusters.length)]; return [cx + (r() - .5) * 260, cy + (r() - .5) * 220]; };
-      for (let i = 0; i < 160 * D; i++) {                       // specks
+      for (let i = 0; i < 160 * D * AREA; i++) {                       // specks
         const [x, y] = r() < .55 ? near() : pt();
-        dirt += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(.3 + Math.pow(r(), 3) * 1.6).toFixed(2)}" fill="#fff" fill-opacity="${(.22 + r() * .38).toFixed(2)}" stroke="none"/>`;
+        dirt += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${((.3 + Math.pow(r(), 3) * 1.6) * SZ).toFixed(2)}" fill="#fff" fill-opacity="${(.22 + r() * .38).toFixed(2)}" stroke="none"/>`;
       }
-      for (let i = 0; i < 22 * D; i++) {                        // irregular blobs
-        const [x, y] = r() < .6 ? near() : pt(), k = 1 + r() * 2.8;
+      for (let i = 0; i < 22 * D * AREA; i++) {                        // irregular blobs
+        const [x, y] = r() < .6 ? near() : pt(), k = (1 + r() * 2.8) * SZ;
         let d = "";
         for (let a = 0; a < 7; a++) {
           const ang = a / 7 * Math.PI * 2, rr = k * (.55 + r() * .7);
@@ -809,9 +826,9 @@
         }
         dirt += `<path d="${d}Z" fill="#fff" fill-opacity="${(.2 + r() * .3).toFixed(2)}" stroke="none"/>`;
       }
-      for (let i = 0; i < 9 * D; i++) {                         // hairs
+      for (let i = 0; i < 9 * D * AREA; i++) {                         // hairs
         const [x, y] = i < 2 ? [rail + r() * (W - 2 * rail), r() * firstView] : pt();
-        const L = 12 + r() * 40;
+        const L = (12 + r() * 40) * SZ;
         dirt += `<path d="M${x.toFixed(1)} ${y.toFixed(1)} c${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)} ${((r() - .5) * L).toFixed(1)}" stroke-width="${(.4 + r() * .4).toFixed(2)}" stroke-opacity="${(.22 + r() * .22).toFixed(2)}" stroke="#fff" fill="none"/>`;
       }
       const ink = document.documentElement.dataset.theme === "light" ? "#000" : "#fff";   // light mode: the marks are printed in black
@@ -1395,6 +1412,7 @@
         if (sec) { view = "project"; navKey = sec; }
       } else if (h === "direction") view = navKey = "direction";
       else if (h === "about") view = navKey = "about";
+      document.body.classList.remove("menu-open"); { const mb = $(".menu-btn"); if (mb) { mb.textContent = "Menu"; mb.setAttribute("aria-expanded", "false"); } }
       document.body.classList.toggle("small-name", view !== "home");
       document.body.classList.toggle("home-top", view === "home");
       document.body.classList.toggle("home", view !== "about");   // "contact me" note: everywhere except About itself
@@ -1418,6 +1436,8 @@
     }, true);
     const onScroll = () => document.body.classList.toggle("scrolled", window.scrollY > 60);
     window.addEventListener("scroll", onScroll, { passive: true }); onScroll();
+    // ----- phone menu -----
+    { const mb = $(".menu-btn"); if (mb) mb.addEventListener("click", () => { const open = document.body.classList.toggle("menu-open"); mb.textContent = open ? "Close" : "Menu"; mb.setAttribute("aria-expanded", open); }); }
     // ----- light / dark -----
     function setTheme(t) {
       const root = document.documentElement;
