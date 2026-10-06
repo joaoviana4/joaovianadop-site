@@ -673,7 +673,7 @@
   <div class="rail left" aria-hidden="true"><div class="track" id="rail-l"></div></div>
   <div class="rail right" aria-hidden="true"><div class="track" id="rail-r"></div></div>
   <header>
-    <a class="mini" href="#/">João Viana</a>
+    <a class="mini" href="#/about">João Viana</a>
     <span class="hotter" aria-hidden="true"></span>
     <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav">Menu</button>
     <nav id="site-nav">
@@ -1153,7 +1153,8 @@
         // a row must be longer than ~2 screens so a still is never on screen twice; repeat the row's projects if it is short
         const base = items.slice(); while (items.length * tw < 2.2 * window.innerWidth) items = items.concat(base);
         // link tiles spread evenly around the loop (including across the wrap), never more than k tiles apart
-        const withLinks = (href, label, first) => { const N = items.length, m = Math.ceil(N / Math.max(1, k - 2));
+        const gap = narrow ? k * 3 : Math.max(1, k - 2);   // phones: a link tile only every ~3 screens, so the stills have room
+        const withLinks = (href, label, first) => { const N = items.length, m = Math.max(1, Math.ceil(N / gap));
           const at = new Set(Array.from({ length: m }, (_, i) => (first + Math.round(i * N / m)) % N));
           const out = []; items.forEach((t, j) => { if (at.has(j)) out.push(link(href, label)); out.push(t); }); return out; };
         if (r === 0) items = withLinks("#/cinematography", "Cinematography<br>Work", 1);          // starts on the left
