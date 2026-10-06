@@ -1468,13 +1468,15 @@
     // ----- easter egg on the header otter -----
     { const ho = $(".hotter"), egg = $(".egg"), txt = $(".egg-txt"); let n = 0, jal = "";
       const say = (t, right) => { egg.classList.remove("on"); egg.classList.toggle("right", !!right); document.body.classList.toggle("egg-right", !!right); txt.textContent = t; void egg.offsetWidth; egg.classList.add("on"); document.body.classList.add("egg-on"); };
+      const hide = () => { egg.classList.remove("on"); document.body.classList.remove("egg-on", "egg-right"); };
+      const toJal = () => { ho.innerHTML = jal; ho.classList.add("jal"); };
+      // otter → "I do like otters" → jalapeño → "and jalapeños" → back to the otter
       if (ho) ho.addEventListener("click", () => {
-        n = (n + 1) % 3;
+        n = (n + 1) % 4;
         if (n === 1) say("I do like otters");
-        else if (n === 2) {
-          const show = svg => { ho.innerHTML = svg; ho.classList.add("jal"); say("and jalapeños", true); };
-          if (jal) show(jal); else fetch("assets/egg/jalapeno-A.svg").then(r => r.text()).then(t => { jal = t; show(t); });
-        } else { ho.classList.remove("jal"); ho.innerHTML = ""; egg.classList.remove("on"); document.body.classList.remove("egg-on", "egg-right"); }
+        else if (n === 2) { hide(); if (jal) toJal(); else fetch("assets/egg/jalapeno-A.svg").then(r => r.text()).then(t => { jal = t; toJal(); }); }
+        else if (n === 3) say("and jalapeños", true);
+        else { ho.classList.remove("jal"); ho.innerHTML = ""; hide(); }
       }); }
     // ----- phone menu -----
     { const mb = $(".menu-btn"); if (mb) mb.addEventListener("click", () => { const open = document.body.classList.toggle("menu-open"); mb.textContent = open ? "Close" : "Menu"; mb.setAttribute("aria-expanded", open); }); }
