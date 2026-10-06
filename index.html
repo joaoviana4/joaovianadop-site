@@ -84,19 +84,26 @@
     .hand:hover { color: var(--name); }
     @media (max-width: 700px) { .hand { display: none; } }
     /* the otter drawing, small, at the top centre of the inner pages */
-    .hotter { position: absolute; left: 50%; top: 8px; width: 52px; aspect-ratio: 1907 / 2207; transform: translateX(-50%); background: var(--name);
+    header { --hx: 50%; }
+    @media (min-width: 761px) and (max-width: 1300px) { header { --hx: 34%; } body.small-name.egg-on .mini { opacity: 0; pointer-events: none; } }
+    .hotter { position: absolute; left: var(--hx); top: 8px; width: 52px; aspect-ratio: 1907 / 2207; transform: translateX(-50%); background: var(--name);
       -webkit-mask: url(assets/otter.svg) center / contain no-repeat; mask: url(assets/otter.svg) center / contain no-repeat;
       filter: drop-shadow(0 0 6px color-mix(in srgb, var(--name) 35%, transparent)); transition: transform .3s cubic-bezier(.2,.8,.3,1); }
     html[data-theme="light"] .hotter { background: #000; filter: none; }
     /* easter egg: click the otter → a handwritten note; click again → it turns into a jalapeño */
     .hotter { cursor: pointer; }
-    .hotter.jal { background: none; -webkit-mask: none; mask: none; aspect-ratio: 200 / 260; color: var(--name); }
+    .hotter.jal { background: none; -webkit-mask: none; mask: none; aspect-ratio: 200 / 260; width: 34px; top: 12px; color: var(--name); }
+    .egg.right { right: auto; left: calc(var(--hx) + 8px); top: 50px; flex-direction: row; z-index: 60; }
+    .egg.right .egg-arrow { transform: rotate(35deg); transform-origin: 4px 7px; }
+    .egg.right .egg-txt { margin: 20px 0 0 4px; transform: rotate(-4deg); }
+    @media (min-width: 1600px) { .egg.right { top: 14px; left: calc(var(--hx) + 24px); } .egg.right .egg-arrow { transform: none; } .egg.right .egg-txt { margin-top: 16px; } }
+    @media (max-width: 760px) { .hotter.jal { width: 28px; top: 9px; } .egg.right { left: calc(50% + 6px); top: 44px; } }
     html[data-theme="light"] .hotter.jal { color: #000; background: none; }
     .hotter.jal svg { display: block; width: 100%; height: 100%; overflow: visible; }
     .hotter.jal svg g { stroke: currentColor; }
     .hotter.jal svg [fill="#fff"] { fill: var(--bg); }
     .hotter.jal svg [fill="#000"] { fill: currentColor; }
-    .egg { position: absolute; right: calc(50% + 32px); top: 14px; display: flex; flex-direction: row-reverse; align-items: flex-start; pointer-events: none; color: var(--accent); opacity: 0; transition: opacity .3s; }
+    .egg { position: absolute; right: calc(100% - var(--hx) + 32px); top: 14px; display: flex; flex-direction: row-reverse; align-items: flex-start; pointer-events: none; color: var(--accent); opacity: 0; transition: opacity .3s; }
     .egg.on { opacity: 1; }
     .egg-arrow { width: 30px; height: 26px; overflow: visible; margin-top: 2px; transform: scaleX(-1); }
     .egg-arrow path { fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 60; stroke-dashoffset: 60; }
@@ -309,6 +316,7 @@
     .ftile .vg2 { filter: url(#imb); color: #fff; animation: vsmear 8s steps(1) infinite .07s; }
     @keyframes vsmear { 0%,93%,100% { opacity: 0; transform: none; } 94% { opacity: .3; transform: translateX(-5px); } 95% { opacity: .15; transform: translateX(3px); } 96% { opacity: 0; } }
     .ftile .grain { position: absolute; inset: -40%; z-index: 2; pointer-events: none; opacity: .55; mix-blend-mode: overlay; animation: hgrain .5s steps(6) infinite; }
+    @keyframes hgrainpos { 0%{background-position:0 0} 17%{background-position:-11px 6px} 33%{background-position:8px -13px} 50%{background-position:-5px 14px} 67%{background-position:13px 3px} 83%{background-position:-14px -8px} }
     @keyframes hgrain { 0%{transform:translate(0,0)} 17%{transform:translate(-7%,4%)} 33%{transform:translate(5%,-8%)} 50%{transform:translate(-3%,9%)} 67%{transform:translate(8%,2%)} 83%{transform:translate(-9%,-5%)} }
     /* the intro: black screen, broken letters one at a time, then "Viana" shrinks into its tile */
     .intro { position: absolute; inset: 0; z-index: 4; background: rgba(0,0,0,.72); display: grid; place-items: center; transition: background .6s ease; pointer-events: none; }
@@ -641,8 +649,7 @@
     /* light mode: film grain over the whole background (a GPU-moved layer, no repaints) */
     .bggrain { position: absolute; inset: -50%; pointer-events: none; display: none; mix-blend-mode: multiply; opacity: .16; animation: hgrain .5s steps(6) infinite; will-change: transform; }
     html[data-theme="light"] .bggrain { display: block; }
-    html[data-theme="light"] header { overflow: hidden; }
-    html[data-theme="light"] header::before { content: ""; position: absolute; inset: -50%; z-index: -1; pointer-events: none; background-image: var(--grain); mix-blend-mode: multiply; opacity: .16; animation: hgrain .5s steps(6) infinite; }
+    html[data-theme="light"] header::before { content: ""; position: absolute; inset: 0; animation-name: hgrainpos !important; z-index: -1; pointer-events: none; background-image: var(--grain); mix-blend-mode: multiply; opacity: .16; animation: hgrain .5s steps(6) infinite; }
     html[data-theme="light"] header { isolation: isolate; }
     /* homepage tiles in light mode: white, with dark sage lettering and black grain */
     html[data-theme="light"] .htile.link, html[data-theme="light"] .ftile { background: #fff; }
@@ -1457,14 +1464,14 @@
     window.addEventListener("scroll", onScroll, { passive: true }); onScroll();
     // ----- easter egg on the header otter -----
     { const ho = $(".hotter"), egg = $(".egg"), txt = $(".egg-txt"); let n = 0, jal = "";
-      const say = t => { egg.classList.remove("on"); txt.textContent = t; void egg.offsetWidth; egg.classList.add("on"); document.body.classList.add("egg-on"); };
+      const say = (t, right) => { egg.classList.remove("on"); egg.classList.toggle("right", !!right); document.body.classList.toggle("egg-right", !!right); txt.textContent = t; void egg.offsetWidth; egg.classList.add("on"); document.body.classList.add("egg-on"); };
       if (ho) ho.addEventListener("click", () => {
         n = (n + 1) % 3;
         if (n === 1) say("I do like otters");
         else if (n === 2) {
-          const show = svg => { ho.innerHTML = svg; ho.classList.add("jal"); say("and jalapeños"); };
+          const show = svg => { ho.innerHTML = svg; ho.classList.add("jal"); say("and jalapeños", true); };
           if (jal) show(jal); else fetch("assets/egg/jalapeno-A.svg").then(r => r.text()).then(t => { jal = t; show(t); });
-        } else { ho.classList.remove("jal"); ho.innerHTML = ""; egg.classList.remove("on"); document.body.classList.remove("egg-on"); }
+        } else { ho.classList.remove("jal"); ho.innerHTML = ""; egg.classList.remove("on"); document.body.classList.remove("egg-on", "egg-right"); }
       }); }
     // ----- phone menu -----
     { const mb = $(".menu-btn"); if (mb) mb.addEventListener("click", () => { const open = document.body.classList.toggle("menu-open"); mb.textContent = open ? "Close" : "Menu"; mb.setAttribute("aria-expanded", open); }); }
