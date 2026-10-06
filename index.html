@@ -697,7 +697,7 @@
   <div class="rail left" aria-hidden="true"><div class="track" id="rail-l"></div></div>
   <div class="rail right" aria-hidden="true"><div class="track" id="rail-r"></div></div>
   <header>
-    <a class="mini" href="#/about">João Viana</a>
+    <a class="mini" href="#/">João Viana</a>
     <span class="hotter" aria-hidden="true"></span>
     <span class="egg" aria-hidden="true"><svg class="egg-arrow" viewBox="0 0 30 26"><path class="shaft" d="M28,24 C27,13 18,7 4,7"/><path class="head" d="M10,2 L3,7 L10,12"/></svg><span class="egg-txt"></span></span>
     <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav">Menu</button>
@@ -1439,6 +1439,7 @@
       } else if (h === "direction") view = navKey = "direction";
       else if (h === "about") view = navKey = "about";
       document.body.classList.remove("menu-open"); { const mb = $(".menu-btn"); if (mb) { mb.textContent = "Menu"; mb.setAttribute("aria-expanded", "false"); } }
+      window._routeT = Date.now();
       document.body.classList.toggle("small-name", view !== "home");
       document.body.classList.toggle("home-top", view === "home");
       document.body.classList.toggle("home", view !== "about");   // "contact me" note: everywhere except About itself
@@ -1458,6 +1459,8 @@
     document.addEventListener("click", e => {
       const a = e.target.closest && e.target.closest('a[href^="#/"]');
       if (!a || e.metaKey || e.ctrlKey || e.shiftKey) return;
+      // phones: ignore a "ghost" tap landing on a homepage tile right after arriving on the homepage
+      if (a.closest("#home") && Date.now() - (window._routeT || 0) < 500) { e.preventDefault(); return; }
       e.preventDefault(); go(a.getAttribute("href"));
     }, true);
     const onScroll = () => document.body.classList.toggle("scrolled", window.scrollY > 60);
