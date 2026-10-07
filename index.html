@@ -115,6 +115,17 @@
     .hotter:hover { transform: translateX(-50%) rotate(-6deg) scale(1.06); }
     @media (max-width: 760px) { .hotter { position: static; transform: none; width: 44px; margin: 0 auto -4px; } .hotter:hover { transform: rotate(-6deg); } }
     .menu-btn { display: none; }
+    .lang-btn { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; letter-spacing: .1em; color: color-mix(in srgb, var(--accent) 60%, #000); }
+    .lang-btn span { transition: color .3s; } .lang-btn span.on { color: var(--accent); }
+    html[data-theme="light"] .lang-btn { color: #999; } html[data-theme="light"] .lang-btn span.on { color: #000; }
+    /* homepage language switch, left of the light/dark switch */
+    .lang-switch { position: fixed; z-index: 7; top: 16px; right: 168px; display: none; padding: 3px; border-radius: 999px; background: rgba(0,0,0,.82); box-shadow: 0 0 0 1px rgba(175,194,162,.35); }
+    body.home-top .lang-switch { display: inline-flex; }
+    .lang-switch button { width: 38px; padding: 7px 0; border-radius: 999px; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; font-weight: 500; letter-spacing: .1em; color: #AFC2A2; transition: background .3s, color .3s; }
+    .lang-switch button.on { background: #AFC2A2; color: #000; }
+    html[data-theme="light"] .lang-switch { background: rgba(255,255,255,.88); box-shadow: 0 0 0 1px rgba(0,0,0,.12); }
+    html[data-theme="light"] .lang-switch button { color: #000; } html[data-theme="light"] .lang-switch button.on { background: #111; color: #fff; }
+    @media (max-width: 760px) { .lang-switch { top: 12px; right: 130px; } .lang-switch button { width: 32px; font-size: 10px; padding: 6px 0; } }
     header nav { display: flex; gap: clamp(20px, 3vw, 44px); margin-left: auto; }
     .mini { font-size: 13px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; opacity: 0; pointer-events: none; transition: opacity .3s; }
     body.small-name .mini { opacity: 1; pointer-events: auto; }
@@ -601,6 +612,7 @@
     .contact a, .contact .row { display: flex; justify-content: space-between; padding: 18px 0; border-bottom: 1px solid var(--line); font-size: 16px; transition: padding .4s var(--ease); }
     .contact a span, .contact .row span { color: var(--muted); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; }
     .contact a:hover { padding-left: 10px; }
+    .contact a span.v { color: inherit; font-size: inherit; letter-spacing: normal; text-transform: none; }
 
     /* contact form */
     .cform { margin-top: clamp(40px, 6vh, 64px); display: grid; gap: 22px; }
@@ -754,18 +766,20 @@
     <a class="mini" href="#/">João Viana</a>
     <span class="hotter" aria-hidden="true"></span>
     <span class="egg" aria-hidden="true"><svg class="egg-arrow" viewBox="0 0 30 26"><path class="shaft" d="M28,24 C27,13 18,7 4,7"/><path class="head" d="M10,2 L3,7 L10,12"/></svg><span class="egg-txt"></span></span>
-    <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav">Menu</button>
+    <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" data-i18n="Menu">Menu</button>
     <nav id="site-nav">
-      <a href="#/cinematography" data-nav="work">Cinematography</a>
-      <a href="#/direction" data-nav="direction">Direction</a>
-      <span class="about-wrap"><a href="#/about" data-nav="about">About</a></span>
+      <a href="#/cinematography" data-nav="work" data-i18n="Cinematography">Cinematography</a>
+      <a href="#/direction" data-nav="direction" data-i18n="Direction">Direction</a>
+      <span class="about-wrap"><a href="#/about" data-nav="about" data-i18n="About">About</a></span>
       <button class="theme-btn" type="button" aria-label="Switch light / dark"><i></i><span class="tl">Light</span></button>
+      <button class="lang-btn" type="button" aria-label="Language / Idioma"><span data-l="en">EN</span> / <span data-l="pt">PT</span></button>
     </nav>
   </header>
 
   <!-- HOME: rows of stills sliding left/right; "João" and "Viana" tiles stay in the middle while the stills pass behind them.
        The site opens on a black screen with the VIANA intro, which then shrinks into the Viana tile. -->
-  <div class="theme-switch" role="group" aria-label="Light / dark mode"><button type="button" data-t="dark">Dark</button><button type="button" data-t="light">Light</button></div>
+  <div class="theme-switch" role="group" aria-label="Light / dark mode"><button type="button" data-t="dark" data-i18n="Dark">Dark</button><button type="button" data-t="light" data-i18n="Light">Light</button></div>
+  <div class="lang-switch" role="group" aria-label="Language / Idioma"><button type="button" data-lang="en">EN</button><button type="button" data-lang="pt">PT</button></div>
   <section class="homepage" id="home" aria-label="João Viana — Director of Photography">
     <div class="rows" id="rows"></div>
     <div class="ftile viana" aria-hidden="true"><span class="vbox"><span class="vj">João</span><span class="vw" id="vw">Viana</span></span><span class="vg vg1" aria-hidden="true">Viana</span><span class="vg vg2" aria-hidden="true">Viana</span><span class="grain" aria-hidden="true"></span></div>
@@ -775,13 +789,13 @@
 
   <!-- CINEMATOGRAPHY (home) -->
   <main class="view" id="view-work">
-    <div class="section-head tight"><span>Selected work</span><div class="right"><div class="filters" id="filters-dp" role="group" aria-label="Filter by type"></div><span id="count-dp"></span></div></div>
+    <div class="section-head tight"><span data-i18n="Selected work">Selected work</span><div class="right"><div class="filters" id="filters-dp" role="group" aria-label="Filter by type"></div><span id="count-dp"></span></div></div>
     <ul class="grid" id="grid-dp"></ul>
   </main>
 
   <!-- DIRECTION -->
   <main class="view" id="view-direction">
-    <div class="section-head tight"><span>Direction</span><div class="right"><div class="filters" id="filters-dir" role="group" aria-label="Filter by type"></div><span id="count-dir"></span></div></div>
+    <div class="section-head tight"><span data-i18n="Direction">Direction</span><div class="right"><div class="filters" id="filters-dir" role="group" aria-label="Filter by type"></div><span id="count-dir"></span></div></div>
     <ul class="grid" id="grid-dir"></ul>
   </main>
 
@@ -792,23 +806,23 @@
   <main class="view" id="view-about">
     <section class="page">
       <div class="about-left">
-        <h1>About</h1>
+        <h1 data-i18n="About">About</h1>
         <img class="portrait" src="assets/about/portrait-set.jpg" alt="João Viana on set, behind the camera" width="800" height="1061" loading="lazy">
       </div>
       <div class="txt">
-        <p>João Viana is a Director of Photography based in Lisbon, working mostly in music videos, short films and commercials. He also directs documentary and fiction.</p>
+        <p data-i18n="João Viana is a Director of Photography based in Lisbon, working mostly in music videos, short films and commercials. He also directs documentary and fiction.">João Viana is a Director of Photography based in Lisbon, working mostly in music videos, short films and commercials. He also directs documentary and fiction.</p>
         <div class="contact">
-          <div class="row"><span>Email</span>joao17viana@gmail.com</div>
+          <div class="row"><span data-i18n="Email">Email</span>joao17viana@gmail.com</div>
           <a href="https://www.instagram.com/joao17viana_/" target="_blank" rel="noopener"><span>Instagram</span>@joao17viana_</a>
-          <a href="#/about"><span>Based in</span>Lisbon, Portugal</a>
+          <a href="#/about"><span data-i18n="Based in">Based in</span><span class="v" data-i18n="Lisbon, Portugal">Lisbon, Portugal</span></a>
         </div>
         <form class="cform" id="cform" novalidate>
-          <h2>Get in touch</h2>
-          <label>Name<input name="name" type="text" autocomplete="name" required></label>
-          <label>Email<input name="email" type="email" autocomplete="email" required></label>
-          <label>Message<textarea name="message" required></textarea></label>
+          <h2 data-i18n="Get in touch">Get in touch</h2>
+          <label><span data-i18n="Name">Name</span><input name="name" type="text" autocomplete="name" required></label>
+          <label><span data-i18n="Email">Email</span><input name="email" type="email" autocomplete="email" required></label>
+          <label><span data-i18n="Message">Message</span><textarea name="message" required></textarea></label>
           <input class="hp" type="text" name="_honey" tabindex="-1" autocomplete="off" aria-hidden="true">
-          <button type="submit">Send message</button>
+          <button type="submit" data-i18n="Send message">Send message</button>
           <p class="msg" id="cform-msg" role="status"></p>
         </form>
       </div>
@@ -817,10 +831,10 @@
 
   <footer>
     <span>João Viana — Lisbon · © <span id="y"></span></span>
-    <button type="button" class="surprise" id="surprise">Surprise me</button>
+    <button type="button" class="surprise" id="surprise" data-i18n="Surprise me">Surprise me</button>
   </footer>
   <div class="lb" id="lb" role="dialog" aria-modal="true" aria-label="Stills viewer" hidden>
-    <div class="lb-top"><span class="lb-count" id="lb-count"></span><button type="button" class="lb-close" id="lb-close" aria-label="Close">Close ✕</button></div>
+    <div class="lb-top"><span class="lb-count" id="lb-count"></span><button type="button" class="lb-close" id="lb-close" aria-label="Close" data-i18n="Close ✕">Close ✕</button></div>
     <button type="button" class="lb-nav prev" id="lb-prev" aria-label="Previous still">←</button>
     <figure class="lb-stage"><img id="lb-img" alt=""></figure>
     <button type="button" class="lb-nav next" id="lb-next" aria-label="Next still">→</button>
@@ -858,6 +872,33 @@
     const LISTS = { work: DP, direction: DIRECTION };
 
     const $ = s => document.querySelector(s);
+    // ----- language: English by default, Portuguese (PT-PT) on request; remembered per visitor -----
+    const LANG = { v: (() => { try { return localStorage.getItem("lang") === "pt" ? "pt" : "en"; } catch (e) { return "en"; } })() };
+    const PT = {
+      "Cinematography": "Cinematografia", "Direction": "Realização", "About": "Sobre", "Menu": "Menu", "Close": "Fechar",
+      "Light": "Claro", "Dark": "Escuro", "Selected work": "Trabalhos", "All": "Todos",
+      "Music Videos": "Videoclipes", "Short Films": "Curtas", "Commercials": "Publicidade", "Docs": "Documentário",
+      "Music Video": "Videoclipe", "Short Film": "Curta-metragem", "Commercial": "Publicidade", "Documentary": "Documentário",
+      "Series Pilot": "Piloto de série", "Fashion Film": "Fashion film", "Live Session": "Live session",
+      "Director of Photography": "Diretor de Fotografia", "Director": "Realizador", "Co-director": "Corealizador",
+      "Creative Director": "Diretor Criativo", "Colorist": "Colorista", "Editor": "Montador",
+      "Role": "Função", "Type": "Tipo", "Year": "Ano", "Watch": "Ver", "Next project": "Próximo projeto", "Coming soon": "Em breve",
+      "Show me more": "Mostrar mais", "Show less": "Mostrar menos", "Let me know more": "Quero saber mais",
+      "Want to talk about this project?": "Queres falar sobre este projeto?", "Get in touch": "Contacto",
+      "Test": "Teste", "Final": "Final", "Surprise me": "Surpreende-me", "Close ✕": "Fechar ✕",
+      "Email": "Email", "Instagram": "Instagram", "Based in": "Baseado em", "Lisbon, Portugal": "Lisboa, Portugal",
+      "Name": "Nome", "Message": "Mensagem", "Send message": "Enviar mensagem",
+      "Please fill in your name, a valid email and a message.": "Preenche o nome, um email válido e a mensagem.",
+      "Sending…": "A enviar…", "Thank you — your message was sent. I'll get back to you soon.": "Obrigado — a mensagem foi enviada. Respondo em breve.",
+      "Something went wrong. Please try again, or email joao17viana@gmail.com.": "Algo correu mal. Tenta outra vez ou envia email para joao17viana@gmail.com.",
+      "João Viana is a Director of Photography based in Lisbon, working mostly in music videos, short films and commercials. He also directs documentary and fiction.":
+        "João Viana é Diretor de Fotografia em Lisboa e trabalha sobretudo em videoclipes, curtas-metragens e publicidade. Também realiza documentário e ficção.",
+      "Cinematography<br>Work": "Cinematografia", "About<br>Me": "Sobre<br>Mim",
+      "I do like otters": "eu gosto mesmo de lontras", "and jalapeños": "e de jalapeños",
+    };
+    const t = window.t = s => LANG.v === "pt" && s != null && PT[s] != null ? PT[s] : s;
+    const tList = s => (s || "").split(", ").map(t).join(", ");     // "Director, Director of Photography" → each part
+    const plural = n => LANG.v === "pt" ? (n === 1 ? " projeto" : " projetos") : (n === 1 ? " project" : " projects");
     const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     const coverSrc = p => `assets/covers/${p.cover}.jpg`;
     const thumbSrc = p => `assets/thumbs/${p.cover}.jpg`;   // 960px version for the grid
@@ -1092,30 +1133,32 @@
     const catOf = p => CATEGORY[p.type] || null;
 
     function renderGrid(el, list, countEl, sec) {
-      countEl.textContent = String(list.length).padStart(2, "0") + (list.length === 1 ? " project" : " projects");
+      countEl.textContent = String(list.length).padStart(2, "0") + plural(list.length);
       el.innerHTML = list.map((p, i) => {
-        const label = p.artist && p.artist !== p.title ? `${p.artist} '${p.title}'` : `${p.title} '${p.type || ""}'`;
+        const label = p.artist && p.artist !== p.title ? `${p.artist} '${p.title}'` : `${p.title} '${t(p.type) || ""}'`;
         return `
         <li class="card">
           <a href="#/${sec}/${p.slug}" aria-label="${esc(label)}${p.year ? ", " + p.year : ""}">
             <div class="label"><span class="num">${String(i + 1).padStart(2, "0")}</span><span class="txt">${esc(label)}</span></div>
             <div class="frame">
               <div class="media">${media(p, "Still — " + esc(p.title))}</div>
-              ${p.soon ? `<span class="soon">Coming soon</span>` : ""}
-              <div class="info">${esc(p.type || "")}${p.year ? `<span>${p.year}</span>` : ""}</div>
+              ${p.soon ? `<span class="soon">${t("Coming soon")}</span>` : ""}
+              <div class="info">${esc(t(p.type) || "")}${p.year ? `<span>${p.year}</span>` : ""}</div>
             </div>
           </a>
         </li>`; }).join("");
     }
 
+    const GRIDS = [];   // re-render hooks for a language change
     function setupGrid(gridEl, filtersEl, countEl, list, sec) {
       const cats = CAT_ORDER.filter(c => list.some(p => catOf(p) === c));
-      filtersEl.innerHTML = ["All", ...cats].map(c => `<button type="button" data-cat="${c}" aria-pressed="${c === "All"}">${c}</button>`).join("");
+      filtersEl.innerHTML = ["All", ...cats].map(c => `<button type="button" data-cat="${c}" aria-pressed="${c === "All"}">${t(c)}</button>`).join("");
+      const show = () => { const c = gridEl.dataset.cat || "All"; renderGrid(gridEl, c === "All" ? list : list.filter(p => catOf(p) === c), countEl, sec); };
+      GRIDS.push(() => { filtersEl.querySelectorAll("button[data-cat]").forEach(b => b.textContent = t(b.dataset.cat)); show(); });
       filtersEl.addEventListener("click", e => {
         const b = e.target.closest("button[data-cat]"); if (!b) return;
         filtersEl.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
-        const c = b.dataset.cat;
-        renderGrid(gridEl, c === "All" ? list : list.filter(p => catOf(p) === c), countEl, sec);
+        gridEl.dataset.cat = b.dataset.cat; show();
       });
       gridEl.addEventListener("mouseover", e => { if (e.target.closest(".card a")) { gridEl.classList.add("hovering"); startLeaks(); } });
       gridEl.addEventListener("mouseout", e => { if (!e.relatedTarget || !e.relatedTarget.closest || !e.relatedTarget.closest(".card a")) { gridEl.classList.remove("hovering"); stopLeaks(); } });
@@ -1176,13 +1219,56 @@
           media: [{ kind: "grid", cols: 2, ratio: "4 / 3", items: [["leo4-1.jpg", "Leopoldo and the finished canary"], ["still_canario.jpg", "The last shot"]] }] },
       ],
     };
+    // Portuguese version of the deep-dive (João's original wording from his notes, trimmed to match)
+    const DEEP_PT = {
+      "ultimo-canto": {
+        "01": { title: "O filme", lead: "No Portugal dos anos 50, Isaltina, uma taxidermista, vive entre o silêncio e a morte que preserva. Depois de um acidente na mina, Leopoldo traz-lhe o canário outrora usado para detetar gás no subsolo. Ao preservar o pequeno pássaro, Isaltina transforma a perda em memória." },
+        "02": { title: "Estética", p: ["Compreender e descobrir as necessidades estéticas deste filme foi o primeiro passo crucial na sua construção cinematográfica. A cinematografia foi encarada como uma ferramenta que visa complementar e enaltecer a narrativa e a carga emocional do filme.",
+              "À medida que a ideia se foi desenvolvendo, percebemos que o filme estava a ganhar uma componente documental inspirada no Portugal dos anos 50. Foi essa componente documental que nos levou a estudar e investigar as comunidades que pretendíamos retratar."] },
+        "03": { title: "Referências", p: ["Numa fase ainda embrionária, o estudo das obras de Artur Pastor e de José Afonso Furtado — “Portugal, País de Contrastes” e “Contaminações” — foi muito importante para estabelecermos um ambiente e um contexto visual para o filme, tanto a nível de personagens como de locais."],
+          refs: [["A obra de Artur Pastor revelou-se particularmente importante na construção visual das personagens e da relação destas com o trabalho. A forma como captava os ofícios da classe operária — frequentemente através de composições ensaiadas e de uma certa artificialidade performativa — ajudou-nos a pensar o corpo, a postura e a presença das personagens dentro do espaço cinematográfico.",
+                  "Existe nas suas imagens uma tensão entre o documental e o encenado que acabou por influenciar a abordagem visual do filme."],
+                 ["Os registos de José Afonso Furtado contribuíram sobretudo para a definição dos ambientes e da atmosfera visual. Os espaços captados em “Contaminações” apresentam uma densidade visual marcada, quase opressiva, onde a paisagem e a arquitetura parecem carregar o peso social e humano dos contextos retratados.",
+                  "Essa dimensão mais pesada e austera serviu de referência para a construção dos locais do filme e para a forma como procurámos representar os espaços."]] },
+        "04": { title: "As minas", p: ["Partindo destas referências, percebemos que o filme deveria assentar num realismo visual bastante marcado. Iniciámos então um processo de exploração de vários espaços mineiros, procurando compreender não só a sua dimensão estética, mas também a carga histórica e humana que transportam.",
+              "As visitas à Mina de São Domingos, ao Lousal e a Aljustrel foram fundamentais para consolidar o imaginário visual do filme — a textura dos espaços, a aridez das paisagens e a sensação de desgaste e abandono."],
+          caps: ["São Domingos — still do filme", "Lousal — fotografia de repérage", "Aljustrel — fotografia de repérage"] },
+        "05": { title: "Princípios", words: ["Real", "Observacional", "Natural"], p: ["Interessava-nos uma abordagem próxima do documental, onde a câmara surgisse mais como observadora do que como elemento interventivo — imagens que transmitissem autenticidade e proximidade às personagens e aos espaços, privilegiando a luz natural, a textura dos ambientes e a duração dos gestos e das ações."] },
+        "06": { title: "Filmar em 16mm", spec: [["Formato", "Película 16mm"], ["Película", "8 rolos × 122 m"], ["Luz", "Motivada, sobretudo natural"], ["Câmara", "Estática, observacional"]],
+          p: ["Para tornar estes princípios em algo prático e concreto, tomámos uma das decisões estéticas mais importantes do projeto: sendo um filme de época, e procurando uma forte sensação de realismo e materialidade, decidimos filmar em película.",
+              "A película aproximava a imagem do universo temporal que queríamos retratar e introduzia uma textura orgânica e imperfeita que dialogava com os espaços, os rostos e os ambientes. O grão, a densidade da imagem e a própria limitação do suporte reforçaram a dimensão observacional e naturalista que procurávamos.",
+              "Sendo um projeto de estudantes, implicava também desafios técnicos e logísticos. Cada rolo exigia um cuidado acrescido com os enquadramentos, a luz, os movimentos e a direção dos atores — um processo mais meticuloso, que influenciou a forma como pensámos a mise-en-scène e a linguagem visual do filme."],
+          caps: ["Preparação da câmara", "A câmara no set"] },
+        "07": { title: "Testes de imagem", p: ["Os testes ajudaram-nos a passar da teoria à prática: perceber como a película reagia a diferentes luzes e ver, no ecrã, o que resultava e o que não resultava. Testámos situações muito semelhantes às da rodagem — sobretudo pouca luz, iluminada maioritariamente por velas.",
+              "Foram essenciais para percebermos que o que queríamos era alcançável, mesmo com apenas 8 rolos de 122 metros, e deram-nos a segurança para filmar com uma margem de erro mínima. Na prática, isso implicou uma minutagem ao segundo e decidir, logo no papel, quantos minutos podíamos gastar em cada cena."],
+          caps: ["Não está no corte final", "Velas", "", "", "", "Testes de imagem"] },
+        "08": { title: "Luz e desenho de produção", p: ["O trabalho com a equipa de desenho de produção foi crucial. O objetivo era manter uma iluminação o mais realista e motivada possível, aproveitando sobretudo as janelas da casa. Com a direção de arte alinhámos as cortinas, as cores das paredes e o mobiliário com a entrada da luz natural.",
+              "Conquistou-nos de imediato a forma como a luz se comportava no quarto, mesmo antes de qualquer alteração — a cor salmão da parede e a maneira como a luz entrava sem se espalhar. A partir daí, escurecemos também as paredes da cozinha para dar continuidade à mesma estética.",
+              "Para as cenas de dia, a escolha das cortinas foi importantíssima: testámos várias opções para controlar a entrada da luz, já que os interiores dia eram motivados a 100% pelas janelas. De noite, os candeeiros a petróleo e azeite e as velas foram a principal motivação — algo só possível graças aos testes. O mesmo para o gasómetro na cena da mina: uma ferramenta única e imprevisível, que foi preciso dominar para conseguir uma chama estática e controlada."],
+          caps: ["Testes de cortinas", "", "", "", "Mina — gasómetro", "Cozinha à noite — candeeiros e velas"] },
+        "09": { title: "Exteriores", p: ["Os exteriores foram filmados quase na totalidade com luz natural — uma decisão premeditada que nos deixou dependentes do tempo. A planificação consoante o cenário foi muito exigente, mas permitiu-nos aproveitar ao máximo os inícios e finais de dia, que eram a nossa prioridade."],
+          caps: ["Posição do sol", "Still do filme"] },
+        "10": { title: "Câmara e narrativa", p: ["Ao longo da história, a câmara foi pensada como um elemento estático que apenas observa. Porém, no clímax — quando o Leopoldo contempla o canário já embalsamado — deixa de estar fixa e recorre a um subtil movimento para amplificar a carga emocional do momento.",
+              "O último plano segue uma lógica semelhante: a luz afasta-se do registo motivado, caindo diretamente de cima sobre o canário, e o plano é construído com um zoom ótico que, embora destoe do resto do filme, isola a força dramática da última imagem e encerra a obra."],
+          caps: ["O Leopoldo e o canário finalizado", "O último plano"] },
+      },
+    };
     function deepHtml(p) {
-      const chs = DEEP[p.deep] || [];
+      const PTD = LANG.v === "pt" && DEEP_PT[p.deep] || {};
+      const chs = (DEEP[p.deep] || []).map(c => {
+        const x = PTD[c.n]; if (!x) return c;
+        let k = 0;   // translated captions, in order across all media of the chapter
+        const capOf = cap => { const v = x.caps ? x.caps[k++] : undefined; return v === undefined ? cap : v; };
+        const media = (c.media || []).map(m => m.kind === "grid" ? { ...m, items: m.items.map(([f, cap]) => [f, x.caps ? capOf(cap) : cap]) }
+          : m.kind === "pairs" ? { ...m, items: m.items.map(([a, b, cap]) => [a, b, x.caps ? capOf(cap) : cap]) }
+          : m.kind === "refs" ? { ...m, items: m.items.map((r, i) => ({ ...r, p: x.refs ? x.refs[i] : r.p })) } : m);
+        return { ...c, ...x, media };
+      });
       const img = (f, alt) => DEEP_IMGS.has(f) ? `<img src="assets/deep/${p.slug}/${f}" alt="${esc(alt || p.title)}" loading="lazy" decoding="async">` : `<div class="ph-box">${esc(alt || f)}</div>`;
       const cap = c => c ? `<figcaption>${esc(c)}</figcaption>` : "";
       const media = m => {
         if (m.kind === "grid") return `<div class="m-grid" style="--c:${m.cols};--r:${m.ratio}">${m.items.map(([f, c]) => `<figure>${img(f, c)}${cap(c)}</figure>`).join("")}</div>`;
-        if (m.kind === "pairs") return `<div class="m-pairs">${m.items.map(([a, b, c]) => `<figure class="m-pair${b ? "" : " solo"}"><div class="m-pair-in">${b ? `<div><span>Test</span>${img(a, "Camera test")}</div><div><span>Final</span>${img(b, "Final")}</div>` : `<div>${img(a, c)}</div>`}</div>${cap(c)}</figure>`).join("")}</div>`;
+        if (m.kind === "pairs") return `<div class="m-pairs">${m.items.map(([a, b, c]) => `<figure class="m-pair${b ? "" : " solo"}"><div class="m-pair-in">${b ? `<div><span>${t("Test")}</span>${img(a, "Camera test")}</div><div><span>${t("Final")}</span>${img(b, "Final")}</div>` : `<div>${img(a, c)}</div>`}</div>${cap(c)}</figure>`).join("")}</div>`;
         if (m.kind === "refs") return `<div class="m-refs">${m.items.map(r => `<article class="m-ref"><div class="m-ref-top"><figure class="m-ref-cover">${img(r.cover, r.book)}</figure><div><h4>${esc(r.name)}</h4><div class="m-ref-book">${esc(r.book)}</div>${r.p.map(t => `<p>${esc(t)}</p>`).join("")}</div></div><div class="m-grid" style="--c:${r.photos.length};--r:${r.photos.length > 2 ? "3 / 4" : "4 / 3"}">${r.photos.map(f => `<figure>${img(f, r.name)}</figure>`).join("")}</div></article>`).join("")}</div>`;
         return "";
       };
@@ -1197,7 +1283,7 @@
           ${(c.media || []).map(m => `<div class="ch-media">${media(m)}</div>`).join("")}
         </section>`).join("");
       return `<div class="deep" id="deep"><div class="deep-in"><div class="deep-inner">${html}
-        <div class="blk deep-end"><p>Want to talk about this project?</p><button type="button" class="more-btn" data-contact="${esc(p.title)}">Get in touch</button></div></div></div></div>`;
+        <div class="blk deep-end"><p>${t("Want to talk about this project?")}</p><button type="button" class="more-btn" data-contact="${esc(p.title)}">${t("Get in touch")}</button></div></div></div></div>`;
     }
 
     // ----- stills lightbox: click any still on a project page to view it large; arrows / keys / swipe to move -----
@@ -1275,8 +1361,8 @@
         const withLinks = (href, label, first) => { const N = items.length, m = Math.max(1, Math.ceil(N / gap));
           const at = new Set(Array.from({ length: m }, (_, i) => (first + Math.round(i * N / m)) % N));
           const out = []; items.forEach((t, j) => { if (at.has(j)) out.push(link(href, label)); out.push(t); }); return out; };
-        if (r === 0) items = withLinks("#/cinematography", "Cinematography<br>Work", 1);          // starts on the left
-        if (r === 4) items = withLinks("#/about", "About<br>Me", Math.max(1, k - 2));              // starts on the right
+        if (r === 0) items = withLinks("#/cinematography", t("Cinematography<br>Work"), 1);          // starts on the left
+        if (r === 4) items = withLinks("#/about", t("About<br>Me"), Math.max(1, k - 2));              // starts on the right
         const html = items.join("");
         return `<div class="hrow"><div class="htrack ${r % 2 ? "l" : "r"}">${html}${html}</div></div>`;
       }).join("");
@@ -1367,7 +1453,7 @@
       const i = list.findIndex(x => x.slug === slug);
       if (i < 0) return null;
       const p = list[i], nx = list[(i + 1) % list.length];
-      const backTo = sec === "work" ? ["#/cinematography", "Selected work"] : ["#/direction", "Direction"];
+      const backTo = sec === "work" ? ["#/cinematography", t("Selected work")] : ["#/direction", t("Direction")];
       // stills: files in assets/stills/<slug>/ listed in p.stills; until they exist, the cover is the only still
       const stills = (p.stills && p.stills.length) ? p.stills.map(f => `assets/stills/${p.slug}/${f}`) : (p.cover ? [coverSrc(p)] : []);
       // the sliding carousel uses lighter 760px-tall copies (stills/<slug>/m/); the lightbox opens the full-size files
@@ -1389,7 +1475,7 @@
       const reel = fpsBar + `<div class="reel${nRows === 1 ? " single" : ""}" aria-label="${esc(p.title)} stills">${Array.from({ length: nRows }, (_, r) => rowHtml(mids.slice(r * per, (r + 1) * per), r % 2 ? "r" : "l", r * per)).join("")}</div>`;
       const video = p.yt ? `
         <section class="p-video">
-          <span class="label-sm">Watch</span>
+          <span class="label-sm">${t("Watch")}</span>
           <div class="player">${media(p, "", true)}<button aria-label="Play ${esc(p.title)}" data-yt="${p.yt}"><span class="play"></span></button></div>
         </section>` : "";
       $("#project").innerHTML = `
@@ -1399,17 +1485,17 @@
         ${(stills.length >= 4 || p.rows === 1 && stills.length > 1) ? reel : gallery ? `<div class="stills">${gallery}</div>` : ""}
         <div class="p-body">
           <dl class="credits">
-            ${p.dir ? `<div><dt>Director</dt><dd>${esc(p.dir)}</dd></div>` : ""}
-            <div><dt>Role</dt><dd>${esc(p.role)}</dd></div>
-            ${p.type ? `<div><dt>Type</dt><dd>${esc(p.type)}</dd></div>` : ""}
-            ${p.year ? `<div><dt>Year</dt><dd>${p.year}</dd></div>` : ""}
+            ${p.dir ? `<div><dt>${LANG.v === "pt" ? "Realização" : "Director"}</dt><dd>${esc(p.dir)}</dd></div>` : ""}
+            <div><dt>${t("Role")}</dt><dd>${esc(tList(p.role))}</dd></div>
+            ${p.type ? `<div><dt>${t("Type")}</dt><dd>${esc(t(p.type))}</dd></div>` : ""}
+            ${p.year ? `<div><dt>${t("Year")}</dt><dd>${p.year}</dd></div>` : ""}
           </dl>
-          ${p.more ? `<button type="button" class="more-btn" data-more="${esc(p.title)}"${p.deep ? ` aria-expanded="false" aria-controls="deep"` : ""}>${p.deep ? "Show me more" : "Let me know more"}${p.deep ? `<span class="arr">↓</span>` : ""}</button>` : ""}
-          ${p.soon ? `<div class="soon-big">Coming soon</div>` : ""}
+          ${p.more ? `<button type="button" class="more-btn" data-more="${esc(p.title)}"${p.deep ? ` aria-expanded="false" aria-controls="deep"` : ""}>${t(p.deep ? "Show me more" : "Let me know more")}${p.deep ? `<span class="arr">↓</span>` : ""}</button>` : ""}
+          ${p.soon ? `<div class="soon-big">${t("Coming soon")}</div>` : ""}
         </div>
         ${p.more && p.deep ? deepHtml(p) : ""}
         ${video}
-        <a class="next" href="#/${sec}/${nx.slug}"><span>Next project</span><strong>${esc(nx.title)} →</strong></a>`;
+        <a class="next" href="#/${sec}/${nx.slug}"><span>${t("Next project")}</span><strong>${esc(nx.title)} →</strong></a>`;
       const setReelSpeed = () => document.querySelectorAll("#project .reel-row").forEach(row => {
         const w = row.scrollWidth / 2;
         if (w > 0) row.style.setProperty("--dur", (w / 35).toFixed(1) + "s");
@@ -1426,7 +1512,7 @@
         go("#/about");
         setTimeout(() => {
           const ta = $("#cform textarea[name=message]");
-          if (ta && !ta.value) ta.value = `Hi João, I'd like to know more about "${title}".`;
+          if (ta && !ta.value) ta.value = LANG.v === "pt" ? `Olá João, gostava de saber mais sobre "${title}".` : `Hi João, I'd like to know more about "${title}".`;
           $("#cform").scrollIntoView({ behavior: "smooth", block: "start" });
           setTimeout(() => $("#cform input[name=name]").focus({ preventScroll: true }), 500);
         }, 60);
@@ -1437,7 +1523,7 @@
         const open = !deep.classList.contains("open");
         deep.classList.toggle("open", open);
         more.setAttribute("aria-expanded", open);
-        more.firstChild.textContent = open ? "Show less" : "Show me more";
+        more.firstChild.textContent = t(open ? "Show less" : "Show me more");
         if (open) setTimeout(() => deep.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
       });
       const contact = $("#project [data-contact]");
@@ -1463,9 +1549,9 @@
       const data = Object.fromEntries(new FormData(f));
       if (data._honey) return;                                   // bot
       if (!data.name.trim() || !/^\S+@\S+\.\S+$/.test(data.email) || !data.message.trim()) {
-        msg.className = "msg err"; msg.textContent = "Please fill in your name, a valid email and a message."; return;
+        msg.className = "msg err"; msg.textContent = t("Please fill in your name, a valid email and a message."); return;
       }
-      btn.disabled = true; msg.className = "msg"; msg.textContent = "Sending…";
+      btn.disabled = true; msg.className = "msg"; msg.textContent = t("Sending…");
       try {
         const r = await fetch(FORM_ENDPOINT, {
           method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -1473,9 +1559,9 @@
             _subject: "New message from joaovianadop.com", _replyto: data.email, _template: "table", _captcha: "false" })
         });
         if (!r.ok) throw new Error(r.status);
-        f.reset(); msg.className = "msg ok"; msg.textContent = "Thank you — your message was sent. I'll get back to you soon.";
+        f.reset(); msg.className = "msg ok"; msg.textContent = t("Thank you — your message was sent. I'll get back to you soon.");
       } catch (err) {
-        msg.className = "msg err"; msg.textContent = "Something went wrong. Please try again, or email joao17viana@gmail.com.";
+        msg.className = "msg err"; msg.textContent = t("Something went wrong. Please try again, or email joao17viana@gmail.com.");
       } finally { btn.disabled = false; }
     });
 
@@ -1531,7 +1617,7 @@
         if (sec) { view = "project"; navKey = sec; }
       } else if (h === "direction") view = navKey = "direction";
       else if (h === "about") view = navKey = "about";
-      document.body.classList.remove("menu-open"); { const mb = $(".menu-btn"); if (mb) { mb.textContent = "Menu"; mb.setAttribute("aria-expanded", "false"); } }
+      document.body.classList.remove("menu-open"); { const mb = $(".menu-btn"); if (mb) { mb.textContent = t("Menu"); mb.setAttribute("aria-expanded", "false"); } }
       window._routeT = Date.now();
       document.body.classList.toggle("small-name", view !== "home");
       document.body.classList.toggle("home-top", view === "home");
@@ -1566,24 +1652,44 @@
       // otter → "I do like otters" → jalapeño → "and jalapeños" → back to the otter
       if (ho) ho.addEventListener("click", () => {
         n = (n + 1) % 4;
-        if (n === 1) say("I do like otters");
+        if (n === 1) say(t("I do like otters"));
         else if (n === 2) { hide(); if (jal) toJal(); else fetch("assets/egg/jalapeno-A.svg").then(r => r.text()).then(t => { jal = t; toJal(); }); }
-        else if (n === 3) say("and jalapeños", true);
+        else if (n === 3) say(t("and jalapeños"), true);
         else { ho.classList.remove("jal"); ho.innerHTML = ""; hide(); }
       }); }
     // ----- phone menu -----
-    { const mb = $(".menu-btn"); if (mb) mb.addEventListener("click", () => { const open = document.body.classList.toggle("menu-open"); mb.textContent = open ? "Close" : "Menu"; mb.setAttribute("aria-expanded", open); }); }
+    { const mb = $(".menu-btn"); if (mb) mb.addEventListener("click", () => { const open = document.body.classList.toggle("menu-open"); mb.textContent = t(open ? "Close" : "Menu"); mb.setAttribute("aria-expanded", open); }); }
+    // ----- language -----
+    function applyLang() {
+      document.documentElement.lang = LANG.v === "pt" ? "pt-PT" : "en";
+      document.querySelectorAll("[data-i18n]").forEach(el => el.textContent = t(el.dataset.i18n));
+      document.querySelectorAll(".lang-btn [data-l]").forEach(x => x.classList.toggle("on", x.dataset.l === LANG.v));
+      document.querySelectorAll(".lang-switch button").forEach(b => { b.classList.toggle("on", b.dataset.lang === LANG.v); b.setAttribute("aria-pressed", b.dataset.lang === LANG.v); });
+      document.querySelectorAll(".theme-btn .tl").forEach(s => s.textContent = t(document.documentElement.dataset.theme === "light" ? "Dark" : "Light"));
+    }
+    function setLang(l) {
+      if (l === LANG.v) return;
+      LANG.v = l; try { localStorage.setItem("lang", l); } catch (e) {}
+      applyLang(); GRIDS.forEach(f => f());
+      homeBuild();
+      if (!document.body.classList.contains("home-top")) { const y = window.scrollY, open = $("#deep") && $("#deep").classList.contains("open"); route();
+        if (open) { const d = $("#deep"), b = $("#project .more-btn[data-more]"); if (d && b) { d.classList.add("open"); b.setAttribute("aria-expanded", true); b.firstChild.textContent = t("Show less"); } }
+        window.scrollTo(0, y); }
+    }
+    document.querySelectorAll(".lang-btn").forEach(b => b.addEventListener("click", () => setLang(LANG.v === "pt" ? "en" : "pt")));
+    document.querySelectorAll(".lang-switch button").forEach(b => b.addEventListener("click", () => setLang(b.dataset.lang)));
+    applyLang();
     // ----- light / dark -----
     function setTheme(t) {
       const root = document.documentElement;
       if (t === "light") root.dataset.theme = "light"; else delete root.dataset.theme;
       try { localStorage.setItem("theme", t); } catch (e) {}
-      document.querySelectorAll(".theme-btn .tl").forEach(s => s.textContent = t === "light" ? "Dark" : "Light");
+      document.querySelectorAll(".theme-btn .tl").forEach(s => s.textContent = window.t(t === "light" ? "Dark" : "Light"));
       document.querySelectorAll(".theme-switch button").forEach(b => { b.classList.toggle("on", b.dataset.t === t); b.setAttribute("aria-pressed", b.dataset.t === t); });
       buildFilm();
     }
     document.querySelectorAll(".theme-btn").forEach(b => b.addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light")));
-    document.querySelectorAll(".theme-btn .tl").forEach(s => s.textContent = document.documentElement.dataset.theme === "light" ? "Dark" : "Light");
+    document.querySelectorAll(".theme-btn .tl").forEach(s => s.textContent = window.t(document.documentElement.dataset.theme === "light" ? "Dark" : "Light"));
     document.querySelectorAll(".theme-switch button").forEach(b => {
       const cur = document.documentElement.dataset.theme === "light" ? "light" : "dark";
       b.classList.toggle("on", b.dataset.t === cur); b.setAttribute("aria-pressed", b.dataset.t === cur);
