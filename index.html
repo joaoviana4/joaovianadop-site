@@ -509,11 +509,13 @@
     .ref p + p { margin-top: .9em; }
     .figs { display: grid; gap: 12px; align-items: end; }
     .figs.n2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .figs.n4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-    .figs.n1 { max-width: 1000px; }
+    .figs.n1 { max-width: 1000px; } .figs.small { max-width: 640px; }
     .ref-more { display: grid; gap: 8px; margin-top: 22px; } .ref-more.n4 { grid-template-columns: repeat(4, minmax(0, 1fr)); } .ref-more.n2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .ref-more img { display: block; width: 100%; height: auto; } .figs.n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .figs img, .pairs img, .ref img { display: block; width: 100%; height: auto; background: #111; }
-    .pairs { display: grid; gap: clamp(20px, 3vh, 36px); }
+    .pairs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(22px, 3vh, 36px) clamp(24px, 3vw, 48px); }   /* test → final pairs, two pairs per row */
+    .pair { gap: 8px !important; }
+    @media (max-width: 760px) { .pairs { grid-template-columns: 1fr; } .pair { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
     .pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     .words { display: flex; flex-wrap: wrap; gap: .1em .5em; font-family: "Unbounded", sans-serif; font-weight: 800; text-transform: uppercase; font-size: clamp(34px, 6.4vw, 104px); line-height: 1; color: var(--name); margin-bottom: clamp(28px, 5vh, 56px); }
     .words span:not(:last-child)::after { content: "."; color: var(--muted); }
@@ -1131,7 +1133,7 @@
             [["158.jpg", "Camera test"], ["155.jpg", "Final"]],
             [["157.jpg", "Camera test"], ["156.jpg", "Final"]],
             [["159.jpg", "Camera test"], ["160.jpg", "Final"]] ] },
-        { t: "figs", items: [["TESTES-DE-IAMGEM.jpg", "Camera tests"]] },
+        { t: "figs", cls: "small", items: [["TESTES-DE-IAMGEM.jpg", "Camera tests"]] },
         { t: "text", n: "08", label: "Light & production design", side: "Realistic, motivated light — through the windows of the house.",
           p: ["Working closely with production design was crucial. Our goal was to keep the lighting as realistic and motivated as possible, relying mostly on the house's existing windows. Together with the art department we aligned the curtains, the wall colours and the furniture with the way natural light came in, creating an organic, believable space.",
               "What won us over straight away was how light behaved in the bedroom, even before any changes — the salmon wall, and the way the light came in without spilling everywhere. Building on that, we darkened the kitchen walls to carry the same look through the house.",
@@ -1159,7 +1161,7 @@
           : `<figure>${ph(cap || f, ar || "1024 / 793")}${cap ? `<figcaption>${esc(cap)}</figcaption>` : ""}</figure>`;
         if (b.t === "text") return `<section class="blk">${lab(b)}<div class="blk-cols">${b.side ? `<p class="blk-side">${esc(b.side)}</p>` : "<div></div>"}<div>${b.p.map(t => `<p>${txt(t)}</p>`).join("")}</div></div></section>`;
         if (b.t === "refs") return `<section class="blk">${lab(b)}${b.intro ? `<p class="blk-intro">${esc(b.intro)}</p>` : ""}<div class="refs">${b.items.map(r => `<div class="ref">${fig(r.img, r.cap, r.ar)}<h3>${esc(r.name)}</h3>${r.p.map(t => `<p>${esc(t)}</p>`).join("")}${r.more ? `<div class="ref-more n${r.more.length}">${r.more.map(f => fig(f, "")).join("")}</div>` : ""}</div>`).join("")}</div></section>`;
-        if (b.t === "figs") return `<section class="blk figs n${b.items.length}">${b.items.map(([f, c, ar]) => fig(f, c, ar)).join("")}</section>`;
+        if (b.t === "figs") return `<section class="blk figs n${b.items.length}${b.cls ? " " + b.cls : ""}">${b.items.map(([f, c, ar]) => fig(f, c, ar)).join("")}</section>`;
         if (b.t === "words") return `<section class="blk">${lab(b)}<div class="words">${b.words.map(w => `<span>${esc(w)}</span>`).join("")}</div><div class="blk-cols"><div></div><div>${b.p.map(t => `<p>${esc(t)}</p>`).join("")}</div></div></section>`;
         if (b.t === "pairs") return `<section class="blk pairs">${b.items.map(pr => `<div class="pair">${pr.map(([f, c]) => fig(f, c)).join("")}</div>`).join("")}</section>`;
         if (b.t === "lead") return `<section class="blk">${lab(b)}<p class="blk-lead${b.wide ? " wide" : ""}${b.long ? " long" : ""}">${txt(b.text)}</p></section>`;
