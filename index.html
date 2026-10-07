@@ -511,6 +511,16 @@
     .blk-label i { font-style: normal; color: var(--muted); }
     .blk-lead { font-family: "Instrument Serif", serif; font-size: clamp(28px, 3.6vw, 56px); line-height: 1.12; letter-spacing: -.01em; max-width: 22ch; }
     .blk-lead.wide { max-width: 30ch; }
+    /* credits: role on the left, NAME on the right (like the film's own site) */
+    .cr-h { font-family: "Instrument Serif", serif; font-size: clamp(20px, 1.8vw, 26px); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px; }
+    .cr-groups { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(36px, 6vh, 64px) clamp(36px, 7vw, 120px); margin-top: clamp(12px, 3vh, 30px); }
+    .cr-row { display: flex; justify-content: space-between; align-items: baseline; gap: 20px; padding: 6px 0; }
+    .cr-role { font-family: "Instrument Serif", serif; font-size: clamp(17px, 1.3vw, 20px); opacity: .8; }
+    .cr-role.cr-char { font-style: italic; }
+    .cr-name { font-family: "Instrument Serif", serif; font-size: clamp(16px, 1.25vw, 19px); text-transform: uppercase; letter-spacing: .05em; text-align: right; }
+    .cr-name.me { color: var(--accent); }
+    .cr-cast { max-width: 640px; }
+    @media (max-width: 760px) { .cr-groups { grid-template-columns: 1fr; } }
     /* deep-dive chapters: number + title on the left, text on the right, images on one shared grid underneath */
     .ch { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); column-gap: clamp(28px, 5vw, 96px); row-gap: clamp(26px, 4vh, 44px); border-top: 1px solid var(--line); padding-top: clamp(20px, 3vh, 30px); }
     .ch-head { display: flex; gap: 14px; align-items: baseline; }
@@ -1253,6 +1263,21 @@
           caps: ["O Leopoldo e o canário finalizado", "O último plano"] },
       },
     };
+    // Último Canto — full credits (screenwriting credits left out on purpose). [Portuguese role, English role, name]
+    const CREDITS = {
+      "ultimo-canto": {
+        cast: [["Isaltina", "Paula Só"], ["Leopoldo", "João Pedro Bénard"], ["Mineiro 1|Miner 1", "Rui Cardoso Martins"], ["Mineiro 2|Miner 2", "Lucas Berenguel"], ["Mineiro 3|Miner 3", "António Cruz"]],
+        groups: [
+          [["Realizador", "Director", "José P. Miguel"], ["1ª Assistente de Realização", "1st Assistant Director", "Maria Barral"], ["Anotação", "Script Supervisor", "Margarida Kalinichenko"], ["Coordenador Taxidermia", "Taxidermy Coordinator", "Pedro Andrade"]],
+          [["Diretora de Produção", "Production Manager", "Beatriz Silva"], ["Coordenadora de Produção", "Production Coordinator", "Maria Barral"], ["Chefe de Produção", "Head of Production", "Eduardo Cruz"], ["Assistente de Produção", "Production Assistant", "Martim Basso"]],
+          [["Diretor de Fotografia", "Director of Photography", "João Viana"], ["1ª Assistente Câmara", "1st Assistant Camera", "Nia Pavlovich"], ["2ª Assistente de Câmara", "2nd Assistant Camera", "Vera Alcobia"], ["Chefe Eletricista", "Gaffer", "Marta O. Andrade"], ["Assistente Iluminação", "Lighting Assistant", "Vasco Cunha"], ["Assistente Iluminação", "Lighting Assistant", "Vasco Lello"], ["Making Of", "Making Of", "Kader Fernandes"]],
+          [["Desenho de Produção", "Production Design", "Maria Flores"], ["Chefe Guarda-Roupa", "Head of Wardrobe", "Nádia A. Henriques"], ["Coordenadora de Arte", "Art Coordinator", "Ana Rita Teles"], ["Assistente de Arte", "Art Assistant", "Leonor Madeira"], ["Assistente de Arte", "Art Assistant", "Sofia Maria"], ["Assistente de Arte", "Art Assistant", "Oskar Bednarek"], ["Make-up e Cabelos", "Make-up & Hair", "Leonor Madeira"], ["Confeção do Guarda-Roupa", "Wardrobe Making", "Marta O. Andrade"]],
+          [["Diretor de Som", "Sound Director", "Simão Pardal"], ["Chefe Captação", "Production Sound Mixer", "João Salgado"], ["Boom 1", "Boom 1", "Filipe Onofre"], ["Boom 2", "Boom 2", "Lucas Berenguel"]],
+          [["Supervisor PPA", "Sound Post Supervisor", "João Salgado"], ["Sound Design", "Sound Design", "Simão Pardal"], ["Assistente Sound Design", "Sound Design Assistant", "João Salgado"], ["Foley Artist", "Foley Artist", "Filipe Onofre"], ["Assistente Foley", "Foley Assistant", "Simão Pardal"], ["ADR", "ADR", "Simão Pardal"], ["Assistente ADR", "ADR Assistant", "Lucas Berenguel"], ["Violino", "Violin", "Maria Gorgel"], ["Mix 5.1", "5.1 Mix", "João Salgado"], ["Assistente Mix 5.1", "5.1 Mix Assistant", "Lucas Berenguel"]],
+          [["Coordenador Pós-produção", "Post-production Coordinator", "João Viana"], ["Supervisor Montagem", "Editing Supervisor", "Beatriz Silva"], ["Supervisor Montagem", "Editing Supervisor", "José P. Miguel"], ["Montador", "Editor", "Eduardo Cruz"], ["Montador", "Editor", "João Viana"], ["Montador", "Editor", "Leonor Madeira"], ["Assistente Montagem", "Assistant Editor", "Martim Basso"], ["Assistente Montagem", "Assistant Editor", "Vasco Cunha"], ["Colorista", "Colorist", "Damião Rodrigues"], ["Ilustrações", "Illustrations", "Maria Flores"]],
+        ],
+      },
+    };
     function deepHtml(p) {
       const PTD = LANG.v === "pt" && DEEP_PT[p.deep] || {};
       const chs = (DEEP[p.deep] || []).map(c => {
@@ -1282,7 +1307,14 @@
           ${c.words ? `<div class="ch-words">${c.words.map(w => `<span>${esc(w)}</span>`).join("")}</div>` : ""}
           ${(c.media || []).map(m => `<div class="ch-media">${media(m)}</div>`).join("")}
         </section>`).join("");
-      return `<div class="deep" id="deep"><div class="deep-in"><div class="deep-inner">${html}
+      const cr = CREDITS[p.deep], pt = LANG.v === "pt";
+      const row = (role, name) => `<div class="cr-row"><span class="cr-role">${esc(role)}</span><span class="cr-name${/^João Viana$/.test(name) ? " me" : ""}">${esc(name)}</span></div>`;
+      const credits = cr ? `<section class="blk ch credits-ch">
+          <div class="ch-head"><span class="ch-n">${String(chs.length + 1).padStart(2, "0")}</span><h3 class="ch-t">${pt ? "Equipa" : "Credits"}</h3></div>
+          <div class="ch-body cr-cast"><div class="cr-h">${pt ? "Elenco" : "Cast"}</div>${cr.cast.map(([c, n]) => `<div class="cr-row"><span class="cr-role cr-char">${esc(c.split("|")[pt ? 0 : (c.includes("|") ? 1 : 0)])}</span><span class="cr-name">${esc(n)}</span></div>`).join("")}</div>
+          <div class="cr-groups">${cr.groups.map(g => `<div class="cr-group">${g.map(([rp, re, n]) => row(pt ? rp : re, n)).join("")}</div>`).join("")}</div>
+        </section>` : "";
+      return `<div class="deep" id="deep"><div class="deep-in"><div class="deep-inner">${html}${credits}
         <div class="blk deep-end"><p>${t("Want to talk about this project?")}</p><button type="button" class="more-btn" data-contact="${esc(p.title)}">${t("Get in touch")}</button></div></div></div></div>`;
     }
 
