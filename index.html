@@ -491,7 +491,7 @@
     .deep { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 1.1s var(--ease); }
     .deep.open { grid-template-rows: 1fr; }
     .deep > .deep-in { overflow: hidden; min-height: 0; }
-    .deep-inner { padding-top: clamp(56px, 10vh, 120px); display: grid; gap: clamp(56px, 10vh, 128px); }
+    .deep-inner { padding-top: clamp(56px, 10vh, 120px); display: grid; gap: clamp(64px, 11vh, 140px); }
     .deep .blk { opacity: 0; transform: translateY(24px); transition: opacity .9s var(--ease), transform 1.1s var(--ease); }
     .deep.open .blk { opacity: 1; transform: none; }
     .deep.open .blk:nth-child(2) { transition-delay: .12s; } .deep.open .blk:nth-child(3) { transition-delay: .22s; }
@@ -500,6 +500,39 @@
     .blk-label i { font-style: normal; color: var(--muted); }
     .blk-lead { font-family: "Instrument Serif", serif; font-size: clamp(28px, 3.6vw, 56px); line-height: 1.12; letter-spacing: -.01em; max-width: 22ch; }
     .blk-lead.wide { max-width: 30ch; }
+    /* deep-dive chapters: number + title on the left, text on the right, images on one shared grid underneath */
+    .ch { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); column-gap: clamp(28px, 5vw, 96px); row-gap: clamp(26px, 4vh, 44px); border-top: 1px solid var(--line); padding-top: clamp(20px, 3vh, 30px); }
+    .ch-head { display: flex; gap: 14px; align-items: baseline; }
+    .ch-n { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; color: var(--muted); }
+    .ch-t { font-family: "Instrument Serif", serif; font-weight: 400; font-size: clamp(28px, 3vw, 46px); line-height: 1; letter-spacing: -.01em; }
+    .ch-body p { font-size: clamp(16px, 1.25vw, 18px); line-height: 1.65; max-width: 62ch; opacity: .9; }
+    .ch-body p + p { margin-top: 1em; }
+    .ch-body .ch-lead { font-family: "Instrument Serif", serif; font-size: clamp(24px, 2.4vw, 36px); line-height: 1.2; max-width: 32ch; opacity: 1; }
+    .ch-spec { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin-bottom: clamp(22px, 3vh, 34px); padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+    .ch-spec dt { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+    .ch-spec dd { font-size: 15px; }
+    .ch-words, .ch-media { grid-column: 1 / -1; }
+    .ch-words { display: flex; flex-wrap: wrap; gap: 0 .45em; font-family: "Unbounded", sans-serif; font-weight: 800; text-transform: uppercase; font-size: clamp(30px, 5.6vw, 92px); line-height: 1.02; color: var(--name); }
+    .ch-words span:not(:last-child)::after { content: "."; color: var(--muted); }
+    .m-grid { display: grid; grid-template-columns: repeat(var(--c), minmax(0, 1fr)); gap: 8px; }
+    .m-grid img, .m-grid .ph-box { display: block; width: 100%; aspect-ratio: var(--r); height: auto; object-fit: cover; background: #111; }
+    .ch figcaption { margin-top: 8px; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+    .m-pairs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px 16px; }
+    .m-pair-in { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+    .m-pair.solo .m-pair-in { grid-template-columns: 1fr; }
+    .m-pair-in > div { position: relative; }
+    .m-pair-in img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: #111; }
+    .m-pair.solo img { aspect-ratio: 8 / 3; object-fit: contain; background: transparent; }
+    .m-pair-in span { position: absolute; left: 6px; top: 6px; z-index: 1; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; color: #fff; background: rgba(0,0,0,.55); padding: 2px 5px; }
+    .m-refs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(28px, 4vw, 64px); }
+    .m-ref-top { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 20px; align-items: start; margin-bottom: 16px; }
+    .m-ref-cover img { display: block; width: 100%; height: auto; }
+    .m-ref h4 { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+    .m-ref-book { font-family: "Instrument Serif", serif; font-style: italic; font-size: 18px; margin: 4px 0 12px; opacity: .8; }
+    .m-ref p { font-size: 15px; line-height: 1.6; opacity: .88; }
+    .m-ref p + p { margin-top: .8em; }
+    @media (max-width: 900px) { .ch { grid-template-columns: 1fr; } .m-refs { grid-template-columns: 1fr; } .m-pairs { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ch-spec { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 560px) { .m-pairs { grid-template-columns: 1fr; } .m-grid { grid-template-columns: repeat(min(var(--c), 2), minmax(0, 1fr)); } }
     .blk-side { font-family: "Instrument Serif", serif; font-size: clamp(22px, 2.2vw, 34px); line-height: 1.15; max-width: 16ch; }
     .blk-intro { font-family: "Instrument Serif", serif; font-size: clamp(22px, 2.2vw, 34px); line-height: 1.2; max-width: 40ch; margin-bottom: clamp(28px, 5vh, 56px); }
     .refs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(28px, 6vw, 110px); align-items: start; }
@@ -1099,80 +1132,70 @@
     const DEEP_IMGS = new Set(["1.jpg", "155.jpg", "156.jpg", "157.jpg", "158.jpg", "159.jpg", "160.jpg", "45.jpg", "46.jpg", "79.jpg", "80.jpg", "81.jpg", "82.jpg", "FOTO7.jpg", "FOTO8.jpg", "TESTES-DE-IAMGEM.jpg", "aljustrel.jpg", "depoiscasaext2.jpg", "foto-6.jpg", "foto3.jpg", "foto4.jpg", "foto5.jpg", "fotografai9.jpg", "image-3.jpg", "leo4-1.jpg", "lousal.jpg", "mina-saodomingos.jpg", "preparar1.jpg", "preparar2.jpg", "sol.jpg", "still_canario.jpg", "stillmina2.jpg", "testeimgem1.jpg", "testmimagem2.jpg"]);
     const DEEP = {
       "ultimo-canto": [
-        { t: "lead", n: "01", label: "The film", long: true, text: "In 1950s Portugal, Isaltina, a taxidermist, lives between silence and the death she preserves. After a mining accident, Leopoldo brings her the canary once used to detect gas underground. By preserving the small bird, Isaltina turns loss into memory." },
-        { t: "text", n: "02", label: "Aesthetic", side: "Cinematography as a tool to complement and heighten the story.",
+        { n: "01", title: "The film", lead: "In 1950s Portugal, Isaltina, a taxidermist, lives between silence and the death she preserves. After a mining accident, Leopoldo brings her the canary once used to detect gas underground. By preserving the small bird, Isaltina turns loss into memory." },
+        { n: "02", title: "Aesthetic",
           p: ["Understanding and discovering the aesthetic needs of this film was the first crucial step in building it cinematically. The cinematography was approached as a tool to complement and heighten the film's narrative and its emotional weight.",
               "As the idea developed, we realised the film was taking on a documentary dimension, inspired by 1950s Portugal. That documentary side led us to study and research the communities we wanted to portray."] },
-        { t: "refs", n: "03", label: "References",
-          intro: "Early on, the work of Artur Pastor and José Afonso Furtado — “Portugal, País de Contrastes” and “Contaminações” — was key to setting the visual world of the film, both for its characters and its locations.",
-          items: [
-            { img: "image-3.jpg", ar: "1 / 1", cap: "Artur Pastor — Portugal, País de Contrastes", name: "Artur Pastor", more: ["foto-6.jpg", "foto3.jpg", "foto4.jpg", "foto5.jpg"],
-              p: ["Artur Pastor's work was especially important in building the characters visually, and their relationship with work.",
-                  "The way he photographed working-class crafts — often through staged compositions and a certain performative artificiality — helped us think about the body, posture and presence of the characters within the frame. His images hold a tension between the documentary and the staged that ended up shaping the visual approach of the film."] },
-            { img: "1.jpg", ar: "793 / 1024", cap: "José Afonso Furtado — Contaminações", name: "José Afonso Furtado", more: ["FOTO8.jpg", "FOTO7.jpg"],
-              p: ["José Afonso Furtado's photographs shaped, above all, the environments and the visual atmosphere.",
-                  "The spaces in “Contaminações” carry a dense, almost oppressive weight, where landscape and architecture seem to hold the social and human burden of their context. That heavier, austere quality became a reference for building the film's locations and for how we represented space."] } ] },
-        { t: "text", n: "04", label: "The mines", side: "A strongly marked visual realism.",
+        { n: "03", title: "References",
+          p: ["Early on, the work of Artur Pastor and José Afonso Furtado — “Portugal, País de Contrastes” and “Contaminações” — was key to setting the visual world of the film, both for its characters and its locations."],
+          media: [{ kind: "refs", items: [
+            { cover: "image-3.jpg", name: "Artur Pastor", book: "Portugal, País de Contrastes", photos: ["foto-6.jpg", "foto3.jpg", "foto4.jpg", "foto5.jpg"],
+              p: ["His work was especially important in building the characters visually, and their relationship with work. The way he photographed working-class crafts — often through staged compositions and a certain performative artificiality — helped us think about the body, posture and presence of the characters within the frame.",
+                  "His images hold a tension between the documentary and the staged that ended up shaping the visual approach of the film."] },
+            { cover: "1.jpg", name: "José Afonso Furtado", book: "Contaminações", photos: ["FOTO8.jpg", "FOTO7.jpg"],
+              p: ["His photographs shaped, above all, the environments and the visual atmosphere. The spaces in “Contaminações” carry a dense, almost oppressive weight, where landscape and architecture seem to hold the social and human burden of their context.",
+                  "That heavier, austere quality became a reference for building the film's locations and for how we represented space."] } ] }] },
+        { n: "04", title: "The mines",
           p: ["From these references we understood the film had to rest on a strongly marked visual realism. We began exploring several mining sites, trying to understand not only their aesthetics but also the historical and human weight they carry.",
-              "Visiting the São Domingos, Lousal and Aljustrel mines was essential to consolidate the film's imagery — the texture of the spaces, the aridity of the landscape and the sense of wear and abandonment."] },
-        { t: "figs", items: [["mina-saodomingos.jpg", "São Domingos mine — film still"], ["lousal.jpg", "Lousal mine — location scout"], ["aljustrel.jpg", "Aljustrel mine — location scout"]] },
-        { t: "words", n: "05", label: "Principles", words: ["Real", "Observational", "Natural"],
+              "Visiting the São Domingos, Lousal and Aljustrel mines was essential to consolidate the film's imagery — the texture of the spaces, the aridity of the landscape and the sense of wear and abandonment."],
+          media: [{ kind: "grid", cols: 3, ratio: "4 / 3", items: [["mina-saodomingos.jpg", "São Domingos — film still"], ["lousal.jpg", "Lousal — location scout"], ["aljustrel.jpg", "Aljustrel — location scout"]] }] },
+        { n: "05", title: "Principles", words: ["Real", "Observational", "Natural"],
           p: ["We wanted an approach close to documentary, where the camera is an observer rather than an intervening presence — images that feel authentic and close to the characters and spaces, favouring natural light, the texture of the places and the duration of gestures and actions."] },
-        { t: "cols", n: "06", label: "Shooting on film",
+        { n: "06", title: "Shooting on 16mm",
           spec: [["Format", "16mm film"], ["Stock", "8 rolls × 122 m"], ["Light", "Motivated, mostly natural"], ["Camera", "Static, observational"]],
-          text: ["To turn these principles into something concrete, we made one of the most important decisions of the project: being a period film, and looking for a strong sense of realism and materiality, we decided to shoot on film.",
-                 "Film brought the image closer to the period we wanted to portray and added an organic, imperfect texture that spoke directly to the spaces, faces and environments. The grain, the density of the image and the material limits of the medium reinforced the observational, naturalistic approach we were after.",
-                 "As a student production, it also meant technical and logistical challenges. Every roll called for extra care with framing, light, movement and directing the actors — a more deliberate process that shaped how we thought about mise-en-scène and the visual language of the film."] },
-        { t: "figs", items: [["preparar2.jpg", ""], ["preparar1.jpg", "", "793 / 1024"]] },
-        { t: "text", n: "07", label: "Camera tests", side: "A lab, before the real thing.",
+          p: ["To turn these principles into something concrete, we made one of the most important decisions of the project: being a period film, and looking for a strong sense of realism and materiality, we decided to shoot on film.",
+              "Film brought the image closer to the period we wanted to portray and added an organic, imperfect texture that spoke directly to the spaces, faces and environments. The grain, the density of the image and the material limits of the medium reinforced the observational, naturalistic approach we were after.",
+              "As a student production, it also meant technical and logistical challenges. Every roll called for extra care with framing, light, movement and directing the actors — a more deliberate process that shaped how we thought about mise-en-scène and the visual language of the film."],
+          media: [{ kind: "grid", cols: 2, ratio: "4 / 3", items: [["preparar2.jpg", "Camera prep"], ["preparar1.jpg", "The camera on set"]] }] },
+        { n: "07", title: "Camera tests",
           p: ["The tests took us from theory to practice: how the stock reacted to different light, and what worked on screen and what didn't. We tested situations very close to the real ones — above all low light, lit mostly by candles.",
-              "They proved that what we wanted was achievable, even with only 8 rolls of 122 metres, and gave us the confidence to shoot with a very small margin for error. In practice, that meant timing the film down to the second and deciding on paper exactly how many minutes we could spend on each scene."] },
-        { t: "pairs", items: [
-            [["46.jpg", "Camera test"], ["45.jpg", "Final — not in the final cut"]],
-            [["testeimgem1.jpg", "Camera test — candles"], ["testmimagem2.jpg", "Final — film still"]],
-            [["158.jpg", "Camera test"], ["155.jpg", "Final"]],
-            [["157.jpg", "Camera test"], ["156.jpg", "Final"]],
-            [["159.jpg", "Camera test"], ["160.jpg", "Final"]] ] },
-        { t: "figs", cls: "small", items: [["TESTES-DE-IAMGEM.jpg", "Camera tests"]] },
-        { t: "text", n: "08", label: "Light & production design", side: "Realistic, motivated light — through the windows of the house.",
-          p: ["Working closely with production design was crucial. Our goal was to keep the lighting as realistic and motivated as possible, relying mostly on the house's existing windows. Together with the art department we aligned the curtains, the wall colours and the furniture with the way natural light came in, creating an organic, believable space.",
+              "They proved that what we wanted was achievable, even with only 8 rolls of 122 metres, and gave us the confidence to shoot with a very small margin for error. In practice, that meant timing the film down to the second and deciding on paper exactly how many minutes we could spend on each scene."],
+          media: [{ kind: "pairs", items: [["46.jpg", "45.jpg", "Not in the final cut"], ["testeimgem1.jpg", "testmimagem2.jpg", "Candles"], ["158.jpg", "155.jpg"], ["157.jpg", "156.jpg"], ["159.jpg", "160.jpg"], ["TESTES-DE-IAMGEM.jpg", null, "All tests"]] }] },
+        { n: "08", title: "Light & production design",
+          p: ["Working closely with production design was crucial. Our goal was to keep the lighting as realistic and motivated as possible, relying mostly on the house's existing windows. Together with the art department we aligned the curtains, the wall colours and the furniture with the way natural light came in.",
               "What won us over straight away was how light behaved in the bedroom, even before any changes — the salmon wall, and the way the light came in without spilling everywhere. Building on that, we darkened the kitchen walls to carry the same look through the house.",
-              "For day scenes the curtains were key: we tested several to control exactly how light entered, since interior day was 100% motivated by the windows. At night, oil and olive-oil lamps and candles were the main sources — only possible thanks to the tests. The same went for the carbide lamp in the mine scene: a unique, unpredictable tool we had to master to get a steady, controlled flame."] },
-        { t: "figs", items: [["79.jpg", "", "793 / 1024"], ["81.jpg", "", "793 / 1024"], ["82.jpg", "", "793 / 1024"], ["80.jpg", "", "793 / 1024"]] },
-        { t: "figs", items: [["stillmina2.jpg", "Film still — mine lighting"], ["fotografai9.jpg", "Film still — kitchen at night"]] },
-        { t: "text", n: "09", label: "Exteriors", side: "Natural light, chasing the start and end of the day.",
-          p: ["Exteriors were shot almost entirely with natural light — a deliberate decision that left us dependent on the weather. Planning around each location was demanding, but it let us make the most of the beginning and end of the day, which were our priority."] },
-        { t: "figs", items: [["sol.jpg", "Sun position", "16 / 9"], ["depoiscasaext2.jpg", "Film still"]] },
-        { t: "text", n: "10", label: "Camera & story", side: "A camera that observes — until it doesn't.",
+              "For day scenes the curtains were key: we tested several to control exactly how light entered, since interior day was 100% motivated by the windows. At night, oil and olive-oil lamps and candles were the main sources — only possible thanks to the tests. The same went for the carbide lamp in the mine scene: a unique, unpredictable tool we had to master to get a steady, controlled flame."],
+          media: [{ kind: "grid", cols: 4, ratio: "3 / 4", items: [["79.jpg", "Curtain tests"], ["81.jpg", ""], ["82.jpg", ""], ["80.jpg", ""]] },
+                  { kind: "grid", cols: 2, ratio: "4 / 3", items: [["stillmina2.jpg", "Mine — carbide lamp"], ["fotografai9.jpg", "Kitchen at night — oil lamps and candles"]] }] },
+        { n: "09", title: "Exteriors",
+          p: ["Exteriors were shot almost entirely with natural light — a deliberate decision that left us dependent on the weather. Planning around each location was demanding, but it let us make the most of the beginning and end of the day, which were our priority."],
+          media: [{ kind: "grid", cols: 2, ratio: "4 / 3", items: [["sol.jpg", "Sun position"], ["depoiscasaext2.jpg", "Film still"]] }] },
+        { n: "10", title: "Camera & story",
           p: ["Throughout the film the camera is a static element that only observes. But at the climax — when Leopoldo looks at the finished, preserved canary — it stops being fixed, and a subtle movement amplifies the emotional weight of the moment.",
-              "The last shot follows the same logic. The light leaves its motivated register, falling straight down on the canary, and the shot is built on an optical zoom that, while at odds with the rest of the film, isolates the dramatic force of the final image and closes the film."] },
-        { t: "figs", items: [["leo4-1.jpg", "Leopoldo looks at the finished canary"], ["still_canario.jpg", "The final canary"]] },
+              "The last shot follows the same logic. The light leaves its motivated register, falling straight down on the canary, and the shot is built on an optical zoom that, while at odds with the rest of the film, isolates the dramatic force of the final image and closes the film."],
+          media: [{ kind: "grid", cols: 2, ratio: "4 / 3", items: [["leo4-1.jpg", "Leopoldo and the finished canary"], ["still_canario.jpg", "The last shot"]] }] },
       ],
     };
     function deepHtml(p) {
-      const blocks = DEEP[p.deep] || [];
-      const src = f => `assets/stills/${p.slug}/${f}`;
-      const lab = b => b.label ? `<div class="blk-label">${b.n ? `<i>${b.n}</i>` : ""}${esc(b.label)}</div>` : "";
-      const txt = v => `<span class="${/^\[/.test(v) ? "ph-txt" : ""}">${esc(v)}</span>`;
-      const ph = (label, ar) => `<div class="ph-box" style="--ar:${ar || "4 / 3"}">${esc(label)}</div>`;
-      const html = blocks.map(b => {
-        const fig = (f, cap, ar) => DEEP_IMGS.has(f)
-          ? `<figure><img src="assets/deep/${p.slug}/${f}" alt="${esc(cap || p.title)}" loading="lazy" decoding="async">${cap ? `<figcaption>${esc(cap)}</figcaption>` : ""}</figure>`
-          : `<figure>${ph(cap || f, ar || "1024 / 793")}${cap ? `<figcaption>${esc(cap)}</figcaption>` : ""}</figure>`;
-        if (b.t === "text") return `<section class="blk">${lab(b)}<div class="blk-cols">${b.side ? `<p class="blk-side">${esc(b.side)}</p>` : "<div></div>"}<div>${b.p.map(t => `<p>${txt(t)}</p>`).join("")}</div></div></section>`;
-        if (b.t === "refs") return `<section class="blk">${lab(b)}${b.intro ? `<p class="blk-intro">${esc(b.intro)}</p>` : ""}<div class="refs">${b.items.map(r => `<div class="ref">${fig(r.img, r.cap, r.ar)}<h3>${esc(r.name)}</h3>${r.p.map(t => `<p>${esc(t)}</p>`).join("")}${r.more ? `<div class="ref-more n${r.more.length}">${r.more.map(f => fig(f, "")).join("")}</div>` : ""}</div>`).join("")}</div></section>`;
-        if (b.t === "figs") return `<section class="blk figs n${b.items.length}${b.cls ? " " + b.cls : ""}">${b.items.map(([f, c, ar]) => fig(f, c, ar)).join("")}</section>`;
-        if (b.t === "words") return `<section class="blk">${lab(b)}<div class="words">${b.words.map(w => `<span>${esc(w)}</span>`).join("")}</div><div class="blk-cols"><div></div><div>${b.p.map(t => `<p>${esc(t)}</p>`).join("")}</div></div></section>`;
-        if (b.t === "pairs") return `<section class="blk pairs">${b.items.map(pr => `<div class="pair">${pr.map(([f, c]) => fig(f, c)).join("")}</div>`).join("")}</section>`;
-        if (b.t === "lead") return `<section class="blk">${lab(b)}<p class="blk-lead${b.wide ? " wide" : ""}${b.long ? " long" : ""}">${txt(b.text)}</p></section>`;
-        if (b.t === "full") return `<section class="blk img-full"><img src="${src(b.src)}" alt="${esc(p.title)}" loading="lazy" decoding="async"></section>`;
-        if (b.t === "cols") return `<section class="blk">${lab(b)}<div class="blk-cols"><dl class="spec">${b.spec.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${txt(v)}</dd>`).join("")}</dl><div>${b.text.map(t => `<p>${txt(t)}</p>`).join("")}</div></div></section>`;
-        if (b.t === "pair") return `<section class="blk img-pair${b.offset ? " offset" : ""}">${b.src.map(f => `<img src="${src(f)}" alt="${esc(p.title)}" loading="lazy" decoding="async">`).join("")}</section>`;
-        if (b.t === "trio") return `<section class="blk">${lab(b)}<div class="img-trio">${b.ph.map((l, k) => `<figure>${ph(l, "4 / 3")}<figcaption>${txt(b.cap[k])}</figcaption></figure>`).join("")}</div></section>`;
-        if (b.t === "bts") return `<section class="blk">${lab(b)}<div class="bts">${b.ph.map((l, k) => ph(l, b.ar[k])).join("")}</div></section>`;
-        if (b.t === "ba") return `<section class="blk">${lab(b)}<div class="ba" style="--x:50%"><img src="${src(b.src)}" alt="${esc(p.title)} — graded" loading="lazy" decoding="async"><div class="ba-top"><img src="${src(b.src)}" alt="${esc(p.title)} — log" loading="lazy" decoding="async"></div><div class="ba-line"></div><span class="ba-tag l">Log</span><span class="ba-tag r">Graded</span></div></section>`;
+      const chs = DEEP[p.deep] || [];
+      const img = (f, alt) => DEEP_IMGS.has(f) ? `<img src="assets/deep/${p.slug}/${f}" alt="${esc(alt || p.title)}" loading="lazy" decoding="async">` : `<div class="ph-box">${esc(alt || f)}</div>`;
+      const cap = c => c ? `<figcaption>${esc(c)}</figcaption>` : "";
+      const media = m => {
+        if (m.kind === "grid") return `<div class="m-grid" style="--c:${m.cols};--r:${m.ratio}">${m.items.map(([f, c]) => `<figure>${img(f, c)}${cap(c)}</figure>`).join("")}</div>`;
+        if (m.kind === "pairs") return `<div class="m-pairs">${m.items.map(([a, b, c]) => `<figure class="m-pair${b ? "" : " solo"}"><div class="m-pair-in">${b ? `<div><span>Test</span>${img(a, "Camera test")}</div><div><span>Final</span>${img(b, "Final")}</div>` : `<div>${img(a, c)}</div>`}</div>${cap(c)}</figure>`).join("")}</div>`;
+        if (m.kind === "refs") return `<div class="m-refs">${m.items.map(r => `<article class="m-ref"><div class="m-ref-top"><figure class="m-ref-cover">${img(r.cover, r.book)}</figure><div><h4>${esc(r.name)}</h4><div class="m-ref-book">${esc(r.book)}</div>${r.p.map(t => `<p>${esc(t)}</p>`).join("")}</div></div><div class="m-grid" style="--c:${r.photos.length};--r:${r.photos.length > 2 ? "3 / 4" : "4 / 3"}">${r.photos.map(f => `<figure>${img(f, r.name)}</figure>`).join("")}</div></article>`).join("")}</div>`;
         return "";
-      }).join("");
+      };
+      const html = chs.map(c => `<section class="blk ch">
+          <div class="ch-head"><span class="ch-n">${c.n}</span><h3 class="ch-t">${esc(c.title)}</h3></div>
+          <div class="ch-body">
+            ${c.lead ? `<p class="ch-lead">${esc(c.lead)}</p>` : ""}
+            ${c.spec ? `<dl class="ch-spec">${c.spec.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>` : ""}
+            ${(c.p || []).map(t => `<p>${esc(t)}</p>`).join("")}
+          </div>
+          ${c.words ? `<div class="ch-words">${c.words.map(w => `<span>${esc(w)}</span>`).join("")}</div>` : ""}
+          ${(c.media || []).map(m => `<div class="ch-media">${media(m)}</div>`).join("")}
+        </section>`).join("");
       return `<div class="deep" id="deep"><div class="deep-in"><div class="deep-inner">${html}
         <div class="blk deep-end"><p>Want to talk about this project?</p><button type="button" class="more-btn" data-contact="${esc(p.title)}">Get in touch</button></div></div></div></div>`;
     }
