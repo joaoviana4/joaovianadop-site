@@ -780,7 +780,7 @@
     // Ordem cronológica (mais recente primeiro), pelas datas de publicação no YouTube.
     // Projetos sem data no YouTube ficam no fim do respetivo ano; Alegria (sem ano) no fim.
     const DP = [
-      { slug: "ultimo-canto", title: "Último Canto", type: "Short Film", year: 2026, dir: "José P. Miguel", role: "Director of Photography", soon: true, cover: "ultimo-canto", moreLater: true, deep: "ultimo-canto", stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg", "07.jpg", "08.jpg", "09.jpg", "10.jpg"] },
+      { slug: "ultimo-canto", title: "Último Canto", type: "Short Film", year: 2026, dir: "José P. Miguel", role: "Director of Photography", soon: true, cover: "ultimo-canto", more: true, deep: "ultimo-canto", stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg", "07.jpg", "08.jpg", "09.jpg", "10.jpg"] },
       { slug: "cartas-na-mesa", title: "Cartas na Mesa", artist: "Van Zee", type: "Music Video", year: 2026, dir: "Ruben Mendes, Tomás Freitas", role: "Director of Photography", yt: "B7VOs2LPC-Q", cover: "cartas-na-mesa", pos: "62% 50%", rows: 3, stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg", "07.jpg", "08.jpg", "09.jpg"] },
       { slug: "viarco", title: "Viarco", type: "Commercial", year: 2025, dir: "Maria Flores", role: "Creative Director, Director of Photography", soon: true, cover: "viarco", moreLater: true, rows: 1, stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg"] },
       { slug: "auto-de-fe", title: "Auto de Fé", type: "Series Pilot", year: 2025, dir: "José P. Miguel", role: "Director of Photography, Colorist", cover: "auto-de-fe", pos: "30% 50%", moreLater: true, stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg"] },
@@ -1311,8 +1311,8 @@
             ${p.type ? `<div><dt>Type</dt><dd>${esc(p.type)}</dd></div>` : ""}
             ${p.year ? `<div><dt>Year</dt><dd>${p.year}</dd></div>` : ""}
           </dl>
+          ${p.more ? `<button type="button" class="more-btn" data-more="${esc(p.title)}"${p.deep ? ` aria-expanded="false" aria-controls="deep"` : ""}>${p.deep ? "Show me more" : "Let me know more"}${p.deep ? `<span class="arr">↓</span>` : ""}</button>` : ""}
           ${p.soon ? `<div class="soon-big">Coming soon</div>` : ""}
-          ${p.more ? `<button type="button" class="more-btn" data-more="${esc(p.title)}"${p.deep ? ` aria-expanded="false" aria-controls="deep"` : ""}>Let me know more${p.deep ? `<span class="arr">↓</span>` : ""}</button>` : ""}
         </div>
         ${p.more && p.deep ? deepHtml(p) : ""}
         ${video}
@@ -1344,7 +1344,7 @@
         const open = !deep.classList.contains("open");
         deep.classList.toggle("open", open);
         more.setAttribute("aria-expanded", open);
-        more.firstChild.textContent = open ? "Show less" : "Let me know more";
+        more.firstChild.textContent = open ? "Show less" : "Show me more";
         if (open) setTimeout(() => deep.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
       });
       const contact = $("#project [data-contact]");
