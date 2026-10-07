@@ -500,6 +500,7 @@
     .blk-label i { font-style: normal; color: var(--muted); }
     .blk-lead { font-family: "Instrument Serif", serif; font-size: clamp(28px, 3.6vw, 56px); line-height: 1.12; letter-spacing: -.01em; max-width: 22ch; }
     .blk-lead.wide { max-width: 30ch; }
+    .blk-lead.long { max-width: 36ch; font-size: clamp(24px, 2.6vw, 40px); line-height: 1.2; }
     .blk-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: clamp(28px, 6vw, 110px); align-items: start; }
     .blk-cols p { font-size: clamp(16px, 1.35vw, 19px); line-height: 1.6; color: #e6e6e6; max-width: 60ch; }
     .blk-cols p + p { margin-top: 1em; }
@@ -1075,7 +1076,7 @@
     // Placeholders ("[...]") and striped boxes are stand-ins until the real text, BTS and references arrive.
     const DEEP = {
       "ultimo-canto": [
-        { t: "lead", n: "01", label: "The film", text: "[Logline / sinopse curta — uma ou duas frases sobre o filme.]" },
+        { t: "lead", n: "01", label: "The film", long: true, text: "In 1950s Portugal, Isaltina, a taxidermist, lives between silence and the death she preserves. After a mining accident, Leopoldo brings her the canary once used to detect gas underground. By preserving the small bird, Isaltina turns loss into memory." },
         { t: "full", src: "07.jpg" },
         { t: "cols", n: "02", label: "Visual approach",
           spec: [["Camera", "[câmara]"], ["Lenses", "[lentes]"], ["Format", "[formato / resolução]"], ["Aspect", "[aspect ratio]"], ["Grade", "[colorista / ferramenta]"]],
@@ -1094,7 +1095,7 @@
       const txt = v => `<span class="${/^\[/.test(v) ? "ph-txt" : ""}">${esc(v)}</span>`;
       const ph = (label, ar) => `<div class="ph-box" style="--ar:${ar || "4 / 3"}">${esc(label)}</div>`;
       const html = blocks.map(b => {
-        if (b.t === "lead") return `<section class="blk">${lab(b)}<p class="blk-lead${b.wide ? " wide" : ""}">${txt(b.text)}</p></section>`;
+        if (b.t === "lead") return `<section class="blk">${lab(b)}<p class="blk-lead${b.wide ? " wide" : ""}${b.long ? " long" : ""}">${txt(b.text)}</p></section>`;
         if (b.t === "full") return `<section class="blk img-full"><img src="${src(b.src)}" alt="${esc(p.title)}" loading="lazy" decoding="async"></section>`;
         if (b.t === "cols") return `<section class="blk">${lab(b)}<div class="blk-cols"><dl class="spec">${b.spec.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${txt(v)}</dd>`).join("")}</dl><div>${b.text.map(t => `<p>${txt(t)}</p>`).join("")}</div></div></section>`;
         if (b.t === "pair") return `<section class="blk img-pair${b.offset ? " offset" : ""}">${b.src.map(f => `<img src="${src(f)}" alt="${esc(p.title)}" loading="lazy" decoding="async">`).join("")}</section>`;
