@@ -21,7 +21,7 @@ canvas{display:block;position:fixed;inset:0}
 import * as THREE from "three";
 const renderer=new THREE.WebGLRenderer({antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);document.body.appendChild(renderer.domElement);
-const scene=new THREE.Scene();scene.fog=new THREE.Fog(0x000000,8,28);
+const scene=new THREE.Scene();scene.fog=new THREE.Fog(0x000000,12,30);
 const camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,.1,400);
 addEventListener("resize",()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
 const loader=new THREE.TextureLoader();
@@ -39,26 +39,28 @@ let ty=null;addEventListener("touchstart",e=>ty=e.touches[0].clientY,{passive:tr
 
 // OPTION 2 v2 — the screen is always full: at every depth there are rows covering the whole height,
 // and every row is an endless loop (two copies side by side), so the strips never end horizontally.
-const W=1.6,H=1.2,GAP=.08,N=20,STEP=W+GAP,LEN=N*STEP;
+const W=2.4,H=1.8,GAP=.1,N=16,STEP=W+GAP,LEN=N*STEP;
 const geo=new THREE.PlaneGeometry(W,H);
 function row(start){const g=new THREE.Group();
   const back=new THREE.Mesh(new THREE.PlaneGeometry(LEN*2,H+.2),new THREE.MeshBasicMaterial({color:0x0b0b0b,transparent:true}));back.position.set(LEN/2-STEP/2,0,-.01);g.add(back);
   for(let c=0;c<2;c++)for(let i=0;i<N;i++){const m=new THREE.Mesh(geo,mats[(start+i)%mats.length].clone());m.material.transparent=true;m.position.x=c*LEN+i*STEP;g.add(m)}
   return g}
-const PLANES=6,DZ=3.6,ROWGAP=2.7;   // rows every 1.5 units: strips touch with a thin gap, no dead space
+const PLANES=4,DZ=5,ROWGAP=4.2;   // fewer, bigger rows   // rows every 1.5 units: strips touch with a thin gap, no dead space
 const planes=[];
 for(let k=0;k<PLANES;k++){const p=new THREE.Group();
-  for(let j=-7;j<=7;j++){const r=row((k*7+j*3+60)%mats.length);r.position.y=j*ROWGAP+((k*0.37)%1)*ROWGAP;r.userData.dir=(j+k)%2?1:-1;r.userData.sp=.25+((j*7+k*3)%5)*.06;r.position.x=-LEN*Math.random();p.add(r)}
-  p.position.z=2-k*DZ;planes.push(p);scene.add(p)}
+  for(let j=-5;j<=5;j++){const r=row((k*7+j*3+60)%mats.length);r.position.y=j*ROWGAP+((k*0.37)%1)*ROWGAP;r.userData.dir=(j+k)%2?1:-1;r.userData.sp=.25+((j*7+k*3)%5)*.06;r.position.x=-LEN*Math.random();
+    if(Math.random()<.4){r.rotation.z=(Math.random()-.5)*.14;r.rotation.y=(Math.random()-.5)*.25;}   // some rows slightly tilted
+    p.add(r)}
+  p.position.z=-.5-k*DZ;planes.push(p);scene.add(p)}
 camera.position.z=5;
 const clock=new THREE.Clock();let camZ=5;
-renderer.setAnimationLoop(()=>{const dt=clock.getDelta();pos+=(target-pos)*.06;
+renderer.setAnimationLoop(()=>{const dt=Math.min(clock.getDelta(),.05);target+=dt*.9;pos+=(target-pos)*.06;   // the rows drift towards the camera on their own
   camZ=5-pos;camera.position.z=camZ;camera.position.x+=(mx*2.2-camera.position.x)*.05;camera.position.y+=(-my*1.6-camera.position.y)*.05;
   camera.lookAt(camera.position.x*.4,camera.position.y*.4,camZ-10);
   planes.forEach(p=>{
     // endless dive: a plane that goes behind the camera is sent to the back
-    if(p.position.z>camZ-1.5)p.position.z-=PLANES*DZ; if(p.position.z<camZ-1.5-PLANES*DZ)p.position.z+=PLANES*DZ;
-    const d=camZ-p.position.z, a=d<3?Math.max(0,(d-1.5)/1.5):1;   // fade out just before you pass through
+    if(p.position.z>camZ-4)p.position.z-=PLANES*DZ; if(p.position.z<camZ-4-PLANES*DZ)p.position.z+=PLANES*DZ;
+    const d=camZ-p.position.z, a=d<6.5?Math.max(0,(d-4)/2.5):(d>20?Math.max(0,1-(d-20)/4):1);   // fade out just before you pass through
     p.children.forEach(r=>{r.position.x+=r.userData.dir*dt*r.userData.sp; if(r.position.x>-STEP/2)r.position.x-=LEN; if(r.position.x<-LEN-STEP/2)r.position.x+=LEN;
       r.children.forEach(m=>m.material.opacity=a)})});
   renderer.render(scene,camera)});
