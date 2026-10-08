@@ -23,7 +23,6 @@ canvas{display:block;position:fixed;inset:0;z-index:1}
 @keyframes g{0%{transform:translate(0,0)}25%{transform:translate(-5%,3%)}50%{transform:translate(4%,-6%)}75%{transform:translate(-2%,7%)}}
 body.hover{cursor:pointer}
 </style></head><body>
-<div class="smoke" aria-hidden="true"><i class="s1"></i><i class="s2"></i><i class="s3"></i></div>
 <div class="ui">3D lab · scroll / drag = travel · click a still</div>
 <div class="name"><div class="box"><b>JOÃO</b><span>Viana</span></div></div>
 <div class="grain"></div>
@@ -33,7 +32,7 @@ body.hover{cursor:pointer}
 import * as THREE from "three";
 const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setClearColor(0x000000,0);   // transparent, so the smoke shows behind
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);document.body.appendChild(renderer.domElement);
-const scene=new THREE.Scene();scene.fog=new THREE.Fog(0x000000,12,30);
+const scene=new THREE.Scene();scene.fog=new THREE.Fog(0x000000,14,30);
 const camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,.1,400);
 addEventListener("resize",()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
 const SAGE=new THREE.Color(0xAFC2A2);
@@ -57,19 +56,19 @@ function linkTex([a,b]){const c=document.createElement("canvas");c.width=640;c.h
 let linkTexes=[];
 
 // ---------- film strip backing: dark band with sprocket holes top and bottom, and a faint sage glow ----------
-const W=2.4,H=1.8,GAP=.1,N=16,STEP=W+GAP,LEN=N*STEP,BAND=H+.62;
+const W=2.4,H=1.8,GAP=.1,N=16,STEP=W+GAP,LEN=N*STEP,BAND=H+.34;
 function perfTex(){const c=document.createElement("canvas");c.width=128;c.height=Math.round(128*BAND/(STEP/4));const x=c.getContext("2d");
   x.fillStyle="#0d0d0d";x.fillRect(0,0,c.width,c.height);
-  const hw=46,hh=Math.round(c.height*.075),r=8,y1=Math.round(c.height*.035),y2=c.height-y1-hh;
+  const hw=26,hh=Math.round(c.height*.04),r=4,y1=Math.round(c.height*.03),y2=c.height-y1-hh;
   x.globalCompositeOperation="destination-out";
   for(const y of [y1,y2]){x.beginPath();x.roundRect((128-hw)/2,y,hw,hh,r);x.fill()}
-  const t=new THREE.CanvasTexture(c);t.wrapS=THREE.RepeatWrapping;t.repeat.set(LEN*2/(STEP/4),1);t.colorSpace=THREE.SRGBColorSpace;return t}
+  const t=new THREE.CanvasTexture(c);t.wrapS=THREE.RepeatWrapping;t.repeat.set(LEN*3/(STEP/4),1);t.colorSpace=THREE.SRGBColorSpace;return t}
 function glowTex(){const c=document.createElement("canvas");c.width=4;c.height=256;const x=c.getContext("2d");
   const g=x.createLinearGradient(0,0,0,256);g.addColorStop(0,"rgba(175,194,162,0)");g.addColorStop(.12,"rgba(175,194,162,.55)");g.addColorStop(.2,"rgba(175,194,162,0)");
   g.addColorStop(.8,"rgba(175,194,162,0)");g.addColorStop(.88,"rgba(175,194,162,.55)");g.addColorStop(1,"rgba(175,194,162,0)");x.fillStyle=g;x.fillRect(0,0,4,256);
   return new THREE.CanvasTexture(c)}
 const PERF=perfTex(),GLOW=glowTex();
-const tileGeo=new THREE.PlaneGeometry(W,H),bandGeo=new THREE.PlaneGeometry(LEN*2,BAND),glowGeo=new THREE.PlaneGeometry(LEN*2,BAND+.7);
+const tileGeo=new THREE.PlaneGeometry(W,H),bandGeo=new THREE.PlaneGeometry(LEN*3,BAND),glowGeo=new THREE.PlaneGeometry(LEN*2,BAND+.7);
 const clickable=[];
 
 function fillRow(r){   // give a row a fresh, shuffled set of stills (+ maybe one link tile)
@@ -80,16 +79,16 @@ function fillRow(r){   // give a row a fresh, shuffled set of stills (+ maybe on
   r.userData.tiles.forEach((m,i)=>{const p=picks[i%N];m.userData.item=p;
     m.material.map=p.link!==undefined?linkTexes[p.link]:texOf(p.u);m.material.needsUpdate=true})}
 function row(){const g=new THREE.Group();
-  const band=new THREE.Mesh(bandGeo,new THREE.MeshBasicMaterial({map:PERF,transparent:true}));band.position.set(LEN/2-STEP/2,0,-.01);g.add(band);
+  const band=new THREE.Mesh(bandGeo,new THREE.MeshBasicMaterial({map:PERF,transparent:true}));band.position.set(0,0,-.01);g.add(band);
   g.userData.tiles=[];
-  for(let c=0;c<2;c++)for(let i=0;i<N;i++){const m=new THREE.Mesh(tileGeo,new THREE.MeshBasicMaterial({transparent:true}));m.position.x=c*LEN+i*STEP;g.add(m);g.userData.tiles.push(m);clickable.push(m)}
+  for(let c=-1;c<2;c++)for(let i=0;i<N;i++){const m=new THREE.Mesh(tileGeo,new THREE.MeshBasicMaterial({transparent:true}));m.position.x=c*LEN+(i-(N-1)/2)*STEP;g.add(m);g.userData.tiles.push(m);clickable.push(m)}
   return g}
 
-const PLANES=4,DZ=5,ROWGAP=4.2,planes=[];
-function init(){linkTexes=LINKS.map(linkTex);
+const PLANES=3,DZ=7.5,ROWGAP=5.6,planes=[];   // far fewer strips coming at the camera
+function init(){linkTexes=LINKS.map(linkTex);ALL.forEach(a=>texOf(a.u));
   for(let k=0;k<PLANES;k++){const p=new THREE.Group();
-    for(let j=-5;j<=5;j++){const r=row();r.position.y=j*ROWGAP+((k*.37)%1)*ROWGAP;
-      r.userData.dir=Math.random()<.5?1:-1;r.userData.sp=.7+Math.random()*.9;r.position.x=-LEN*Math.random();
+    for(let j=-4;j<=4;j++){const r=row();r.position.y=j*ROWGAP+((k*.37)%1)*ROWGAP;
+      r.userData.dir=Math.random()<.5?1:-1;r.userData.sp=.7+Math.random()*.9;r.position.x=(Math.random()-.5)*LEN;
       if(Math.random()<.4){r.rotation.z=(Math.random()-.5)*.14;r.rotation.y=(Math.random()-.5)*.25}
       fillRow(r);p.add(r)}
     p.position.z=-.5-k*DZ;planes.push(p);scene.add(p)}}
@@ -114,8 +113,8 @@ function loop(){const dt=Math.min(clock.getDelta(),.05);target+=dt*.9;pos+=(targ
   planes.forEach(p=>{
     if(p.position.z>camZ-4){p.position.z-=PLANES*DZ;p.children.forEach(fillRow)}          // recycled to the back with new stills
     if(p.position.z<camZ-4-PLANES*DZ)p.position.z+=PLANES*DZ;
-    const d=camZ-p.position.z,a=d<6.5?Math.max(0,(d-4)/2.5):(d>20?Math.max(0,1-(d-20)/4):1);
-    p.children.forEach(r=>{r.position.x+=r.userData.dir*dt*r.userData.sp;if(r.position.x>-STEP/2)r.position.x-=LEN;if(r.position.x<-LEN-STEP/2)r.position.x+=LEN;
+    const d=camZ-p.position.z,a=d<6.5?Math.max(0,(d-4)/2.5):(d>22?Math.max(0,1-(d-22)/4):1);
+    p.children.forEach(r=>{r.position.x+=r.userData.dir*dt*r.userData.sp;if(r.position.x>LEN/2)r.position.x-=LEN;if(r.position.x<-LEN/2)r.position.x+=LEN;
       r.children.forEach(m=>m.material.opacity=m.material.blending===THREE.AdditiveBlending?a*.5:a)})});
   renderer.render(scene,camera)}
 (document.fonts?Promise.race([document.fonts.load('800 54px "Unbounded"'),new Promise(r=>setTimeout(r,1500))]):Promise.resolve()).then(()=>{init();renderer.setAnimationLoop(loop)});
