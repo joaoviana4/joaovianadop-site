@@ -25,9 +25,22 @@ html[data-theme="light"] .box b{text-shadow:0 1px 10px rgba(255,255,255,.9)} htm
 html[data-theme="light"] .pill{background:rgba(255,255,255,.9);box-shadow:0 0 0 1px rgba(0,0,0,.12)} html[data-theme="light"] .pill button{color:#000} html[data-theme="light"] .pill button.on{background:#111;color:#fff}
 .ui{position:fixed;left:20px;top:22px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);z-index:3;pointer-events:none;opacity:.7}
 body.hover{cursor:pointer}
+.rail{position:fixed;top:0;bottom:0;width:30px;z-index:5;overflow:hidden;pointer-events:none;display:flex;justify-content:center;align-items:flex-start;background:var(--bg)}
+.rail.left{left:0;transform:rotate(180deg)} .rail.right{right:0}
+.rail .track{writing-mode:vertical-rl;white-space:nowrap;height:max-content;font:800 12px "Unbounded",sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#AFC2A2;
+  text-shadow:0 0 14px rgba(175,194,162,.55),0 0 36px rgba(175,194,162,.25);animation:rail 240s linear infinite}
+html[data-theme="light"] .rail .track{color:#000;text-shadow:none}
+@keyframes rail{from{translate:0 0}to{translate:0 -50%}}
+canvas{left:30px!important;right:30px!important;width:calc(100% - 60px)!important}
+.sw{right:46px} .ui{left:50px}
+/* a second, faint dirt layer printed over the strips, like a projected print */
+.dirt.over{z-index:3;opacity:.45;animation-duration:45s}
+@media (max-width:760px){.rail{display:none} canvas{left:0!important;right:0!important;width:100%!important} .sw{right:12px}}
 @media (max-width:760px){.sw{top:12px;right:12px}.pill button{padding:6px 9px;font-size:10px}.ui{display:none}}
 </style></head><body>
 <div class="dirt" id="dirt" aria-hidden="true"></div>
+<div class="dirt over" id="dirt2" aria-hidden="true"></div>
+<div class="rail left" aria-hidden="true"><div class="track"></div></div><div class="rail right" aria-hidden="true"><div class="track"></div></div>
 <div class="ui" id="ui">3D lab · scroll / drag</div>
 <div class="sw"><div class="pill" id="lang"><button data-l="en">EN</button><button data-l="pt">PT</button></div><div class="pill" id="theme"><button data-t="dark">Dark</button><button data-t="light">Light</button></div></div>
 <div class="name"><div class="box"><b>JOÃO</b><span>Viana</span></div></div>
@@ -42,18 +55,19 @@ const light=()=>root.dataset.theme==="light";
 
 // ---------- renderer / scene ----------
 const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setClearColor(0,0);
-renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);document.body.appendChild(renderer.domElement);
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);
+document.querySelectorAll(".rail .track").forEach(t=>t.textContent=Array(48).fill("João Viana + ").join(""));document.body.appendChild(renderer.domElement);
 const scene=new THREE.Scene();scene.fog=new THREE.Fog(0x000000,10,30);
 const camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,.1,400);
 addEventListener("resize",()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);buildDirt()});
 
 // ---------- film dirt + scratches (behind the strips), drawn once as an SVG tile ----------
 function buildDirt(){const W=innerWidth,H=Math.round(innerHeight*1.6),ink=light()?"#000":"#fff";let r=7;const rnd=()=>(r=r*16807%2147483647)/2147483647;
-  let s="";for(let i=0;i<70;i++){const x=rnd()*W,y=rnd()*H,l=30+rnd()*rnd()*520,b=(rnd()-.5)*12;s+=`<path d="M${x} ${y} q${b} ${l/2} ${b*.4} ${l}" stroke-width="${(.4+rnd()*.8).toFixed(2)}" stroke-opacity="${(.06+rnd()*.16).toFixed(2)}" fill="none"/>`}
-  for(let i=0;i<420;i++){s+=`<circle cx="${rnd()*W}" cy="${rnd()*H}" r="${(.3+rnd()**3*2.2).toFixed(2)}" fill-opacity="${(.12+rnd()*.4).toFixed(2)}" stroke="none"/>`}
-  for(let i=0;i<26;i++){const x=rnd()*W,y=rnd()*H,L=12+rnd()*46;s+=`<path d="M${x} ${y} c${(rnd()-.5)*L} ${(rnd()-.5)*L} ${(rnd()-.5)*L} ${(rnd()-.5)*L} ${(rnd()-.5)*L} ${(rnd()-.5)*L}" stroke-width=".6" stroke-opacity=".35" fill="none"/>`}
+  let s="";for(let i=0;i<160;i++){const x=rnd()*W,y=rnd()*H,l=30+rnd()*rnd()*520,b=(rnd()-.5)*12;s+=`<path d="M${x} ${y} q${b} ${l/2} ${b*.4} ${l}" stroke-width="${(.4+rnd()*.8).toFixed(2)}" stroke-opacity="${(.1+rnd()*.22).toFixed(2)}" fill="none"/>`}
+  for(let i=0;i<1100;i++){s+=`<circle cx="${rnd()*W}" cy="${rnd()*H}" r="${(.3+rnd()**3*2.2).toFixed(2)}" fill-opacity="${(.12+rnd()*.4).toFixed(2)}" stroke="none"/>`}
+  for(let i=0;i<60;i++){const x=rnd()*W,y=rnd()*H,L=12+rnd()*46;s+=`<path d="M${x} ${y} c${(rnd()-.5)*L} ${(rnd()-.5)*L} ${(rnd()-.5)*L} ${(rnd()-.5)*L} ${(rnd()-.5)*L} ${(rnd()-.5)*L}" stroke-width=".6" stroke-opacity=".35" fill="none"/>`}
   const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><g stroke="${ink}" fill="${ink}">${s}</g></svg>`;
-  const d=document.getElementById("dirt");d.style.height=H*2+"px";d.style.background=`url("data:image/svg+xml,${encodeURIComponent(svg)}") 0 0/${W}px ${H}px repeat-y`}
+  ["dirt","dirt2"].forEach((id,k)=>{const d=document.getElementById(id);d.style.height=H*2+"px";d.style.background=`url("data:image/svg+xml,${encodeURIComponent(svg)}") ${k*W*.37}px ${k*H*.5}px/${W}px ${H}px repeat`})}
 
 // ---------- stills (real aspect ratios) ----------
 const loader=new THREE.TextureLoader(),texCache=new Map();
