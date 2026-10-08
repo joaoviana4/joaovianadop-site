@@ -11,7 +11,9 @@ canvas{display:block;position:fixed;inset:0;z-index:1}
 .dirt{position:fixed;left:0;right:0;top:0;z-index:0;pointer-events:none;will-change:transform;animation:rise 60s linear infinite}
 @keyframes rise{from{transform:translate3d(0,0,0)}to{transform:translate3d(0,-50%,0)}}
 .grain{position:fixed;inset:-50%;z-index:4;pointer-events:none;opacity:.22;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");animation:g .45s steps(5) infinite;mix-blend-mode:overlay}
-html[data-theme="light"] .grain{mix-blend-mode:multiply;opacity:.28}
+.bgrain{position:fixed;inset:-50%;z-index:0;pointer-events:none;display:none;opacity:.75;mix-blend-mode:multiply;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");animation:g .6s steps(6) infinite}
+html[data-theme="light"] .bgrain{display:block}
+html[data-theme="light"] .grain{mix-blend-mode:multiply;opacity:.45}
 @keyframes g{0%{transform:translate(0,0)}25%{transform:translate(-5%,3%)}50%{transform:translate(4%,-6%)}75%{transform:translate(-2%,7%)}}
 .name{position:fixed;inset:0;display:grid;place-items:center;pointer-events:none;z-index:2}
 .box b{display:block;text-align:right;font-family:"Unbounded",sans-serif;font-size:clamp(11px,1.2vw,18px);color:var(--name);letter-spacing:.06em;text-shadow:0 1px 10px rgba(0,0,0,.9)}
@@ -38,6 +40,7 @@ canvas{left:30px!important;right:30px!important;width:calc(100% - 60px)!importan
 @media (max-width:760px){.rail{display:none} canvas{left:0!important;right:0!important;width:100%!important} .sw{right:12px}}
 @media (max-width:760px){.sw{top:12px;right:12px}.pill button{padding:6px 9px;font-size:10px}.ui{display:none}}
 </style></head><body>
+<div class="bgrain" aria-hidden="true"></div>
 <div class="dirt" id="dirt" aria-hidden="true"></div>
 <div class="dirt over" id="dirt2" aria-hidden="true"></div>
 <div class="rail left" aria-hidden="true"><div class="track"></div></div><div class="rail right" aria-hidden="true"><div class="track"></div></div>
@@ -92,8 +95,11 @@ const H=1.8,GAP=.1,MIN_LEN=46,BAND=H+.34;
 function perfTex(len){const c=document.createElement("canvas");c.width=128;c.height=Math.round(128*BAND/.6);const x=c.getContext("2d");
   x.fillStyle="#0d0d0d";x.fillRect(0,0,c.width,c.height);x.globalCompositeOperation="destination-out";
   const hw=26,hh=Math.round(c.height*.04),y1=Math.round(c.height*.03),y2=c.height-y1-hh;for(const y of [y1,y2]){x.beginPath();x.roundRect((128-hw)/2,y,hw,hh,4);x.fill()}
+  if(!light()){   // dark mode: a very faint sage glow only inside/around the perforations
+    x.globalCompositeOperation="source-over";x.shadowColor="rgba(175,194,162,.55)";x.shadowBlur=10;x.fillStyle="rgba(175,194,162,.16)";
+    for(const y of [y1,y2]){x.beginPath();x.roundRect((128-hw)/2,y,hw,hh,4);x.fill()}}
   const t=new THREE.CanvasTexture(c);t.wrapS=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;return t}
-const PERF=perfTex();
+let PERF=perfTex();
 const clickable=new Set();
 function buildRow(r){   // (re)fill a strip with one project, its stills in order and at their real shape, looped; link tiles in between
   let inner=r.userData.inner;if(!inner){inner=new THREE.Group();r.add(inner);r.userData.inner=inner}
@@ -113,23 +119,29 @@ function buildRow(r){   // (re)fill a strip with one project, its stills in orde
   inner.position.x=(Math.random()-.5)*len;r.userData.born=performance.now()}
 
 const ROWS=22,DEPTH=46,NEAR=4; /* born far away and small */const rows=[];
-const FAN=.38;
-function place(r,z){   // a strip anywhere on screen at its depth, with its own tilt
-  const d=Math.max(6,camera.position.z-z),half=d*Math.tan(Math.PI/6)*.95;
-  r.position.z=z;r.position.y=(Math.random()*2-1)*half*1.05;
+const FAN=.1,MAXTILT=.06;   // very slight
+const TAN=Math.tan(Math.PI/6);
+const screenY=(r,camZ)=>(r.position.y-camera.position.y)/(Math.max(.1,camZ-r.position.z)*TAN);   // -1..1 = bottom..top of the screen
+function place(r,z){   // put a strip in the emptiest band of the screen (looking at the strips that are already visible)
+  const camZ=camera.position.z,d=Math.max(6,camZ-z);
+  const ys=rows.filter(o=>o!==r&&o.userData.inner&&camZ-o.position.z>NEAR+1).map(o=>screenY(o,camZ)).filter(v=>v>-1.1&&v<1.1).sort((a,b)=>a-b);
+  const pts=[-1.05,...ys,1.05];let best=0,at=0;for(let i=0;i<pts.length-1;i++){const g=pts[i+1]-pts[i];if(g>best){best=g;at=(pts[i]+pts[i+1])/2}}
+  const ny=at+(Math.random()-.5)*best*.3;
+  r.position.z=z;r.position.y=camera.position.y+ny*d*TAN;
 
   r.userData.dir=Math.random()<.5?1:-1;r.userData.sp=.6+Math.random()*1.1}
 function init(){makeLinkTexes();Object.values(STILLS).flat().forEach(([u])=>texOf(u));
   camera.position.set(0,0,5);
-  for(let i=0;i<ROWS;i++){const r=new THREE.Group();buildRow(r);place(r,5-NEAR-1-(i/ROWS)*DEPTH-Math.random()*1.2);rows.push(r);scene.add(r)}}
+  for(let i=0;i<ROWS;i++){const r=new THREE.Group();buildRow(r);rows.push(r);place(r,5-NEAR-1-(i+.5)*(DEPTH/ROWS));scene.add(r)}}
 
 // ---------- theme / language ----------
 function paint(){const lt=light();scene.fog.color.set(lt?0xECEAE4:0x000000);buildDirt();
+  PERF=perfTex();rows.forEach(r=>{const b=r.userData.inner&&r.userData.inner.children[0];if(b){const m=PERF.clone();m.repeat.copy(b.material.map.repeat);m.needsUpdate=true;b.material.map=m;b.material.needsUpdate=true}});
   document.querySelectorAll("#theme button").forEach(b=>b.classList.toggle("on",b.dataset.t===(lt?"light":"dark")));
   document.querySelectorAll("#lang button").forEach(b=>b.classList.toggle("on",b.dataset.l===LANG));
   document.querySelectorAll("#theme button").forEach(b=>b.textContent=LANG==="pt"?(b.dataset.t==="dark"?"Escuro":"Claro"):(b.dataset.t==="dark"?"Dark":"Light"));
   document.getElementById("ui").textContent=LANG==="pt"?"3D lab · scroll / arrastar":"3D lab · scroll / drag"}
-function relink(){makeLinkTexes();rows.forEach(r=>r.children.forEach(m=>{const it=m.userData.item;if(it&&it.link!==undefined){m.material.map=linkTexes[it.link];m.material.needsUpdate=true}}))}
+function relink(){makeLinkTexes();rows.forEach(r=>r.userData.inner.children.forEach(m=>{const it=m.userData.item;if(it&&it.link!==undefined){m.material.map=linkTexes[it.link];m.material.needsUpdate=true}}))}
 document.querySelectorAll("#theme button").forEach(b=>b.onclick=()=>{if(b.dataset.t==="light")root.dataset.theme="light";else delete root.dataset.theme;try{localStorage.setItem("theme",b.dataset.t)}catch(e){}paint();relink()});
 document.querySelectorAll("#lang button").forEach(b=>b.onclick=()=>{LANG=b.dataset.l;try{localStorage.setItem("lang",LANG)}catch(e){}paint();relink()});
 
@@ -148,11 +160,13 @@ const clock=new THREE.Clock();
 function loop(){const dt=Math.min(clock.getDelta(),.05);target+=dt*.9;pos+=(target-pos)*.06;
   const camZ=5-pos;camera.position.z=camZ;camera.lookAt(0,0,camZ-10);
   rows.forEach(r=>{
-    if(r.position.z>camZ-NEAR){buildRow(r);place(r,camZ-NEAR-DEPTH-Math.random()*1.5)}         // passed: back to the far end, new project
-    if(r.position.z<camZ-NEAR-DEPTH-3){buildRow(r);place(r,camZ-NEAR-1-Math.random()*3)}
+    const SLOT=DEPTH/ROWS;
+    if(r.position.z>camZ-NEAR){const far=Math.min(...rows.map(o=>o.position.z));buildRow(r);place(r,far-SLOT)}          // one slot behind the last strip: constant rhythm
+    if(r.position.z<camZ-NEAR-DEPTH-SLOT*1.5){const near=Math.max(...rows.map(o=>o.position.z));buildRow(r);place(r,near+SLOT)}   // scrolling back
+    if(Math.abs(screenY(r,camZ))>1.25&&camZ-r.position.z>NEAR+1){const far=Math.min(...rows.map(o=>o.position.z));buildRow(r);place(r,far-SLOT)}   // left the screen: reuse it
     const d=camZ-r.position.z,a=d<NEAR+2.5?Math.max(0,(d-NEAR)/2.5):(d>NEAR+DEPTH-10?Math.max(0,1-(d-(NEAR+DEPTH-10))/10):1);
     const inner=r.userData.inner,L=r.userData.len;inner.position.x+=r.userData.dir*dt*r.userData.sp;if(inner.position.x>L/2)inner.position.x-=L;if(inner.position.x<-L/2)inner.position.x+=L;
-    r.rotation.z=-FAN*(r.position.y-camera.position.y)/Math.max(6,d)*.9;     // fan out from the centre
+    r.rotation.z=Math.max(-MAXTILT,Math.min(MAXTILT,-FAN*(r.position.y-camera.position.y)/Math.max(6,d)));     // fan out from the centre
     const born=Math.min(1,(performance.now()-r.userData.born)/900);           // every new strip fades in, nothing pops
     inner.children.forEach(m=>m.material.opacity=a*born)});
   renderer.render(scene,camera)}
