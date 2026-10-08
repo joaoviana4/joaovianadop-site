@@ -33,7 +33,9 @@ const loader=new THREE.TextureLoader();
 const ALL=[];Object.entries(STILLS).forEach(([slug,list])=>list.forEach(u=>ALL.push({slug,u})));
 const texCache=new Map();
 const texOf=u=>{if(!texCache.has(u)){const t=loader.load(u);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=4;texCache.set(u,t)}return texCache.get(u)};
-let deck=[];const draw=()=>{if(!deck.length)deck=ALL.slice().sort(()=>Math.random()-.5);return deck.pop()};
+// one project per strip: projects are dealt from a shuffled deck, so all of them show up before any repeats
+const SLUGS=Object.keys(STILLS);let pdeck=[];
+const drawProject=()=>{if(!pdeck.length)pdeck=SLUGS.slice().sort(()=>Math.random()-.5);return pdeck.pop()};
 
 // ---------- link tiles (canvas text, same look as the homepage squares) ----------
 const LINKS=[["Cinematography","Work","/#/cinematography"],["Direction","Work","/#/direction"],["About","Me","/#/about"]];
@@ -62,7 +64,9 @@ const clickable=[];
 
 function fillRow(r){   // give a row a fresh, shuffled set of stills (+ maybe one link tile)
   const link=Math.random()<.3?Math.floor(Math.random()*3):-1, at=Math.floor(Math.random()*N);
-  const picks=Array.from({length:N},(_,i)=>i===at&&link>=0?{link}:draw());
+  const slug=drawProject(),list=STILLS[slug],off=Math.floor(Math.random()*list.length);
+  // the project's stills in order, looped until the strip is full
+  const picks=Array.from({length:N},(_,i)=>i===at&&link>=0?{link}:{slug,u:list[(i+off)%list.length]});
   r.userData.tiles.forEach((m,i)=>{const p=picks[i%N];m.userData.item=p;
     m.material.map=p.link!==undefined?linkTexes[p.link]:texOf(p.u);m.material.needsUpdate=true})}
 function row(){const g=new THREE.Group();
