@@ -57,14 +57,15 @@ const light=()=>root.dataset.theme==="light";
 const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setClearColor(0,0);
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);
 document.querySelectorAll(".rail .track").forEach(t=>t.textContent=Array(48).fill("João Viana + ").join(""));document.body.appendChild(renderer.domElement);
-const scene=new THREE.Scene();scene.fog=new THREE.Fog(0x000000,10,30);
+const scene=new THREE.Scene();scene.fog=new THREE.Fog(0x000000,16,52);
 const camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,.1,400);
 addEventListener("resize",()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);buildDirt()});
 
 // ---------- film dirt + scratches (behind the strips), drawn once as an SVG tile ----------
 function buildDirt(){const W=innerWidth,H=Math.round(innerHeight*1.6),ink=light()?"#000":"#fff";let r=7;const rnd=()=>(r=r*16807%2147483647)/2147483647;
-  let s="";for(let i=0;i<160;i++){const x=rnd()*W,y=rnd()*H,l=30+rnd()*rnd()*520,b=(rnd()-.5)*12;s+=`<path d="M${x} ${y} q${b} ${l/2} ${b*.4} ${l}" stroke-width="${(.4+rnd()*.8).toFixed(2)}" stroke-opacity="${(.1+rnd()*.22).toFixed(2)}" fill="none"/>`}
-  for(let i=0;i<1100;i++){s+=`<circle cx="${rnd()*W}" cy="${rnd()*H}" r="${(.3+rnd()**3*2.2).toFixed(2)}" fill-opacity="${(.12+rnd()*.4).toFixed(2)}" stroke="none"/>`}
+  let s="";for(let i=0;i<22;i++){const x=rnd()*W,y=rnd()*H,l=30+rnd()*rnd()*520,b=(rnd()-.5)*12;s+=`<path d="M${x} ${y} q${b} ${l/2} ${b*.4} ${l}" stroke-width="${(.4+rnd()*.8).toFixed(2)}" stroke-opacity="${(.1+rnd()*.22).toFixed(2)}" fill="none"/>`}
+  for(let i=0;i<900;i++){s+=`<circle cx="${rnd()*W}" cy="${rnd()*H}" r="${(.3+rnd()**3*2.2).toFixed(2)}" fill-opacity="${(.12+rnd()*.4).toFixed(2)}" stroke="none"/>`}
+  for(let i=0;i<2600;i++){s+=`<circle cx="${(rnd()*W).toFixed(1)}" cy="${(rnd()*H).toFixed(1)}" r="${(.18+rnd()*.35).toFixed(2)}" fill-opacity="${(.15+rnd()*.35).toFixed(2)}" stroke="none"/>`}   // fine dust
   for(let i=0;i<60;i++){const x=rnd()*W,y=rnd()*H,L=12+rnd()*46;s+=`<path d="M${x} ${y} c${(rnd()-.5)*L} ${(rnd()-.5)*L} ${(rnd()-.5)*L} ${(rnd()-.5)*L} ${(rnd()-.5)*L} ${(rnd()-.5)*L}" stroke-width=".6" stroke-opacity=".35" fill="none"/>`}
   const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><g stroke="${ink}" fill="${ink}">${s}</g></svg>`;
   ["dirt","dirt2"].forEach((id,k)=>{const d=document.getElementById(id);d.style.height=H*2+"px";d.style.background=`url("data:image/svg+xml,${encodeURIComponent(svg)}") ${k*W*.37}px ${k*H*.5}px/${W}px ${H}px repeat`})}
@@ -110,11 +111,12 @@ function buildRow(r){   // (re)fill a strip with one project, its stills in orde
     m.position.x=x+w/2;m.userData.item=it;r.add(m);clickable.add(m);x+=w+GAP}}
   r.position.x=(Math.random()-.5)*len}
 
-const ROWS=20,DEPTH=26,NEAR=4;const rows=[];
+const ROWS=22,DEPTH=46,NEAR=4; /* born far away and small */const rows=[];
+const TILT=-.075;
 function place(r,z){   // a strip anywhere on screen at its depth, with its own tilt
-  const d=Math.max(6,camera.position.z-z),half=d*Math.tan(Math.PI/6);
+  const d=Math.max(6,camera.position.z-z),half=d*Math.tan(Math.PI/6)*.95;
   r.position.z=z;r.position.y=(Math.random()*2-1)*half*1.05;
-  const tilt=Math.random()<.65;r.rotation.set(tilt?(Math.random()-.5)*.25:0,tilt?(Math.random()-.5)*.6:0,tilt?(Math.random()-.5)*.32:0);
+  r.rotation.set(0,0,TILT+(Math.random()-.5)*.02);   // all strips share one slant (±tiny), so they never cross
   r.userData.dir=Math.random()<.5?1:-1;r.userData.sp=.6+Math.random()*1.1}
 function init(){makeLinkTexes();Object.values(STILLS).flat().forEach(([u])=>texOf(u));
   camera.position.set(0,0,5);
@@ -146,8 +148,8 @@ function loop(){const dt=Math.min(clock.getDelta(),.05);target+=dt*.9;pos+=(targ
   const camZ=5-pos;camera.position.z=camZ;camera.lookAt(0,0,camZ-10);
   rows.forEach(r=>{
     if(r.position.z>camZ-NEAR){buildRow(r);place(r,camZ-NEAR-DEPTH-Math.random()*1.5)}         // passed: back to the far end, new project
-    if(r.position.z<camZ-NEAR-DEPTH-3){buildRow(r);place(r,camZ-NEAR-Math.random()*2)}
-    const d=camZ-r.position.z,a=d<NEAR+2.5?Math.max(0,(d-NEAR)/2.5):(d>NEAR+DEPTH-4?Math.max(0,1-(d-(NEAR+DEPTH-4))/4):1);
+    if(r.position.z<camZ-NEAR-DEPTH-3){buildRow(r);place(r,camZ-NEAR-2-Math.random()*4)}
+    const d=camZ-r.position.z,a=d<NEAR+2.5?Math.max(0,(d-NEAR)/2.5):(d>NEAR+DEPTH-10?Math.max(0,1-(d-(NEAR+DEPTH-10))/10):1);
     r.position.x+=r.userData.dir*dt*r.userData.sp;const L=r.userData.len;if(r.position.x>L/2)r.position.x-=L;if(r.position.x<-L/2)r.position.x+=L;
     r.children.forEach(m=>m.material.opacity=a)});
   renderer.render(scene,camera)}
