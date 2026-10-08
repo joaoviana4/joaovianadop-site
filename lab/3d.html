@@ -96,7 +96,8 @@ function perfTex(len){const c=document.createElement("canvas");c.width=128;c.hei
 const PERF=perfTex();
 const clickable=new Set();
 function buildRow(r){   // (re)fill a strip with one project, its stills in order and at their real shape, looped; link tiles in between
-  r.children.slice().forEach(m=>{r.remove(m);clickable.delete(m);m.geometry.dispose();m.material.dispose()});
+  let inner=r.userData.inner;if(!inner){inner=new THREE.Group();r.add(inner);r.userData.inner=inner}
+  inner.children.slice().forEach(m=>{inner.remove(m);clickable.delete(m);m.geometry.dispose();m.material.dispose()});
   if(r.userData.slug)onScreen.delete(r.userData.slug);
   const slug=drawProject(),list=STILLS[slug];r.userData.slug=slug;onScreen.add(slug);
   const seq=[];let len=0,i=Math.floor(Math.random()*list.length),sinceLink=Math.floor(Math.random()*4);
@@ -105,18 +106,18 @@ function buildRow(r){   // (re)fill a strip with one project, its stills in orde
     const [u,a]=list[i%list.length];seq.push({slug,u,a});len+=H*a+GAP;i++;sinceLink++}
   r.userData.len=len;
   const band=new THREE.Mesh(new THREE.PlaneGeometry(len*3,BAND),new THREE.MeshBasicMaterial({map:PERF.clone(),transparent:true}));
-  band.material.map.repeat.set(len*3/.6,1);band.material.map.needsUpdate=true;band.position.z=-.01;r.add(band);
+  band.material.map.repeat.set(len*3/.6,1);band.material.map.needsUpdate=true;band.position.z=-.01;inner.add(band);
   for(let c=-1;c<2;c++){let x=c*len-len/2;for(const it of seq){const w=H*it.a;
     const m=new THREE.Mesh(new THREE.PlaneGeometry(w,H),new THREE.MeshBasicMaterial({transparent:true,map:it.link!==undefined?linkTexes[it.link]:texOf(it.u)}));
-    m.position.x=x+w/2;m.userData.item=it;r.add(m);clickable.add(m);x+=w+GAP}}
-  r.position.x=(Math.random()-.5)*len}
+    m.position.x=x+w/2;m.userData.item=it;inner.add(m);clickable.add(m);x+=w+GAP}}
+  inner.position.x=(Math.random()-.5)*len;r.userData.born=performance.now()}
 
 const ROWS=22,DEPTH=46,NEAR=4; /* born far away and small */const rows=[];
-const TILT=-.075;
+const FAN=.38;
 function place(r,z){   // a strip anywhere on screen at its depth, with its own tilt
   const d=Math.max(6,camera.position.z-z),half=d*Math.tan(Math.PI/6)*.95;
   r.position.z=z;r.position.y=(Math.random()*2-1)*half*1.05;
-  r.rotation.set(0,0,TILT+(Math.random()-.5)*.02);   // all strips share one slant (±tiny), so they never cross
+
   r.userData.dir=Math.random()<.5?1:-1;r.userData.sp=.6+Math.random()*1.1}
 function init(){makeLinkTexes();Object.values(STILLS).flat().forEach(([u])=>texOf(u));
   camera.position.set(0,0,5);
@@ -148,10 +149,12 @@ function loop(){const dt=Math.min(clock.getDelta(),.05);target+=dt*.9;pos+=(targ
   const camZ=5-pos;camera.position.z=camZ;camera.lookAt(0,0,camZ-10);
   rows.forEach(r=>{
     if(r.position.z>camZ-NEAR){buildRow(r);place(r,camZ-NEAR-DEPTH-Math.random()*1.5)}         // passed: back to the far end, new project
-    if(r.position.z<camZ-NEAR-DEPTH-3){buildRow(r);place(r,camZ-NEAR-2-Math.random()*4)}
+    if(r.position.z<camZ-NEAR-DEPTH-3){buildRow(r);place(r,camZ-NEAR-1-Math.random()*3)}
     const d=camZ-r.position.z,a=d<NEAR+2.5?Math.max(0,(d-NEAR)/2.5):(d>NEAR+DEPTH-10?Math.max(0,1-(d-(NEAR+DEPTH-10))/10):1);
-    r.position.x+=r.userData.dir*dt*r.userData.sp;const L=r.userData.len;if(r.position.x>L/2)r.position.x-=L;if(r.position.x<-L/2)r.position.x+=L;
-    r.children.forEach(m=>m.material.opacity=a)});
+    const inner=r.userData.inner,L=r.userData.len;inner.position.x+=r.userData.dir*dt*r.userData.sp;if(inner.position.x>L/2)inner.position.x-=L;if(inner.position.x<-L/2)inner.position.x+=L;
+    r.rotation.z=-FAN*(r.position.y-camera.position.y)/Math.max(6,d)*.9;     // fan out from the centre
+    const born=Math.min(1,(performance.now()-r.userData.born)/900);           // every new strip fades in, nothing pops
+    inner.children.forEach(m=>m.material.opacity=a*born)});
   renderer.render(scene,camera)}
 (document.fonts?Promise.race([document.fonts.load('800 60px "Unbounded"'),new Promise(r=>setTimeout(r,1500))]):Promise.resolve()).then(()=>{init();paint();renderer.setAnimationLoop(loop)});
 </script></body></html>
