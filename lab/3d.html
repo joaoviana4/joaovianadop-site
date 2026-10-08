@@ -1,121 +1,141 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Viana · 3D lab</title>
+<script>try{if(localStorage.getItem("theme")==="light")document.documentElement.dataset.theme="light"}catch(e){}</script>
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@800&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
-:root{--name:#c9d6c0;--accent:#AFC2A2}
-html,body{margin:0;height:100%;background:#000;overflow:hidden;color:#fff;font-family:"IBM Plex Mono",monospace}
+:root{--bg:#000;--name:#c9d6c0;--accent:#AFC2A2;--ink:#fff}
+html[data-theme="light"]{--bg:#ECEAE4;--name:#000;--accent:#000;--ink:#000}
+html,body{margin:0;height:100%;background:var(--bg);overflow:hidden;color:var(--ink);font-family:"IBM Plex Mono",monospace;transition:background .4s}
 canvas{display:block;position:fixed;inset:0;z-index:1}
-/* background smoke: low-opacity violet haze (complementary to the sage), slowly drifting behind the strips */
-.smoke{position:fixed;inset:-25%;z-index:0;pointer-events:none}
-.smoke i{position:absolute;inset:0;display:block}
-.smoke .s1{background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='900'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.0035' numOctaves='4' seed='3'/%3E%3CfeColorMatrix values='0 0 0 0 .36  0 0 0 0 .22  0 0 0 0 .62  0 0 0 1.7 -.75'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E") center/900px 900px;opacity:.55;filter:blur(18px);animation:drift1 70s linear infinite alternate}
-.smoke .s2{background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1200' height='1200'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.0022' numOctaves='3' seed='11'/%3E%3CfeColorMatrix values='0 0 0 0 .26  0 0 0 0 .2  0 0 0 0 .58  0 0 0 1.6 -.8'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E") center/1200px 1200px;opacity:.45;filter:blur(30px);animation:drift2 95s linear infinite alternate}
-.smoke .s3{background:radial-gradient(45% 40% at 55% 55%,rgba(88,60,170,.28),transparent 70%),radial-gradient(30% 30% at 30% 35%,rgba(120,70,170,.16),transparent 70%);animation:breathe 14s ease-in-out infinite alternate}
-@keyframes drift1{from{transform:translate(-4%,-3%) scale(1)}to{transform:translate(5%,4%) scale(1.12)}}
-@keyframes drift2{from{transform:translate(4%,2%) scale(1.1) rotate(0)}to{transform:translate(-5%,-4%) scale(1) rotate(6deg)}}
-@keyframes breathe{from{opacity:.7}to{opacity:1}}
-.ui{position:fixed;left:20px;top:18px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);z-index:3;line-height:1.7;pointer-events:none}
-.name{position:fixed;inset:0;display:grid;place-items:center;pointer-events:none;z-index:2}
-.box{padding:.35em .6em .3em}
-.box b{display:block;text-align:right;text-shadow:0 1px 10px rgba(0,0,0,.9);font-family:"Unbounded",sans-serif;font-size:clamp(11px,1.2vw,18px);color:var(--name);letter-spacing:.06em}
-.box span{font-family:"Unbounded",sans-serif;font-weight:800;font-size:clamp(38px,6.5vw,104px);line-height:1;color:var(--name);text-transform:uppercase;filter:drop-shadow(0 0 14px rgba(175,194,162,.35)) drop-shadow(0 2px 18px rgba(0,0,0,.85))}
-.grain{position:fixed;inset:-50%;z-index:4;pointer-events:none;opacity:.12;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");animation:g .5s steps(5) infinite}
+/* film dirt + scratches behind the strips (moving up slowly) and heavy grain over everything */
+.dirt{position:fixed;left:0;right:0;top:0;z-index:0;pointer-events:none;will-change:transform;animation:rise 60s linear infinite}
+@keyframes rise{from{transform:translate3d(0,0,0)}to{transform:translate3d(0,-50%,0)}}
+.grain{position:fixed;inset:-50%;z-index:4;pointer-events:none;opacity:.22;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");animation:g .45s steps(5) infinite;mix-blend-mode:overlay}
+html[data-theme="light"] .grain{mix-blend-mode:multiply;opacity:.28}
 @keyframes g{0%{transform:translate(0,0)}25%{transform:translate(-5%,3%)}50%{transform:translate(4%,-6%)}75%{transform:translate(-2%,7%)}}
+.name{position:fixed;inset:0;display:grid;place-items:center;pointer-events:none;z-index:2}
+.box b{display:block;text-align:right;font-family:"Unbounded",sans-serif;font-size:clamp(11px,1.2vw,18px);color:var(--name);letter-spacing:.06em;text-shadow:0 1px 10px rgba(0,0,0,.9)}
+.box span{font-family:"Unbounded",sans-serif;font-weight:800;font-size:clamp(38px,6.5vw,104px);line-height:1;color:var(--name);text-transform:uppercase;filter:drop-shadow(0 0 14px rgba(175,194,162,.35)) drop-shadow(0 2px 18px rgba(0,0,0,.85))}
+html[data-theme="light"] .box b{text-shadow:0 1px 10px rgba(255,255,255,.9)} html[data-theme="light"] .box span{filter:drop-shadow(0 2px 16px rgba(255,255,255,.9))}
+/* top-right switches: light/dark and language */
+.sw{position:fixed;top:16px;right:16px;z-index:6;display:flex;gap:8px}
+.pill{display:inline-flex;padding:3px;border-radius:999px;background:rgba(0,0,0,.82);box-shadow:0 0 0 1px rgba(175,194,162,.35)}
+.pill button{border:0;background:none;cursor:pointer;padding:7px 12px;border-radius:999px;font:500 11px "IBM Plex Mono",monospace;letter-spacing:.12em;text-transform:uppercase;color:#AFC2A2;transition:background .3s,color .3s}
+.pill button.on{background:#AFC2A2;color:#000}
+html[data-theme="light"] .pill{background:rgba(255,255,255,.9);box-shadow:0 0 0 1px rgba(0,0,0,.12)} html[data-theme="light"] .pill button{color:#000} html[data-theme="light"] .pill button.on{background:#111;color:#fff}
+.ui{position:fixed;left:20px;top:22px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);z-index:3;pointer-events:none;opacity:.7}
 body.hover{cursor:pointer}
+@media (max-width:760px){.sw{top:12px;right:12px}.pill button{padding:6px 9px;font-size:10px}.ui{display:none}}
 </style></head><body>
-<div class="ui">3D lab · scroll / drag = travel · click a still</div>
+<div class="dirt" id="dirt" aria-hidden="true"></div>
+<div class="ui" id="ui">3D lab · scroll / drag</div>
+<div class="sw"><div class="pill" id="lang"><button data-l="en">EN</button><button data-l="pt">PT</button></div><div class="pill" id="theme"><button data-t="dark">Dark</button><button data-t="light">Light</button></div></div>
 <div class="name"><div class="box"><b>JOÃO</b><span>Viana</span></div></div>
-<div class="grain"></div>
-<script>window.STILLS={"ultimo-canto": ["/assets/stills/ultimo-canto/s/01.jpg", "/assets/stills/ultimo-canto/s/02.jpg", "/assets/stills/ultimo-canto/s/03.jpg", "/assets/stills/ultimo-canto/s/04.jpg", "/assets/stills/ultimo-canto/s/05.jpg", "/assets/stills/ultimo-canto/s/06.jpg", "/assets/stills/ultimo-canto/s/07.jpg", "/assets/stills/ultimo-canto/s/08.jpg", "/assets/stills/ultimo-canto/s/09.jpg", "/assets/stills/ultimo-canto/s/10.jpg"], "cartas-na-mesa": ["/assets/stills/cartas-na-mesa/s/01.jpg", "/assets/stills/cartas-na-mesa/s/02.jpg", "/assets/stills/cartas-na-mesa/s/03.jpg", "/assets/stills/cartas-na-mesa/s/04.jpg", "/assets/stills/cartas-na-mesa/s/05.jpg", "/assets/stills/cartas-na-mesa/s/06.jpg", "/assets/stills/cartas-na-mesa/s/07.jpg", "/assets/stills/cartas-na-mesa/s/08.jpg", "/assets/stills/cartas-na-mesa/s/09.jpg"], "viarco": ["/assets/stills/viarco/s/01.jpg", "/assets/stills/viarco/s/02.jpg", "/assets/stills/viarco/s/03.jpg", "/assets/stills/viarco/s/04.jpg"], "auto-de-fe": ["/assets/stills/auto-de-fe/s/01.jpg", "/assets/stills/auto-de-fe/s/02.jpg", "/assets/stills/auto-de-fe/s/03.jpg", "/assets/stills/auto-de-fe/s/04.jpg", "/assets/stills/auto-de-fe/s/05.jpg", "/assets/stills/auto-de-fe/s/06.jpg"], "quase-nada": ["/assets/stills/quase-nada/s/01.jpg", "/assets/stills/quase-nada/s/02.jpg", "/assets/stills/quase-nada/s/03.jpg", "/assets/stills/quase-nada/s/04.jpg", "/assets/stills/quase-nada/s/05.jpg", "/assets/stills/quase-nada/s/06.jpg"], "top": ["/assets/stills/top/s/01.jpg", "/assets/stills/top/s/02.jpg", "/assets/stills/top/s/03.jpg", "/assets/stills/top/s/04.jpg", "/assets/stills/top/s/05.jpg", "/assets/stills/top/s/06.jpg", "/assets/stills/top/s/07.jpg", "/assets/stills/top/s/08.jpg"], "a-grande-viagem": ["/assets/stills/a-grande-viagem/s/01.jpg", "/assets/stills/a-grande-viagem/s/02.jpg", "/assets/stills/a-grande-viagem/s/03.jpg", "/assets/stills/a-grande-viagem/s/04.jpg", "/assets/stills/a-grande-viagem/s/05.jpg", "/assets/stills/a-grande-viagem/s/06.jpg"], "novidades": ["/assets/stills/novidades/s/01.jpg", "/assets/stills/novidades/s/02.jpg", "/assets/stills/novidades/s/03.jpg", "/assets/stills/novidades/s/04.jpg", "/assets/stills/novidades/s/05.jpg", "/assets/stills/novidades/s/06.jpg", "/assets/stills/novidades/s/07.jpg", "/assets/stills/novidades/s/08.jpg"], "ha-de-sarar": ["/assets/stills/ha-de-sarar/s/01.jpg", "/assets/stills/ha-de-sarar/s/02.jpg", "/assets/stills/ha-de-sarar/s/03.jpg", "/assets/stills/ha-de-sarar/s/04.jpg", "/assets/stills/ha-de-sarar/s/05.jpg", "/assets/stills/ha-de-sarar/s/06.jpg", "/assets/stills/ha-de-sarar/s/07.jpg", "/assets/stills/ha-de-sarar/s/08.jpg", "/assets/stills/ha-de-sarar/s/09.jpg", "/assets/stills/ha-de-sarar/s/10.jpg", "/assets/stills/ha-de-sarar/s/11.jpg"], "desculpa": ["/assets/stills/desculpa/s/01.jpg", "/assets/stills/desculpa/s/02.jpg", "/assets/stills/desculpa/s/03.jpg"], "so": ["/assets/stills/so/s/01.jpg", "/assets/stills/so/s/02.jpg", "/assets/stills/so/s/03.jpg", "/assets/stills/so/s/04.jpg", "/assets/stills/so/s/05.jpg", "/assets/stills/so/s/06.jpg"], "nada-demais": ["/assets/stills/nada-demais/s/01.jpg", "/assets/stills/nada-demais/s/02.jpg", "/assets/stills/nada-demais/s/03.jpg"], "alegria": ["/assets/stills/alegria/s/01.jpg", "/assets/stills/alegria/s/02.jpg", "/assets/stills/alegria/s/03.jpg", "/assets/stills/alegria/s/04.jpg", "/assets/stills/alegria/s/05.jpg", "/assets/stills/alegria/s/06.jpg", "/assets/stills/alegria/s/07.jpg"], "nunca-te-esqueco": ["/assets/stills/nunca-te-esqueco/s/01.jpg", "/assets/stills/nunca-te-esqueco/s/02.jpg", "/assets/stills/nunca-te-esqueco/s/03.jpg", "/assets/stills/nunca-te-esqueco/s/04.jpg", "/assets/stills/nunca-te-esqueco/s/05.jpg", "/assets/stills/nunca-te-esqueco/s/06.jpg"], "severa": ["/assets/stills/severa/s/01.jpg", "/assets/stills/severa/s/02.jpg", "/assets/stills/severa/s/03.jpg", "/assets/stills/severa/s/04.jpg", "/assets/stills/severa/s/05.jpg", "/assets/stills/severa/s/06.jpg", "/assets/stills/severa/s/07.jpg"], "celia": ["/assets/stills/celia/s/01.jpg", "/assets/stills/celia/s/02.jpg", "/assets/stills/celia/s/03.jpg", "/assets/stills/celia/s/04.jpg", "/assets/stills/celia/s/05.jpg", "/assets/stills/celia/s/06.jpg"]};</script>
+<div class="grain" aria-hidden="true"></div>
+<script>window.STILLS={"ultimo-canto": [["/assets/stills/ultimo-canto/s/01.jpg", 1.333], ["/assets/stills/ultimo-canto/s/02.jpg", 1.333], ["/assets/stills/ultimo-canto/s/03.jpg", 1.333], ["/assets/stills/ultimo-canto/s/04.jpg", 1.333], ["/assets/stills/ultimo-canto/s/05.jpg", 1.333], ["/assets/stills/ultimo-canto/s/06.jpg", 1.333], ["/assets/stills/ultimo-canto/s/07.jpg", 1.333], ["/assets/stills/ultimo-canto/s/08.jpg", 1.333], ["/assets/stills/ultimo-canto/s/09.jpg", 1.333], ["/assets/stills/ultimo-canto/s/10.jpg", 1.333]], "cartas-na-mesa": [["/assets/stills/cartas-na-mesa/s/01.jpg", 2.358], ["/assets/stills/cartas-na-mesa/s/02.jpg", 2.358], ["/assets/stills/cartas-na-mesa/s/03.jpg", 2.358], ["/assets/stills/cartas-na-mesa/s/04.jpg", 2.358], ["/assets/stills/cartas-na-mesa/s/05.jpg", 2.358], ["/assets/stills/cartas-na-mesa/s/06.jpg", 2.358], ["/assets/stills/cartas-na-mesa/s/07.jpg", 2.358], ["/assets/stills/cartas-na-mesa/s/08.jpg", 2.358], ["/assets/stills/cartas-na-mesa/s/09.jpg", 2.358]], "viarco": [["/assets/stills/viarco/s/01.jpg", 1.336], ["/assets/stills/viarco/s/02.jpg", 1.336], ["/assets/stills/viarco/s/03.jpg", 1.333], ["/assets/stills/viarco/s/04.jpg", 1.336]], "auto-de-fe": [["/assets/stills/auto-de-fe/s/01.jpg", 1.672], ["/assets/stills/auto-de-fe/s/02.jpg", 1.672], ["/assets/stills/auto-de-fe/s/03.jpg", 1.672], ["/assets/stills/auto-de-fe/s/04.jpg", 1.672], ["/assets/stills/auto-de-fe/s/05.jpg", 1.664], ["/assets/stills/auto-de-fe/s/06.jpg", 1.672]], "quase-nada": [["/assets/stills/quase-nada/s/01.jpg", 1.333], ["/assets/stills/quase-nada/s/02.jpg", 1.333], ["/assets/stills/quase-nada/s/03.jpg", 1.333], ["/assets/stills/quase-nada/s/04.jpg", 1.333], ["/assets/stills/quase-nada/s/05.jpg", 1.333], ["/assets/stills/quase-nada/s/06.jpg", 1.333]], "top": [["/assets/stills/top/s/01.jpg", 1.333], ["/assets/stills/top/s/02.jpg", 1.333], ["/assets/stills/top/s/03.jpg", 1.333], ["/assets/stills/top/s/04.jpg", 1.333], ["/assets/stills/top/s/05.jpg", 1.333], ["/assets/stills/top/s/06.jpg", 1.333], ["/assets/stills/top/s/07.jpg", 1.333], ["/assets/stills/top/s/08.jpg", 1.333]], "a-grande-viagem": [["/assets/stills/a-grande-viagem/s/01.jpg", 1.333], ["/assets/stills/a-grande-viagem/s/02.jpg", 1.333], ["/assets/stills/a-grande-viagem/s/03.jpg", 1.333], ["/assets/stills/a-grande-viagem/s/04.jpg", 1.333], ["/assets/stills/a-grande-viagem/s/05.jpg", 1.333], ["/assets/stills/a-grande-viagem/s/06.jpg", 1.333]], "novidades": [["/assets/stills/novidades/s/01.jpg", 1.778], ["/assets/stills/novidades/s/02.jpg", 1.778], ["/assets/stills/novidades/s/03.jpg", 1.778], ["/assets/stills/novidades/s/04.jpg", 1.778], ["/assets/stills/novidades/s/05.jpg", 1.778], ["/assets/stills/novidades/s/06.jpg", 1.225], ["/assets/stills/novidades/s/07.jpg", 1.225], ["/assets/stills/novidades/s/08.jpg", 1.225]], "ha-de-sarar": [["/assets/stills/ha-de-sarar/s/01.jpg", 1.325], ["/assets/stills/ha-de-sarar/s/02.jpg", 1.325], ["/assets/stills/ha-de-sarar/s/03.jpg", 1.325], ["/assets/stills/ha-de-sarar/s/04.jpg", 1.325], ["/assets/stills/ha-de-sarar/s/05.jpg", 1.325], ["/assets/stills/ha-de-sarar/s/06.jpg", 1.325], ["/assets/stills/ha-de-sarar/s/07.jpg", 1.325], ["/assets/stills/ha-de-sarar/s/08.jpg", 1.325], ["/assets/stills/ha-de-sarar/s/09.jpg", 1.325], ["/assets/stills/ha-de-sarar/s/10.jpg", 1.325], ["/assets/stills/ha-de-sarar/s/11.jpg", 1.325]], "desculpa": [["/assets/stills/desculpa/s/01.jpg", 1.778], ["/assets/stills/desculpa/s/02.jpg", 1.778], ["/assets/stills/desculpa/s/03.jpg", 1.778]], "so": [["/assets/stills/so/s/01.jpg", 1.664], ["/assets/stills/so/s/02.jpg", 1.664], ["/assets/stills/so/s/03.jpg", 1.664], ["/assets/stills/so/s/04.jpg", 1.664], ["/assets/stills/so/s/05.jpg", 1.664], ["/assets/stills/so/s/06.jpg", 1.664]], "nada-demais": [["/assets/stills/nada-demais/s/01.jpg", 1.331], ["/assets/stills/nada-demais/s/02.jpg", 1.331], ["/assets/stills/nada-demais/s/03.jpg", 1.331]], "alegria": [["/assets/stills/alegria/s/01.jpg", 1.333], ["/assets/stills/alegria/s/02.jpg", 1.333], ["/assets/stills/alegria/s/03.jpg", 1.333], ["/assets/stills/alegria/s/04.jpg", 1.333], ["/assets/stills/alegria/s/05.jpg", 1.333], ["/assets/stills/alegria/s/06.jpg", 1.333], ["/assets/stills/alegria/s/07.jpg", 1.333]], "nunca-te-esqueco": [["/assets/stills/nunca-te-esqueco/s/01.jpg", 1.333], ["/assets/stills/nunca-te-esqueco/s/02.jpg", 1.333], ["/assets/stills/nunca-te-esqueco/s/03.jpg", 1.333], ["/assets/stills/nunca-te-esqueco/s/04.jpg", 1.333], ["/assets/stills/nunca-te-esqueco/s/05.jpg", 1.333], ["/assets/stills/nunca-te-esqueco/s/06.jpg", 1.333]], "severa": [["/assets/stills/severa/s/01.jpg", 1.331], ["/assets/stills/severa/s/02.jpg", 1.331], ["/assets/stills/severa/s/03.jpg", 1.331], ["/assets/stills/severa/s/04.jpg", 1.331], ["/assets/stills/severa/s/05.jpg", 1.331], ["/assets/stills/severa/s/06.jpg", 1.331], ["/assets/stills/severa/s/07.jpg", 1.331]], "celia": [["/assets/stills/celia/s/01.jpg", 1.333], ["/assets/stills/celia/s/02.jpg", 1.333], ["/assets/stills/celia/s/03.jpg", 1.333], ["/assets/stills/celia/s/04.jpg", 1.333], ["/assets/stills/celia/s/05.jpg", 1.333], ["/assets/stills/celia/s/06.jpg", 1.333]]};</script>
 <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.min.js"}}</script>
 <script type="module">
 import * as THREE from "three";
-const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setClearColor(0x000000,0);   // transparent, so the smoke shows behind
+const root=document.documentElement;
+let LANG=(()=>{try{return localStorage.getItem("lang")==="pt"?"pt":"en"}catch(e){return "en"}})();
+const light=()=>root.dataset.theme==="light";
+
+// ---------- renderer / scene ----------
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});renderer.setClearColor(0,0);
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);document.body.appendChild(renderer.domElement);
-const scene=new THREE.Scene();scene.fog=new THREE.Fog(0x000000,14,30);
+const scene=new THREE.Scene();scene.fog=new THREE.Fog(0x000000,10,30);
 const camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,.1,400);
-addEventListener("resize",()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
-const SAGE=new THREE.Color(0xAFC2A2);
+addEventListener("resize",()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);buildDirt()});
 
-// ---------- stills: every project, shuffled per row so rows never look the same ----------
-const loader=new THREE.TextureLoader();
-const ALL=[];Object.entries(STILLS).forEach(([slug,list])=>list.forEach(u=>ALL.push({slug,u})));
-const texCache=new Map();
+// ---------- film dirt + scratches (behind the strips), drawn once as an SVG tile ----------
+function buildDirt(){const W=innerWidth,H=Math.round(innerHeight*1.6),ink=light()?"#000":"#fff";let r=7;const rnd=()=>(r=r*16807%2147483647)/2147483647;
+  let s="";for(let i=0;i<70;i++){const x=rnd()*W,y=rnd()*H,l=30+rnd()*rnd()*520,b=(rnd()-.5)*12;s+=`<path d="M${x} ${y} q${b} ${l/2} ${b*.4} ${l}" stroke-width="${(.4+rnd()*.8).toFixed(2)}" stroke-opacity="${(.06+rnd()*.16).toFixed(2)}" fill="none"/>`}
+  for(let i=0;i<420;i++){s+=`<circle cx="${rnd()*W}" cy="${rnd()*H}" r="${(.3+rnd()**3*2.2).toFixed(2)}" fill-opacity="${(.12+rnd()*.4).toFixed(2)}" stroke="none"/>`}
+  for(let i=0;i<26;i++){const x=rnd()*W,y=rnd()*H,L=12+rnd()*46;s+=`<path d="M${x} ${y} c${(rnd()-.5)*L} ${(rnd()-.5)*L} ${(rnd()-.5)*L} ${(rnd()-.5)*L} ${(rnd()-.5)*L} ${(rnd()-.5)*L}" stroke-width=".6" stroke-opacity=".35" fill="none"/>`}
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><g stroke="${ink}" fill="${ink}">${s}</g></svg>`;
+  const d=document.getElementById("dirt");d.style.height=H*2+"px";d.style.background=`url("data:image/svg+xml,${encodeURIComponent(svg)}") 0 0/${W}px ${H}px repeat-y`}
+
+// ---------- stills (real aspect ratios) ----------
+const loader=new THREE.TextureLoader(),texCache=new Map();
 const texOf=u=>{if(!texCache.has(u)){const t=loader.load(u);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=4;texCache.set(u,t)}return texCache.get(u)};
-// one project per strip: projects are dealt from a shuffled deck, so all of them show up before any repeats
-const SLUGS=Object.keys(STILLS);let pdeck=[];
-const drawProject=()=>{if(!pdeck.length)pdeck=SLUGS.slice().sort(()=>Math.random()-.5);return pdeck.pop()};
+const SLUGS=Object.keys(STILLS);let pdeck=[];const onScreen=new Set();
+const drawProject=()=>{for(let k=0;k<SLUGS.length;k++){if(!pdeck.length)pdeck=SLUGS.slice().sort(()=>Math.random()-.5);const s=pdeck.pop();if(!onScreen.has(s))return s}return SLUGS[Math.floor(Math.random()*SLUGS.length)]};
 
-// ---------- link tiles (canvas text, same look as the homepage squares) ----------
-const LINKS=[["Cinematography","Work","/#/cinematography"],["Direction","Work","/#/direction"],["About","Me","/#/about"]];
-function linkTex([a,b]){const c=document.createElement("canvas");c.width=640;c.height=480;const x=c.getContext("2d");
-  x.fillStyle="#000";x.fillRect(0,0,640,480);x.fillStyle="#c9d6c0";x.textAlign="center";x.textBaseline="middle";
-  x.shadowColor="rgba(175,194,162,.55)";x.shadowBlur=22;x.font='800 54px "Unbounded", sans-serif';
-  x.fillText(a.toUpperCase(),320,212);x.fillText(b.toUpperCase(),320,280);
-  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t}
+// ---------- link tiles ----------
+const LINKS={en:[["Cinematography","Work"],["Direction","Work"],["About","Me"]],pt:[["Cinematografia",""],["Realização",""],["Sobre","Mim"]]};
+const HREF=["/#/cinematography","/#/direction","/#/about"];
 let linkTexes=[];
+function makeLinkTexes(){linkTexes.forEach(t=>t.dispose());linkTexes=LINKS[LANG].map(([a,b])=>{const c=document.createElement("canvas");c.width=640;c.height=480;const x=c.getContext("2d");
+  x.fillStyle=light()?"#fff":"#000";x.fillRect(0,0,640,480);x.fillStyle=light()?"#000":"#c9d6c0";x.textAlign="center";x.textBaseline="middle";
+  if(!light()){x.shadowColor="rgba(175,194,162,.55)";x.shadowBlur=22}
+  let f=60;do{x.font=`800 ${f}px "Unbounded", sans-serif`;f-=2}while(Math.max(x.measureText(a.toUpperCase()).width,x.measureText(b.toUpperCase()).width)>540);
+  if(b){x.fillText(a.toUpperCase(),320,212);x.fillText(b.toUpperCase(),320,284)}else x.fillText(a.toUpperCase(),320,248);
+  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t})}
 
-// ---------- film strip backing: dark band with sprocket holes top and bottom, and a faint sage glow ----------
-const W=2.4,H=1.8,GAP=.1,N=16,STEP=W+GAP,LEN=N*STEP,BAND=H+.34;
-function perfTex(){const c=document.createElement("canvas");c.width=128;c.height=Math.round(128*BAND/(STEP/4));const x=c.getContext("2d");
-  x.fillStyle="#0d0d0d";x.fillRect(0,0,c.width,c.height);
-  const hw=26,hh=Math.round(c.height*.04),r=4,y1=Math.round(c.height*.03),y2=c.height-y1-hh;
-  x.globalCompositeOperation="destination-out";
-  for(const y of [y1,y2]){x.beginPath();x.roundRect((128-hw)/2,y,hw,hh,r);x.fill()}
-  const t=new THREE.CanvasTexture(c);t.wrapS=THREE.RepeatWrapping;t.repeat.set(LEN*3/(STEP/4),1);t.colorSpace=THREE.SRGBColorSpace;return t}
-function glowTex(){const c=document.createElement("canvas");c.width=4;c.height=256;const x=c.getContext("2d");
-  const g=x.createLinearGradient(0,0,0,256);g.addColorStop(0,"rgba(175,194,162,0)");g.addColorStop(.12,"rgba(175,194,162,.55)");g.addColorStop(.2,"rgba(175,194,162,0)");
-  g.addColorStop(.8,"rgba(175,194,162,0)");g.addColorStop(.88,"rgba(175,194,162,.55)");g.addColorStop(1,"rgba(175,194,162,0)");x.fillStyle=g;x.fillRect(0,0,4,256);
-  return new THREE.CanvasTexture(c)}
-const PERF=perfTex(),GLOW=glowTex();
-const tileGeo=new THREE.PlaneGeometry(W,H),bandGeo=new THREE.PlaneGeometry(LEN*3,BAND),glowGeo=new THREE.PlaneGeometry(LEN*2,BAND+.7);
-const clickable=[];
+// ---------- strips ----------
+const H=1.8,GAP=.1,MIN_LEN=46,BAND=H+.34;
+function perfTex(len){const c=document.createElement("canvas");c.width=128;c.height=Math.round(128*BAND/.6);const x=c.getContext("2d");
+  x.fillStyle="#0d0d0d";x.fillRect(0,0,c.width,c.height);x.globalCompositeOperation="destination-out";
+  const hw=26,hh=Math.round(c.height*.04),y1=Math.round(c.height*.03),y2=c.height-y1-hh;for(const y of [y1,y2]){x.beginPath();x.roundRect((128-hw)/2,y,hw,hh,4);x.fill()}
+  const t=new THREE.CanvasTexture(c);t.wrapS=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;return t}
+const PERF=perfTex();
+const clickable=new Set();
+function buildRow(r){   // (re)fill a strip with one project, its stills in order and at their real shape, looped; link tiles in between
+  r.children.slice().forEach(m=>{r.remove(m);clickable.delete(m);m.geometry.dispose();m.material.dispose()});
+  if(r.userData.slug)onScreen.delete(r.userData.slug);
+  const slug=drawProject(),list=STILLS[slug];r.userData.slug=slug;onScreen.add(slug);
+  const seq=[];let len=0,i=Math.floor(Math.random()*list.length),sinceLink=Math.floor(Math.random()*4);
+  while(len<MIN_LEN){
+    if(sinceLink>=4+Math.floor(Math.random()*3)){const k=Math.floor(Math.random()*3);seq.push({link:k,a:4/3});len+=H*4/3+GAP;sinceLink=0;continue}
+    const [u,a]=list[i%list.length];seq.push({slug,u,a});len+=H*a+GAP;i++;sinceLink++}
+  r.userData.len=len;
+  const band=new THREE.Mesh(new THREE.PlaneGeometry(len*3,BAND),new THREE.MeshBasicMaterial({map:PERF.clone(),transparent:true}));
+  band.material.map.repeat.set(len*3/.6,1);band.material.map.needsUpdate=true;band.position.z=-.01;r.add(band);
+  for(let c=-1;c<2;c++){let x=c*len-len/2;for(const it of seq){const w=H*it.a;
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(w,H),new THREE.MeshBasicMaterial({transparent:true,map:it.link!==undefined?linkTexes[it.link]:texOf(it.u)}));
+    m.position.x=x+w/2;m.userData.item=it;r.add(m);clickable.add(m);x+=w+GAP}}
+  r.position.x=(Math.random()-.5)*len}
 
-function fillRow(r){   // give a row a fresh, shuffled set of stills (+ maybe one link tile)
-  const link=Math.random()<.3?Math.floor(Math.random()*3):-1, at=Math.floor(Math.random()*N);
-  const slug=drawProject(),list=STILLS[slug],off=Math.floor(Math.random()*list.length);
-  // the project's stills in order, looped until the strip is full
-  const picks=Array.from({length:N},(_,i)=>i===at&&link>=0?{link}:{slug,u:list[(i+off)%list.length]});
-  r.userData.tiles.forEach((m,i)=>{const p=picks[i%N];m.userData.item=p;
-    m.material.map=p.link!==undefined?linkTexes[p.link]:texOf(p.u);m.material.needsUpdate=true})}
-function row(){const g=new THREE.Group();
-  const band=new THREE.Mesh(bandGeo,new THREE.MeshBasicMaterial({map:PERF,transparent:true}));band.position.set(0,0,-.01);g.add(band);
-  g.userData.tiles=[];
-  for(let c=-1;c<2;c++)for(let i=0;i<N;i++){const m=new THREE.Mesh(tileGeo,new THREE.MeshBasicMaterial({transparent:true}));m.position.x=c*LEN+(i-(N-1)/2)*STEP;g.add(m);g.userData.tiles.push(m);clickable.push(m)}
-  return g}
+const ROWS=20,DEPTH=26,NEAR=4;const rows=[];
+function place(r,z){   // a strip anywhere on screen at its depth, with its own tilt
+  const d=Math.max(6,camera.position.z-z),half=d*Math.tan(Math.PI/6);
+  r.position.z=z;r.position.y=(Math.random()*2-1)*half*1.05;
+  const tilt=Math.random()<.65;r.rotation.set(tilt?(Math.random()-.5)*.25:0,tilt?(Math.random()-.5)*.6:0,tilt?(Math.random()-.5)*.32:0);
+  r.userData.dir=Math.random()<.5?1:-1;r.userData.sp=.6+Math.random()*1.1}
+function init(){makeLinkTexes();Object.values(STILLS).flat().forEach(([u])=>texOf(u));
+  camera.position.set(0,0,5);
+  for(let i=0;i<ROWS;i++){const r=new THREE.Group();buildRow(r);place(r,5-NEAR-1-(i/ROWS)*DEPTH-Math.random()*1.2);rows.push(r);scene.add(r)}}
 
-const PLANES=3,DZ=7.5,ROWGAP=5.6,planes=[];   // far fewer strips coming at the camera
-function init(){linkTexes=LINKS.map(linkTex);ALL.forEach(a=>texOf(a.u));
-  for(let k=0;k<PLANES;k++){const p=new THREE.Group();
-    for(let j=-4;j<=4;j++){const r=row();r.position.y=j*ROWGAP+((k*.37)%1)*ROWGAP;
-      r.userData.dir=Math.random()<.5?1:-1;r.userData.sp=.7+Math.random()*.9;r.position.x=(Math.random()-.5)*LEN;
-      if(Math.random()<.4){r.rotation.z=(Math.random()-.5)*.14;r.rotation.y=(Math.random()-.5)*.25}
-      fillRow(r);p.add(r)}
-    p.position.z=-.5-k*DZ;planes.push(p);scene.add(p)}}
+// ---------- theme / language ----------
+function paint(){const lt=light();scene.fog.color.set(lt?0xECEAE4:0x000000);buildDirt();
+  document.querySelectorAll("#theme button").forEach(b=>b.classList.toggle("on",b.dataset.t===(lt?"light":"dark")));
+  document.querySelectorAll("#lang button").forEach(b=>b.classList.toggle("on",b.dataset.l===LANG));
+  document.querySelectorAll("#theme button").forEach(b=>b.textContent=LANG==="pt"?(b.dataset.t==="dark"?"Escuro":"Claro"):(b.dataset.t==="dark"?"Dark":"Light"));
+  document.getElementById("ui").textContent=LANG==="pt"?"3D lab · scroll / arrastar":"3D lab · scroll / drag"}
+function relink(){makeLinkTexes();rows.forEach(r=>r.children.forEach(m=>{const it=m.userData.item;if(it&&it.link!==undefined){m.material.map=linkTexes[it.link];m.material.needsUpdate=true}}))}
+document.querySelectorAll("#theme button").forEach(b=>b.onclick=()=>{if(b.dataset.t==="light")root.dataset.theme="light";else delete root.dataset.theme;try{localStorage.setItem("theme",b.dataset.t)}catch(e){}paint();relink()});
+document.querySelectorAll("#lang button").forEach(b=>b.onclick=()=>{LANG=b.dataset.l;try{localStorage.setItem("lang",LANG)}catch(e){}paint();relink()});
 
-// ---------- input ----------
-let mx=0,my=0,target=0,pos=0;
-addEventListener("pointermove",e=>{mx=e.clientX/innerWidth-.5;my=e.clientY/innerHeight-.5;hover(e)});
-addEventListener("wheel",e=>{target+=e.deltaY*.01},{passive:true});
+// ---------- input (no mouse-follow) ----------
+let target=0,pos=0;addEventListener("wheel",e=>{target+=e.deltaY*.01},{passive:true});
 let ty=null,moved=0;addEventListener("touchstart",e=>{ty=e.touches[0].clientY;moved=0},{passive:true});
 addEventListener("touchmove",e=>{const y=e.touches[0].clientY;target+=(ty-y)*.03;moved+=Math.abs(ty-y);ty=y},{passive:true});
 const ray=new THREE.Raycaster(),ndc=new THREE.Vector2();
 const pick=e=>{ndc.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);ray.setFromCamera(ndc,camera);
-  const h=ray.intersectObjects(clickable,false).find(h=>h.object.material.opacity>.5);return h&&h.object.userData.item};
-function hover(e){document.body.classList.toggle("hover",!!pick(e))}
-addEventListener("click",e=>{if(moved>10)return;const it=pick(e);if(!it)return;
-  location.href=it.link!==undefined?LINKS[it.link][2]:"/#/work/"+it.slug});
+  const h=ray.intersectObjects([...clickable],false).find(h=>h.object.material.opacity>.5);return h&&h.object.userData.item};
+addEventListener("pointermove",e=>document.body.classList.toggle("hover",!!pick(e)));
+addEventListener("click",e=>{if(e.target.closest(".sw")||moved>10)return;const it=pick(e);if(!it)return;location.href=it.link!==undefined?HREF[it.link]:"/#/work/"+it.slug});
 
 // ---------- loop ----------
-const clock=new THREE.Clock();let camZ=5;
+const clock=new THREE.Clock();
 function loop(){const dt=Math.min(clock.getDelta(),.05);target+=dt*.9;pos+=(target-pos)*.06;
-  camZ=5-pos;camera.position.z=camZ;camera.lookAt(0,0,camZ-10);   // camera does not follow the mouse
-  planes.forEach(p=>{
-    if(p.position.z>camZ-4){p.position.z-=PLANES*DZ;p.children.forEach(fillRow)}          // recycled to the back with new stills
-    if(p.position.z<camZ-4-PLANES*DZ)p.position.z+=PLANES*DZ;
-    const d=camZ-p.position.z,a=d<6.5?Math.max(0,(d-4)/2.5):(d>22?Math.max(0,1-(d-22)/4):1);
-    p.children.forEach(r=>{r.position.x+=r.userData.dir*dt*r.userData.sp;if(r.position.x>LEN/2)r.position.x-=LEN;if(r.position.x<-LEN/2)r.position.x+=LEN;
-      r.children.forEach(m=>m.material.opacity=m.material.blending===THREE.AdditiveBlending?a*.5:a)})});
+  const camZ=5-pos;camera.position.z=camZ;camera.lookAt(0,0,camZ-10);
+  rows.forEach(r=>{
+    if(r.position.z>camZ-NEAR){buildRow(r);place(r,camZ-NEAR-DEPTH-Math.random()*1.5)}         // passed: back to the far end, new project
+    if(r.position.z<camZ-NEAR-DEPTH-3){buildRow(r);place(r,camZ-NEAR-Math.random()*2)}
+    const d=camZ-r.position.z,a=d<NEAR+2.5?Math.max(0,(d-NEAR)/2.5):(d>NEAR+DEPTH-4?Math.max(0,1-(d-(NEAR+DEPTH-4))/4):1);
+    r.position.x+=r.userData.dir*dt*r.userData.sp;const L=r.userData.len;if(r.position.x>L/2)r.position.x-=L;if(r.position.x<-L/2)r.position.x+=L;
+    r.children.forEach(m=>m.material.opacity=a)});
   renderer.render(scene,camera)}
-(document.fonts?Promise.race([document.fonts.load('800 54px "Unbounded"'),new Promise(r=>setTimeout(r,1500))]):Promise.resolve()).then(()=>{init();renderer.setAnimationLoop(loop)});
+(document.fonts?Promise.race([document.fonts.load('800 60px "Unbounded"'),new Promise(r=>setTimeout(r,1500))]):Promise.resolve()).then(()=>{init();paint();renderer.setAnimationLoop(loop)});
 </script></body></html>
