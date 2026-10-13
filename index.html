@@ -865,7 +865,7 @@
       { slug: "energias", title: "Energias", artist: "ATJ", type: "Music Video", year: 2026, dir: "Ruben Mendes", role: "Director of Photography, Colorist", cover: "energias", prod: "Visuals by GRAIN",
         team: [["Realização & Montagem", "Director & Editor", "Ruben Mendes"], ["Direção de Fotografia & Cor", "Cinematography & Colorist", "João Viana"], ["1º Assistente de Câmara", "1st AC", "Vasco Souto"], ["Direção de Arte", "Art Director", "Maria Flores"], ["Styling & Produção", "Styling & Production", "Leonor Valle"], ["Assistente de Produção", "Production Assistant", "Santiago Caiado"], ["Assistentes de Set", "Set Assistants", "Emilia Gato, Laura Gato"]],
         stills: ["01.jpg", "08.jpg", "04.jpg", "10.jpg", "05.jpg", "06.jpg", "02.jpg", "09.jpg", "07.jpg", "11.jpg", "03.jpg", "12.jpg"] },
-      { slug: "cartas-na-mesa", title: "Cartas na Mesa", artist: "Van Zee", type: "Music Video", year: 2026, dir: "Ruben Mendes, Tomás Freitas", role: "Director of Photography", yt: "B7VOs2LPC-Q", cover: "cartas-na-mesa", pos: "62% 50%", rows: 3, stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg", "07.jpg", "08.jpg", "09.jpg"] },
+      { slug: "cartas-na-mesa", title: "Cartas na Mesa", artist: "Van Zee", type: "Music Video", year: 2026, dir: "Ruben Mendes, Tomás Freitas", role: "Director of Photography", yt: "B7VOs2LPC-Q", cover: "cartas-na-mesa", pos: "62% 50%", rows: 3, more: true, deep: "cartas-na-mesa", stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg", "07.jpg", "08.jpg", "09.jpg"] },
       { slug: "viarco", title: "Viarco", type: "Commercial", year: 2025, dir: "Maria Flores", role: "Creative Director, Director of Photography", soon: true, cover: "viarco", moreLater: true, rows: 1, stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg"] },
       { slug: "auto-de-fe", title: "Auto de Fé", type: "Series Pilot", year: 2025, dir: "José P. Miguel", role: "Director of Photography, Colorist", cover: "auto-de-fe", pos: "30% 50%", more: true, deep: "auto-de-fe", stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg"] },
       { slug: "quase-nada", title: "Quase Nada", artist: "Ed", type: "Music Video", year: 2026, dir: "Mário ARV", role: "Director of Photography", yt: "iVH0_Aq6lw4", cover: "quase-nada", moreLater: true, stills: ["01.jpg", "02.jpg", "03.jpg", "04.jpg", "05.jpg", "06.jpg"] },
@@ -1279,6 +1279,15 @@
     };
     // Último Canto — full credits (screenwriting credits left out on purpose). [Portuguese role, English role, name]
     const CREDITS = {
+      "cartas-na-mesa": {
+        cast: [["Rider", "Kiko Gouveia"], ["Figuração|Extras", "Rita Campos, Tomás Freitas, Daniel Pato, Kiko Gouveia"]],
+        groups: [
+          [["Argumento e Realização", "Written & Directed by", "Ruben Mendes, Tomás Freitas"]],
+          [["Direção de Fotografia", "Cinematography", "João Viana"], ["1ª Assistente de Câmara", "1st AC", "Maria Barral"], ["Gaffer & Grip", "Gaffer & Grip", "Rodrigo Duarte"]],
+          [["Produção & Criativo", "Production & Creative", "Daniel Pato"], ["Assistentes de Produção", "Assistant Producers", "Maria Inês Hortêncio, Anais Almeida"], ["Styling", "Styling", "Leonor Valle"]],
+          [["Compositing", "Compositing", "Kevin Marrengule"]]
+        ],
+      },
       "auto-de-fe": {
         cast: [["Samuel", "Paulo Pascoal"], ["D. Teresa", "Carmen Santos"], ["Fernando", "Ivo Alexandre"], ["Joel", "André Vazão"], ["Maestro|Conductor", "Alex Duart"], ["Coro|Choir", "Catarina Guinot"], ["Mulher 1|Woman 1", "Inês Guerreiro"]],
         groups: [
