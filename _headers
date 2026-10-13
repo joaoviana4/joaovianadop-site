@@ -2,3 +2,10 @@
   Cache-Control: no-cache
 /index.html
   Cache-Control: no-cache
+
+/studio/
+  Cache-Control: no-cache
+/studio/index.html
+  Cache-Control: no-cache
+/studio/sw.js
+  Cache-Control: no-cache
