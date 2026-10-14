@@ -383,7 +383,9 @@ async function projectView(projectId, boardId) {
   const hideSide = () => { hideT = setTimeout(() => side.classList.remove('open'), 250); };
   app.querySelector('[data-edge]').addEventListener('mouseenter', showSide);
   side.addEventListener('mouseenter', showSide); side.addEventListener('mouseleave', hideSide);
-  app.querySelector('[data-side]').addEventListener('click', () => side.classList.toggle('open'));
+  app.querySelector('[data-side]').addEventListener('click', showSide);
+  const outside = (e) => { if (side.classList.contains('open') && !e.target.closest('[data-sidebar], [data-side], [data-edge]')) side.classList.remove('open'); };
+  document.addEventListener('pointerdown', outside, true); onCleanup(() => document.removeEventListener('pointerdown', outside, true));
 
   // painéis por cima do board
   const drawer = app.querySelector('[data-drawer]');
@@ -451,7 +453,7 @@ async function teamPage() {
     <td>${u.username ? '@' + esc(u.username) : '<span class="muted">—</span>'}</td>
     <td class="muted">${esc(u.email || '')}</td>
     <td><select data-role="${u.id}" aria-label="Papel de ${esc(u.display_name)}" ${u.id === state.user.id ? 'disabled' : ''}>${Object.entries(ROLES).map(([k, v]) => `<option value="${k}" ${u.role === k ? 'selected' : ''}>${v}</option>`).join('')}</select></td>
-    <td class="row end"><button type="button" class="link-btn" data-pw="${u.id}">Palavra-passe</button>${u.id !== state.user.id ? `<button type="button" class="icon-btn" data-deluser="${u.id}" aria-label="Apagar a conta de ${esc(u.display_name)}">${ICON.trash}</button>` : ''}</td>
+    <td><div class="row end"><button type="button" class="link-btn" data-pw="${u.id}">Palavra-passe</button>${u.id !== state.user.id ? `<button type="button" class="icon-btn" data-deluser="${u.id}" aria-label="Apagar a conta de ${esc(u.display_name)}">${ICON.trash}</button>` : ''}</div></td>
   </tr>`).join('');
   app.querySelectorAll('[data-role]').forEach((s) => s.addEventListener('change', async () => {
     try { await callFn('admin-users', { action: 'update', user_id: s.dataset.role, role: s.value }); toast('Papel mudado.'); } catch (e) { toast(e.message); teamPage(); }

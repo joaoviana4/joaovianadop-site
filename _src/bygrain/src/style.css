@@ -23,6 +23,7 @@
   --grain: url('/bygrain/grain.png');
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; height: 100%; }
 body { background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 15px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
 body.is-auth { background: var(--blue); }
@@ -53,7 +54,7 @@ svg .ink { stroke: var(--bg); stroke-width: 2.2; }
 /* ---------- logótipo (aproximação até chegar o SVG) ---------- */
 .logo { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; line-height: 1; }
 .logo-mark { display: inline-flex; align-items: flex-end; gap: .14em; font-family: var(--logo); line-height: .8; }
-.logo-mark .by { font-weight: 800; font-size: .23em; padding-bottom: .07em; letter-spacing: -0.02em; }
+.logo-mark .by { font-weight: 800; font-size: .3em; padding-bottom: .07em; letter-spacing: -0.02em; }
 .logo-mark .grain { font-weight: 900; letter-spacing: -0.055em; }
 .logo-mark .reg { font-family: var(--sans); font-weight: 600; font-size: .13em; align-self: flex-start; padding-top: .06em; }
 .logo-sub { font-family: var(--serif); font-style: italic; font-size: .24em; letter-spacing: .01em; }
