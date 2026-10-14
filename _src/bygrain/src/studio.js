@@ -202,7 +202,7 @@ function newProject() {
       <div class="field"><label for="pc">Artista ou marca</label><input id="pc" name="client"></div>
       <div class="field"><label for="pk">Tipo</label><select id="pk" name="kind">${Object.entries(KINDS).filter(([k]) => k !== 'central').map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
       <div class="grid2"><div class="field"><label for="ps">Começa</label><input id="ps" name="starts_on" type="date"></div><div class="field"><label for="pe">Entrega</label><input id="pe" name="ends_on" type="date"></div></div>
-      <div class="field"><label for="pv">Valor do projeto (€, opcional)</label><input id="pv" name="value" type="number" step="0.01" min="0" inputmode="decimal"></div>
+      <div class="field"><label for="pv">Orçamento (€, opcional)</label><input id="pv" name="value" type="number" step="0.01" min="0" inputmode="decimal"></div>
       <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Criar</button></div>
     </form>`);
   m.el.querySelector('form').addEventListener('submit', async (e) => {
@@ -225,7 +225,7 @@ function detailsForm(p) {
       <div class="field"><label for="dst">Estado</label><select id="dst" name="status"><option value="active" ${p.status === 'active' ? 'selected' : ''}>Em curso</option><option value="done" ${p.status === 'done' ? 'selected' : ''}>Finalizado</option><option value="archived" ${p.status === 'archived' ? 'selected' : ''}>Arquivo</option></select></div>
       <div class="field"><label for="ds">Começa</label><input id="ds" name="starts_on" type="date" value="${esc(p.starts_on || '')}"></div>
       <div class="field"><label for="de">Entrega</label><input id="de" name="ends_on" type="date" value="${esc(p.ends_on || '')}"></div>
-      <div class="field"><label for="dv">Valor do projeto (€)</label><input id="dv" name="value" type="number" step="0.01" min="0" inputmode="decimal" value="${esc(p.value ?? '')}"></div>
+      <div class="field"><label for="dv">Orçamento (€)</label><input id="dv" name="value" type="number" step="0.01" min="0" inputmode="decimal" value="${esc(p.value ?? '')}"></div>
     </div>
     <div class="field"><span class="label">Capa</span><div class="row"><button type="button" class="btn ghost" data-cover>${ICON.image} Escolher imagem</button>${p.cover_path ? '<button type="button" class="btn ghost" data-nocover>Tirar capa</button>' : ''}</div></div>`}
     <fieldset class="depts"><legend>Departamentos e cores</legend>
@@ -496,6 +496,7 @@ async function projectOverview(main, p) {
         <span class="tag dark">${esc(KINDS[p.kind] || p.kind)}</span>
         <h1 class="pm-name">${esc(p.name)}</h1>
         <p class="pm-sub">${[p.client, p.starts_on && p.ends_on ? `${fmtDate(p.starts_on)} – ${fmtDate(p.ends_on)}` : ''].filter(Boolean).map(esc).join(' · ')}</p>
+        ${isStaff() && !p.is_central ? `<button type="button" class="pm-budget" data-budget>${p.value != null ? `<span>Orçamento</span><strong>${eur.format(p.value)}</strong>` : `<span>Orçamento</span><strong class="muted-w">Definir</strong>`}</button>` : ''}
         ${ph.label ? `<div class="pm-phase"><div class="row between small"><span>${esc(ph.label)}</span><span>${Math.round(ph.pct * 100)}%</span></div><div class="bar light"><i style="width:${Math.round(ph.pct * 100)}%"></i></div></div>` : ''}
       </div>
     </section>
@@ -520,6 +521,15 @@ async function projectOverview(main, p) {
       </aside>
     </div>`;
   main.querySelectorAll('[data-nb]').forEach((b) => b.addEventListener('click', () => newBoard(p)));
+  main.querySelector('[data-budget]')?.addEventListener('click', () => {
+    const m = modal(`<h2>Orçamento do projeto</h2><form class="stack"><div class="field"><label for="bv">Orçamento (€)</label><input id="bv" type="number" step="0.01" min="0" inputmode="decimal" value="${esc(p.value ?? '')}"></div><div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Guardar</button></div></form>`);
+    m.el.querySelector('form').addEventListener('submit', async (e) => {
+      e.preventDefault(); const v = m.el.querySelector('#bv').value;
+      const { error } = await sb.from('projects').update({ value: v === '' ? null : Number(v) }).eq('id', p.id);
+      if (error) return toast(error.message);
+      m.close(); toast('Orçamento guardado.'); projectPage(p.id, 'geral');
+    });
+  });
   main.querySelectorAll('[data-bopt]').forEach((btn) => btn.addEventListener('click', () => boardOptions(p, p._boards.find((x) => x.id === btn.dataset.bopt), () => projectPage(p.id, 'geral'))));
   if (p.is_central) { const box = document.createElement('div'); box.className = 'co'; main.querySelector('.pm-head').after(box); centralOverview(box); }
 }
@@ -549,7 +559,7 @@ async function centralOverview(box) {
   box.innerHTML = `
     <section class="co-sec">
       <div class="co-h"><h2 class="h2">Projetos em curso</h2><span class="muted">${ongoing.length} ${ongoing.length === 1 ? 'projeto' : 'projetos'} · <strong class="co-total">${eur.format(sum(ongoing))}</strong></span></div>
-      <div class="panel table-wrap">${ongoing.length ? `<table class="table co-table"><thead><tr><th>Projeto</th><th class="num">Valor</th><th>Atribuídos</th><th>Estado</th><th class="num">Tarefas</th><th>Entrega</th></tr></thead><tbody>
+      <div class="panel table-wrap">${ongoing.length ? `<table class="table co-table"><thead><tr><th>Projeto</th><th class="num">Orçamento</th><th>Atribuídos</th><th>Estado</th><th class="num">Tarefas</th><th>Entrega</th></tr></thead><tbody>
         ${ongoing.map((x) => `<tr class="click-row" data-href="#/p/${x.id}"><td><a href="#/p/${x.id}" class="co-name"><strong>${esc(x.name)}</strong><span class="small muted">${esc(x.client || '')}${x.client ? ' · ' : ''}${esc(KINDS[x.kind] || x.kind)}</span></a></td><td class="num">${val(x.value)}</td><td>${avatars(x.id)}</td><td>${stateCell(x)}</td><td class="num">${open(x.id) || '<span class="muted">0</span>'}</td><td class="small">${x.ends_on ? fmtDate(x.ends_on) : '<span class="muted">—</span>'}</td></tr>`).join('')}
       </tbody><tfoot><tr><td><strong>Total</strong></td><td class="num"><strong>${eur.format(sum(ongoing))}</strong></td><td colspan="4"></td></tr></tfoot></table>` : '<p class="empty-note">Não há projetos em curso.</p>'}</div>
     </section>
@@ -557,7 +567,7 @@ async function centralOverview(box) {
       <div class="co-h"><h2 class="h2">Finalizados</h2>
         <div class="month-nav"><button type="button" class="icon-btn" data-cm="-1" aria-label="Mês anterior">${ICON.back}</button><strong>${MESES_L[+m - 1]} ${y}</strong><button type="button" class="icon-btn" data-cm="1" aria-label="Mês seguinte">${ICON.chev}</button></div>
         <span class="muted">${finished.length} ${finished.length === 1 ? 'projeto' : 'projetos'} · <strong class="co-total">${eur.format(sum(finished))}</strong></span></div>
-      <div class="panel table-wrap">${finished.length ? `<table class="table co-table"><thead><tr><th>Projeto</th><th class="num">Valor</th><th>Atribuídos</th><th>Fechado a</th></tr></thead><tbody>
+      <div class="panel table-wrap">${finished.length ? `<table class="table co-table"><thead><tr><th>Projeto</th><th class="num">Orçamento</th><th>Atribuídos</th><th>Fechado a</th></tr></thead><tbody>
         ${finished.map((x) => `<tr class="click-row" data-href="#/p/${x.id}"><td><a href="#/p/${x.id}" class="co-name"><strong>${esc(x.name)}</strong><span class="small muted">${esc(x.client || '')}${x.client ? ' · ' : ''}${esc(KINDS[x.kind] || x.kind)}</span></a></td><td class="num">${val(x.value)}</td><td>${avatars(x.id)}</td><td class="small">${fmtDate(x.done_at)}</td></tr>`).join('')}
       </tbody><tfoot><tr><td><strong>Total</strong></td><td class="num"><strong>${eur.format(sum(finished))}</strong></td><td colspan="2"></td></tr></tfoot></table>` : `<p class="empty-note">Nenhum projeto finalizado em ${MESES_L[+m - 1]}.</p>`}</div>
     </section>`;

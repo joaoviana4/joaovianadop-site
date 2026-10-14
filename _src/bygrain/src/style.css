@@ -677,3 +677,9 @@ input[type=search] { min-height: 44px; }
 .av-stack .avatar { margin-left: -6px; box-shadow: 0 0 0 2px var(--panel); }
 .av-stack .avatar:first-child { margin-left: 0; }
 .avatar.more { background: var(--panel2); color: var(--text); }
+
+.pm-budget { display: inline-flex; align-items: baseline; gap: 10px; margin-top: 4px; padding: 8px 14px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .35); background: rgba(4, 6, 48, .35); color: #fff; cursor: pointer; font: inherit; }
+.pm-budget span { font-size: 13px; opacity: .85; }
+.pm-budget strong { font-family: var(--logo); font-weight: 800; font-size: 22px; }
+.pm-budget .muted-w { font-family: var(--sans); font-size: 15px; font-weight: 600; opacity: .8; }
+.pm-budget:hover { background: rgba(4, 6, 48, .55); }
