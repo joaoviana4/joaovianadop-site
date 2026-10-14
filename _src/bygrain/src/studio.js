@@ -7,6 +7,7 @@ import { financePage } from './finance.js';
 import { TOOL_KINDS, tableTool, timelineTool, tableTemplate } from './tools.js';
 import { lightmapTool, newLightmapData } from './lightmap.js';
 import { propsPage } from './props.js';
+import { mountTaskCenter } from './taskcenter.js';
 import { FICTION_PAGES, FICTION_DEPTS, fictionPage, fictionStats } from './fiction.js';
 
 const app = $('#app');
@@ -51,7 +52,7 @@ async function route() {
     if (!data) return toast('A Central de Produção ainda não existe.');
     return parts[1] === 'b' ? boardView(data.id, parts[2]) : parts[1] === 'f' ? toolPage(data.id, parts[2]) : projectPage(data.id, parts[1] || 'geral', parts[2]);
   }
-  if (parts[0] === 'tarefas') return tasksPage(parts[1] || 'minhas');
+  if (parts[0] === 'tarefas') return tasksPage();
   if (parts[0] === 'equipa') return isAdmin() ? teamPage() : go('#/');
   return homePage();
 }
@@ -460,7 +461,7 @@ async function projectPage(projectId, page, sub) {
   if (p.kind === 'ficcao' && FICTION_PAGES.some(([k]) => k === page)) return fictionPage(main, p, page, sub, projBase(p), onCleanup);
   main.innerHTML = `<h1 class="h1 pm-title">${esc(titles[page] || '')}</h1><div class="panel" data-body></div>`;
   const body = main.querySelector('[data-body]');
-  if (page === 'tarefas') { const t = mountTasks(body, { projectId: p.id }); onCleanup(() => t.destroy()); }
+  if (page === 'tarefas') { body.classList.remove('panel'); body.classList.add('tc'); const t = mountTaskCenter(body, { projectId: p.id }); onCleanup(() => t.destroy()); }
   if (page === 'equipa') projectTeam(body, p);
   if (page === 'detalhes') { body.innerHTML = detailsForm(p); bindDetails(body, p, () => projectPage(projectId, 'detalhes')); }
 }
@@ -607,19 +608,14 @@ async function boardView(projectId, boardId) {
 }
 
 // ---------- tarefas (todas) ----------
-function tasksPage(tab) {
+function tasksPage() {
   app.innerHTML = `<div class="page">${header('tasks')}
     <div class="wrap page-pad">
-      <div class="row between wrap-gap"><h1 class="h1">Tarefas</h1>
-        <div class="seg dark" role="tablist">
-          <button type="button" role="tab" aria-selected="${tab === 'minhas'}" data-t="minhas">As minhas</button>
-          ${isStaff() ? `<button type="button" role="tab" aria-selected="${tab === 'todas'}" data-t="todas">Todas</button>` : ''}
-        </div></div>
-      <div class="panel" data-list></div>
+      <h1 class="h1">Tarefas</h1>
+      <div class="tc" data-list></div>
     </div></div>`;
   bindHeader(app);
-  app.querySelectorAll('[data-t]').forEach((b) => b.addEventListener('click', () => go('#/tarefas/' + b.dataset.t)));
-  const t = mountTasks(app.querySelector('[data-list]'), { mine: tab === 'minhas' });
+  const t = mountTaskCenter(app.querySelector('[data-list]'));
   onCleanup(() => t.destroy());
 }
 

@@ -646,3 +646,18 @@ details.panel[open] summary { margin-bottom: 4px; }
 .acc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
 .acc-grid .ent-card.acc { padding: 20px 22px; gap: 6px; border-radius: 14px; }
 .acc-grid .acc-bal { font-size: 30px; }
+
+/* central de tarefas */
+.tc { display: flex; flex-direction: column; gap: 36px; }
+.tc-sec { display: flex; flex-direction: column; gap: 12px; }
+.tc-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.late-txt2 { color: var(--late); font-weight: 600; }
+.task-add.big { margin: 0; }
+.task-add.big input[name=title] { font-size: 16px; }
+.t-doing { color: var(--doing); font-weight: 600; }
+.dept-badge { flex: 0 0 auto; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 999px; background: var(--dept); color: #fff; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; text-transform: uppercase; }
+.hist-m { display: flex; flex-direction: column; }
+.hist-h { margin: 8px 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+.hist-h span { color: var(--text); margin-left: 6px; }
+.task-list.done .t-title { text-decoration: line-through; color: var(--muted); }
+input[type=search] { min-height: 44px; }
