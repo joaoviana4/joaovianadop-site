@@ -44,7 +44,7 @@ export function greeting() { const h = new Date().getHours(); return h < 6 ? 'Bo
 export function initials(name) { return String(name || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase(); }
 
 export const KINDS = {
-  campanha: 'Campanha', lancamento: 'Lançamento', videoclipe: 'Videoclipe', branded: 'Branded',
+  campanha: 'Comercial', lancamento: 'Lançamento', videoclipe: 'Videoclipe', branded: 'Branded',
   redes: 'Redes sociais', documentario: 'Documentário', outro: 'Outro', central: 'Central',
 };
 export const STATUS = { todo: 'Por fazer', doing: 'Em curso', done: 'Feita' };
