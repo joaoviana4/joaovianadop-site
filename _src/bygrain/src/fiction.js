@@ -1,12 +1,14 @@
 import { sb, esc, toast, modal, confirmBox, ICON, signedUrl, signedUrls, uploadImage, fmtDate } from './lib.js';
 import { parseScript, fileToText, eighthsLabel } from './script.js';
 import { mountTasks } from './tasks.js';
+import { propsPage } from './props.js';
+import { newLightmapData } from './lightmap.js';
 
 // Modelo de ficção, igual ao do Studio: guião → cenas, personagens e décors → planos e storyboard.
 
 export const FICTION_PAGES = [
   ['guiao', 'Guião', ICON.note], ['cenas', 'Cenas', ICON.list], ['personagens', 'Personagens', ICON.team],
-  ['decors', 'Décors', ICON.home], ['storyboard', 'Storyboard', ICON.image], ['planificacao', 'Planificação', ICON.board],
+  ['decors', 'Décors', ICON.home], ['aderecos', 'Adereços', ICON.prop], ['storyboard', 'Storyboard', ICON.image], ['planificacao', 'Planificação', ICON.board],
 ];
 export const FICTION_DEPTS = [
   { id: 'realizacao', name: 'Realização', color: '#7C5CFF' }, { id: 'producao', name: 'Produção', color: '#F08A24' },
@@ -33,6 +35,7 @@ const sceneTitle = (s, f) => { const loc = f.locations.find((l) => l.id === s.lo
 const nameList = (ids, f) => (ids || []).map((id) => f.characters.find((c) => c.id === id)?.name).filter(Boolean);
 
 export async function fictionPage(main, p, page, sub, base, cleanup) {
+  if (page === 'aderecos') return propsPage(main, p, sub, base, cleanup);
   main.innerHTML = '<p class="muted">A carregar…</p>';
   const f = await load(p.id);
   const R = { guiao, cenas, personagens, decors, storyboard, planificacao };
@@ -173,6 +176,7 @@ function shotCard(sh, url) {
       <label class="mini">Movimento<select data-f="movement">${MOVES.map((x) => `<option ${x === sh.movement ? 'selected' : ''} value="${esc(x)}">${esc(x || '—')}</option>`).join('')}${sh.movement && !MOVES.includes(sh.movement) ? `<option selected>${esc(sh.movement)}</option>` : ''}</select></label>
       <label class="mini">Lente<input data-f="lens" value="${esc(sh.lens)}" placeholder="ex: 35mm"></label>
       <label class="mini">Descrição<textarea data-f="description" rows="3">${esc(sh.description)}</textarea></label>
+      <button type="button" class="btn ghost sm-btn" data-lm>${ICON.bulb} ${sh.lightmap_id ? 'Abrir mapa de luz' : 'Mapa de luz'}</button>
     </div>
   </article>`;
 }
@@ -232,6 +236,15 @@ function bindShots(main, p, f, s, shots, urls, base) {
     if (e.target.closest('[data-del]')) {
       if (!(await confirmBox(`Apagar o plano ${sh.code}?`, 'Apagar'))) return;
       await sb.from('shots').delete().eq('id', sh.id); card.remove(); shots.splice(shots.indexOf(sh), 1); f.shots.splice(f.shots.indexOf(sh), 1); return;
+    }
+    if (e.target.closest('[data-lm]')) {
+      if (sh.lightmap_id) { location.hash = `${base}/f/${sh.lightmap_id}`; return; }
+      const names = (s.character_ids || []).map((id) => f.characters.find((c) => c.id === id)?.name).filter(Boolean);
+      const grp = (p.departments || []).find((d) => d.id === 'imagem') ? 'imagem' : null;
+      const { data: tool, error } = await sb.from('boards').insert({ project_id: p.id, kind: 'lightmap', title: `Mapa de luz ${sh.code}`, group_id: grp, data: { ...newLightmapData({ cameraCode: sh.code, people: names }), shot_id: sh.id } }).select().single();
+      if (error) return toast(error.message);
+      await save(sh.id, { lightmap_id: tool.id });
+      location.hash = `${base}/f/${tool.id}`; return;
     }
     if (e.target.closest('[data-img]')) {
       if (sh.image_path) return shotViewer(f, sh, base);
@@ -357,10 +370,21 @@ async function decor(main, p, f, id, base, cleanup) {
       <section class="panel stack"><h2 class="h3">Ficha</h2><div class="grid2">${[['morada', 'Morada'], ['contacto', 'Contacto'], ['estacionamento', 'Estacionamento'], ['eletricidade', 'Eletricidade'], ['luz_natural', 'Luz natural'], ['notas', 'Notas']].map(([k, lab]) => `<div class="field"><label for="i-${k}">${lab}</label><textarea id="i-${k}" data-info="${k}" rows="2">${esc(l.info?.[k] || '')}</textarea></div>`).join('')}</div></section>
       <section class="panel"><div class="row between"><h2 class="h3">Fotos de repérage</h2><button type="button" class="btn ghost" data-addph>${ICON.plus} Fotos</button></div>
         <div class="photo-grid" data-photos>${photos.map((ph, i) => `<figure><img src="${esc(urls[ph.path] || '')}" alt=""><button type="button" class="icon-btn sm" data-rmph="${i}" aria-label="Tirar foto">${ICON.close}</button></figure>`).join('') || '<p class="muted small">Ainda sem fotos. Também podes largá-las aqui.</p>'}</div></section>
+      <section class="panel"><div class="row between"><h2 class="h3">Mapas de luz da montagem base</h2><button type="button" class="btn ghost" data-newlm>${ICON.bulb} Mapa de luz</button></div><div data-lms class="muted small">A carregar…</div></section>
       <section class="panel"><h2 class="h3">Tarefas</h2><div data-tasks></div></section>
     </div><aside class="pm-side"><section class="panel"><h2 class="h3">Cenas neste décor (${scenes.length})</h2>${sceneLinks(scenes, f, base)}</section></aside></div>`;
   bindBlocks(main, 'locations', l);
   const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: 'location', id: l.id } }); cleanup(() => t.destroy());
+  sb.from('boards').select('id, title').eq('project_id', p.id).eq('kind', 'lightmap').eq('data->>location_id', l.id).then(({ data }) => {
+    const box = main.querySelector('[data-lms]'); if (!box) return;
+    box.innerHTML = (data || []).length ? `<ul class="links">${data.map((b) => `<li><a href="${base}/f/${b.id}">${ICON.bulb} ${esc(b.title)}</a></li>`).join('')}</ul>` : 'Ainda sem mapas de luz para este décor.';
+  });
+  main.querySelector('[data-newlm]').addEventListener('click', async () => {
+    const grp = (p.departments || []).find((d) => d.id === 'imagem') ? 'imagem' : null;
+    const { data: tool, error } = await sb.from('boards').insert({ project_id: p.id, kind: 'lightmap', title: `Montagem base — ${l.name}`, group_id: grp, data: { ...newLightmapData(), location_id: l.id } }).select().single();
+    if (error) return toast(error.message);
+    location.hash = `${base}/f/${tool.id}`;
+  });
   const add = async (files) => {
     const imgs = [...files].filter((x) => x.type.startsWith('image/')); if (!imgs.length) return;
     toast(`A enviar ${imgs.length} ${imgs.length === 1 ? 'foto' : 'fotos'}…`, 8000);
