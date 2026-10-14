@@ -42,13 +42,14 @@ export function taskRow(t, { project, people, showProject }) {
   </li>`;
 }
 
-export function mountTasks(root, { projectId = null, mine = false, compact = false } = {}) {
+export function mountTasks(root, { projectId = null, mine = false, compact = false, entity = null } = {}) {
   const st = { tasks: [], projects: new Map(), people: [], status: 'open', who: mine ? 'me' : 'all', dept: 'all', sort: 'due', showDone: false, dead: false };
 
   async function load() {
     let q = sb.from('tasks').select('*').order('created_at');
     if (projectId) q = q.eq('project_id', projectId);
     if (mine) q = q.eq('assignee_id', state.user.id);
+    if (entity) q = q.eq('entity_id', entity.id);
     const [{ data: tasks, error }, people, { data: projects }] = await Promise.all([
       q, loadPeople(),
       projectId ? sb.from('projects').select('id, name, departments, is_central').eq('id', projectId) : sb.from('projects').select('id, name, departments, is_central, status'),
@@ -85,7 +86,7 @@ export function mountTasks(root, { projectId = null, mine = false, compact = fal
         ${!mine ? `<label class="sel"><span class="vh">Responsável</span><select data-f="who">
           <option value="all">Todos</option><option value="me">As minhas</option><option value="none">Sem responsável</option>
           ${st.people.map((p) => `<option value="${p.id}">${esc(p.display_name)}</option>`).join('')}</select></label>` : ''}
-        ${depts.length ? `<label class="sel"><span class="vh">Departamento</span><select data-f="dept"><option value="all">Todos os departamentos</option>${depts.map((d) => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</select></label>` : ''}
+        ${depts.length && !entity ? `<label class="sel"><span class="vh">Departamento</span><select data-f="dept"><option value="all">Todos os departamentos</option>${depts.map((d) => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</select></label>` : ''}
         <label class="sel"><span class="vh">Ordenar</span><select data-f="sort"><option value="due">Por urgência</option><option value="name">Por nome</option><option value="status">Por estado</option></select></label>
       </div>
       ${projectId ? `<form class="task-add" data-add>
@@ -106,7 +107,7 @@ export function mountTasks(root, { projectId = null, mine = false, compact = fal
       e.preventDefault();
       const f = Object.fromEntries(new FormData(add));
       if (!f.title.trim()) return;
-      const row = { project_id: projectId, title: f.title.trim(), assignee_id: f.assignee || null, department: f.department || null, due: f.due || null };
+      const row = { project_id: projectId, title: f.title.trim(), assignee_id: f.assignee || null, department: f.department || null, due: f.due || null, ...(entity ? { entity_type: entity.type, entity_id: entity.id } : {}) };
       const { data, error } = await sb.from('tasks').insert(row).select().single();
       if (error) return toast(error.message);
       st.tasks.push(data); draw();
@@ -129,6 +130,7 @@ export function mountTasks(root, { projectId = null, mine = false, compact = fal
     if (b.dataset.act === 'edit') editTask(t, st, draw);
   });
 
+  if (entity) root.classList.add('tasks-compact');
   const ch = sb.channel('tasks-' + (projectId || 'mine') + Math.random().toString(36).slice(2))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', ...(projectId ? { filter: `project_id=eq.${projectId}` } : {}) }, () => { clearTimeout(ch._t); ch._t = setTimeout(load, 400); })
     .subscribe();

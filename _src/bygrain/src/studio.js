@@ -3,6 +3,7 @@ import { sb, state, esc, $, loadProfile, isStaff, isAdmin, toast, modal, confirm
 import { renderAuth } from './auth.js';
 import { mountBoard } from './board.js';
 import { mountTasks, loadPeople } from './tasks.js';
+import { FICTION_PAGES, FICTION_DEPTS, fictionPage, fictionStats } from './fiction.js';
 
 const app = $('#app');
 let cleanup = [];
@@ -39,12 +40,12 @@ async function route() {
   teardown();
   const h = location.hash.replace(/^#\/?/, '');
   const parts = h.split('/').filter(Boolean);
-  if (parts[0] === 'p' && parts[1]) return parts[2] === 'b' ? boardView(parts[1], parts[3]) : projectPage(parts[1], parts[2] || 'geral');
+  if (parts[0] === 'p' && parts[1]) return parts[2] === 'b' ? boardView(parts[1], parts[3]) : projectPage(parts[1], parts[2] || 'geral', parts[3]);
   if (parts[0] === 'central') {
     if (!isStaff()) return go('#/');
     const { data } = await sb.from('projects').select('id').eq('is_central', true).limit(1).maybeSingle();
     if (!data) return toast('A Central de Produção ainda não existe.');
-    return parts[1] === 'b' ? boardView(data.id, parts[2]) : projectPage(data.id, parts[1] || 'geral');
+    return parts[1] === 'b' ? boardView(data.id, parts[2]) : projectPage(data.id, parts[1] || 'geral', parts[2]);
   }
   if (parts[0] === 'tarefas') return tasksPage(parts[1] || 'minhas');
   if (parts[0] === 'equipa') return isAdmin() ? teamPage() : go('#/');
@@ -200,7 +201,7 @@ function newProject() {
   m.el.querySelector('form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target));
-    const { data, error } = await sb.from('projects').insert({ name: f.name.trim(), client: f.client.trim(), kind: f.kind, starts_on: f.starts_on || null, ends_on: f.ends_on || null }).select().single();
+    const { data, error } = await sb.from('projects').insert({ name: f.name.trim(), client: f.client.trim(), kind: f.kind, starts_on: f.starts_on || null, ends_on: f.ends_on || null, ...(f.kind === 'ficcao' ? { departments: FICTION_DEPTS } : {}) }).select().single();
     if (error) return toast(error.message);
     await sb.from('project_members').insert({ project_id: data.id, user_id: state.user.id });
     m.close(); go(`#/p/${data.id}`);
@@ -339,7 +340,7 @@ function boardGroups(p) {
 
 function projectNav(p, active) {
   const base = projBase(p);
-  const pages = [['geral', 'Visão geral', ICON.home], ['tarefas', 'Tarefas', ICON.task], ['equipa', p.is_central ? 'Equipa' : 'Equipa e convites', ICON.team], ...(isStaff() ? [['detalhes', 'Detalhes', ICON.info]] : [])];
+  const pages = [['geral', 'Visão geral', ICON.home], ...(p.kind === 'ficcao' ? FICTION_PAGES : []), ['tarefas', 'Tarefas', ICON.task], ['equipa', p.is_central ? 'Equipa' : 'Equipa e convites', ICON.team], ...(isStaff() ? [['detalhes', 'Detalhes', ICON.info]] : [])];
   return `
     <div class="pn-h"><strong>${esc(p.name)}</strong>${p.client ? `<span class="muted small">${esc(p.client)}</span>` : ''}</div>
     ${pages.map(([k, l, ic]) => `<a class="side-a" href="${base}${k === 'geral' ? '' : '/' + k}" ${active === k ? 'aria-current="page"' : ''}>${ic}<span>${l}</span></a>`).join('')}
@@ -395,7 +396,7 @@ function boardOptions(p, b, after) {
   });
 }
 
-async function projectPage(projectId, page) {
+async function projectPage(projectId, page, sub) {
   const p = await loadProject(projectId);
   if (!p) return notFound();
   if (page === 'detalhes' && !isStaff()) page = 'geral';
@@ -408,6 +409,7 @@ async function projectPage(projectId, page) {
   const main = app.querySelector('[data-main]');
   const titles = { tarefas: 'Tarefas', equipa: p.is_central ? 'Equipa' : 'Equipa e convites', detalhes: 'Detalhes' };
   if (page === 'geral') return projectOverview(main, p);
+  if (p.kind === 'ficcao' && FICTION_PAGES.some(([k]) => k === page)) return fictionPage(main, p, page, sub, projBase(p), onCleanup);
   main.innerHTML = `<h1 class="h1 pm-title">${esc(titles[page] || '')}</h1><div class="panel" data-body></div>`;
   const body = main.querySelector('[data-body]');
   if (page === 'tarefas') { const t = mountTasks(body, { projectId: p.id }); onCleanup(() => t.destroy()); }
@@ -423,6 +425,7 @@ async function projectOverview(main, p) {
     loadPeople(),
   ]);
   const cover = p.cover_path ? (await signedUrls([p.cover_path]))[p.cover_path] : null;
+  const fs = p.kind === 'ficcao' ? await fictionStats(p) : null;
   const imgPaths = (items || []).filter((i) => i.kind === 'image').map((i) => i.data?.path);
   const thumbs = await signedUrls(imgPaths.slice(0, 40));
   const ph = phaseOf(p);
@@ -441,6 +444,7 @@ async function projectOverview(main, p) {
         ${ph.label ? `<div class="pm-phase"><div class="row between small"><span>${esc(ph.label)}</span><span>${Math.round(ph.pct * 100)}%</span></div><div class="bar light"><i style="width:${Math.round(ph.pct * 100)}%"></i></div></div>` : ''}
       </div>
     </section>
+    ${fs ? `<div class="stats">${[['cenas', 'Cenas', fs.scenes], ['personagens', 'Personagens', fs.characters], ['decors', 'Décors', fs.locations], ['storyboard', 'Planos', fs.shots]].map(([k, l, n]) => `<a class="stat" href="${base}/${k}"><strong>${n}</strong><span>${l}</span></a>`).join('')}${fs.scenes ? '' : `<a class="stat cta" href="${base}/guiao"><strong>${ICON.plus}</strong><span>Importar guião</span></a>`}</div>` : ''}
     <div class="pm-grid">
       <section class="pm-boards" aria-labelledby="h-boards">
         <div class="row between"><h2 id="h-boards" class="h2">Boards</h2><button type="button" class="btn primary" data-nb>${ICON.plus} Novo board</button></div>
