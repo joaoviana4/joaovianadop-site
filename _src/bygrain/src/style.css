@@ -294,9 +294,13 @@ input[type=date] { color-scheme: dark; }
 .card.sel .checklist li:hover .x { display: flex; }
 .add-item { align-self: flex-start; margin: 4px 10px 10px; border: 0; background: none; color: rgba(11, 11, 20, .6); font-size: 13px; display: flex; align-items: center; gap: 4px; cursor: pointer; padding: 4px; }
 .add-item svg { width: 16px; height: 16px; }
-.k-board { background: var(--blue); color: #fff; padding: 14px; gap: 6px; }
-.k-board .card-h { padding: 0; font-size: 17px; }
-.board-ico svg { width: 28px; height: 28px; }
+.k-board { background: var(--blue); color: #fff; padding: 0; gap: 0; }
+.bcov { flex: 1; min-height: 0; background: center / cover no-repeat; display: flex; align-items: center; justify-content: center; color: rgba(255, 255, 255, .85); }
+.bcov svg { width: 30px; height: 30px; }
+.bname { padding: 7px 10px 8px; font-size: 13px; font-weight: 600; background: var(--blue); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 0 auto; }
+.cov-btn { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; border-radius: 6px; border: 0; background: rgba(12, 12, 18, .7); color: #fff; display: none; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+.cov-btn svg { width: 16px; height: 16px; }
+.k-board:hover .cov-btn, .k-board.sel .cov-btn { display: flex; }
 .open-board, .open-link { margin-top: auto; align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 6px; border: 0; background: rgba(255, 255, 255, .16); color: inherit; cursor: pointer; font-size: 13px; text-decoration: none; }
 .open-board svg, .open-link svg { width: 16px; height: 16px; }
 .k-link { padding-bottom: 12px; }

@@ -3,8 +3,8 @@ import { sb, esc, signedUrls, uploadImage, toast, modal, confirmBox, ICON } from
 // Board infinito à maneira do Milanote: cada cartão é uma linha própria na base de dados,
 // por isso duas pessoas podem trabalhar no mesmo board sem se apagarem uma à outra.
 
-const MIN = { note: [140, 80], title: [160, 50], image: [80, 60], palette: [180, 110], list: [180, 120], board: [160, 110], link: [180, 80] };
-const SIZE = { note: [280, 180], title: [520, 72], palette: [320, 150], list: [280, 220], board: [240, 160], link: [300, 110] };
+const MIN = { note: [140, 80], title: [160, 50], image: [80, 60], palette: [180, 110], list: [180, 120], board: [110, 90], link: [180, 80] };
+const SIZE = { note: [280, 180], title: [520, 72], palette: [320, 150], list: [280, 220], board: [180, 150], link: [300, 110] };
 
 export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom }) {
   const items = new Map();
@@ -49,6 +49,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
 
   // ---------- desenhar cartões ----------
   let urls = {};
+  let covers = {}; // capa automática: a primeira imagem do board de dentro
   function inner(it) {
     const d = it.data || {};
     switch (it.kind) {
@@ -61,7 +62,8 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
       case 'list': return `<div class="txt card-h" data-field="title">${esc(d.title || 'Lista')}</div>
         <ul class="checklist">${(d.items || []).map((li, i) => `<li class="${li.done ? 'done' : ''}"><button type="button" class="chk" data-ui="toggle" data-i="${i}" aria-label="${li.done ? 'Desmarcar' : 'Marcar'}">${li.done ? ICON.check : ''}</button><span class="txt" data-field="item" data-i="${i}">${esc(li.text)}</span><button type="button" class="x" data-ui="rmitem" data-i="${i}" aria-label="Tirar">${ICON.close}</button></li>`).join('')}</ul>
         <button type="button" class="add-item" data-ui="additem">${ICON.plus} Item</button>`;
-      case 'board': return `<div class="board-ico">${ICON.board}</div><div class="txt card-h" data-field="title">${esc(d.title || 'Board')}</div><button type="button" class="open-board" data-ui="openboard">Abrir ${ICON.chev}</button>`;
+      case 'board': { const cov = urls[d.cover] || covers[d.board_id];
+        return `<div class="bcov" ${cov ? `style="background-image:url('${esc(cov)}')"` : ''}>${cov ? '' : ICON.board}</div><div class="txt bname" data-field="title">${esc(d.title || 'Board')}</div><button type="button" class="cov-btn" data-ui="cover" title="Mudar a capa" aria-label="Mudar a capa">${ICON.image}</button>`; }
       case 'link': { let host = ''; try { host = new URL(d.url).hostname.replace(/^www\./, ''); } catch { /* url inválido */ }
         return `<div class="txt card-h" data-field="title">${esc(d.title || host || 'Ligação')}</div><div class="link-host">${esc(host)}</div><a class="open-link" data-ui="link" href="${esc(d.url || '#')}" target="_blank" rel="noopener noreferrer">Abrir ${ICON.open}</a>`; }
       default: return '';
@@ -193,6 +195,13 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
         inp.click(); return;
       }
       case 'openboard': return d.board_id && onOpenBoard(d.board_id);
+      case 'cover': {
+        const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+        inp.onchange = async () => {
+          try { toast('A enviar a capa…'); const up = await uploadImage(projectId, 'board', inp.files[0]); urls = { ...urls, ...(await signedUrls([up.path])) }; it.data = { ...it.data, cover: up.path }; save(it, ['data']); cardEl(it); toast('Capa mudada.'); } catch (e) { toast(e.message || String(e)); }
+        };
+        inp.click(); return;
+      }
       case 'link': return;
       default: return;
     }
@@ -266,7 +275,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     const card = e.target.closest('.card'); if (!card) { add('note').then(() => {}); return; }
     const it = items.get(card.dataset.id); if (!it) return;
     const txt = e.target.closest('.txt') || (it.kind === 'note' || it.kind === 'title' ? card.querySelector('.txt') : null);
-    if (it.kind === 'board' && !e.target.closest('.txt')) return onOpenBoard(it.data.board_id);
+    if (it.kind === 'board') { if (!e.target.closest('[data-ui]')) onOpenBoard(it.data.board_id); return; }
     if (it.kind === 'image') return editCaption(it);
     if (txt) startEdit(it.id, txt);
   });
@@ -365,7 +374,11 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     if (st.dead) return;
     if (error) { toast(error.message); return; }
     data.forEach((r) => items.set(r.id, r));
-    urls = await signedUrls(data.filter((r) => r.kind === 'image').map((r) => r.data?.path));
+    const childIds = data.filter((r) => r.kind === 'board' && r.data?.board_id).map((r) => r.data.board_id);
+    let firstImgs = [];
+    if (childIds.length) { const { data: imgs } = await sb.from('board_items').select('board_id, data, z').in('board_id', childIds).eq('kind', 'image').order('z'); firstImgs = imgs || []; }
+    urls = await signedUrls([...data.filter((r) => r.kind === 'image').map((r) => r.data?.path), ...data.filter((r) => r.kind === 'board').map((r) => r.data?.cover), ...firstImgs.map((i) => i.data?.path)]);
+    firstImgs.forEach((i) => { if (!covers[i.board_id] && urls[i.data?.path]) covers[i.board_id] = urls[i.data.path]; });
     renderAll();
     let saved = null; try { saved = JSON.parse(localStorage.getItem(viewKey) || 'null'); } catch { /* nada */ }
     if (saved && Number.isFinite(saved.k)) { st.view = saved; applyView(); } else fit();
