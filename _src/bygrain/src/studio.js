@@ -8,6 +8,7 @@ import { financePage } from './finance.js';
 import { TOOL_KINDS, tableTool, timelineTool, tableTemplate } from './tools.js';
 import { lightmapTool, newLightmapData } from './lightmap.js';
 import { propsPage } from './props.js';
+import { budgetPage } from './budget.js';
 import { mountTaskCenter } from './taskcenter.js';
 import { FICTION_PAGES, FICTION_DEPTS, fictionPage, fictionStats } from './fiction.js';
 
@@ -352,7 +353,7 @@ function boardGroups(p) {
 
 function projectNav(p, active) {
   const base = projBase(p);
-  const pages = [['geral', 'Visão geral', ICON.home], ...(p.is_central && isStaff() ? [['financas', 'Finanças', ICON.money]] : []), ...(p.kind === 'ficcao' ? FICTION_PAGES : p.is_central ? [] : [['aderecos', 'Adereços', ICON.prop]]), ['tarefas', 'Tarefas', ICON.task], ['equipa', p.is_central ? 'Equipa' : 'Equipa e convites', ICON.team], ...(isStaff() ? [['detalhes', 'Detalhes', ICON.info]] : [])];
+  const pages = [['geral', 'Visão geral', ICON.home], ...(p.is_central && isStaff() ? [['financas', 'Finanças', ICON.money]] : []), ...(!p.is_central && isStaff() ? [['orcamento', 'Orçamento', ICON.money]] : []), ...(p.kind === 'ficcao' ? FICTION_PAGES : p.is_central ? [] : [['aderecos', 'Adereços', ICON.prop]]), ['tarefas', 'Tarefas', ICON.task], ['equipa', p.is_central ? 'Equipa' : 'Equipa e convites', ICON.team], ...(isStaff() ? [['detalhes', 'Detalhes', ICON.info]] : [])];
   return `
     <div class="pn-h"><strong>${esc(p.name)}</strong>${p.client ? `<span class="muted small">${esc(p.client)}</span>` : ''}</div>
     ${pages.map(([k, l, ic]) => `<a class="side-a" href="${base}${k === 'geral' ? '' : '/' + k}" ${active === k ? 'aria-current="page"' : ''}>${ic}<span>${l}</span></a>`).join('')}
@@ -463,6 +464,7 @@ async function projectPage(projectId, page, sub) {
   const titles = { tarefas: 'Tarefas', equipa: p.is_central ? 'Equipa' : 'Equipa e convites', detalhes: 'Detalhes' };
   if (page === 'geral') return projectOverview(main, p);
   if (page === 'financas' && p.is_central && isStaff()) return financePage(main, sub);
+  if (page === 'orcamento' && !p.is_central && isStaff()) { main.innerHTML = `<div><h1 class="h1 pm-title">Orçamento</h1><p class="muted">Soma tudo o que está na tabela e compara com o orçamento geral do projeto.</p></div><div class="budget-wrap" data-b></div>`; return budgetPage(main.querySelector('[data-b]'), p); }
   if (page === 'aderecos' && !p.is_central) return propsPage(main, p, sub, projBase(p), onCleanup);
   if (p.kind === 'ficcao' && FICTION_PAGES.some(([k]) => k === page)) return fictionPage(main, p, page, sub, projBase(p), onCleanup);
   main.innerHTML = `<h1 class="h1 pm-title">${esc(titles[page] || '')}</h1><div class="panel" data-body></div>`;
@@ -521,7 +523,8 @@ async function projectOverview(main, p) {
       </aside>
     </div>`;
   main.querySelectorAll('[data-nb]').forEach((b) => b.addEventListener('click', () => newBoard(p)));
-  main.querySelector('[data-budget]')?.addEventListener('click', () => {
+  main.querySelector('[data-budget]')?.addEventListener('click', () => go(`${base}/orcamento`));
+  if (false) main.querySelector('[data-budget]')?.addEventListener('click', () => {
     const m = modal(`<h2>Orçamento do projeto</h2><form class="stack"><div class="field"><label for="bv">Orçamento (€)</label><input id="bv" type="number" step="0.01" min="0" inputmode="decimal" value="${esc(p.value ?? '')}"></div><div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Guardar</button></div></form>`);
     m.el.querySelector('form').addEventListener('submit', async (e) => {
       e.preventDefault(); const v = m.el.querySelector('#bv').value;
