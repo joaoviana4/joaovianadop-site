@@ -3,8 +3,8 @@ import { sb, esc, signedUrls, uploadImage, toast, modal, confirmBox, ICON } from
 // Board infinito à maneira do Milanote: cada cartão é uma linha própria na base de dados,
 // por isso duas pessoas podem trabalhar no mesmo board sem se apagarem uma à outra.
 
-const MIN = { note: [140, 80], title: [160, 50], image: [80, 60], palette: [180, 110], list: [180, 120], board: [110, 90], link: [180, 80] };
-const SIZE = { note: [280, 180], title: [520, 72], palette: [320, 150], list: [280, 220], board: [180, 150], link: [300, 110] };
+const MIN = { note: [140, 80], title: [160, 50], image: [80, 60], palette: [180, 110], list: [180, 120], board: [56, 56], link: [180, 80] };
+const SIZE = { note: [280, 180], title: [520, 72], palette: [320, 150], list: [280, 220], board: [96, 96], link: [300, 110] };
 
 export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom }) {
   const items = new Map();
@@ -72,6 +72,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   function cardEl(it) {
     let el = world.querySelector(`[data-id="${it.id}"]`);
     if (!el) { el = document.createElement('div'); el.className = `card k-${it.kind}`; el.dataset.id = it.id; world.appendChild(el); }
+    if (it.kind === 'palette') it.w = Math.max(it.w, 28 + (it.data?.colors || []).length * 70 + 40);
     el.style.cssText = `left:${it.x}px;top:${it.y}px;width:${it.w}px;height:${it.h}px;z-index:${it.z}`;
     el.innerHTML = `${inner(it)}<div class="rs" data-rs aria-hidden="true"></div>`;
     el.classList.toggle('sel', st.sel === it.id);
@@ -184,8 +185,12 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
         if (last) { const r = document.createRange(); startEdit(it.id, last); r.selectNodeContents(last); getSelection().removeAllRanges(); getSelection().addRange(r); }
         return;
       }
-      case 'addcolor': d.colors = [...(d.colors || []), '#888888']; break;
-      case 'rmcolor': d.colors = d.colors.filter((_, j) => j !== i); break;
+      case 'addcolor': case 'rmcolor': {
+        d.colors = btn.dataset.ui === 'addcolor' ? [...(d.colors || []), '#888888'] : d.colors.filter((_, j) => j !== i);
+        // a paleta alarga ou encolhe com o número de cores
+        it.w = Math.max(MIN.palette[0], 28 + d.colors.length * 70 + 40);
+        it.data = d; save(it, ['data', 'w']); cardEl(it); return;
+      }
       case 'color': {
         const inp = document.createElement('input'); inp.type = 'color'; inp.value = d.colors[i];
         inp.style.cssText = 'position:fixed;opacity:0;pointer-events:none;left:50%;top:50%';
