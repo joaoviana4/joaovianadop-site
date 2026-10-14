@@ -11,9 +11,30 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   const st = { view: { x: 0, y: 0, k: 1 }, sel: null, editing: null, drag: null, pointers: new Map(), pinch: null, dead: false };
   const viewKey = `bygrain-view-${boardId}`;
 
-  root.innerHTML = `<div class="stage" tabindex="0" aria-label="Board"><div class="world"></div><div class="drop-hint" hidden>Larga as imagens para as juntar ao board</div></div>`;
+  root.innerHTML = `<div class="stage" tabindex="0" aria-label="Board"><div class="world"></div><div class="drop-hint" hidden>Larga as imagens para as juntar ao board</div><div class="color-bar" hidden role="toolbar" aria-label="Cor do cartão"></div></div>`;
   const stage = root.querySelector('.stage');
   const world = root.querySelector('.world');
+  const bar = root.querySelector('.color-bar');
+  const COLORS = [['', 'Predefinida'], ['#FFFFFF', 'Branco'], ['#FFE58F', 'Amarelo'], ['#FFC9DE', 'Rosa'], ['#C9D7FF', 'Azul claro'], ['#BFEBD6', 'Verde'], ['#E3D4FF', 'Lilás'], ['#FFD2B0', 'Laranja'], ['#2B2B36', 'Escuro'], ['#1E2AD4', 'Azul Grain'], ['#C8382D', 'Vermelho']];
+  const isDark = (hex) => { const h = (hex || '').replace('#', ''); if (h.length !== 6) return false; const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255); return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.55; };
+  function placeBar() {
+    const it = st.sel && items.get(st.sel);
+    if (!it || it.kind === 'image' || st.editing) { bar.hidden = true; return; }
+    const { x, y, k } = st.view;
+    bar.hidden = false;
+    bar.style.left = `${Math.max(8, x + it.x * k)}px`;
+    bar.style.top = `${Math.max(8, y + it.y * k - 46)}px`;
+    const cur = it.data?.bg || '';
+    bar.innerHTML = COLORS.map(([c, n]) => `<button type="button" class="cb-sw ${cur === c ? 'on' : ''}" data-bg="${c}" style="${c ? `background:${c}` : ''}" title="${n}" aria-label="${n}"></button>`).join('') + `<label class="cb-custom" title="Outra cor"><input type="color" data-bgc value="${cur || '#F4F1E8'}" aria-label="Outra cor"><span>+</span></label>`;
+  }
+  bar.addEventListener('pointerdown', (e) => e.stopPropagation());
+  bar.addEventListener('click', (e) => { const b = e.target.closest('[data-bg]'); if (!b) return; setBg(b.dataset.bg); });
+  bar.addEventListener('input', (e) => { if (e.target.matches('[data-bgc]')) setBg(e.target.value, 400); });
+  function setBg(c, delay = 0) {
+    const it = items.get(st.sel); if (!it) return;
+    it.data = { ...(it.data || {}), bg: c || undefined }; if (!c) delete it.data.bg;
+    cardEl(it); save(it, ['data'], delay); if (!delay) placeBar();
+  }
 
   // ---------- vista ----------
   function applyView() {
@@ -22,6 +43,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     stage.style.backgroundPosition = `${x}px ${y}px`;
     stage.style.backgroundSize = `${24 * k}px ${24 * k}px`;
     onZoom && onZoom(k);
+    placeBar && placeBar();
     clearTimeout(applyView.t);
     applyView.t = setTimeout(() => { try { localStorage.setItem(viewKey, JSON.stringify(st.view)); } catch { /* sem armazenamento */ } }, 300);
   }
@@ -75,6 +97,12 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     if (it.kind === 'palette') it.w = Math.max(it.w, 28 + (it.data?.colors || []).length * 70 + 40);
     el.style.cssText = `left:${it.x}px;top:${it.y}px;width:${it.w}px;height:${it.h}px;z-index:${it.z}`;
     el.innerHTML = `${inner(it)}<div class="rs" data-rs aria-hidden="true"></div>`;
+    const bg = it.data?.bg;
+    el.classList.toggle('dark-bg', !!bg && isDark(bg) && it.kind !== 'title');
+    el.classList.toggle('light-tile', it.kind === 'board' && !!bg && !isDark(bg));
+    if (bg && it.kind === 'title') el.style.color = bg;
+    else if (bg && it.kind === 'board') el.style.setProperty('--tile', bg);
+    else if (bg) el.style.background = bg;
     el.classList.toggle('sel', st.sel === it.id);
     return el;
   }
@@ -82,6 +110,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   function select(id) {
     st.sel = id;
     world.querySelectorAll('.card').forEach((c) => c.classList.toggle('sel', c.dataset.id === id));
+    placeBar();
   }
 
   // ---------- gravar ----------
@@ -152,7 +181,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   // ---------- editar texto ----------
   function startEdit(id, el) {
     if (!el) return;
-    st.editing = { id, el };
+    st.editing = { id, el }; bar.hidden = true;
     el.contentEditable = 'plaintext-only';
     if (el.contentEditable !== 'plaintext-only') el.contentEditable = 'true';
     el.focus();
@@ -161,7 +190,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   }
   function commitEdit() {
     const ed = st.editing; if (!ed) return;
-    st.editing = null; ed.el.contentEditable = 'false';
+    st.editing = null; ed.el.contentEditable = 'false'; setTimeout(placeBar);
     const it = items.get(ed.id); if (!it) return;
     const text = ed.el.innerText.replace(/\n$/, '');
     const f = ed.el.dataset.field;
@@ -256,7 +285,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     const it = items.get(g.id); if (!it) return;
     if (Math.abs(dx) + Math.abs(dy) > 3) g.moved = true;
     const k = st.view.k; const el = world.querySelector(`[data-id="${it.id}"]`);
-    if (g.mode === 'move') { it.x = Math.round(g.ox + dx / k); it.y = Math.round(g.oy + dy / k); el.style.left = it.x + 'px'; el.style.top = it.y + 'px'; }
+    if (g.mode === 'move') { it.x = Math.round(g.ox + dx / k); it.y = Math.round(g.oy + dy / k); el.style.left = it.x + 'px'; el.style.top = it.y + 'px'; placeBar(); }
     else {
       const [mw, mh] = MIN[it.kind] || [80, 60];
       let w = Math.max(mw, g.ow + dx / k), h = Math.max(mh, g.oh + dy / k);
@@ -347,7 +376,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   document.addEventListener('keydown', onKey);
 
   async function remove(it) {
-    items.delete(it.id); world.querySelector(`[data-id="${it.id}"]`)?.remove(); st.sel = null;
+    items.delete(it.id); world.querySelector(`[data-id="${it.id}"]`)?.remove(); st.sel = null; placeBar();
     const { error } = await sb.from('board_items').delete().eq('id', it.id);
     if (error) return toast(error.message);
     if (it.kind === 'board' && it.data?.board_id) await sb.from('boards').delete().eq('id', it.data.board_id);

@@ -295,7 +295,7 @@ input[type=date] { color-scheme: dark; }
 .add-item { align-self: flex-start; margin: 4px 10px 10px; border: 0; background: none; color: rgba(11, 11, 20, .6); font-size: 13px; display: flex; align-items: center; gap: 4px; cursor: pointer; padding: 4px; }
 .add-item svg { width: 16px; height: 16px; }
 .k-board { background: transparent; box-shadow: none; overflow: visible; color: var(--cream); }
-.bcov { flex: 1; min-height: 0; border-radius: 10px; overflow: hidden; background: var(--blue) center / cover no-repeat; display: flex; align-items: center; justify-content: center; color: rgba(255, 255, 255, .9); box-shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 18px rgba(0, 0, 0, .3); }
+.bcov { flex: 1; min-height: 0; border-radius: 10px; overflow: hidden; background: var(--tile, var(--blue)) center / cover no-repeat; display: flex; align-items: center; justify-content: center; color: rgba(255, 255, 255, .9); box-shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 18px rgba(0, 0, 0, .3); }
 .bcov svg { width: 40%; height: 40%; max-width: 34px; max-height: 34px; }
 .bname { position: absolute; top: calc(100% + 6px); left: -24px; right: -24px; text-align: center; font-size: 12px; font-weight: 600; line-height: 1.25; color: var(--cream); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 2px; }
 .k-board.sel { outline: none; }
@@ -590,3 +590,18 @@ details.panel[open] summary { margin-bottom: 4px; }
 .an-steps li { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .an-steps textarea { font-size: 13px; }
 .lm-canvas svg { stroke: none; stroke-width: 1; fill: none; }
+
+/* cores dos cartões */
+.color-bar { position: absolute; z-index: 6; display: flex; align-items: center; gap: 5px; padding: 6px 8px; border-radius: 999px; background: rgba(21, 21, 29, .96); border: 1px solid var(--line2); box-shadow: 0 8px 24px rgba(0, 0, 0, .4); }
+.cb-sw { width: 24px; height: 24px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .35); background: var(--cream); cursor: pointer; padding: 0; }
+.cb-sw[data-bg=""] { background: linear-gradient(135deg, var(--cream) 50%, var(--blue) 50%); }
+.cb-sw.on { outline: 2px solid #fff; outline-offset: 2px; }
+.cb-custom { position: relative; width: 24px; height: 24px; border-radius: 999px; border: 1px dashed rgba(255, 255, 255, .5); display: flex; align-items: center; justify-content: center; color: var(--text); font-size: 14px; cursor: pointer; overflow: hidden; }
+.cb-custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.card.dark-bg { color: #fff; }
+.card.dark-bg .sw span, .card.dark-bg .link-host, .card.dark-bg .add-item, .card.dark-bg .checklist li.done .txt { color: rgba(255, 255, 255, .7); }
+.card.dark-bg .chk { border-color: rgba(255, 255, 255, .6); }
+.card.dark-bg .sw-add { color: #fff; border-color: rgba(255, 255, 255, .4); }
+.card.dark-bg.k-link .open-link { background: rgba(255, 255, 255, .14); color: #fff; }
+.k-board.dark-bg { color: var(--cream); }
+.k-board.light-tile .bcov { color: rgba(11, 11, 20, .75); }
