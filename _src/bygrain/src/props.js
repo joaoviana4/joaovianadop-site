@@ -27,20 +27,22 @@ export async function propsPage(main, p, sub, base, cleanup) {
   main.innerHTML = '<p class="muted">A carregar…</p>';
   const f = await load(p.id);
   if (sub) return propPage(main, p, f, sub, base, cleanup);
+  const hasScenes = f.scenes.length > 0;
+  if (!hasScenes && st.sort === 'scene') st.sort = 'name';
   const visible = f.props.filter((x) => !x.removed && x.type === st.tab);
   const counts = Object.fromEntries(PROP_STATUS.map(([k]) => [k, visible.filter((x) => x.status === k).length]));
   const list = visible.filter((x) => !st.filter || x.status === st.filter);
   const sceneNo = (id) => f.scenes.find((s) => s.id === id)?.number;
   main.innerHTML = `
     <div class="row between wrap-gap"><h1 class="h1 pm-title">Adereços</h1>
-      <div class="row wrap-gap"><button type="button" class="btn ghost" data-add>${ICON.plus} Adereço</button><button type="button" class="btn primary" data-analyze>Analisar o guião</button></div></div>
+      <div class="row wrap-gap"><button type="button" class="btn ghost" data-add>${ICON.plus} Adereço</button>${hasScenes ? '<button type="button" class="btn primary" data-analyze>Analisar o guião</button>' : ''}</div></div>
     <div class="row between wrap-gap">
       <div class="seg dark" role="tablist">${[['acao', 'De ação'], ['cenario', 'De cenário']].map(([k, l]) => `<button type="button" role="tab" aria-selected="${st.tab === k}" data-tab="${k}">${l} (${f.props.filter((x) => !x.removed && x.type === k).length})</button>`).join('')}</div>
-      <label class="sel"><span class="vh">Ordenar</span><select data-sort>${[['scene', 'Por cena'], ['name', 'Nome (A–Z)'], ['status', 'Por estado'], ['category', 'Por categoria']].map(([k, l]) => `<option value="${k}" ${st.sort === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label class="sel"><span class="vh">Ordenar</span><select data-sort>${[...(hasScenes ? [['scene', 'Por cena']] : []), ['name', 'Nome (A–Z)'], ['status', 'Por estado'], ['category', 'Por categoria']].map(([k, l]) => `<option value="${k}" ${st.sort === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
     </div>
     ${visible.length ? `<div class="status-bar">${PROP_STATUS.filter(([k]) => counts[k]).map(([k, l, c]) => `<i style="flex:${counts[k]};background:${c}" title="${l}: ${counts[k]}"></i>`).join('')}</div>
     <div class="pills">${PROP_STATUS.filter(([k]) => counts[k]).map(([k, l, c]) => `<button type="button" class="pill ${st.filter === k ? 'on' : ''}" data-filter="${k}" style="--c:${c}"><i></i>${l} ${counts[k]}</button>`).join('')}${st.filter ? '<button type="button" class="link-btn" data-filter="">Ver todos</button>' : ''}</div>` : ''}
-    <section class="panel">${list.length ? renderList(list, f, base) : `<p class="empty-note">${f.props.length ? 'Nada com este filtro.' : 'Ainda não há adereços. Analisa o guião ou junta-os à mão.'}</p>`}</section>`;
+    <section class="panel">${list.length ? renderList(list, f, base) : `<p class="empty-note">${f.props.length ? 'Nada com este filtro.' : (hasScenes ? 'Ainda não há adereços. Analisa o guião ou junta-os à mão.' : 'Ainda não há adereços. Junta-os em "Adereço".')}</p>`}</section>`;
   main.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { st.tab = b.dataset.tab; st.filter = ''; propsPage(main, p, null, base, cleanup); }));
   main.querySelector('[data-sort]').addEventListener('change', (e) => { st.sort = e.target.value; propsPage(main, p, null, base, cleanup); });
   main.querySelectorAll('[data-filter]').forEach((b) => b.addEventListener('click', () => { st.filter = b.dataset.filter; propsPage(main, p, null, base, cleanup); }));
@@ -58,7 +60,7 @@ export async function propsPage(main, p, sub, base, cleanup) {
       if (error) return toast(error.message); m.close(); location.hash = `${base}/aderecos/${data.id}`;
     });
   });
-  main.querySelector('[data-analyze]').addEventListener('click', () => analyze(p, f, () => propsPage(main, p, null, base, cleanup)));
+  main.querySelector('[data-analyze]')?.addEventListener('click', () => analyze(p, f, () => propsPage(main, p, null, base, cleanup)));
   void sceneNo;
 }
 
@@ -108,9 +110,9 @@ async function propPage(main, p, f, id, base, cleanup) {
         ${!imgs.length && !links.length ? '<p class="muted small">Imagens e links para produtos.</p>' : ''}</section>
       <section class="panel"><h2 class="h3">Tarefas</h2><div data-tasks></div></section>
     </div><aside class="pm-side stack">
-      <section class="panel"><h2 class="h3">Cenas (${scenes.length})</h2>${scenes.map((s) => `<a class="scene-ex" href="${base}/cenas/${s.id}"><span class="scene-n sm">${esc(s.number)}</span><span><span class="small">${esc(s.heading)}</span>${excerpt(s) ? `<span class="small muted mono">${esc(excerpt(s))}</span>` : ''}</span></a>`).join('')}${chips(x.scene_ids, f.scenes.map((s) => ({ id: s.id, name: `Cena ${s.number}` })), 'scene_ids')}</section>
-      <section class="panel"><h2 class="h3">Personagens</h2>${chips(x.character_ids, f.characters, 'character_ids')}</section>
-      <section class="panel"><h2 class="h3">Décors</h2>${chips(x.location_ids, f.locations, 'location_ids')}</section>
+      ${f.scenes.length ? `<section class="panel"><h2 class="h3">Cenas (${scenes.length})</h2>${scenes.map((s) => `<a class="scene-ex" href="${base}/cenas/${s.id}"><span class="scene-n sm">${esc(s.number)}</span><span><span class="small">${esc(s.heading)}</span>${excerpt(s) ? `<span class="small muted mono">${esc(excerpt(s))}</span>` : ''}</span></a>`).join('')}${chips(x.scene_ids, f.scenes.map((s) => ({ id: s.id, name: `Cena ${s.number}` })), 'scene_ids')}</section>` : ''}
+      ${f.characters.length ? `<section class="panel"><h2 class="h3">Personagens</h2>${chips(x.character_ids, f.characters, 'character_ids')}</section>` : ''}
+      ${f.locations.length ? `<section class="panel"><h2 class="h3">Décors</h2>${chips(x.location_ids, f.locations, 'location_ids')}</section>` : ''}
     </aside></div>`;
   const savers = {};
   main.querySelectorAll('[data-k]').forEach((el) => el.addEventListener('input', () => {

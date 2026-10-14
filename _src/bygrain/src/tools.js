@@ -27,6 +27,7 @@ export async function tableTemplate(p, tpl) {
       sb.from('props').select('name, status, scene_ids').eq('project_id', p.id).eq('removed', false),
     ]);
     const rows = [];
+    if (!(scenes || []).length) (props || []).forEach((x) => rows.push({ id: uid(), cells: { [cols[1].id]: x.name, [cols[2].id]: x.status.replace('_', ' ') } }));
     (scenes || []).forEach((s) => {
       const ps = (props || []).filter((x) => (x.scene_ids || []).includes(s.id));
       if (!ps.length) rows.push({ id: uid(), cells: { [cols[0].id]: s.number } });
