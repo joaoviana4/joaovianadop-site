@@ -661,3 +661,19 @@ details.panel[open] summary { margin-bottom: 4px; }
 .hist-h span { color: var(--text); margin-left: 6px; }
 .task-list.done .t-title { text-decoration: line-through; color: var(--muted); }
 input[type=search] { min-height: 44px; }
+
+/* central: visão geral */
+.co { display: flex; flex-direction: column; gap: 32px; }
+.co-sec { display: flex; flex-direction: column; gap: 12px; }
+.co-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
+.co-h .month-nav strong { min-width: 140px; font-size: 16px; }
+.co-total { color: var(--text); font-family: var(--logo); font-weight: 800; }
+.co-table { min-width: 760px; }
+.co-table td { padding: 12px 10px; }
+.co-table tfoot td { border-bottom: 0; border-top: 1px solid var(--line2); }
+.co-name { display: flex; flex-direction: column; gap: 2px; text-decoration: none; }
+.co-state { display: flex; flex-direction: column; gap: 6px; min-width: 150px; font-size: 13px; }
+.av-stack { display: inline-flex; }
+.av-stack .avatar { margin-left: -6px; box-shadow: 0 0 0 2px var(--panel); }
+.av-stack .avatar:first-child { margin-left: 0; }
+.avatar.more { background: var(--panel2); color: var(--text); }

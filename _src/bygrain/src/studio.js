@@ -1,4 +1,5 @@
 import './style.css';
+import { daysUntil } from './lib.js';
 import { sb, state, esc, $, loadProfile, isStaff, isAdmin, toast, modal, confirmBox, ICON, LOGO, KINDS, ROLES, phaseOf, greeting, initials, signedUrls, uploadImage, callFn, authPw, MIN_PW, fmtDate, dueInfo, registerSW, BASE } from './lib.js';
 import { renderAuth } from './auth.js';
 import { mountBoard } from './board.js';
@@ -201,12 +202,13 @@ function newProject() {
       <div class="field"><label for="pc">Artista ou marca</label><input id="pc" name="client"></div>
       <div class="field"><label for="pk">Tipo</label><select id="pk" name="kind">${Object.entries(KINDS).filter(([k]) => k !== 'central').map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
       <div class="grid2"><div class="field"><label for="ps">Começa</label><input id="ps" name="starts_on" type="date"></div><div class="field"><label for="pe">Entrega</label><input id="pe" name="ends_on" type="date"></div></div>
+      <div class="field"><label for="pv">Valor do projeto (€, opcional)</label><input id="pv" name="value" type="number" step="0.01" min="0" inputmode="decimal"></div>
       <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Criar</button></div>
     </form>`);
   m.el.querySelector('form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target));
-    const { data, error } = await sb.from('projects').insert({ name: f.name.trim(), client: f.client.trim(), kind: f.kind, starts_on: f.starts_on || null, ends_on: f.ends_on || null, ...(f.kind === 'ficcao' ? { departments: FICTION_DEPTS } : {}) }).select().single();
+    const { data, error } = await sb.from('projects').insert({ name: f.name.trim(), client: f.client.trim(), kind: f.kind, starts_on: f.starts_on || null, ends_on: f.ends_on || null, value: f.value ? Number(f.value) : null, ...(f.kind === 'ficcao' ? { departments: FICTION_DEPTS } : {}) }).select().single();
     if (error) return toast(error.message);
     await sb.from('project_members').insert({ project_id: data.id, user_id: state.user.id });
     m.close(); go(`#/p/${data.id}`);
@@ -223,6 +225,7 @@ function detailsForm(p) {
       <div class="field"><label for="dst">Estado</label><select id="dst" name="status"><option value="active" ${p.status === 'active' ? 'selected' : ''}>Em curso</option><option value="done" ${p.status === 'done' ? 'selected' : ''}>Finalizado</option><option value="archived" ${p.status === 'archived' ? 'selected' : ''}>Arquivo</option></select></div>
       <div class="field"><label for="ds">Começa</label><input id="ds" name="starts_on" type="date" value="${esc(p.starts_on || '')}"></div>
       <div class="field"><label for="de">Entrega</label><input id="de" name="ends_on" type="date" value="${esc(p.ends_on || '')}"></div>
+      <div class="field"><label for="dv">Valor do projeto (€)</label><input id="dv" name="value" type="number" step="0.01" min="0" inputmode="decimal" value="${esc(p.value ?? '')}"></div>
     </div>
     <div class="field"><span class="label">Capa</span><div class="row"><button type="button" class="btn ghost" data-cover>${ICON.image} Escolher imagem</button>${p.cover_path ? '<button type="button" class="btn ghost" data-nocover>Tirar capa</button>' : ''}</div></div>`}
     <fieldset class="depts"><legend>Departamentos e cores</legend>
@@ -259,7 +262,7 @@ function bindDetails(root, p, after) {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(form));
     const patch = { departments: depts.filter((d) => d.name.trim()), updated_at: new Date().toISOString() };
-    if (!p.is_central) Object.assign(patch, { name: f.name.trim(), client: f.client.trim(), kind: f.kind, status: f.status, starts_on: f.starts_on || null, ends_on: f.ends_on || null });
+    if (!p.is_central) Object.assign(patch, { name: f.name.trim(), client: f.client.trim(), kind: f.kind, status: f.status, starts_on: f.starts_on || null, ends_on: f.ends_on || null, value: f.value === '' || f.value == null ? null : Number(f.value) });
     const { data, error } = await sb.from('projects').update(patch).eq('id', p.id).select().single();
     if (error) return toast(error.message);
     Object.assign(p, data); toast('Guardado.'); after && after(data);
@@ -285,9 +288,11 @@ async function projectTeam(root, p) {
   const istate = (i) => (i.used_at ? `Usado a ${fmtDate(i.used_at)}` : new Date(i.expires_at) < new Date() ? 'Expirou' : `Válido até ${fmtDate(i.expires_at)}`);
   root.innerHTML = `
     <section class="stack">
-      <h3 class="h3">Equipa da Grain</h3>
-      <p class="muted small">Todos os membros e administradores têm acesso a todos os projetos.</p>
-      <ul class="people">${staff.map((x) => `<li><span class="avatar sm" style="--c:${esc(x.color)}">${esc(initials(x.display_name))}</span><span>${esc(x.display_name)}</span><span class="muted small">${esc(ROLES[x.role])}</span></li>`).join('')}</ul>
+      <h3 class="h3">${p.is_central ? 'Equipa da Grain' : 'Atribuídos ao projeto'}</h3>
+      <p class="muted small">${p.is_central ? 'Todos os membros e administradores têm acesso à Central.' : 'Quem trabalha neste projeto. Todos os membros da Grain continuam a ter acesso.'}</p>
+      ${(() => { const assigned = p.is_central ? staff : staff.filter((x) => (members || []).some((m) => m.user_id === x.id)); const free = staff.filter((x) => !assigned.includes(x));
+        return `<ul class="people">${assigned.map((x) => `<li><span class="avatar sm" style="--c:${esc(x.color)}">${esc(initials(x.display_name))}</span><span>${esc(x.display_name)}</span><span class="muted small">${esc(ROLES[x.role])}</span>${!p.is_central && isStaff() ? `<button type="button" class="link-btn danger-text" data-rmguest="${x.id}">Tirar</button>` : ''}</li>`).join('') || '<li class="muted small">Ainda ninguém atribuído.</li>'}</ul>
+        ${!p.is_central && isStaff() && free.length ? `<label class="sel"><span class="vh">Atribuir pessoa</span><select data-assign><option value="">+ Atribuir pessoa da Grain</option>${free.map((x) => `<option value="${x.id}">${esc(x.display_name)}</option>`).join('')}</select></label>` : ''}`; })()}
     </section>
     ${p.is_central ? '' : `<section class="stack">
       <h3 class="h3">Convidados externos</h3>
@@ -315,6 +320,7 @@ async function projectTeam(root, p) {
     if (!(await confirmBox('Tirar esta pessoa do projeto?', 'Tirar'))) return;
     await sb.from('project_members').delete().eq('project_id', p.id).eq('user_id', b.dataset.rmguest); projectTeam(root, p);
   }));
+  root.querySelector('[data-assign]')?.addEventListener('change', async (e) => { if (!e.target.value) return; const { error } = await sb.from('project_members').insert({ project_id: p.id, user_id: e.target.value }); if (error) toast(error.message); projectTeam(root, p); });
   root.querySelectorAll('[data-rminv]').forEach((b) => b.addEventListener('click', async () => { await sb.from('invites').delete().eq('id', b.dataset.rminv); projectTeam(root, p); }));
 }
 
@@ -515,6 +521,48 @@ async function projectOverview(main, p) {
     </div>`;
   main.querySelectorAll('[data-nb]').forEach((b) => b.addEventListener('click', () => newBoard(p)));
   main.querySelectorAll('[data-bopt]').forEach((btn) => btn.addEventListener('click', () => boardOptions(p, p._boards.find((x) => x.id === btn.dataset.bopt), () => projectPage(p.id, 'geral'))));
+  if (p.is_central) { const box = document.createElement('div'); box.className = 'co'; main.querySelector('.pm-head').after(box); centralOverview(box); }
+}
+
+// ---------- Central: visão geral dos projetos ----------
+const eur = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+const coState = { ym: new Date().toISOString().slice(0, 7) };
+const MESES_L = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+async function centralOverview(box) {
+  box.innerHTML = '<p class="muted">A carregar os projetos…</p>';
+  const [{ data: projects }, { data: members }, { data: tasks }, people] = await Promise.all([
+    sb.from('projects').select('*').eq('is_central', false),
+    sb.from('project_members').select('project_id, user_id'),
+    sb.from('tasks').select('project_id, assignee_id, status'),
+    loadPeople(),
+  ]);
+  const staffIds = new Set(people.filter((x) => x.role !== 'guest').map((x) => x.id));
+  const who = (pid) => { const ids = new Set([...(members || []).filter((m) => m.project_id === pid).map((m) => m.user_id), ...(tasks || []).filter((t) => t.project_id === pid && t.assignee_id).map((t) => t.assignee_id)]); return people.filter((x) => ids.has(x.id)).sort((a, b) => staffIds.has(b.id) - staffIds.has(a.id)); };
+  const avatars = (pid) => { const l = who(pid); return l.length ? `<span class="av-stack">${l.slice(0, 4).map((x) => `<span class="avatar sm" title="${esc(x.display_name)}" style="--c:${esc(x.color)}">${esc(initials(x.display_name))}</span>`).join('')}${l.length > 4 ? `<span class="avatar sm more">+${l.length - 4}</span>` : ''}</span>` : '<span class="muted small">—</span>'; };
+  const open = (pid) => (tasks || []).filter((t) => t.project_id === pid && t.status !== 'done').length;
+  const val = (v) => (v == null ? '<span class="muted">—</span>' : eur.format(v));
+  const ongoing = (projects || []).filter((x) => x.status === 'active').sort((a, b) => (a.ends_on || '9999').localeCompare(b.ends_on || '9999'));
+  const finished = (projects || []).filter((x) => x.status !== 'active' && x.done_at && x.done_at.slice(0, 7) === coState.ym).sort((a, b) => b.done_at.localeCompare(a.done_at));
+  const sum = (l) => l.reduce((a, x) => a + (Number(x.value) || 0), 0);
+  const [y, m] = coState.ym.split('-');
+  const stateCell = (x) => { const ph = phaseOf(x); const d = x.ends_on ? daysUntil(x.ends_on) : null; return `<div class="co-state"><span>${esc(ph.label || 'Sem datas')}</span><div class="bar"><i style="width:${Math.round(ph.pct * 100)}%"></i></div>${d != null && d < 0 ? '<span class="small late-txt2">Prazo passado</span>' : ''}</div>`; };
+  box.innerHTML = `
+    <section class="co-sec">
+      <div class="co-h"><h2 class="h2">Projetos em curso</h2><span class="muted">${ongoing.length} ${ongoing.length === 1 ? 'projeto' : 'projetos'} · <strong class="co-total">${eur.format(sum(ongoing))}</strong></span></div>
+      <div class="panel table-wrap">${ongoing.length ? `<table class="table co-table"><thead><tr><th>Projeto</th><th class="num">Valor</th><th>Atribuídos</th><th>Estado</th><th class="num">Tarefas</th><th>Entrega</th></tr></thead><tbody>
+        ${ongoing.map((x) => `<tr class="click-row" data-href="#/p/${x.id}"><td><a href="#/p/${x.id}" class="co-name"><strong>${esc(x.name)}</strong><span class="small muted">${esc(x.client || '')}${x.client ? ' · ' : ''}${esc(KINDS[x.kind] || x.kind)}</span></a></td><td class="num">${val(x.value)}</td><td>${avatars(x.id)}</td><td>${stateCell(x)}</td><td class="num">${open(x.id) || '<span class="muted">0</span>'}</td><td class="small">${x.ends_on ? fmtDate(x.ends_on) : '<span class="muted">—</span>'}</td></tr>`).join('')}
+      </tbody><tfoot><tr><td><strong>Total</strong></td><td class="num"><strong>${eur.format(sum(ongoing))}</strong></td><td colspan="4"></td></tr></tfoot></table>` : '<p class="empty-note">Não há projetos em curso.</p>'}</div>
+    </section>
+    <section class="co-sec">
+      <div class="co-h"><h2 class="h2">Finalizados</h2>
+        <div class="month-nav"><button type="button" class="icon-btn" data-cm="-1" aria-label="Mês anterior">${ICON.back}</button><strong>${MESES_L[+m - 1]} ${y}</strong><button type="button" class="icon-btn" data-cm="1" aria-label="Mês seguinte">${ICON.chev}</button></div>
+        <span class="muted">${finished.length} ${finished.length === 1 ? 'projeto' : 'projetos'} · <strong class="co-total">${eur.format(sum(finished))}</strong></span></div>
+      <div class="panel table-wrap">${finished.length ? `<table class="table co-table"><thead><tr><th>Projeto</th><th class="num">Valor</th><th>Atribuídos</th><th>Fechado a</th></tr></thead><tbody>
+        ${finished.map((x) => `<tr class="click-row" data-href="#/p/${x.id}"><td><a href="#/p/${x.id}" class="co-name"><strong>${esc(x.name)}</strong><span class="small muted">${esc(x.client || '')}${x.client ? ' · ' : ''}${esc(KINDS[x.kind] || x.kind)}</span></a></td><td class="num">${val(x.value)}</td><td>${avatars(x.id)}</td><td class="small">${fmtDate(x.done_at)}</td></tr>`).join('')}
+      </tbody><tfoot><tr><td><strong>Total</strong></td><td class="num"><strong>${eur.format(sum(finished))}</strong></td><td colspan="2"></td></tr></tfoot></table>` : `<p class="empty-note">Nenhum projeto finalizado em ${MESES_L[+m - 1]}.</p>`}</div>
+    </section>`;
+  box.querySelectorAll('[data-href]').forEach((tr) => tr.addEventListener('click', (e) => { if (!e.target.closest('a')) go(tr.dataset.href); }));
+  box.querySelectorAll('[data-cm]').forEach((b) => b.addEventListener('click', () => { const [yy, mm] = coState.ym.split('-').map(Number); const d = new Date(yy, mm - 1 + Number(b.dataset.cm), 1); coState.ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; centralOverview(box); }));
 }
 
 // ---------- board em ecrã inteiro ----------
