@@ -1443,6 +1443,9 @@
     function homeIntro() {
       const home = $("#home"), stage = $("#intro-stage"); if (!home || !stage) return;
       const skip = () => { home.classList.add("ready", "done"); };
+      // otter intro switched off for now (set to false to bring it back)
+      const INTRO_OFF = true;
+      if (INTRO_OFF) return skip();
       // the intro plays on every load of the homepage (every refresh)
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return skip();
       const R = (a, b) => a + Math.random() * (b - a), STEP = 150, SEQ = ["V", "I", "A", "N", "A"];
