@@ -18,7 +18,7 @@ export async function financePage(main, sub) {
   if (['movimentos', 'contas', 'despesas'].includes(sub)) st.tab = sub;
   main.innerHTML = `<div class="row between wrap-gap"><h1 class="h1 pm-title">Finanças</h1>
     <div class="seg dark" role="tablist">${[['movimentos', 'Movimentos'], ['contas', 'Contas'], ['despesas', 'Despesas mensais']].map(([k, l]) => `<button type="button" role="tab" aria-selected="${st.tab === k}" data-t="${k}">${l}</button>`).join('')}</div></div>
-    <div data-fin><p class="muted">A carregar…</p></div>`;
+    <div class="fin" data-fin><p class="muted">A carregar…</p></div>`;
   main.querySelectorAll('[data-t]').forEach((b) => b.addEventListener('click', () => { st.tab = b.dataset.t; financePage(main); }));
   const box = main.querySelector('[data-fin]');
   const [{ data: accounts }, { data: recurring }, { data: projects }] = await Promise.all([
@@ -44,26 +44,27 @@ async function movements(box, ctx) {
   const pending = ctx.recurring.filter((r) => r.active && !list.some((m) => m.recurring_id === r.id));
   const byCat = {}; list.filter((x) => x.direction === 'out').forEach((x) => { byCat[x.category || 'Sem categoria'] = (byCat[x.category || 'Sem categoria'] || 0) + Number(x.amount); });
   const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+  const nIn = list.filter((x) => x.direction === 'in').length, nOut = list.length - nIn;
   box.innerHTML = `
-    <div class="row between wrap-gap">
+    <div class="fin-bar">
       <div class="month-nav"><button type="button" class="icon-btn" data-m="-1" aria-label="Mês anterior">${ICON.back}</button><strong>${ymLabel(st.ym)}</strong><button type="button" class="icon-btn" data-m="1" aria-label="Mês seguinte">${ICON.chev}</button></div>
-      <div class="row wrap-gap">${pending.length ? `<button type="button" class="btn ghost" data-fixed>Lançar despesas mensais (${pending.length})</button>` : ''}<button type="button" class="btn primary" data-add>${ICON.plus} Movimento</button></div>
+      <div class="fin-actions">${pending.length ? `<button type="button" class="btn ghost" data-fixed>Lançar despesas mensais <span class="count">${pending.length}</span></button>` : ''}<button type="button" class="btn primary" data-add>${ICON.plus} Movimento</button></div>
     </div>
-    <div class="stats fin-stats">
-      <div class="stat"><span>Entradas</span><strong class="pos">${money(inn)}</strong></div>
-      <div class="stat"><span>Saídas</span><strong class="neg">${money(out)}</strong></div>
-      <div class="stat"><span>Resultado do mês</span><strong class="${inn - out >= 0 ? 'pos' : 'neg'}">${money(inn - out)}</strong></div>
+    <div class="fin-stats">
+      <div class="fstat"><span class="fl">Entradas</span><strong class="pos">${money(inn)}</strong><span class="fs">${nIn} ${nIn === 1 ? 'movimento' : 'movimentos'}</span></div>
+      <div class="fstat"><span class="fl">Saídas</span><strong class="neg">${money(out)}</strong><span class="fs">${nOut} ${nOut === 1 ? 'movimento' : 'movimentos'}${pending.length ? ` · ${pending.length} ${pending.length === 1 ? 'fixa' : 'fixas'} por lançar` : ''}</span></div>
+      <div class="fstat ${inn - out >= 0 ? 'good' : 'bad'}"><span class="fl">Resultado do mês</span><strong>${money(inn - out)}</strong><span class="fs">${inn - out >= 0 ? 'Positivo' : 'Negativo'}</span></div>
     </div>
-    <div class="pm-grid">
-      <section class="panel pm-boards">${list.length ? `<div class="table-wrap"><table class="table fin"><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Conta</th><th class="num">Valor</th></tr></thead><tbody>
+    <div class="fin-grid">
+      <section class="panel fin-main"><h2 class="h3">Movimentos</h2>${list.length ? `<div class="table-wrap"><table class="table fin"><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Conta</th><th class="num">Valor</th></tr></thead><tbody>
         ${list.map((m) => `<tr class="click-row" data-mov="${m.id}"><td class="muted">${dmy(m.date)}</td><td><strong>${esc(m.description)}</strong>${m.project_id ? `<div class="small muted">${esc(proj(m.project_id)?.name || '')}</div>` : ''}${m.recurring_id ? '<div class="small muted">Despesa mensal</div>' : ''}</td><td class="small">${esc(m.category)}</td><td class="small">${esc(acc(m.account_id)?.name || '—')}</td><td class="num ${m.direction === 'in' ? 'pos' : 'neg'}">${m.direction === 'in' ? '+' : '−'}${money(m.amount)}</td></tr>`).join('')}
-      </tbody></table></div>` : `<p class="empty-note">Ainda não há movimentos em ${ymLabel(st.ym)}.</p>`}</section>
-      <aside class="pm-side"><section class="panel"><h2 class="h3">Saídas por categoria</h2>
+      </tbody></table></div>` : `<div class="fin-empty"><p>Ainda não há movimentos em ${ymLabel(st.ym)}.</p><button type="button" class="btn ghost" data-add2>${ICON.plus} Juntar o primeiro</button></div>`}</section>
+      <aside class="fin-side"><section class="panel"><h2 class="h3">Saídas por categoria</h2>
         ${cats.length ? `<ul class="cat-bars">${cats.map(([c, v]) => `<li><div class="row between small"><span>${esc(c)}</span><span>${money(v)}</span></div><div class="bar"><i style="width:${Math.round((v / out) * 100)}%"></i></div></li>`).join('')}</ul>` : '<p class="muted small">Sem saídas este mês.</p>'}
       </section></aside>
     </div>`;
   box.querySelectorAll('[data-m]').forEach((b) => b.addEventListener('click', () => { st.ym = shiftYm(st.ym, +b.dataset.m); movements(box, ctx); }));
-  box.querySelector('[data-add]').addEventListener('click', () => movementForm(ctx, null, () => movements(box, ctx)));
+  box.querySelectorAll('[data-add], [data-add2]').forEach((b) => b.addEventListener('click', () => movementForm(ctx, null, () => movements(box, ctx))));
   box.querySelectorAll('[data-mov]').forEach((r) => r.addEventListener('click', () => movementForm(ctx, list.find((x) => x.id === r.dataset.mov), () => movements(box, ctx))));
   box.querySelector('[data-fixed]')?.addEventListener('click', async () => {
     if (!(await confirmBox(`Lançar ${pending.length} ${pending.length === 1 ? 'despesa mensal' : 'despesas mensais'} em ${ymLabel(st.ym)} (${money(pending.reduce((a, r) => a + Number(r.amount), 0))})?`, 'Lançar'))) return;
@@ -119,8 +120,8 @@ async function accountsTab(box, ctx) {
   const bal = (a) => Number(a.opening_balance) + (data || []).filter((m) => m.account_id === a.id).reduce((s, m) => s + (m.direction === 'in' ? 1 : -1) * Number(m.amount), 0);
   const total = ctx.accounts.reduce((s, a) => s + bal(a), 0);
   box.innerHTML = `
-    <div class="row between wrap-gap"><p class="muted">Saldo total: <strong class="${total >= 0 ? 'pos' : 'neg'}">${money(total)}</strong></p><button type="button" class="btn primary" data-add>${ICON.plus} Conta</button></div>
-    <div class="ent-grid">${ctx.accounts.map((a) => `<button type="button" class="ent-card acc" data-acc="${a.id}" style="--g:${esc(a.color)}"><span class="small muted"><i class="dot"></i>${esc(KINDS[a.kind] || a.kind)}</span><strong>${esc(a.name)}</strong><span class="acc-bal ${bal(a) >= 0 ? 'pos' : 'neg'}">${money(bal(a))}</span><span class="small muted">Saldo inicial ${money(a.opening_balance)}</span></button>`).join('')}</div>`;
+    <div class="fin-bar"><div class="fin-sum"><span>Saldo total</span><strong class="${total >= 0 ? 'pos' : 'neg'}">${money(total)}</strong><span>${ctx.accounts.length} ${ctx.accounts.length === 1 ? 'conta' : 'contas'}</span></div><button type="button" class="btn primary" data-add>${ICON.plus} Conta</button></div>
+    <div class="acc-grid">${ctx.accounts.map((a) => `<button type="button" class="ent-card acc" data-acc="${a.id}" style="--g:${esc(a.color)}"><span class="small muted"><i class="dot"></i>${esc(KINDS[a.kind] || a.kind)}</span><strong>${esc(a.name)}</strong><span class="acc-bal ${bal(a) >= 0 ? 'pos' : 'neg'}">${money(bal(a))}</span><span class="small muted">Saldo inicial ${money(a.opening_balance)}</span></button>`).join('')}</div>`;
   box.querySelector('[data-add]').addEventListener('click', () => accountForm(ctx, null));
   box.querySelectorAll('[data-acc]').forEach((b) => b.addEventListener('click', () => accountForm(ctx, ctx.accounts.find((a) => a.id === b.dataset.acc))));
 }
@@ -151,7 +152,7 @@ function recurringTab(box, ctx) {
   const total = active.reduce((s, r) => s + Number(r.amount), 0);
   const acc = (id) => ctx.accounts.find((a) => a.id === id);
   box.innerHTML = `
-    <div class="row between wrap-gap"><p class="muted">Total por mês: <strong class="neg">${money(total)}</strong> · ${active.length} ${active.length === 1 ? 'despesa ativa' : 'despesas ativas'}</p><button type="button" class="btn primary" data-add>${ICON.plus} Despesa mensal</button></div>
+    <div class="fin-bar"><div class="fin-sum"><span>Total por mês</span><strong class="neg">${money(total)}</strong><span>${active.length} ${active.length === 1 ? 'despesa ativa' : 'despesas ativas'}</span></div><button type="button" class="btn primary" data-add>${ICON.plus} Despesa mensal</button></div>
     <section class="panel">${ctx.recurring.length ? `<div class="table-wrap"><table class="table fin"><thead><tr><th>Dia</th><th>Despesa</th><th>Categoria</th><th>Conta</th><th class="num">Valor</th><th>Ativa</th></tr></thead><tbody>
       ${ctx.recurring.map((r) => `<tr class="click-row ${r.active ? '' : 'off'}" data-rec="${r.id}"><td class="muted">${r.day_of_month}</td><td><strong>${esc(r.name)}</strong></td><td class="small">${esc(r.category)}</td><td class="small">${esc(acc(r.account_id)?.name || '—')}</td><td class="num neg">${money(r.amount)}</td><td>${r.active ? 'Sim' : 'Não'}</td></tr>`).join('')}
     </tbody></table></div>` : '<p class="empty-note">Ainda não há despesas mensais. Junta as fixas (renda, software, contabilista…) e lança-as todos os meses em Movimentos com um clique.</p>'}</section>`;
