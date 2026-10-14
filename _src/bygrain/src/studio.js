@@ -39,12 +39,12 @@ async function route() {
   teardown();
   const h = location.hash.replace(/^#\/?/, '');
   const parts = h.split('/').filter(Boolean);
-  if (parts[0] === 'p' && parts[1]) return projectView(parts[1], parts[2] === 'b' ? parts[3] : null);
+  if (parts[0] === 'p' && parts[1]) return parts[2] === 'b' ? boardView(parts[1], parts[3]) : projectPage(parts[1], parts[2] || 'geral');
   if (parts[0] === 'central') {
     if (!isStaff()) return go('#/');
     const { data } = await sb.from('projects').select('id').eq('is_central', true).limit(1).maybeSingle();
     if (!data) return toast('A Central de Produção ainda não existe.');
-    return projectView(data.id, parts[1] === 'b' ? parts[2] : null);
+    return parts[1] === 'b' ? boardView(data.id, parts[2]) : projectPage(data.id, parts[1] || 'geral');
   }
   if (parts[0] === 'tarefas') return tasksPage(parts[1] || 'minhas');
   if (parts[0] === 'equipa') return isAdmin() ? teamPage() : go('#/');
@@ -312,19 +312,170 @@ async function projectTeam(root, p) {
   root.querySelectorAll('[data-rminv]').forEach((b) => b.addEventListener('click', async () => { await sb.from('invites').delete().eq('id', b.dataset.rminv); projectTeam(root, p); }));
 }
 
-// ---------- vista do projeto: board em ecrã inteiro ----------
-async function projectView(projectId, boardId) {
-  const { data: p, error } = await sb.from('projects').select('*').eq('id', projectId).maybeSingle();
-  if (error || !p) { app.innerHTML = `<div class="page">${header('')}<div class="wrap"><p class="empty-note">Este projeto não existe ou não tens acesso.</p></div></div>`; bindHeader(app); return; }
-  const { data: boards } = await sb.from('boards').select('id, parent_id, title').eq('project_id', p.id);
-  const root = (boards || []).find((b) => !b.parent_id);
-  const cur = (boards || []).find((b) => b.id === boardId) || root;
-  const base = p.is_central ? '#/central' : `#/p/${p.id}`;
-  const chain = []; let b = cur; while (b) { chain.unshift(b); b = (boards || []).find((x) => x.id === b.parent_id); }
-  const boardHash = (id) => (id === root.id ? base : `${base}/b/${id}`);
+// ---------- projeto: página com ferramentas; os boards criam-se lá dentro ----------
+const projBase = (p) => (p.is_central ? '#/central' : `#/p/${p.id}`);
+
+async function loadProject(id) {
+  const { data: p } = await sb.from('projects').select('*').eq('id', id).maybeSingle();
+  if (!p) return null;
+  const { data: boards } = await sb.from('boards').select('id, parent_id, title, group_id, position, created_at').eq('project_id', id).order('position').order('created_at');
+  p._boards = boards || [];
+  return p;
+}
+function notFound() {
+  app.innerHTML = `<div class="page">${header('')}<div class="wrap page-pad"><p class="empty-note">Este projeto não existe ou não tens acesso.</p><a href="#/">Voltar ao início</a></div></div>`;
+  bindHeader(app);
+}
+
+// grupos de boards = departamentos do projeto (como no Studio), mais "Outros"
+function boardGroups(p) {
+  const top = p._boards.filter((b) => !b.parent_id);
+  const groups = (p.departments || []).map((d) => ({ ...d, boards: top.filter((b) => b.group_id === d.id) }));
+  const known = new Set(groups.map((g) => g.id));
+  const other = top.filter((b) => !b.group_id || !known.has(b.group_id));
+  if (other.length) groups.push({ id: '', name: 'Outros', color: '#8A8A99', boards: other });
+  return groups;
+}
+
+function projectNav(p, active) {
+  const base = projBase(p);
+  const pages = [['geral', 'Visão geral', ICON.home], ['tarefas', 'Tarefas', ICON.task], ['equipa', p.is_central ? 'Equipa' : 'Equipa e convites', ICON.team], ...(isStaff() ? [['detalhes', 'Detalhes', ICON.info]] : [])];
+  return `
+    <div class="pn-h"><strong>${esc(p.name)}</strong>${p.client ? `<span class="muted small">${esc(p.client)}</span>` : ''}</div>
+    ${pages.map(([k, l, ic]) => `<a class="side-a" href="${base}${k === 'geral' ? '' : '/' + k}" ${active === k ? 'aria-current="page"' : ''}>${ic}<span>${l}</span></a>`).join('')}
+    <div class="pn-sec"><span>Boards</span><button type="button" class="icon-btn sm" data-newboard="" aria-label="Novo board">${ICON.plus}</button></div>
+    ${boardGroups(p).map((g) => `<div class="pn-group" style="--g:${esc(g.color)}">
+      <div class="pn-gh"><i></i><span>${esc(g.name)}</span>${g.id ? `<button type="button" class="icon-btn sm" data-newboard="${esc(g.id)}" aria-label="Novo board em ${esc(g.name)}">${ICON.plus}</button>` : ''}</div>
+      ${g.boards.map((b) => `<a class="side-a sub" href="${base}/b/${b.id}" ${active === b.id ? 'aria-current="page"' : ''}>${ICON.board}<span>${esc(b.title)}</span></a>`).join('')}
+    </div>`).join('')}`;
+}
+function bindProjectNav(root, p) {
+  root.querySelectorAll('[data-newboard]').forEach((b) => b.addEventListener('click', () => newBoard(p, b.dataset.newboard)));
+}
+
+function newBoard(p, groupId = '') {
+  const m = modal(`<h2>Novo board</h2>
+    <form class="stack">
+      <div class="field"><label for="bn">Nome</label><input id="bn" name="title" placeholder="ex: Moodboard, Storyboard, Brainstorm" required></div>
+      <div class="field"><label for="bg">Departamento</label><select id="bg" name="group_id"><option value="">Nenhum</option>${(p.departments || []).map((d) => `<option value="${esc(d.id)}" ${d.id === groupId ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></div>
+      <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Criar e abrir</button></div>
+    </form>`);
+  m.el.querySelector('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target));
+    const { data, error } = await sb.from('boards').insert({ project_id: p.id, title: f.title.trim(), group_id: f.group_id || null, position: p._boards.length }).select().single();
+    if (error) return toast(error.message);
+    m.close(); go(`${projBase(p)}/b/${data.id}`);
+  });
+}
+
+function boardOptions(p, b, after) {
+  const m = modal(`<h2>Board</h2>
+    <form class="stack">
+      <div class="field"><label for="bn">Nome</label><input id="bn" name="title" value="${esc(b.title)}" required></div>
+      <div class="field"><label for="bg">Departamento</label><select id="bg" name="group_id"><option value="">Nenhum</option>${(p.departments || []).map((d) => `<option value="${esc(d.id)}" ${d.id === b.group_id ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></div>
+      <div class="row between">
+        <button type="button" class="btn ghost danger-text" data-del>${ICON.trash} Apagar</button>
+        <div class="row"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Guardar</button></div>
+      </div>
+    </form>`);
+  m.el.querySelector('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target));
+    const { error } = await sb.from('boards').update({ title: f.title.trim(), group_id: f.group_id || null }).eq('id', b.id);
+    if (error) return toast(error.message);
+    m.close(); after();
+  });
+  m.el.querySelector('[data-del]').addEventListener('click', async () => {
+    m.close();
+    if (!(await confirmBox(`Apagar o board "${b.title}" e tudo o que tem dentro?`, 'Apagar'))) return;
+    const { error } = await sb.from('boards').delete().eq('id', b.id);
+    if (error) return toast(error.message);
+    toast('Board apagado.'); after();
+  });
+}
+
+async function projectPage(projectId, page) {
+  const p = await loadProject(projectId);
+  if (!p) return notFound();
+  if (page === 'detalhes' && !isStaff()) page = 'geral';
+  app.innerHTML = `<div class="page">${header(p.is_central ? 'central' : '')}
+    <div class="proj-layout">
+      <nav class="proj-nav" aria-label="Projeto">${projectNav(p, page)}</nav>
+      <main class="proj-main" data-main></main>
+    </div></div>`;
+  bindHeader(app); bindProjectNav(app, p);
+  const main = app.querySelector('[data-main]');
+  const titles = { tarefas: 'Tarefas', equipa: p.is_central ? 'Equipa' : 'Equipa e convites', detalhes: 'Detalhes' };
+  if (page === 'geral') return projectOverview(main, p);
+  main.innerHTML = `<h1 class="h1 pm-title">${esc(titles[page] || '')}</h1><div class="panel" data-body></div>`;
+  const body = main.querySelector('[data-body]');
+  if (page === 'tarefas') { const t = mountTasks(body, { projectId: p.id }); onCleanup(() => t.destroy()); }
+  if (page === 'equipa') projectTeam(body, p);
+  if (page === 'detalhes') { body.innerHTML = detailsForm(p); bindDetails(body, p, () => projectPage(projectId, 'detalhes')); }
+}
+
+async function projectOverview(main, p) {
+  const base = projBase(p);
+  const [{ data: tasks }, { data: items }, people] = await Promise.all([
+    sb.from('tasks').select('*').eq('project_id', p.id).neq('status', 'done'),
+    sb.from('board_items').select('board_id, kind, data').eq('project_id', p.id),
+    loadPeople(),
+  ]);
+  const cover = p.cover_path ? (await signedUrls([p.cover_path]))[p.cover_path] : null;
+  const imgPaths = (items || []).filter((i) => i.kind === 'image').map((i) => i.data?.path);
+  const thumbs = await signedUrls(imgPaths.slice(0, 40));
+  const ph = phaseOf(p);
+  const top = p._boards.filter((b) => !b.parent_id);
+  const count = (id) => (items || []).filter((i) => i.board_id === id).length;
+  const thumbOf = (id) => { const im = (items || []).find((i) => i.board_id === id && i.kind === 'image' && thumbs[i.data?.path]); return im ? thumbs[im.data.path] : null; };
+  const deptMap = new Map((p.departments || []).map((d) => [d.id, d]));
+  const next = (tasks || []).sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999')).slice(0, 6);
+  main.innerHTML = `
+    <section class="pm-head" style="${cover ? `background-image:linear-gradient(rgba(12,12,18,.15),rgba(12,12,18,.75)),url('${esc(cover)}')` : ''}">
+      <div class="grain-layer moving" aria-hidden="true"></div>
+      <div class="pm-head-in">
+        <span class="tag dark">${esc(KINDS[p.kind] || p.kind)}</span>
+        <h1 class="pm-name">${esc(p.name)}</h1>
+        <p class="pm-sub">${[p.client, p.starts_on && p.ends_on ? `${fmtDate(p.starts_on)} – ${fmtDate(p.ends_on)}` : ''].filter(Boolean).map(esc).join(' · ')}</p>
+        ${ph.label ? `<div class="pm-phase"><div class="row between small"><span>${esc(ph.label)}</span><span>${Math.round(ph.pct * 100)}%</span></div><div class="bar light"><i style="width:${Math.round(ph.pct * 100)}%"></i></div></div>` : ''}
+      </div>
+    </section>
+    <div class="pm-grid">
+      <section class="pm-boards" aria-labelledby="h-boards">
+        <div class="row between"><h2 id="h-boards" class="h2">Boards</h2><button type="button" class="btn primary" data-nb>${ICON.plus} Novo board</button></div>
+        ${top.length ? `<div class="board-grid">${top.map((b) => { const d = deptMap.get(b.group_id); const th = thumbOf(b.id); return `
+          <article class="board-card" style="--g:${esc(d?.color || '#8A8A99')}">
+            <a href="${base}/b/${b.id}" class="proj-link" aria-label="Abrir ${esc(b.title)}"></a>
+            <div class="bc-cover" ${th ? `style="background-image:url('${esc(th)}')"` : ''}>${th ? '' : ICON.board}</div>
+            <div class="bc-body"><strong>${esc(b.title)}</strong><span class="small muted">${d ? `<i class="dot"></i>${esc(d.name)} · ` : ''}${count(b.id)} ${count(b.id) === 1 ? 'cartão' : 'cartões'}</span></div>
+            <button type="button" class="icon-btn bc-more" data-bopt="${b.id}" aria-label="Opções de ${esc(b.title)}">${ICON.dots}</button>
+          </article>`; }).join('')}</div>`
+        : `<div class="empty-box"><p>Ainda não há boards neste projeto.</p><p class="muted small">Cria um para o tratamento, o moodboard, o storyboard ou um brainstorm. Cada board abre em ecrã inteiro.</p><button type="button" class="btn primary" data-nb>${ICON.plus} Criar o primeiro board</button></div>`}
+      </section>
+      <aside class="pm-side">
+        <section class="panel">
+          <div class="row between"><h2 class="h3">Próximas tarefas</h2><a href="${base}/tarefas" class="small">Ver todas</a></div>
+          <ul class="mini-tasks">${next.length ? next.map((t) => { const du = dueInfo(t.due, t.status); const d = deptMap.get(t.department); const who = people.find((x) => x.id === t.assignee_id); return `<li><a href="${base}/tarefas"><span><strong>${esc(t.title)}</strong><small>${[who?.display_name, d?.name].filter(Boolean).map(esc).join(' · ') || 'Sem responsável'}</small></span><span class="due due-${du.tone}">${esc(du.label)}</span></a></li>`; }).join('') : '<li class="muted">Sem tarefas abertas.</li>'}</ul>
+        </section>
+      </aside>
+    </div>`;
+  main.querySelectorAll('[data-nb]').forEach((b) => b.addEventListener('click', () => newBoard(p)));
+  main.querySelectorAll('[data-bopt]').forEach((btn) => btn.addEventListener('click', () => boardOptions(p, p._boards.find((x) => x.id === btn.dataset.bopt), () => projectPage(p.id, 'geral'))));
+}
+
+// ---------- board em ecrã inteiro ----------
+async function boardView(projectId, boardId) {
+  const p = await loadProject(projectId);
+  if (!p) return notFound();
+  const boards = p._boards;
+  const cur = boards.find((b) => b.id === boardId);
+  if (!cur) return go(projBase(p));
+  const base = projBase(p);
+  const chain = []; let b = cur; while (b) { chain.unshift(b); b = boards.find((x) => x.id === b.parent_id); }
+  const topId = chain[0].id;
 
   const tools = [['note', 'Nota', ICON.note], ['image', 'Imagem', ICON.image], ['palette', 'Paleta', ICON.palette], ['list', 'Lista', ICON.list], ['board', 'Board', ICON.board], ['title', 'Título', ICON.title], ['link', 'Ligação', ICON.link]];
-  const pages = [['board', 'Board', ICON.board], ['tarefas', 'Tarefas', ICON.task], ['equipa', p.is_central ? 'Equipa' : 'Equipa e convites', ICON.team], ...(isStaff() ? [['detalhes', 'Detalhes', ICON.info]] : [])];
   document.body.classList.add('is-board');
   onCleanup(() => document.body.classList.remove('is-board'));
 
@@ -333,18 +484,15 @@ async function projectView(projectId, boardId) {
     <div class="pv-top">
       <button type="button" class="pv-mark" data-side aria-label="Abrir o menu do projeto">${LOGO('studio')}</button>
       <nav class="crumbs" aria-label="Caminho">
-        <a href="#/">${p.is_central ? 'Início' : 'Projetos'}</a>
-        ${chain.map((c, i) => `<span>/</span>${i === chain.length - 1 ? `<span aria-current="page">${esc(i === 0 ? p.name : c.title)}</span>` : `<a href="${boardHash(c.id)}">${esc(i === 0 ? p.name : c.title)}</a>`}`).join('')}
+        <a href="${base}">${esc(p.name)}</a>
+        ${chain.map((c, i) => `<span>/</span>${i === chain.length - 1 ? `<span aria-current="page">${esc(c.title)}</span>` : `<a href="${base}/b/${c.id}">${esc(c.title)}</a>`}`).join('')}
       </nav>
     </div>
     <div class="pv-edge" data-edge aria-hidden="true"></div>
     <nav class="pv-side" data-sidebar aria-label="Páginas do projeto">
-      <div class="side-h"><strong>${esc(p.name)}</strong>${p.client ? `<span class="muted small">${esc(p.client)}</span>` : ''}</div>
-      ${pages.map(([k, l, ic]) => `<button type="button" class="side-a" data-page="${k}">${ic}<span>${l}</span></button>`).join('')}
+      ${projectNav(p, topId)}
       <hr>
-      <a class="side-a" href="#/">${ICON.home}<span>Início</span></a>
-      ${isStaff() && !p.is_central ? `<a class="side-a" href="#/central">${ICON.board}<span>Central de Produção</span></a>` : ''}
-      ${isStaff() ? `<a class="side-a" href="#/tarefas">${ICON.task}<span>As minhas tarefas</span></a>` : ''}
+      <a class="side-a" href="#/">${ICON.back}<span>Voltar ao início</span></a>
     </nav>
     <div class="pv-tools" role="toolbar" aria-label="Juntar ao board">
       ${tools.map(([k, l, ic]) => `<button type="button" data-tool="${k}" title="${l}" aria-label="Juntar ${l.toLowerCase()}">${ic}<span>${l}</span></button>`).join('')}
@@ -355,22 +503,19 @@ async function projectView(projectId, boardId) {
       <button type="button" data-z="in" aria-label="Aproximar">${ICON.plus}</button>
       <button type="button" data-z="fit" aria-label="Ver tudo">${ICON.fit}<span>Ver tudo</span></button>
     </div>
-    <aside class="pv-drawer" data-drawer hidden aria-label="Painel">
-      <div class="drawer-h"><h2 class="h3" data-dtitle></h2><button type="button" class="icon-btn" data-dclose aria-label="Fechar o painel">${ICON.close}</button></div>
-      <div class="drawer-b" data-dbody></div>
-    </aside>
   </div>`;
+  bindProjectNav(app, p);
 
   const pct = app.querySelector('.pct');
   const board = mountBoard(app.querySelector('.pv-board'), {
     projectId: p.id, boardId: cur.id,
-    onOpenBoard: (id) => go(boardHash(id)),
-    onUp: () => { if (!drawerOpen()) { if (cur.parent_id) go(boardHash(cur.parent_id)); } },
+    onOpenBoard: (id) => go(`${base}/b/${id}`),
+    onUp: () => go(cur.parent_id ? `${base}/b/${cur.parent_id}` : base),
     onZoom: (k) => (pct.textContent = Math.round(k * 100) + '%'),
   });
   onCleanup(() => board.destroy());
 
-  app.querySelectorAll('[data-tool]').forEach((b) => b.addEventListener('click', () => board.add(b.dataset.tool)));
+  app.querySelectorAll('[data-tool]').forEach((x) => x.addEventListener('click', () => board.add(x.dataset.tool)));
   app.querySelector('[data-z=in]').addEventListener('click', () => board.zoomBy(1.2));
   app.querySelector('[data-z=out]').addEventListener('click', () => board.zoomBy(1 / 1.2));
   app.querySelector('[data-z=reset]').addEventListener('click', () => board.setZoom(1));
@@ -384,32 +529,8 @@ async function projectView(projectId, boardId) {
   app.querySelector('[data-edge]').addEventListener('mouseenter', showSide);
   side.addEventListener('mouseenter', showSide); side.addEventListener('mouseleave', hideSide);
   app.querySelector('[data-side]').addEventListener('click', showSide);
-  const outside = (e) => { if (side.classList.contains('open') && !e.target.closest('[data-sidebar], [data-side], [data-edge]')) side.classList.remove('open'); };
+  const outside = (e) => { if (side.classList.contains('open') && !e.target.closest('[data-sidebar], [data-side], [data-edge], #modal')) side.classList.remove('open'); };
   document.addEventListener('pointerdown', outside, true); onCleanup(() => document.removeEventListener('pointerdown', outside, true));
-
-  // painéis por cima do board
-  const drawer = app.querySelector('[data-drawer]');
-  const dbody = app.querySelector('[data-dbody]');
-  let sub = null;
-  const drawerOpen = () => !drawer.hidden;
-  const closeDrawer = () => { drawer.hidden = true; sub && sub.destroy && sub.destroy(); sub = null; side.querySelectorAll('[data-page]').forEach((x) => x.removeAttribute('aria-current')); };
-  onCleanup(() => sub && sub.destroy && sub.destroy());
-  app.querySelector('[data-dclose]').addEventListener('click', closeDrawer);
-  const onEsc = (e) => { if (e.key === 'Escape' && drawerOpen() && !document.querySelector('#modal.open')) { e.stopImmediatePropagation(); closeDrawer(); } };
-  document.addEventListener('keydown', onEsc, true); onCleanup(() => document.removeEventListener('keydown', onEsc, true));
-
-  side.querySelectorAll('[data-page]').forEach((btn) => btn.addEventListener('click', () => {
-    const k = btn.dataset.page;
-    side.classList.remove('open');
-    if (k === 'board') return closeDrawer();
-    closeDrawer();
-    side.querySelector(`[data-page="${k}"]`).setAttribute('aria-current', 'page');
-    drawer.hidden = false;
-    app.querySelector('[data-dtitle]').textContent = btn.textContent.trim();
-    if (k === 'tarefas') sub = mountTasks(dbody, { projectId: p.id });
-    if (k === 'equipa') projectTeam(dbody, p);
-    if (k === 'detalhes') { dbody.innerHTML = detailsForm(p); bindDetails(dbody, p, () => projectView(projectId, boardId)); }
-  }));
 }
 
 // ---------- tarefas (todas) ----------

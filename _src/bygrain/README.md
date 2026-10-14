@@ -4,7 +4,7 @@ Espaço de trabalho privado da byGrain. Versão de teste publicada em **joaovian
 
 | O quê | Onde |
 |---|---|
-| Studio | `/bygrain/` |
+| Studio | `/bygrain/` (cada projeto abre numa página com Visão geral, Tarefas, Equipa, Detalhes e os boards por departamento) |
 | Tarefas no telemóvel (instalável) | `/bygrain/tasks/` |
 | Código-fonte | esta pasta (`_src/bygrain`, fora do site publicado) |
 | Código publicado | `bygrain/` na raiz do repositório (gerado por `npm run build`) |
