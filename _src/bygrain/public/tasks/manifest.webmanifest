@@ -1,0 +1,18 @@
+{
+  "name": "byGrain Tasks",
+  "short_name": "Grain Tasks",
+  "description": "As tuas tarefas na byGrain.",
+  "lang": "pt-PT",
+  "id": "/bygrain/tasks/",
+  "start_url": "/bygrain/tasks/",
+  "scope": "/bygrain/tasks/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1E2AD4",
+  "theme_color": "#1E2AD4",
+  "icons": [
+    { "src": "/bygrain/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/bygrain/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/bygrain/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -9,3 +9,16 @@
   Cache-Control: no-cache
 /studio/sw.js
   Cache-Control: no-cache
+
+/bygrain/
+  Cache-Control: no-cache
+  X-Robots-Tag: noindex, nofollow
+/bygrain/index.html
+  Cache-Control: no-cache
+/bygrain/tasks/
+  Cache-Control: no-cache
+  X-Robots-Tag: noindex, nofollow
+/bygrain/tasks/index.html
+  Cache-Control: no-cache
+/bygrain/sw.js
+  Cache-Control: no-cache
