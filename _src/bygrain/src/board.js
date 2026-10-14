@@ -6,7 +6,7 @@ import { sb, esc, signedUrls, uploadImage, toast, modal, confirmBox, ICON } from
 const MIN = { note: [140, 80], title: [160, 50], image: [80, 60], palette: [180, 110], list: [180, 120], board: [56, 56], link: [180, 80] };
 const SIZE = { note: [280, 180], title: [520, 72], palette: [320, 150], list: [280, 220], board: [96, 96], link: [300, 110] };
 
-export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom }) {
+export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom, onSelect }) {
   const items = new Map();
   const st = { view: { x: 0, y: 0, k: 1 }, sel: null, editing: null, drag: null, pointers: new Map(), pinch: null, dead: false };
   const viewKey = `bygrain-view-${boardId}`;
@@ -18,14 +18,9 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   const COLORS = [['', 'Predefinida'], ['#FFFFFF', 'Branco'], ['#FFE58F', 'Amarelo'], ['#FFC9DE', 'Rosa'], ['#C9D7FF', 'Azul claro'], ['#BFEBD6', 'Verde'], ['#E3D4FF', 'Lilás'], ['#FFD2B0', 'Laranja'], ['#2B2B36', 'Escuro'], ['#1E2AD4', 'Azul Grain'], ['#C8382D', 'Vermelho']];
   const isDark = (hex) => { const h = (hex || '').replace('#', ''); if (h.length !== 6) return false; const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255); return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.55; };
   function placeBar() {
+    bar.hidden = true;
     const it = st.sel && items.get(st.sel);
-    if (!it || it.kind === 'image' || st.editing) { bar.hidden = true; return; }
-    const { x, y, k } = st.view;
-    bar.hidden = false;
-    bar.style.left = `${Math.max(8, x + it.x * k)}px`;
-    bar.style.top = `${Math.max(8, y + it.y * k - 46)}px`;
-    const cur = it.data?.bg || '';
-    bar.innerHTML = COLORS.map(([c, n]) => `<button type="button" class="cb-sw ${cur === c ? 'on' : ''}" data-bg="${c}" style="${c ? `background:${c}` : ''}" title="${n}" aria-label="${n}"></button>`).join('') + `<label class="cb-custom" title="Outra cor"><input type="color" data-bgc value="${cur || '#F4F1E8'}" aria-label="Outra cor"><span>+</span></label>`;
+    onSelect && onSelect(it && it.kind !== 'image' ? { kind: it.kind, bg: it.data?.bg || '' } : null);
   }
   bar.addEventListener('pointerdown', (e) => e.stopPropagation());
   bar.addEventListener('click', (e) => { const b = e.target.closest('[data-bg]'); if (!b) return; setBg(b.dataset.bg); });
@@ -421,7 +416,8 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   stage.focus({ preventScroll: true });
 
   return {
-    add, fit, zoomBy, setZoom,
+    add, fit, zoomBy, setZoom, colors: COLORS,
+    setColor: (c, delay) => setBg(c, delay),
     get zoom() { return st.view.k; },
     destroy() {
       st.dead = true; commitEdit();

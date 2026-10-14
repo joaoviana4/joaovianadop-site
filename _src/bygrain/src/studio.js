@@ -548,7 +548,10 @@ async function boardView(projectId, boardId) {
     </nav>
     <div class="pv-tools" role="toolbar" aria-label="Juntar ao board">
       ${tools.map(([k, l, ic]) => `<button type="button" data-tool="${k}" title="${l}" aria-label="Juntar ${l.toLowerCase()}">${ic}<span>${l}</span></button>`).join('')}
+      <hr>
+      <button type="button" data-color title="Cor do cartão selecionado" aria-label="Cor do cartão selecionado" aria-expanded="false" disabled><span class="cdot"></span><span>Cor</span></button>
     </div>
+    <div class="pv-colorpop" data-cpop hidden role="dialog" aria-label="Cor do cartão"></div>
     <div class="pv-zoom">
       <button type="button" data-z="out" aria-label="Afastar">${ICON.minus}</button>
       <button type="button" data-z="reset" class="pct" aria-label="Voltar a 100%">100%</button>
@@ -557,6 +560,18 @@ async function boardView(projectId, boardId) {
     </div>
   </div>`;
   bindProjectNav(app, p);
+  const cBtn = app.querySelector('[data-color]'); const cPop = app.querySelector('[data-cpop]');
+  let selInfo = null;
+  const drawPop = () => {
+    const cur = selInfo?.bg || '';
+    cPop.innerHTML = `<p class="small muted">${selInfo?.kind === 'title' ? 'Cor do texto' : 'Cor de fundo'}</p><div class="cp-grid">${board.colors.map(([c, n]) => `<button type="button" class="cb-sw ${cur === c ? 'on' : ''}" data-bg="${c}" style="${c ? `background:${c}` : ''}" title="${n}" aria-label="${n}"></button>`).join('')}<label class="cb-custom" title="Outra cor"><input type="color" data-bgc value="${cur || '#F4F1E8'}" aria-label="Outra cor"><span>+</span></label></div>`;
+  };
+  const closePop = () => { cPop.hidden = true; cBtn.setAttribute('aria-expanded', 'false'); };
+  cBtn.addEventListener('click', () => { if (!selInfo) return; if (cPop.hidden) { drawPop(); cPop.hidden = false; cBtn.setAttribute('aria-expanded', 'true'); } else closePop(); });
+  cPop.addEventListener('click', (e) => { const b = e.target.closest('[data-bg]'); if (b) { board.setColor(b.dataset.bg); drawPop(); } });
+  cPop.addEventListener('input', (e) => { if (e.target.matches('[data-bgc]')) board.setColor(e.target.value, 400); });
+  const popOutside = (e) => { if (!cPop.hidden && !e.target.closest('[data-cpop], [data-color]')) closePop(); };
+  document.addEventListener('pointerdown', popOutside, true); onCleanup(() => document.removeEventListener('pointerdown', popOutside, true));
 
   const pct = app.querySelector('.pct');
   const board = mountBoard(app.querySelector('.pv-board'), {
@@ -564,6 +579,12 @@ async function boardView(projectId, boardId) {
     onOpenBoard: (id) => go(`${base}/b/${id}`),
     onUp: () => go(cur.parent_id ? `${base}/b/${cur.parent_id}` : base),
     onZoom: (k) => (pct.textContent = Math.round(k * 100) + '%'),
+    onSelect: (info) => {
+      selInfo = info;
+      cBtn.disabled = !info;
+      cBtn.querySelector('.cdot').style.background = info?.bg || '';
+      if (!info) closePop(); else if (!cPop.hidden) drawPop();
+    },
   });
   onCleanup(() => board.destroy());
 
