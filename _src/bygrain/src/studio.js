@@ -3,6 +3,7 @@ import { sb, state, esc, $, loadProfile, isStaff, isAdmin, toast, modal, confirm
 import { renderAuth } from './auth.js';
 import { mountBoard } from './board.js';
 import { mountTasks, loadPeople } from './tasks.js';
+import { financePage } from './finance.js';
 import { FICTION_PAGES, FICTION_DEPTS, fictionPage, fictionStats } from './fiction.js';
 
 const app = $('#app');
@@ -340,7 +341,7 @@ function boardGroups(p) {
 
 function projectNav(p, active) {
   const base = projBase(p);
-  const pages = [['geral', 'Visão geral', ICON.home], ...(p.kind === 'ficcao' ? FICTION_PAGES : []), ['tarefas', 'Tarefas', ICON.task], ['equipa', p.is_central ? 'Equipa' : 'Equipa e convites', ICON.team], ...(isStaff() ? [['detalhes', 'Detalhes', ICON.info]] : [])];
+  const pages = [['geral', 'Visão geral', ICON.home], ...(p.is_central && isStaff() ? [['financas', 'Finanças', ICON.money]] : []), ...(p.kind === 'ficcao' ? FICTION_PAGES : []), ['tarefas', 'Tarefas', ICON.task], ['equipa', p.is_central ? 'Equipa' : 'Equipa e convites', ICON.team], ...(isStaff() ? [['detalhes', 'Detalhes', ICON.info]] : [])];
   return `
     <div class="pn-h"><strong>${esc(p.name)}</strong>${p.client ? `<span class="muted small">${esc(p.client)}</span>` : ''}</div>
     ${pages.map(([k, l, ic]) => `<a class="side-a" href="${base}${k === 'geral' ? '' : '/' + k}" ${active === k ? 'aria-current="page"' : ''}>${ic}<span>${l}</span></a>`).join('')}
@@ -409,6 +410,7 @@ async function projectPage(projectId, page, sub) {
   const main = app.querySelector('[data-main]');
   const titles = { tarefas: 'Tarefas', equipa: p.is_central ? 'Equipa' : 'Equipa e convites', detalhes: 'Detalhes' };
   if (page === 'geral') return projectOverview(main, p);
+  if (page === 'financas' && p.is_central && isStaff()) return financePage(main, sub);
   if (p.kind === 'ficcao' && FICTION_PAGES.some(([k]) => k === page)) return fictionPage(main, p, page, sub, projBase(p), onCleanup);
   main.innerHTML = `<h1 class="h1 pm-title">${esc(titles[page] || '')}</h1><div class="panel" data-body></div>`;
   const body = main.querySelector('[data-body]');
