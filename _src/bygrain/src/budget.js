@@ -2,7 +2,7 @@ import { sb, esc, toast, modal, confirmBox, ICON } from './lib.js';
 
 // Orçamento do projeto, como no Studio: tabela com secções, colunas de texto, valor (€) e número,
 // subtotais por secção, comparação com o orçamento geral, modelos por tipo de projeto, importar e exportar Excel.
-// O orçamento geral é o mesmo valor que aparece no topo do projeto e na Central de Produção (projects.value).
+// O orçamento geral é o mesmo valor que aparece no topo do projeto e na Central de Produção (guardado em project_budgets, que só quem tem acesso ao orçamento consegue ler).
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const TYPES = [['text', 'Texto'], ['money', 'Valor (€)'], ['number', 'Número']];
@@ -59,9 +59,9 @@ export async function budgetPage(main, p) {
   let saveT;
   const save = (delay = 600) => {
     clearTimeout(saveT);
-    saveT = setTimeout(async () => { const { error } = await sb.from('projects').update({ budget: b }).eq('id', p.id); if (error) toast('Não foi possível guardar: ' + error.message); else p.budget = b; }, delay);
+    saveT = setTimeout(async () => { const { error } = await sb.from('project_budgets').upsert({ project_id: p.id, budget: b, updated_at: new Date().toISOString() }); if (error) toast('Não foi possível guardar: ' + error.message); else p.budget = b; }, delay);
   };
-  const saveTotal = async () => { const { error } = await sb.from('projects').update({ value: total }).eq('id', p.id); if (error) toast(error.message); else p.value = total; };
+  const saveTotal = async () => { const { error } = await sb.from('project_budgets').upsert({ project_id: p.id, value: total, updated_at: new Date().toISOString() }); if (error) toast(error.message); else p.value = total; };
 
   function summary() {
     const { tot } = sums(b); const t = (b.main && tot[b.main]) || 0;

@@ -167,7 +167,7 @@ function cenas(main, p, f, sub, base, cleanup) {
   });
 }
 
-function shotCard(sh, url) {
+export function shotCard(sh, url) {
   return `<article class="shot" data-shot="${sh.id}">
     <div class="shot-img" data-img tabindex="0" role="button" aria-label="${url ? 'Ver o plano em grande' : 'Juntar imagem de storyboard'}">${url ? `<img src="${esc(url)}" alt="Storyboard ${esc(sh.code)}">` : `<span>${ICON.image}<small>Juntar storyboard</small></span>`}</div>
     <div class="shot-f">
@@ -212,7 +212,7 @@ function nextCode(scene, shots) {
   return `${scene.number}-${shots.length + 1}`;
 }
 
-function bindShots(main, p, f, s, shots, urls, base) {
+export function bindShots(main, p, f, s, shots, urls, base) {
   const wrap = main.querySelector('[data-shots]');
   const savers = new Map();
   const save = (id, patch) => sb.from('shots').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id).then(({ error }) => error && toast(error.message));
@@ -271,7 +271,7 @@ function bindShots(main, p, f, s, shots, urls, base) {
 }
 
 // plano em grande, com ‹ › pelos planos do projeto inteiro
-async function shotViewer(f, start, base) {
+export async function shotViewer(f, start, base) {
   const all = f.scenes.flatMap((sc) => f.shots.filter((x) => x.scene_id === sc.id));
   let i = Math.max(0, all.findIndex((x) => x.id === start.id));
   const m = modal('<div data-v></div>', { wide: true });
@@ -280,12 +280,12 @@ async function shotViewer(f, start, base) {
     const sh = all[i]; const sc = f.scenes.find((x) => x.id === sh.scene_id);
     const u = await signedUrl(sh.image_path);
     m.el.querySelector('[data-v]').innerHTML = `
-      <div class="row between"><h2>${esc(sh.code)} <span class="muted small">Cena ${esc(sc?.number || '')} · ${i + 1} de ${all.length}</span></h2>
+      <div class="row between"><h2>${esc(sh.code)} <span class="muted small">${f.unitPath === 'seguimento' ? esc(sc?.heading || '') : `Cena ${esc(sc?.number || '')}`} · ${i + 1} de ${all.length}</span></h2>
         <div class="row"><button type="button" class="icon-btn" data-p aria-label="Plano anterior" ${i ? '' : 'disabled'}>${ICON.back}</button><button type="button" class="icon-btn" data-n aria-label="Plano seguinte" ${i < all.length - 1 ? '' : 'disabled'}>${ICON.chev}</button><button type="button" class="icon-btn" data-close aria-label="Fechar">${ICON.close}</button></div></div>
       <div class="viewer-img">${u ? `<img src="${esc(u)}" alt="">` : '<p class="muted">Sem storyboard.</p>'}</div>
       <div class="chips">${[sh.framing, sh.movement, sh.lens].filter(Boolean).map((x) => `<span class="chip">${esc(x)}</span>`).join('')}</div>
       ${sh.description ? `<p>${esc(sh.description)}</p>` : ''}
-      <a class="link-btn" href="${base}/cenas/${sc?.id}">Abrir a cena</a>`;
+      <a class="link-btn" href="${base}/${f.unitPath || 'cenas'}/${sc?.id}">${f.unitPath === 'seguimento' ? 'Abrir a secção' : 'Abrir a cena'}</a>`;
     m.el.querySelector('[data-p]').onclick = () => { if (i) { i--; draw(); } };
     m.el.querySelector('[data-n]').onclick = () => { if (i < all.length - 1) { i++; draw(); } };
     m.el.querySelector('[data-close]').onclick = m.close;

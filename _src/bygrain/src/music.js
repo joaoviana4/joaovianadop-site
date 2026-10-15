@@ -1,0 +1,304 @@
+import { sb, esc, toast, confirmBox, modal, ICON, signedUrls } from './lib.js';
+import { shotCard, bindShots, shotViewer } from './fiction.js';
+import { mountTasks } from './tasks.js';
+
+// Videoclipes: a música partida em secções (intro, versos, refrões, ponte…), como no Studio.
+// Cada secção é uma linha de "scenes" com tempos; décors = locations, pessoas = characters (figurantes têm info.extra).
+
+export const PARTS = ['Intro', 'Verso 1', 'Pré-refrão', 'Refrão', 'Verso 2', 'Refrão 2', 'Ponte', 'Refrão final', 'Outro'];
+const AUTO = ['Intro', 'Verso 1', 'Refrão', 'Verso 2', 'Refrão 2', 'Ponte', 'Refrão final', 'Outro'];
+export const SEG_COLORS = ['#8e6cdb', '#d6457a', '#d9822b', '#c9a227', '#2fa37a', '#4f8f9e', '#7fae3a', '#8a7563'];
+const debounce = (fn, ms = 600) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+
+// "1:20" → 80 · "80" → 80 · "1:02:03" → 3723
+export function parseT(v) {
+  const s = String(v ?? '').trim().replace(',', '.'); if (!s) return null;
+  if (!/^\d+(\.\d+)?(:\d{1,2}(\.\d+)?){0,2}$/.test(s)) return null;
+  return s.split(':').reduce((a, x) => a * 60 + Number(x), 0);
+}
+export const fmtT = (n) => { if (n == null) return ''; n = Math.round(n); const m = Math.floor(n / 60), s = n % 60; return `${m}:${String(s).padStart(2, '0')}`; };
+
+async function load(pid) {
+  const [sc, ch, lo, sh] = await Promise.all([
+    sb.from('scenes').select('*').eq('project_id', pid).order('position'),
+    sb.from('characters').select('*').eq('project_id', pid).order('position'),
+    sb.from('locations').select('*').eq('project_id', pid).order('position'),
+    sb.from('shots').select('*').eq('project_id', pid).order('position'),
+  ]);
+  return { scenes: sc.data || [], characters: ch.data || [], locations: lo.data || [], shots: sh.data || [], unitPath: 'seguimento' };
+}
+
+// posição de cada secção na barra; se faltarem tempos, a barra passa a "fluida" (blocos iguais)
+export function layout(scenes, duration) {
+  const t = scenes.map((s) => ({ s, a: parseT(s.starts_at), b: parseT(s.ends_at) }));
+  const total = parseT(duration) || t.reduce((m, x) => Math.max(m, x.b || 0, x.a || 0), 0);
+  const scaled = total > 0 && t.every((x) => x.a != null);
+  const out = t.map((x, i) => {
+    const nxt = t.filter((y) => y.a != null && x.a != null && y.a > x.a).sort((p, q) => p.a - q.a)[0];
+    const b = x.b != null ? x.b : nxt ? nxt.a : total;
+    return { ...x, b, col: SEG_COLORS[i % SEG_COLORS.length], style: scaled && b > x.a ? `left:${(x.a / total * 100).toFixed(2)}%;width:${((b - x.a) / total * 100).toFixed(2)}%` : '' };
+  });
+  return { items: out, total, scaled: scaled && out.every((x) => x.style) };
+}
+
+export function trackHtml(scenes, duration, { base, f, compact = false } = {}) {
+  if (!scenes.length) return '';
+  const L = layout(scenes, duration);
+  const nShots = (id) => (f?.shots || []).filter((x) => x.scene_id === id).length;
+  const ticks = L.scaled ? Array.from({ length: Math.floor(L.total / 30) + 1 }, (_, i) => `<i style="left:${(i * 30 / L.total * 100).toFixed(2)}%"><span>${fmtT(i * 30)}</span></i>`).join('') : '';
+  return `<div class="seg-track ${L.scaled ? '' : 'flow'} ${compact ? 'compact' : ''}">${L.items.map((x) => `<a class="seg-b" href="${base}/seguimento/${x.s.id}" style="--sc:${x.col};${x.style}" title="${esc(x.s.heading || 'Sem nome')}">
+      <b>${esc(x.s.heading || 'Sem nome')}</b>${x.a != null ? `<span class="num">${fmtT(x.a)}${x.b != null ? '–' + fmtT(x.b) : ''}</span>` : ''}
+      ${compact ? '' : `<span class="seg-meta">${[(x.s.location_ids || []).length ? `${x.s.location_ids.length} ${x.s.location_ids.length === 1 ? 'décor' : 'décors'}` : '', ((x.s.character_ids || []).length + (x.s.extra_ids || []).length) ? `${(x.s.character_ids || []).length + (x.s.extra_ids || []).length} pessoas` : '', nShots(x.s.id) ? `${nShots(x.s.id)} ${nShots(x.s.id) === 1 ? 'plano' : 'planos'}` : ''].filter(Boolean).join(' · ')}</span>`}
+    </a>`).join('')}</div>${ticks ? `<div class="seg-ticks">${ticks}</div>` : ''}`;
+}
+
+export const CLIP_PAGES = [
+  ['seguimento', 'Seguimento', ICON.music], ['decors', 'Décors', ICON.home], ['elenco', 'Atores e figurantes', ICON.team],
+  ['storyboard', 'Storyboard', ICON.image], ['aderecos', 'Adereços', ICON.prop],
+];
+
+export async function clipPage(main, p, page, sub, base, cleanup) {
+  main.innerHTML = '<p class="muted">A carregar…</p>';
+  const f = await load(p.id);
+  if (page === 'decors') return sub ? entityPage(main, p, f, 'place', sub, base, cleanup) : entityList(main, p, f, 'place', base);
+  if (page === 'elenco') return sub ? entityPage(main, p, f, 'person', sub, base, cleanup) : entityList(main, p, f, 'person', base);
+  if (page === 'storyboard') return storyboard(main, p, f, base);
+  return musicPage(main, p, f, sub, base, cleanup);
+}
+
+async function musicPage(main, p, f, sub, base, cleanup) {
+  if (sub) return section(main, p, f, sub, base, cleanup);
+  const music = { ...(p.music || {}) };
+  const saveMusic = debounce(async () => { const { error } = await sb.from('projects').update({ music }).eq('id', p.id); if (error) toast(error.message); else p.music = { ...music }; }, 500);
+  const draw = () => {
+    const L = layout(f.scenes, music.duration);
+    main.innerHTML = `
+      <div class="row between wrap-gap"><div><h1 class="h1 pm-title">Seguimento</h1><p class="muted">Parte o clipe em secções da música. Cada secção funciona como uma cena: décors, atores, figurantes, planos e tarefas.</p></div></div>
+      <section class="panel seg">
+        <div class="seg-head"><strong>${esc(music.title || p.name)}</strong>
+          <label class="seg-dur"><span class="muted small">Duração</span><input class="mini-in num" data-dur value="${esc(music.duration || '')}" placeholder="3:45" aria-label="Duração da música"></label>
+          <label class="seg-dur"><span class="muted small">BPM</span><input class="mini-in num" data-bpm value="${esc(music.bpm || '')}" placeholder="—" aria-label="BPM" inputmode="numeric"></label>
+          ${f.scenes.length ? '' : '<button type="button" class="btn primary" data-auto>Partir com as secções habituais</button>'}
+        </div>
+        ${f.scenes.length ? trackHtml(f.scenes, music.duration, { base, f }) + (L.scaled ? '' : '<p class="muted small">Escreve quando começa cada secção (e a duração da música) para a barra ficar à escala.</p>') : '<p class="muted">Ainda sem secções. Junta-as em baixo, uma a uma, ou parte já com as secções habituais de uma música (intro, versos, refrões, ponte).</p>'}
+      </section>
+      ${f.scenes.length ? `<div class="panel table-wrap"><table class="table seg-table"><thead><tr><th></th><th>Secção</th><th>Começa</th><th>Acaba</th><th>Décors</th><th>Pessoas</th><th class="num">Planos</th><th></th></tr></thead><tbody>
+        ${L.items.map((x) => `<tr data-sid="${x.s.id}">
+          <td><i class="seg-dot" style="--sc:${x.col}"></i></td>
+          <td><input class="cell-in" data-f="heading" value="${esc(x.s.heading || '')}" list="dl-parts" aria-label="Nome da secção"></td>
+          <td><input class="cell-in num t" data-f="starts_at" value="${esc(x.s.starts_at || '')}" placeholder="0:00" aria-label="Começa"></td>
+          <td><input class="cell-in num t" data-f="ends_at" value="${esc(x.s.ends_at || '')}" placeholder="${x.b != null ? fmtT(x.b) : '—'}" aria-label="Acaba"></td>
+          <td class="small">${esc((x.s.location_ids || []).map((id) => f.locations.find((l) => l.id === id)?.name).filter(Boolean).join(', ')) || '<span class="muted">—</span>'}</td>
+          <td class="small">${esc([...(x.s.character_ids || []), ...(x.s.extra_ids || [])].map((id) => f.characters.find((c) => c.id === id)?.name).filter(Boolean).join(', ')) || '<span class="muted">—</span>'}</td>
+          <td class="num">${f.shots.filter((y) => y.scene_id === x.s.id).length || '<span class="muted">—</span>'}</td>
+          <td><a class="btn ghost sm-btn" href="${base}/seguimento/${x.s.id}">Abrir ${ICON.chev}</a></td></tr>`).join('')}
+      </tbody></table></div>` : ''}
+      <form class="panel row wrap-gap seg-add" data-add>
+        <strong class="small">Nova secção</strong>
+        <input name="name" placeholder="ex: Refrão" list="dl-parts" aria-label="Nome da secção" required>
+        <input name="start" class="mini-in num" placeholder="começa 1:20" aria-label="Começa">
+        <input name="end" class="mini-in num" placeholder="acaba 1:45" aria-label="Acaba">
+        <button class="btn primary">${ICON.plus} Juntar</button>
+      </form>
+      <datalist id="dl-parts">${PARTS.map((x) => `<option value="${x}">`).join('')}</datalist>`;
+    main.querySelector('[data-dur]').addEventListener('input', (e) => { music.duration = e.target.value.trim(); saveMusic(); });
+    main.querySelector('[data-dur]').addEventListener('change', draw);
+    main.querySelector('[data-bpm]').addEventListener('input', (e) => { music.bpm = e.target.value.trim(); saveMusic(); });
+    main.querySelector('[data-auto]')?.addEventListener('click', async () => {
+      const rows = AUTO.map((h, i) => ({ project_id: p.id, number: String(i + 1), heading: h, position: i, character_ids: [] }));
+      const { data, error } = await sb.from('scenes').insert(rows).select();
+      if (error) return toast(error.message);
+      f.scenes = data.sort((a, b) => a.position - b.position); draw();
+      toast(`Música partida em ${AUTO.length} secções. Muda os nomes e os tempos à vontade.`);
+    });
+    const savers = new Map();
+    main.querySelectorAll('[data-sid] [data-f]').forEach((inp) => {
+      const s = f.scenes.find((x) => x.id === inp.closest('[data-sid]').dataset.sid); const k = inp.dataset.f;
+      inp.addEventListener('input', () => {
+        s[k] = inp.value.trim();
+        if (!savers.has(s.id + k)) savers.set(s.id + k, debounce((v) => sb.from('scenes').update({ [k]: v }).eq('id', s.id).then(({ error }) => error && toast(error.message)), 500));
+        savers.get(s.id + k)(s[k]);
+      });
+      inp.addEventListener('change', () => { if (inp.classList.contains('t') && inp.value && parseT(inp.value) == null) return toast('Escreve o tempo assim: 1:20'); setTimeout(draw, 550); });
+    });
+    main.querySelector('[data-add]').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = Object.fromEntries(new FormData(e.target));
+      const n = f.scenes.reduce((m, x) => Math.max(m, Number(x.number) || 0), 0) + 1;
+      const { data, error } = await sb.from('scenes').insert({ project_id: p.id, number: String(n), heading: fd.name.trim(), starts_at: fd.start.trim() || null, ends_at: fd.end.trim() || null, position: f.scenes.length, character_ids: [] }).select().single();
+      if (error) return toast(error.message);
+      f.scenes.push(data); draw(); main.querySelector('[data-add] [name=name]').focus();
+    });
+  };
+  draw();
+}
+
+async function section(main, p, f, sid, base, cleanup) {
+  const s = f.scenes.find((x) => x.id === sid);
+  if (!s) { main.innerHTML = `<p class="empty-note">Esta secção já não existe.</p><a href="${base}/seguimento">Voltar ao seguimento</a>`; return; }
+  const idx = f.scenes.indexOf(s); const prev = f.scenes[idx - 1], next = f.scenes[idx + 1];
+  const L = layout(f.scenes, p.music?.duration); const me = L.items[idx];
+  const shots = f.shots.filter((x) => x.scene_id === s.id);
+  const urls = await signedUrls(shots.map((x) => x.image_path));
+  const isExtra = (c) => !!c.info?.extra;
+  const chips = (ids, kind) => (ids || []).map((id) => { const e = (kind === 'place' ? f.locations : f.characters).find((x) => x.id === id); return e ? `<span class="chip"><a href="${base}/${kind === 'place' ? 'decors' : 'elenco'}/${e.id}">${esc(e.name)}</a><button type="button" class="chip-x" data-rm="${kind}" data-id="${id}" aria-label="Tirar ${esc(e.name)}">${ICON.close}</button></span>` : ''; }).join('');
+  const adder = (kind, label) => {
+    const used = new Set(kind === 'place' ? s.location_ids || [] : [...(s.character_ids || []), ...(s.extra_ids || [])]);
+    const pool = kind === 'place' ? f.locations : f.characters.filter((c) => (kind === 'extra') === isExtra(c));
+    return `<select class="mini-sel" data-addent="${kind}" aria-label="Juntar ${label}"><option value="">+ Juntar…</option>${pool.filter((x) => !used.has(x.id)).map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}<option value="__new">${kind === 'place' ? 'Outro décor…' : kind === 'extra' ? 'Outro figurante…' : 'Outra pessoa…'}</option></select>`;
+  };
+  main.innerHTML = `
+    <nav class="row between wrap-gap"><a href="${base}/seguimento" class="link-btn">${ICON.back} Seguimento</a>
+      <span class="row">${prev ? `<a class="btn ghost" href="${base}/seguimento/${prev.id}">${ICON.back} ${esc(prev.heading)}</a>` : ''}${next ? `<a class="btn ghost" href="${base}/seguimento/${next.id}">${esc(next.heading)} ${ICON.chev}</a>` : ''}</span></nav>
+    <div class="seg-mini">${trackHtml(f.scenes, p.music?.duration, { base, f, compact: true })}</div>
+    <header class="scene-h"><span class="scene-n" style="background:${me.col}">${idx + 1}</span><div><h1 class="h2">${esc(s.heading || 'Sem nome')}</h1>
+      <p class="muted">${me.a != null ? `${fmtT(me.a)}${me.b != null ? ' – ' + fmtT(me.b) : ''}${me.b != null && me.a != null ? ` · ${Math.round(me.b - me.a)} s` : ''}` : 'Sem tempos ainda'}</p></div></header>
+    <section class="panel seg-facts">
+      <div class="seg-fact"><span class="lbl">Décors</span><p class="chips">${chips(s.location_ids, 'place')}${adder('place', 'décor')}</p></div>
+      <div class="seg-fact"><span class="lbl">Artista e elenco</span><p class="chips">${chips(s.character_ids, 'actor')}${adder('actor', 'pessoa')}</p></div>
+      <div class="seg-fact"><span class="lbl">Figurantes</span><p class="chips">${chips(s.extra_ids, 'extra')}${adder('extra', 'figurante')}</p></div>
+      <form class="row wrap-gap seg-split" data-split><span class="small muted">Partir esta secção em</span><input class="mini-in num" name="at" placeholder="${me.a != null ? fmtT(me.a + 15) : '0:15'}" aria-label="Momento onde partir"><input name="name" placeholder="Nome da nova secção" list="dl-parts" aria-label="Nome da nova secção"><button class="btn ghost">Partir</button></form>
+      <datalist id="dl-parts">${PARTS.map((x) => `<option value="${x}">`).join('')}</datalist>
+    </section>
+    <section><div class="row between"><h2 class="h3">Planos</h2><span class="muted small">${shots.length} ${shots.length === 1 ? 'plano' : 'planos'}</span></div>
+      <div class="shots" data-shots>${shots.map((x) => shotCard(x, urls[x.image_path])).join('')}<button type="button" class="shot-add" data-addshot>${ICON.plus}<span>Plano</span></button></div></section>
+    <section class="panel"><h2 class="h3">Tarefas desta secção</h2><div data-tasks></div></section>
+    <section class="panel"><h2 class="h3">Ideia e notas</h2><textarea data-notes rows="4" placeholder="O que acontece nesta parte da música: performance, narrativa, ritmo da montagem…">${esc(s.notes || '')}</textarea></section>
+    <div class="row end"><button type="button" class="btn ghost danger-text" data-del>${ICON.trash} Apagar secção</button></div>`;
+  const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: 'scene', id: s.id } }); cleanup(() => t.destroy());
+  const saveNotes = debounce((v) => sb.from('scenes').update({ notes: v }).eq('id', s.id));
+  main.querySelector('[data-notes]').addEventListener('input', (e) => saveNotes(e.target.value));
+  bindShots(main, p, f, s, shots, urls, base);
+  const field = { place: 'location_ids', actor: 'character_ids', extra: 'extra_ids' };
+  const redraw = () => section(main, p, f, sid, base, cleanup);
+  const setIds = async (kind, ids) => { s[field[kind]] = ids; const { error } = await sb.from('scenes').update({ [field[kind]]: ids }).eq('id', s.id); if (error) toast(error.message); redraw(); };
+  main.querySelectorAll('[data-addent]').forEach((sel) => sel.addEventListener('change', async () => {
+    const kind = sel.dataset.addent; let id = sel.value; if (!id) return;
+    if (id === '__new') {
+      const name = (prompt(kind === 'place' ? 'Nome do décor' : 'Nome') || '').trim(); // prompt simples: protótipo
+      if (!name) { sel.value = ''; return; }
+      const table = kind === 'place' ? 'locations' : 'characters';
+      const list = kind === 'place' ? f.locations : f.characters;
+      const { data, error } = await sb.from(table).insert({ project_id: p.id, name, position: list.length, ...(kind === 'extra' ? { info: { extra: true } } : {}) }).select().single();
+      if (error) return toast(error.message);
+      list.push(data); id = data.id;
+    }
+    setIds(kind, [...(s[field[kind]] || []), id]);
+  }));
+  main.querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => setIds(b.dataset.rm, (s[field[b.dataset.rm]] || []).filter((x) => x !== b.dataset.id))));
+  main.querySelector('[data-split]').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const at = parseT(e.target.at.value); const name = e.target.name.value.trim();
+    if (at == null) { toast('Escreve o momento onde partir, por exemplo 1:20.'); return e.target.at.focus(); }
+    if ((me.a != null && at <= me.a) || (me.b != null && at >= me.b)) return toast(`Esse momento fica fora desta secção (${fmtT(me.a) || '?'}–${fmtT(me.b) || '?'}).`);
+    const n = f.scenes.reduce((m, x) => Math.max(m, Number(x.number) || 0), 0) + 1;
+    const after = f.scenes.slice(idx + 1);
+    const row = { project_id: p.id, number: String(n), heading: name || `${s.heading} (2)`, starts_at: fmtT(at), ends_at: s.ends_at || null, position: idx + 1, location_ids: s.location_ids || [], character_ids: s.character_ids || [], extra_ids: s.extra_ids || [] };
+    const { data, error } = await sb.from('scenes').insert(row).select().single();
+    if (error) return toast(error.message);
+    await sb.from('scenes').update({ ends_at: fmtT(at) }).eq('id', s.id);
+    await Promise.all(after.map((x, i) => sb.from('scenes').update({ position: idx + 2 + i }).eq('id', x.id)));
+    toast('Secção partida em duas.'); location.hash = `${base}/seguimento/${data.id}`;
+  });
+  main.querySelector('[data-del]').addEventListener('click', async () => {
+    if (!(await confirmBox(`Apagar a secção "${s.heading}" e os planos dela?`, 'Apagar'))) return;
+    const { error } = await sb.from('scenes').delete().eq('id', s.id);
+    if (error) return toast(error.message);
+    location.hash = `${base}/seguimento`;
+  });
+}
+
+export async function musicStats(pid) {
+  const [{ data: sc }, { data: sh }] = await Promise.all([
+    sb.from('scenes').select('id, heading, starts_at, ends_at, location_ids, character_ids, extra_ids, position').eq('project_id', pid).order('position'),
+    sb.from('shots').select('id').eq('project_id', pid),
+  ]);
+  return { scenes: sc || [], shots: (sh || []).length };
+}
+
+// ---------- décors e pessoas (cada um tem a sua página) ----------
+const sectionsWith = (f, kind, id) => f.scenes.filter((s) => (kind === 'place' ? s.location_ids || [] : [...(s.character_ids || []), ...(s.extra_ids || [])]).includes(id));
+
+function entityList(main, p, f, kind, base) {
+  const isPlace = kind === 'place';
+  const path = isPlace ? 'decors' : 'elenco';
+  const card = (e) => { const n = sectionsWith(f, kind, e.id).length; return `<a class="ent-card" href="${base}/${path}/${e.id}"><strong>${esc(e.name)}</strong><span class="muted small">${isPlace ? esc(e.info?.address || 'Sem morada') : esc(e.actor || (e.info?.extra ? 'Figurante' : 'Sem nome real'))}</span><span class="small">${n ? `${n} ${n === 1 ? 'secção' : 'secções'}` : '<span class="muted">Ainda em nenhuma secção</span>'}</span></a>`; };
+  const people = f.characters.filter((c) => !c.info?.extra), extras = f.characters.filter((c) => c.info?.extra);
+  main.innerHTML = `<div class="row between wrap-gap"><h1 class="h1 pm-title">${isPlace ? 'Décors' : 'Atores e figurantes'}</h1>
+      <div class="row">${isPlace ? `<button type="button" class="btn ghost" data-add="place">${ICON.plus} Décor</button>` : `<button type="button" class="btn ghost" data-add="actor">${ICON.plus} Ator ou atriz</button><button type="button" class="btn ghost" data-add="extra">${ICON.plus} Figurante</button>`}</div></div>
+    ${isPlace ? (f.locations.length ? `<div class="ent-grid">${f.locations.map(card).join('')}</div>` : '<p class="empty-note">Ainda não há décors. Junta-os aqui ou dentro de cada secção do seguimento.</p>')
+      : `<h2 class="h3">Artista e elenco</h2>${people.length ? `<div class="ent-grid">${people.map(card).join('')}</div>` : '<p class="muted small">Ninguém ainda.</p>'}
+         <h2 class="h3">Figurantes</h2>${extras.length ? `<div class="ent-grid">${extras.map(card).join('')}</div>` : '<p class="muted small">Ninguém ainda.</p>'}`}`;
+  main.querySelectorAll('[data-add]').forEach((b) => b.addEventListener('click', () => {
+    const k = b.dataset.add;
+    const m = modal(`<h2>${k === 'place' ? 'Novo décor' : k === 'extra' ? 'Novo figurante' : 'Novo ator ou atriz'}</h2><form class="stack"><div class="field"><label for="nm">Nome</label><input id="nm" required></div><div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Criar</button></div></form>`);
+    m.el.querySelector('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const table = k === 'place' ? 'locations' : 'characters'; const list = k === 'place' ? f.locations : f.characters;
+      const { data, error } = await sb.from(table).insert({ project_id: p.id, name: m.el.querySelector('#nm').value.trim(), position: list.length, ...(k === 'extra' ? { info: { extra: true } } : {}) }).select().single();
+      if (error) return toast(error.message);
+      m.close(); location.hash = `${base}/${path}/${data.id}`;
+    });
+  }));
+}
+
+async function entityPage(main, p, f, kind, id, base, cleanup) {
+  const isPlace = kind === 'place'; const path = isPlace ? 'decors' : 'elenco';
+  const list = isPlace ? f.locations : f.characters; const e = list.find((x) => x.id === id);
+  if (!e) { main.innerHTML = `<p class="empty-note">Já não existe.</p><a href="${base}/${path}">Voltar</a>`; return; }
+  const secs = sectionsWith(f, kind, id);
+  const info = { ...(e.info || {}) };
+  const fields = isPlace ? [['address', 'Morada / localização', 'Onde fica, como se chega, contacto do local'], ['notes', 'Notas', 'Autorizações, horários, luz natural, som, estacionamento…']]
+    : [['role', 'Papel no clipe', 'ex: o artista, a mulher do bar, dançarina'], ['contact', 'Contacto', 'Telefone, email, agência'], ['notes', 'Notas', 'Guarda-roupa, cabelo e maquilhagem, disponibilidade…']];
+  main.innerHTML = `
+    <nav class="row between wrap-gap"><a href="${base}/${path}" class="link-btn">${ICON.back} ${isPlace ? 'Décors' : 'Atores e figurantes'}</a></nav>
+    <header class="row between wrap-gap"><div><span class="small muted">${isPlace ? 'Décor' : info.extra ? 'Figurante' : 'Ator ou atriz'}</span><input class="title-in h1" data-name value="${esc(e.name)}" aria-label="Nome"></div>
+      <button type="button" class="btn ghost danger-text" data-del>${ICON.trash} Apagar</button></header>
+    <div class="ent-layout">
+      <section class="panel stack">
+        ${isPlace ? '' : `<div class="field"><label for="ea">Nome real</label><input id="ea" data-actor value="${esc(e.actor || '')}" placeholder="Quem faz"></div>${''}<label class="row small"><input type="checkbox" data-extra ${info.extra ? 'checked' : ''}> É figurante</label>`}
+        ${fields.map(([k, l, ph]) => `<div class="field"><label for="ei-${k}">${l}</label><textarea id="ei-${k}" data-info="${k}" rows="${k === 'notes' ? 4 : 2}" placeholder="${esc(ph)}">${esc(info[k] || '')}</textarea></div>`).join('')}
+      </section>
+      <section class="panel"><h2 class="h3">Aparece em</h2>
+        ${secs.length ? `<ul class="ent-secs">${secs.map((s) => { const i = f.scenes.indexOf(s); return `<li><a href="${base}/seguimento/${s.id}"><i class="seg-dot" style="--sc:${SEG_COLORS[i % SEG_COLORS.length]}"></i><span>${esc(s.heading || 'Sem nome')}</span><span class="muted small">${esc([s.starts_at, s.ends_at].filter(Boolean).join('–'))}</span></a></li>`; }).join('')}</ul>` : '<p class="muted small">Ainda em nenhuma secção. Junta-o dentro de uma secção do seguimento.</p>'}
+      </section>
+    </div>
+    <section class="panel"><h2 class="h3">Tarefas</h2><div data-tasks></div></section>`;
+  const table = isPlace ? 'locations' : 'characters';
+  const save = debounce((patch) => sb.from(table).update(patch).eq('id', e.id).then(({ error }) => error && toast(error.message)), 500);
+  main.querySelector('[data-name]').addEventListener('input', (ev) => { e.name = ev.target.value; save({ name: e.name }); });
+  main.querySelector('[data-actor]')?.addEventListener('input', (ev) => { e.actor = ev.target.value; save({ actor: e.actor }); });
+  main.querySelector('[data-extra]')?.addEventListener('change', async (ev) => {
+    info.extra = ev.target.checked; e.info = { ...info };
+    // passa a secção certa: figurantes ficam em extra_ids, o resto em character_ids
+    await sb.from(table).update({ info }).eq('id', e.id);
+    await Promise.all(secs.map((s) => { const c = (s.character_ids || []).filter((x) => x !== id), x = (s.extra_ids || []).filter((y) => y !== id); (info.extra ? x : c).push(id); s.character_ids = c; s.extra_ids = x; return sb.from('scenes').update({ character_ids: c, extra_ids: x }).eq('id', s.id); }));
+    toast(info.extra ? 'Agora é figurante.' : 'Agora está no elenco.');
+  });
+  main.querySelectorAll('[data-info]').forEach((t) => t.addEventListener('input', () => { info[t.dataset.info] = t.value; e.info = { ...info }; save({ info: e.info }); }));
+  main.querySelector('[data-del]').addEventListener('click', async () => {
+    if (!(await confirmBox(`Apagar "${e.name}"? Sai também das secções onde está.`, 'Apagar'))) return;
+    const key = isPlace ? ['location_ids'] : ['character_ids', 'extra_ids'];
+    await Promise.all(secs.map((s) => { const patch = {}; key.forEach((k) => (patch[k] = (s[k] || []).filter((x) => x !== id))); return sb.from('scenes').update(patch).eq('id', s.id); }));
+    const { error } = await sb.from(table).delete().eq('id', e.id);
+    if (error) return toast(error.message);
+    location.hash = `${base}/${path}`;
+  });
+  const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: isPlace ? 'location' : 'character', id: e.id } }); cleanup(() => t.destroy());
+}
+
+// ---------- storyboard geral: todos os planos, secção a secção ----------
+async function storyboard(main, p, f, base) {
+  const urls = await signedUrls(f.shots.map((x) => x.image_path));
+  const L = layout(f.scenes, p.music?.duration);
+  main.innerHTML = `<div class="row between wrap-gap"><div><h1 class="h1 pm-title">Storyboard</h1><p class="muted">Todos os planos do clipe, pela ordem da música.</p></div><span class="muted small">${f.shots.length} ${f.shots.length === 1 ? 'plano' : 'planos'}</span></div>
+    ${f.scenes.length ? trackHtml(f.scenes, p.music?.duration, { base, f, compact: true }) : ''}
+    ${f.scenes.length ? L.items.map((x) => { const sh = f.shots.filter((y) => y.scene_id === x.s.id); return `<section class="sb-sec" style="--sc:${x.col}">
+        <div class="sb-h"><i class="seg-dot"></i><a href="${base}/seguimento/${x.s.id}"><strong>${esc(x.s.heading || 'Sem nome')}</strong></a><span class="muted small">${x.a != null ? fmtT(x.a) + (x.b != null ? '–' + fmtT(x.b) : '') : ''}</span><span class="muted small">· ${sh.length} ${sh.length === 1 ? 'plano' : 'planos'}</span></div>
+        ${sh.length ? `<div class="sb-grid">${sh.map((y) => `<button type="button" class="sb-shot" data-shot="${y.id}"><span class="sb-img">${urls[y.image_path] ? `<img src="${esc(urls[y.image_path])}" alt="" loading="lazy">` : ICON.image}</span><span class="sb-cap"><b>${esc(y.code)}</b>${esc([y.framing, y.movement].filter(Boolean).join(' · '))}</span>${y.description ? `<span class="sb-desc">${esc(y.description)}</span>` : ''}</button>`).join('')}</div>` : `<a class="link-btn small" href="${base}/seguimento/${x.s.id}">${ICON.plus} Juntar planos a esta secção</a>`}
+      </section>`; }).join('') : `<div class="empty-box"><p>Primeiro parte o clipe em secções.</p><a class="btn primary" href="${base}/seguimento">Abrir o seguimento</a></div>`}`;
+  main.querySelectorAll('[data-shot]').forEach((b) => b.addEventListener('click', () => {
+    const sh = f.shots.find((x) => x.id === b.dataset.shot);
+    if (sh.image_path) shotViewer(f, sh, base); else location.hash = `${base}/seguimento/${sh.scene_id}`;
+  }));
+}

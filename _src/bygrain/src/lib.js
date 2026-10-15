@@ -96,10 +96,17 @@ export async function loadProfile() {
   if (!state.user) { state.profile = null; return null; }
   const { data } = await sb.from('profiles').select('*').eq('id', state.user.id).single();
   state.profile = data;
+  const { data: perms } = await sb.from('user_perms').select('perm').eq('user_id', state.user.id);
+  state.perms = new Set((perms || []).map((x) => x.perm));
   return data;
 }
 export const isStaff = () => ['admin', 'member'].includes(state.profile?.role);
 export const isAdmin = () => state.profile?.role === 'admin';
+// permissões: os administradores têm tudo; os outros só o que um administrador lhes der
+export const PERMS = { budget: ['Orçamentos', 'Vê e edita o orçamento e os valores de todos os projetos'], finance: ['Finanças', 'Vê e edita as finanças da Central (movimentos, contas e despesas)'] };
+export const hasPerm = (k) => isAdmin() || !!state.perms?.has(k);
+// colunas de projects que a app pode ler (os valores vivem em project_budgets, protegidos)
+export const PROJECT_COLS = 'id, name, client, kind, status, is_central, cover_path, departments, starts_on, ends_on, created_by, created_at, updated_at, done_at, music';
 
 export async function signIn(identifier, password) {
   let email = String(identifier || '').trim().toLowerCase();
@@ -170,6 +177,11 @@ export function registerSW() {
 
 export const ICON = {
   plus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+  search: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
+  calendar: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
+  lock: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+  music: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>',
+  question: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14"/><path d="M12 17.5v.01"/></svg>',
   eye: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
   back: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>',
   chev: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>',
