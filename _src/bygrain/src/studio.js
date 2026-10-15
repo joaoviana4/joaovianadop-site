@@ -502,7 +502,7 @@ function newBoard(p, groupId = '', kind = 'board') {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(form));
-    const data = f.kind === 'table' ? await tableTemplate(p, f.tpl) : f.kind === 'lightmap' ? newLightmapData() : f.kind === 'callsheet' ? newCallsheet(p, p._boards.filter((b) => b.kind === 'callsheet').length + 1) : {};
+    const data = f.kind === 'table' ? await tableTemplate(p, f.tpl) : f.kind === 'lightmap' ? newLightmapData() : f.kind === 'callsheet' ? { sheets: [newCallsheet(p, 1)] } : {};
     const { data: row, error } = await sb.from('boards').insert({ project_id: p.id, title: f.title.trim(), group_id: f.group_id || null, position: p._boards.length, kind: f.kind, data }).select().single();
     if (error) return toast(error.message);
     m.close(); go(toolHref(p, row));

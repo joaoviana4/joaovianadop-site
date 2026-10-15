@@ -1,4 +1,4 @@
-import { sb, esc, toast, modal, confirmBox, ICON } from './lib.js';
+import { sb, esc, toast, modal, confirmBox, ICON, signedUrl } from './lib.js';
 
 // Folha de serviço (call sheet) de um dia de rodagem, no estilo do modelo "A Forma e o Silêncio":
 // cabeçalho com dia, contactos, call e morada, meteorologia, notas, hospital e estacionamento, horários,
@@ -64,20 +64,56 @@ function sheetHtml(d, edit) {
   </div></div>`;
 }
 
+// Uma ferramenta guarda todos os dias de rodagem: { sheets: [folha do dia 1, dia 2, …] }.
+// (as folhas antigas, de um só dia, passam a ser o dia 1)
+const wrap = (data, p) => (data?.sheets?.length ? data : { sheets: [data?.rows ? data : newCallsheet(p, 1)] });
+const shortDay = (iso) => { if (!iso) return ''; const d = new Date(iso + 'T00:00:00'); return d.toLocaleDateString('pt-PT', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, ''); };
+
 export function callsheetTool(main, p, tool) {
-  let d = tool.data && tool.data.rows ? tool.data : newCallsheet(p);
-  const save = debounce(async () => { const { error } = await sb.from('boards').update({ data: d, updated_at: new Date().toISOString() }).eq('id', tool.id); if (error) toast('Não foi possível guardar: ' + error.message); else tool.data = d; });
+  const all = wrap(tool.data, p);
+  const key = `bg-cs-day:${tool.id}`;
+  let cur = 0; try { cur = Math.min(all.sheets.length - 1, Math.max(0, Number(localStorage.getItem(key)) || 0)); } catch { /* nada */ }
+  let d = all.sheets[cur];
+  const save = debounce(async () => { all.sheets[cur] = d; const { error } = await sb.from('boards').update({ data: all, updated_at: new Date().toISOString() }).eq('id', tool.id); if (error) toast('Não foi possível guardar: ' + error.message); else tool.data = all; });
+  const go = (i) => { cur = Math.max(0, Math.min(all.sheets.length - 1, i)); d = all.sheets[cur]; try { localStorage.setItem(key, cur); } catch { /* nada */ } draw(); };
+  // "DIA x DE y" acompanha os dias quando se junta ou tira um dia
+  const renumber = () => { const n = all.sheets.length; all.sheets.forEach((sh, i) => { sh.day = String(i + 1); sh.days = String(n); }); };
+  const used = () => { const m = new Map(); all.sheets.forEach((sh, i) => { if (i !== cur) sh.rows.forEach((r) => r.shot_id && m.set(r.shot_id, sh.day || i + 1)); }); return m; };
+  const addDay = (blank) => {
+    const copy = blank ? newCallsheet(p, 1) : JSON.parse(JSON.stringify(d));
+    if (!blank) { copy.rows = copy.rows.filter((r) => r.kind === 'band'); copy.cast = []; copy.weather = { text: '', min: '', max: '' }; }
+    copy.accent = d.accent; copy.title = d.title; copy.footer = d.footer;
+    const last = all.sheets[all.sheets.length - 1]?.date;
+    if (last) { const nx = new Date(last + 'T00:00:00'); nx.setDate(nx.getDate() + 1); copy.date = `${nx.getFullYear()}-${String(nx.getMonth() + 1).padStart(2, '0')}-${String(nx.getDate()).padStart(2, '0')}`; } else copy.date = '';
+    all.sheets.push(copy); renumber(); save(); go(all.sheets.length - 1);
+    toast(blank ? 'Dia novo, em branco.' : 'Dia novo com os mesmos contactos, horários e local (sem planos nem elenco).');
+  };
   const draw = () => {
-    main.innerHTML = `<div class="row between wrap-gap cs-bar">
+    main.innerHTML = `<div class="cs-days" role="tablist" aria-label="Dias de rodagem">
+        <button type="button" class="cs-dnav" data-go="-1" aria-label="Dia anterior" ${cur === 0 ? 'disabled' : ''}>${ICON.back}</button>
+        <div class="cs-dtabs">${all.sheets.map((sh, i) => `<button type="button" role="tab" class="cs-dtab ${i === cur ? 'on' : ''}" aria-selected="${i === cur}" data-day="${i}" style="--acc:${esc(sh.accent || '#C8382D')}"><b>Dia ${esc(sh.day || i + 1)}</b>${sh.date ? `<small>${esc(shortDay(sh.date))}</small>` : ''}<small class="muted">${sh.rows.filter((r) => r.kind === 'shot').length} pl.</small></button>`).join('')}</div>
+        <button type="button" class="cs-dnav" data-go="1" aria-label="Dia seguinte" ${cur === all.sheets.length - 1 ? 'disabled' : ''}>${ICON.chev}</button>
+        <button type="button" class="btn ghost" data-addday>${ICON.plus} Dia</button>
+        <button type="button" class="btn ghost" data-addblank title="Dia novo sem copiar nada">${ICON.plus} Dia em branco</button>
+        ${all.sheets.length > 1 ? `<button type="button" class="btn ghost danger-text" data-rmday title="Apagar este dia">${ICON.trash}</button>` : ''}
+      </div>
+      <div class="row between wrap-gap cs-bar">
         <div class="row wrap-gap"><label class="cs-acc" title="Cor da moldura"><input type="color" data-acc value="${esc(d.accent || '#C8382D')}"><span>Cor</span></label>
-          <button type="button" class="btn ghost" data-import>${ICON.open} Importar do Excel</button>
-          <button type="button" class="btn ghost" data-dup>${ICON.copy} Duplicar para outro dia</button></div>
-        <button type="button" class="btn primary" data-pdf>${ICON.open} Exportar PDF</button></div>
+          <button type="button" class="btn ghost" data-import>${ICON.open} Importar do Excel</button></div>
+        <div class="row wrap-gap">${all.sheets.length > 1 ? `<button type="button" class="btn ghost" data-pdfall>${ICON.open} PDF de todos os dias</button>` : ''}<button type="button" class="btn primary" data-pdf>${ICON.open} Exportar PDF do dia ${esc(d.day || cur + 1)}</button></div></div>
       <div class="cs-wrap">${sheetHtml(d, true)}</div>`;
     const auto = (t) => { if (t.tagName === 'TEXTAREA') { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; } };
     main.querySelectorAll('.cs textarea').forEach(auto);
-    main.querySelectorAll('[data-p]').forEach((el) => el.addEventListener('input', () => { set(d, el.dataset.p, el.value); auto(el); save(); }));
+    main.querySelectorAll('[data-p]').forEach((el) => el.addEventListener('input', () => { set(d, el.dataset.p, el.value); auto(el); save(); if (['date', 'day'].includes(el.dataset.p)) { const t = main.querySelector(`[data-day="${cur}"]`); if (t) t.innerHTML = `<b>Dia ${esc(d.day || cur + 1)}</b>${d.date ? `<small>${esc(shortDay(d.date))}</small>` : ''}<small class="muted">${d.rows.filter((r) => r.kind === 'shot').length} pl.</small>`; } }));
     main.querySelector('[data-acc]').addEventListener('input', (e) => { d.accent = e.target.value; main.querySelector('.cs-frame').style.setProperty('--acc', d.accent); save(); });
+    main.querySelectorAll('[data-day]').forEach((b) => b.addEventListener('click', () => go(Number(b.dataset.day))));
+    main.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => go(cur + Number(b.dataset.go))));
+    main.querySelector('[data-addday]').addEventListener('click', () => addDay(false));
+    main.querySelector('[data-addblank]').addEventListener('click', () => addDay(true));
+    main.querySelector('[data-rmday]')?.addEventListener('click', async () => {
+      if (!(await confirmBox(`Apagar o dia ${d.day || cur + 1} e tudo o que está nesta folha?`, 'Apagar dia'))) return;
+      all.sheets.splice(cur, 1); renumber(); save(); go(Math.min(cur, all.sheets.length - 1));
+    });
     const on = (sel, fn) => main.querySelectorAll(sel).forEach((b) => b.addEventListener('click', () => { fn(b); save(); draw(); }));
     on('[data-addc]', () => d.contacts.push({ id: uid(), role: '', value: '' }));
     on('[data-addt]', () => d.times.push({ id: uid(), label: '', value: '' }));
@@ -96,22 +132,16 @@ export function callsheetTool(main, p, tool) {
     main.querySelectorAll('[data-rmcol]').forEach((b) => b.addEventListener('click', async () => {
       const c = d.cols.find((y) => y.id === b.dataset.rmcol); if (!(await confirmBox(`Tirar a coluna "${c.label}"?`, 'Tirar'))) return; d.cols = d.cols.filter((y) => y !== c); save(); draw();
     }));
-    main.querySelector('[data-pick]').addEventListener('click', () => pickShots(p, d, () => { save(); draw(); }));
-    main.querySelector('[data-pdf]').addEventListener('click', () => printSheet(d));
-    main.querySelector('[data-import]').addEventListener('click', () => importXlsx(d, (nd) => { d = nd; save(); draw(); }));
-    main.querySelector('[data-dup]').addEventListener('click', async () => {
-      const copy = JSON.parse(JSON.stringify(d)); copy.day = String((Number(d.day) || 0) + 1); copy.date = ''; copy.rows = copy.rows.filter((r) => r.kind === 'band'); copy.cast = [];
-      const { data: row, error } = await sb.from('boards').insert({ project_id: p.id, kind: 'callsheet', title: `Folha de serviço — Dia ${copy.day}`, group_id: tool.group_id, position: 999, data: copy }).select().single();
-      if (error) return toast(error.message);
-      toast('Folha do dia seguinte criada (mesmos contactos e locais, sem planos).');
-      location.hash = location.hash.replace(/\/f\/[^/]+$/, `/f/${row.id}`);
-    });
+    main.querySelector('[data-pick]').addEventListener('click', () => pickShots(p, d, () => { save(); draw(); }, used()));
+    main.querySelector('[data-pdf]').addEventListener('click', () => printSheet([d]));
+    main.querySelector('[data-pdfall]')?.addEventListener('click', () => printSheet(all.sheets));
+    main.querySelector('[data-import]').addEventListener('click', () => importXlsx(d, (nd) => { all.sheets[cur] = nd; d = nd; save(); draw(); }));
   };
   draw();
 }
 
 // escolher os planos do dia: vêm com a secção/cena, descrição, câmara, técnica; o décor e o elenco preenchem-se
-async function pickShots(p, d, after) {
+async function pickShots(p, d, after, elsewhere = new Map()) {
   const [{ data: shots }, { data: scenes }, { data: locs }, { data: chars }] = await Promise.all([
     sb.from('shots').select('*').eq('project_id', p.id).order('position'),
     sb.from('scenes').select('id, number, heading, int_ext, time_of_day, location_id, location_ids, character_ids, extra_ids, position').eq('project_id', p.id).order('position'),
@@ -119,16 +149,34 @@ async function pickShots(p, d, after) {
     sb.from('characters').select('id, name, actor, info').eq('project_id', p.id),
   ]);
   const used = new Set(d.rows.map((r) => r.shot_id).filter(Boolean));
-  const groups = [...(scenes || []).map((s) => ({ s, list: (shots || []).filter((x) => x.scene_id === s.id) })), { s: null, list: (shots || []).filter((x) => !x.scene_id) }].filter((g) => g.list.length);
+  // mesma ordem e numeração da shotlist: secção a secção (por posição), depois os planos sem secção
+  const byPos = (a, b) => (a.position || 0) - (b.position || 0);
+  const groups = [...(scenes || []).map((s) => ({ s, list: (shots || []).filter((x) => x.scene_id === s.id).sort(byPos) })), { s: null, list: (shots || []).filter((x) => !x.scene_id || !(scenes || []).some((s) => s.id === x.scene_id)) }].filter((g) => g.list.length);
   if (!groups.length) return toast('Ainda não há planos no projeto. Junta-os na shotlist ou no storyboard.');
-  const m = modal(`<h2>Planos deste dia</h2><p class="muted small">Escolhe os planos. Entram pela ordem da lista, com a ${p._hasScript ? 'cena' : 'secção'}, a descrição e a técnica; o décor e o elenco preenchem-se sozinhos.</p>
-    <div class="cs-pick">${groups.map(({ s, list }) => `<fieldset><legend><label><input type="checkbox" data-all> ${esc(s ? s.heading || 'Sem nome' : 'Sem secção')}</label></legend>${list.map((x) => `<label class="cs-pi"><input type="checkbox" value="${x.id}" ${used.has(x.id) ? 'disabled checked' : ''}><span>${esc(x.code ? x.code + ' · ' : '')}${esc(x.description || 'Plano sem descrição')}</span>${used.has(x.id) ? '<small class="muted">já na folha</small>' : ''}</label>`).join('')}</fieldset>`).join('')}</div>
+  let n = 0; const num = new Map(); groups.forEach((g) => g.list.forEach((x) => num.set(x.id, ++n)));
+  const ordered = groups.flatMap((g) => g.list);
+  const urls = new Map(await Promise.all(ordered.filter((x) => x.image_path).map(async (x) => [x.id, await signedUrl(x.image_path).catch(() => null)])));
+  let view = 'list'; try { view = localStorage.getItem('bg-cs-pick') || 'list'; } catch { /* nada */ }
+  const lbl = (x) => `<span class="cs-pn">${num.get(x.id)}</span><span class="cs-pd">${x.code ? `<b>${esc(x.code)}</b> · ` : ''}${esc(x.description || 'Plano sem descrição')}</span>`;
+  const item = (x) => `<label class="cs-pi"><input type="checkbox" value="${x.id}" ${used.has(x.id) ? 'disabled checked' : ''}>${view === 'grid' ? `<span class="cs-pimg">${urls.get(x.id) ? `<img src="${esc(urls.get(x.id))}" alt="" loading="lazy">` : `<span class="cs-pnoimg">${ICON.image}</span>`}</span>` : ''}<span class="cs-pt">${lbl(x)}</span>${used.has(x.id) ? '<small class="muted">já neste dia</small>' : elsewhere.has(x.id) ? `<small class="muted">no dia ${esc(elsewhere.get(x.id))}</small>` : ''}</label>`;
+  const m = modal(`<div class="row between wrap-gap"><h2>Planos deste dia</h2><div class="seg dark view-seg" role="radiogroup" aria-label="Vista">${[['list', ICON.list, 'Lista'], ['grid', ICON.image, 'Grelha']].map(([k, ic, l]) => `<button type="button" role="radio" data-v="${k}" title="${l}">${ic}<span>${l}</span></button>`).join('')}</div></div><p class="muted small">Escolhe os planos. A numeração é a da shotlist e entram por essa ordem, com a ${p._hasScript ? 'cena' : 'secção'}, a descrição e a técnica; o décor e o elenco preenchem-se sozinhos.</p>
+    <div class="cs-pick" data-pickbox></div>
     <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button type="button" class="btn primary" data-ok>Juntar à folha</button></div>`, { wide: true });
-  m.el.querySelectorAll('[data-all]').forEach((a) => a.addEventListener('change', () => a.closest('fieldset').querySelectorAll('input[value]:not(:disabled)').forEach((c) => (c.checked = a.checked))));
+  const box = m.el.querySelector("[data-pickbox]");
+  const drawPick = () => {
+    const keep = new Set([...box.querySelectorAll('input[value]:checked:not(:disabled)')].map((c) => c.value));
+    box.className = `cs-pick ${view === 'grid' ? 'is-grid' : ''}`;
+    box.innerHTML = groups.map(({ s, list }) => `<fieldset><legend><label><input type="checkbox" data-all> ${esc(s ? s.heading || 'Sem nome' : 'Sem secção')} <span class="muted small">${num.get(list[0].id)}–${num.get(list[list.length - 1].id)}</span></label></legend><div class="cs-pl">${list.map(item).join('')}</div></fieldset>`).join('');
+    box.querySelectorAll('input[value]').forEach((c) => { if (keep.has(c.value)) c.checked = true; });
+    box.querySelectorAll('[data-all]').forEach((a) => a.addEventListener('change', () => a.closest('fieldset').querySelectorAll('input[value]:not(:disabled)').forEach((c) => (c.checked = a.checked))));
+    m.el.querySelectorAll('[data-v]').forEach((b) => { b.setAttribute('aria-checked', b.dataset.v === view); b.setAttribute('aria-selected', b.dataset.v === view); });
+  };
+  m.el.querySelectorAll('[data-v]').forEach((b) => b.addEventListener('click', () => { view = b.dataset.v; try { localStorage.setItem('bg-cs-pick', view); } catch { /* nada */ } drawPick(); }));
+  drawPick();
   m.el.querySelector('[data-ok]').addEventListener('click', () => {
     const ids = [...m.el.querySelectorAll('input[value]:checked:not(:disabled)')].map((c) => c.value);
     if (!ids.length) return m.close();
-    const chosen = (shots || []).filter((x) => ids.includes(x.id));
+    const chosen = ordered.filter((x) => ids.includes(x.id));
     const secIds = new Set();
     chosen.forEach((x) => {
       const s = (scenes || []).find((y) => y.id === x.scene_id); if (s) secIds.add(s.id);
@@ -139,7 +187,7 @@ async function pickShots(p, d, after) {
         actor: idx.join(';'), resumo: x.description || '', cam: [x.rig, x.lens].filter(Boolean).join(' · '),
         tecnico: [x.framing, x.movement, x.direction_notes, x.tech_notes].filter(Boolean).join(' || '), paf: x.tc || '',
       };
-      d.rows.push({ id: uid(), kind: 'shot', shot_id: x.id, cells });
+      d.rows.push({ id: uid(), kind: 'shot', shot_id: x.id, num: num.get(x.id), cells });
     });
     // décor e elenco do dia
     const secs = (scenes || []).filter((s) => secIds.has(s.id));
@@ -219,13 +267,14 @@ async function importXlsx(d, done) {
   inp.click();
 }
 
-function printSheet(d) {
+function printSheet(list) {
+  const d = list[0];
   const css = [...document.styleSheets].map((s) => { try { return [...s.cssRules].map((r) => r.cssText).filter((t) => t.includes('.cs')).join('\n'); } catch { return ''; } }).join('\n');
-  const html = `<!doctype html><html lang="pt"><head><meta charset="utf-8"><title>${esc(d.title)} — Folha de serviço dia ${esc(d.day)}</title><style>
+  const html = `<!doctype html><html lang="pt"><head><meta charset="utf-8"><title>${esc(d.title)} — Folha de serviço ${list.length > 1 ? 'todos os dias' : 'dia ' + esc(d.day)}</title><style>
     @page { size: A4 portrait; margin: 8mm; } * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     body { margin: 0; font: 9px/1.3 Arial, Helvetica, sans-serif; color: #000; } ${css}
     .cs-frame { padding: 16px !important; } a { color: #1155cc; }
-  </style></head><body>${sheetHtml(d, false)}</body></html>`;
+  </style></head><body>${list.map((x, i) => `<div style="${i ? 'break-before: page;' : ''}">${sheetHtml(x, false)}</div>`).join('')}</body></html>`;
   const fr = document.createElement('iframe'); fr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
   document.body.append(fr); const doc = fr.contentWindow.document; doc.open(); doc.write(html); doc.close();
   setTimeout(() => { fr.contentWindow.focus(); fr.contentWindow.print(); setTimeout(() => fr.remove(), 60000); }, 300);
