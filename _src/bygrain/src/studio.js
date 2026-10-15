@@ -21,6 +21,8 @@ const onCleanup = (fn) => cleanup.push(fn);
 function teardown() { cleanup.forEach((f) => { try { f(); } catch { /* nada */ } }); cleanup = []; }
 
 registerSW();
+// a roda do rato não muda valores sem querer nos campos numéricos
+document.addEventListener('wheel', (e) => { const a = document.activeElement; if (a?.type === 'number' && e.target === a) a.blur(); }, { passive: true });
 
 // ---------- arranque ----------
 let recovering = false;
