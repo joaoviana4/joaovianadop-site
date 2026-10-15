@@ -1,5 +1,6 @@
 import { sb, esc, toast, modal, confirmBox, ICON } from './lib.js';
 import { exportPdf } from './pdf.js';
+import { GRAIN_FEE } from './folders.js';
 import { colorField, readColor, bindColorField, colorPop, tableShortcuts, rowStyle, colStyle, makeHistory, bindUndoKeys } from './tablekit.js';
 
 // Orçamento do projeto, como no Studio: tabela com secções, colunas de texto, valor (€) e número,
@@ -102,14 +103,18 @@ export async function budgetPage(main, p) {
     }));
   }
 
+  // Grain fee: só no orçamento geral do projeto (não nos orçamentos de departamento, que usam _store)
+  const hasFee = !p._store;
+  const feeP = () => (!hasFee || !b || b.gfee?.off ? 0 : b.gfee?.pct != null ? Number(b.gfee.pct) || 0 : GRAIN_FEE);
+  const feeOf = (own) => own * feeP() / 100;
   function summary() {
-    const { tot } = sums(b); const own = (b.main && tot[b.main]) || 0;
+    const { tot } = sums(b); const costs = (b.main && tot[b.main]) || 0; const fee = feeOf(costs); const own = costs + fee;
     // numa pasta (ex.: álbum), o que está atribuído aos projetos lá dentro também conta
     const extra = p._extra?.amount || 0; const t = own + extra;
     const has = total != null && total > 0; const ratio = has ? t / total : 0; const diff = has ? total - t : 0;
     const stt = !has ? 'none' : diff < 0 ? 'over' : ratio >= 0.9 ? 'near' : 'ok';
     const label = { none: p._capLabel ? 'Sem limite definido' : 'Sem orçamento geral definido', over: 'Fora do orçamento', near: 'Dentro, mas perto do limite', ok: 'Dentro do orçamento' }[stt];
-    return `<div class="bsum-grid"><div><span class="fl">${extra ? 'Total comprometido' : 'Total da tabela'}</span><strong class="bbig">${eur.format(t)}</strong>${extra ? `<small class="muted">${eur.format(own)} nesta tabela + ${eur.format(extra)} ${esc(p._extra.label || 'nos projetos dentro')}</small>` : ''}</div>
+    return `<div class="bsum-grid"><div><span class="fl">${extra ? 'Total comprometido' : fee ? 'Total com Grain fee' : 'Total da tabela'}</span><strong class="bbig">${eur.format(t)}</strong>${fee ? `<small class="muted">${eur.format(costs)} custos + ${eur.format(fee)} Grain fee (${String(feeP()).replace('.', ',')} %)</small>` : ''}${extra ? `<small class="muted">${eur.format(own)} nesta tabela + ${eur.format(extra)} ${esc(p._extra.label || 'nos projetos dentro')}</small>` : ''}</div>
       ${has ? `<div><span class="fl">${diff < 0 ? 'Passa' : 'Sobram'}</span><strong class="bbig bst-${stt}">${eur.format(Math.abs(diff))}</strong></div>` : ''}
       <div class="bstate"><span class="bchip bst-${stt}">${label}</span></div></div>
       ${has ? `<div class="bbar" role="img" aria-label="${Math.round(ratio * 100)} % do orçamento geral"><span class="bst-${stt}" style="width:${Math.min(100, ratio * 100).toFixed(1)}%"></span>${ratio > 1 ? `<i style="left:${(100 / ratio).toFixed(1)}%"></i>` : ''}</div><p class="muted small">${Math.round(ratio * 100)} % do orçamento geral</p>` : ''}`;
@@ -137,6 +142,7 @@ export async function budgetPage(main, p) {
       <section class="panel bsum">
         <div class="btotal-in">
           <label class="field"><span class="label">${esc(p._capLabel || 'Orçamento geral do projeto')}</span><span class="money-in"><input class="num" data-total inputmode="decimal" value="${total != null ? esc(fmtIn({ type: 'money' }, total)) : ''}" placeholder="Ex.: 8000" autocomplete="off"><i>€</i></span></label>
+          ${hasFee ? `<div class="field bfee"><span class="label">Grain fee</span><span class="bfee-in"><label class="switch-l"><input type="checkbox" data-feeon ${b.gfee?.off ? '' : 'checked'}> aplicar</label><span class="money-in"><input class="num" data-feepct inputmode="decimal" value="${esc(String(b.gfee?.pct ?? GRAIN_FEE).replace('.', ','))}" ${b.gfee?.off ? 'disabled' : ''} aria-label="Percentagem da Grain fee"><i>%</i></span></span></div>` : ''}
           ${moneyCols.length > 1 ? `<label class="field"><span class="label">Compara com a coluna</span><select data-main>${moneyCols.map((c) => `<option value="${c.id}" ${c.id === b.main ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>` : ''}
         </div>
         <div data-sum>${summary()}</div>
@@ -154,7 +160,7 @@ export async function budgetPage(main, p) {
         <tbody>${b.rows.map((r) => r.kind === 'section'
           ? `<tr class="bsec ${r.color ? 'has-rc' : ''}" data-row="${r.id}"${rowStyle(r)}><td colspan="${Math.max(1, b.cols.findIndex((c) => c.type !== 'text'))}" class="rd-cell"><button type="button" class="row-dot" data-rowcolor title="Cor da secção" aria-label="Cor da secção"></button><input class="sec-in" data-sec value="${esc(r.title)}" aria-label="Nome da secção"></td>${b.cols.slice(Math.max(1, b.cols.findIndex((c) => c.type !== 'text'))).map((c) => `<td class="num">${c.type === 'text' ? '' : `<b data-ssum="${r.id}:${c.id}">${fmt(c, sec[r.id]?.[c.id] || 0)}</b>`}</td>`).join('')}<td class="bact"><button type="button" class="icon-btn sm" data-rm aria-label="Apagar secção">${ICON.close}</button></td></tr>`
           : `<tr data-row="${r.id}" class="${r.color ? 'has-rc' : ''}"${rowStyle(r)}>${b.cols.map((c, i) => `<td class="${c.type !== 'text' ? 'num' : ''} ${c.color ? 'has-cc' : ''} ${i === 0 ? 'rd-cell' : ''}" data-colid="${c.id}"${colStyle(c)}>${i === 0 ? '<button type="button" class="row-dot" data-rowcolor title="Cor da linha" aria-label="Cor da linha"></button>' : ''}${cellInput(r, c)}</td>`).join('')}<td class="bact"><button type="button" class="icon-btn sm" data-rm aria-label="Apagar linha">${ICON.close}</button></td></tr>`).join('')}</tbody>
-        <tfoot><tr>${b.cols.map((c, i) => `<td class="num">${i === 0 ? '<strong>Total</strong>' : c.type === 'text' ? '' : `<strong data-tsum="${c.id}">${fmt(c, tot[c.id] || 0)}</strong>`}</td>`).join('')}<td></td></tr></tfoot>
+        <tfoot><tr>${b.cols.map((c, i) => `<td class="num">${i === 0 ? '<strong>Total</strong>' : c.type === 'text' ? '' : `<strong data-tsum="${c.id}">${fmt(c, tot[c.id] || 0)}</strong>`}</td>`).join('')}<td></td></tr>${feeP() && b.main ? `<tr class="bfee-row">${b.cols.map((c, i) => `<td class="num">${i === 0 ? `Grain fee (${String(feeP()).replace('.', ',')} %)` : c.id === b.main ? `<span data-tfee>${eur.format(feeOf(tot[c.id] || 0))}</span>` : ''}</td>`).join('')}<td></td></tr><tr class="bfee-row tot">${b.cols.map((c, i) => `<td class="num">${i === 0 ? '<strong>Total com Grain fee</strong>' : c.id === b.main ? `<strong data-tfeetot>${eur.format((tot[c.id] || 0) + feeOf(tot[c.id] || 0))}</strong>` : ''}</td>`).join('')}<td></td></tr>` : ''}</tfoot>
       </table></div>
       <div class="row wrap-gap"><button type="button" class="btn ghost" data-addrow>${ICON.plus} Linha</button><button type="button" class="btn ghost" data-addsec>${ICON.plus} Secção</button><span class="muted small">${nItems} ${nItems === 1 ? 'linha' : 'linhas'} · clica no nome de uma coluna para mudar nome, tipo e cor · ● conta para o total · <kbd>Alt</kbd>+<kbd>↓</kbd> linha, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>↓</kbd> secção, <kbd>Alt</kbd>+<kbd>→</kbd> coluna (onde está o rato) · cor da linha no ponto à esquerda</span></div>`;
     bind();
@@ -164,6 +170,7 @@ export async function budgetPage(main, p) {
     const { tot, sec } = sums(b);
     main.querySelectorAll('[data-tsum]').forEach((el) => { const c = b.cols.find((x) => x.id === el.dataset.tsum); el.textContent = fmt(c, tot[c.id] || 0); });
     main.querySelectorAll('[data-ssum]').forEach((el) => { const [sid, cid] = el.dataset.ssum.split(':'); const c = b.cols.find((x) => x.id === cid); el.textContent = fmt(c, sec[sid]?.[cid] || 0); });
+    const mt = (b.main && tot[b.main]) || 0; const tf = main.querySelector('[data-tfee]'); if (tf) tf.textContent = eur.format(feeOf(mt)); const tt = main.querySelector('[data-tfeetot]'); if (tt) tt.textContent = eur.format(mt + feeOf(mt));
     main.querySelector('[data-sum]').innerHTML = summary();
   }
   const snapshot = (label) => hist.push(label);
@@ -172,6 +179,9 @@ export async function budgetPage(main, p) {
     const totalIn = main.querySelector('[data-total]');
     totalIn.addEventListener('input', () => { total = num(totalIn.value); refreshSums(); clearTimeout(totalIn._t); totalIn._t = setTimeout(saveTotal, 600); });
     totalIn.addEventListener('blur', () => { if (total != null) totalIn.value = fmtIn({ type: 'money' }, total); });
+    main.querySelector('[data-feeon]')?.addEventListener('change', (e) => { snapshot('Grain fee'); b.gfee = { ...(b.gfee || {}), off: !e.target.checked }; if (!b.gfee.off) delete b.gfee.off; save(0); draw(); });
+    const fp = main.querySelector('[data-feepct]');
+    fp?.addEventListener('change', () => { const n = num(fp.value); snapshot('Grain fee'); b.gfee = { ...(b.gfee || {}), pct: n == null ? GRAIN_FEE : Math.max(0, n) }; save(0); draw(); });
     main.querySelector('[data-main]')?.addEventListener('change', (e) => { b.main = e.target.value; save(); draw(); });
     main.querySelector('[data-tpl]').addEventListener('change', async (e) => {
       const k = e.target.value; if (!k) return;
@@ -184,7 +194,7 @@ export async function budgetPage(main, p) {
     hist.watch(main.querySelector('table.budget'));
     if (!undoKeysBound) { bindUndoKeys(main, hist); undoKeysBound = true; }
     main.querySelector('[data-import]').addEventListener('click', pickImport);
-    main.querySelector('[data-export]').addEventListener('click', () => exportXlsx(b, total, p.name));
+    main.querySelector('[data-export]').addEventListener('click', () => exportXlsx(b, total, p.name, feeP()));
     main.querySelector('[data-hist]')?.addEventListener('click', history);
     main.querySelector('[data-pdf]').addEventListener('click', () => {
       const { tot, sec } = sums(b); const groups = []; let cur = { title: null, rows: [] };
@@ -198,7 +208,7 @@ export async function budgetPage(main, p) {
         title: `Orçamento — ${p.name}`, subtitle: new Date().toLocaleDateString('pt-PT'),
         columns: b.cols.map((c) => ({ label: c.name, align: c.type === 'text' ? undefined : 'right' })),
         groups: groups.filter((g) => g.title !== null || g.rows.length),
-        footer: [['Total da tabela', mainCol ? fmt(mainCol, t) : ''], ...(total != null ? [[p._capLabel || 'Orçamento geral', eur.format(total)], [total - t < 0 ? 'Passa' : 'Sobram', eur.format(Math.abs(total - t))]] : [])],
+        footer: [['Total da tabela', mainCol ? fmt(mainCol, t) : ''], ...(feeP() ? [[`Grain fee (${String(feeP()).replace('.', ',')} %)`, eur.format(feeOf(t))], ['Total com Grain fee', eur.format(t + feeOf(t))]] : []), ...(total != null ? [[p._capLabel || 'Orçamento geral', eur.format(total)], [total - t - feeOf(t) < 0 ? 'Passa' : 'Sobram', eur.format(Math.abs(total - t - feeOf(t)))]] : [])],
       });
     });
     const tbody = main.querySelector('tbody');
@@ -363,7 +373,7 @@ function parseRows(raw) {
   return { cols, rows: out, total };
 }
 
-async function exportXlsx(b, total, name) {
+async function exportXlsx(b, total, name, feePct = 0) {
   const ExcelJS = await loadExcel();
   const wb = new ExcelJS.Workbook(); const ws = wb.addWorksheet('Orçamento');
   ws.columns = b.cols.map((c) => ({ header: c.name, key: c.id, width: c.type === 'text' ? 30 : 14 }));
@@ -375,10 +385,12 @@ async function exportXlsx(b, total, name) {
   });
   ws.addRow({});
   const t = ws.addRow({}); t.getCell(1).value = 'Total'; t.font = { bold: true }; b.cols.forEach((c, i) => { if (c.type !== 'text') t.getCell(i + 1).value = tot[c.id]; });
+  const fi = b.cols.findIndex((c) => c.id === b.main); const fee = feePct && fi >= 0 ? (tot[b.main] || 0) * feePct / 100 : 0;
+  if (fee) { const f = ws.addRow({}); f.getCell(1).value = `Grain fee (${feePct} %)`; f.getCell(fi + 1).value = fee; const ft = ws.addRow({}); ft.getCell(1).value = 'Total com Grain fee'; ft.font = { bold: true }; ft.getCell(fi + 1).value = (tot[b.main] || 0) + fee; }
   if (total != null) {
     const i = b.cols.findIndex((c) => c.id === b.main);
     const g = ws.addRow({}); g.getCell(1).value = 'Orçamento geral'; if (i >= 0) g.getCell(i + 1).value = total;
-    const d = ws.addRow({}); d.getCell(1).value = 'Diferença'; if (i >= 0) d.getCell(i + 1).value = total - (tot[b.main] || 0);
+    const d = ws.addRow({}); d.getCell(1).value = 'Diferença'; if (i >= 0) d.getCell(i + 1).value = total - (tot[b.main] || 0) - fee;
   }
   b.cols.forEach((c, i) => { if (c.type === 'money') ws.getColumn(i + 1).numFmt = '#,##0.00 "€"'; });
   const buf = await wb.xlsx.writeBuffer();

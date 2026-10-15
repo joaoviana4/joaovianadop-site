@@ -1687,3 +1687,15 @@ tr:hover > td > .cst-x, tr:hover > td > .cst-mv, tr:hover .cst-colh .cst-x, .cst
 @media (max-width: 760px) { .fmt-bar { right: 88px; top: auto !important; bottom: 70px; transform: none !important; max-height: 60vh; overflow-y: auto; } }
 .fmt-list button { border: 0 !important; border-radius: 8px !important; background: none; } .fmt-list button:hover { background: rgba(244,241,232,.08); } .fmt-list button.on { background: rgba(244,241,232,.16); }
 .co-child { padding-left: 34px !important; position: relative; } .co-child::before { content: "↳"; position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: rgba(244,241,232,.4); }
+.bfee-in { display: flex; align-items: center; gap: 10px; }
+.bfee-in .money-in { width: 90px; }
+.bfee .switch-l { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: rgba(244,241,232,.75); white-space: nowrap; }
+.bfee-row td { color: rgba(244,241,232,.7); font-size: 13px; }
+.bfee-row.tot td { color: inherit; }
+.bsum-grid small + small { display: block; }
+.fold-cw { position: relative; display: flex; }
+.fold-cw > .fold-card { flex: 1; }
+.fold-act { position: absolute; top: 8px; right: 8px; z-index: 2; display: flex; gap: 4px; opacity: 0; transition: opacity .15s; }
+.fold-cw:hover .fold-act, .fold-act:focus-within { opacity: 1; }
+.fold-act .icon-btn { background: rgba(15,15,20,.78); backdrop-filter: blur(6px); }
+@media (hover: none) { .fold-act { opacity: 1; } }
