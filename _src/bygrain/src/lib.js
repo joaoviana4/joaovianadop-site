@@ -45,7 +45,7 @@ export function initials(name) { return String(name || '?').trim().split(/\s+/).
 
 export const KINDS = {
   ficcao: 'Ficção', campanha: 'Comercial', lancamento: 'Lançamento', videoclipe: 'Videoclipe', branded: 'Branded',
-  redes: 'Redes sociais', documentario: 'Documentário', outro: 'Outro', central: 'Central',
+  redes: 'Redes sociais', documentario: 'Documentário', album: 'Álbum (pasta)', outro: 'Outro', central: 'Central',
 };
 export const STATUS = { todo: 'Por fazer', doing: 'Em curso', done: 'Feita' };
 export const ROLES = { admin: 'Administrador', member: 'Membro', guest: 'Convidado' };
@@ -106,7 +106,7 @@ export const isAdmin = () => state.profile?.role === 'admin';
 export const PERMS = { budget: ['Orçamentos', 'Vê e edita o orçamento e os valores de todos os projetos'], finance: ['Finanças', 'Vê e edita as finanças da Central (movimentos, contas e despesas)'] };
 export const hasPerm = (k) => isAdmin() || !!state.perms?.has(k);
 // colunas de projects que a app pode ler (os valores vivem em project_budgets, protegidos)
-export const PROJECT_COLS = 'id, name, client, kind, status, is_central, cover_path, departments, starts_on, ends_on, created_by, created_at, updated_at, done_at, music, layouts, modules, deleted_at, deleted_by';
+export const PROJECT_COLS = 'id, name, client, kind, status, is_central, cover_path, departments, starts_on, ends_on, created_by, created_at, updated_at, done_at, music, layouts, modules, deleted_at, deleted_by, parent_id';
 
 export async function signIn(identifier, password) {
   let email = String(identifier || '').trim().toLowerCase();

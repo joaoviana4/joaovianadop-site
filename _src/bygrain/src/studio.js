@@ -8,6 +8,7 @@ import { financePage } from './finance.js';
 import { TOOL_KINDS, tableTool, timelineTool, tableTemplate } from './tools.js';
 import { lightmapTool, newLightmapData } from './lightmap.js';
 import { gearPage } from './gear.js';
+import { isFolder, loadChildren, rollup, childrenSection, budgetChildrenPanel } from './folders.js';
 import { propsPage } from './props.js';
 import { budgetPage, budgetTool } from './budget.js';
 import { mountTaskCenter } from './taskcenter.js';
@@ -169,7 +170,7 @@ async function homePage() {
     </div></div>`;
   bindHeader(app);
   app.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { homeState.tab = b.dataset.tab; homePage(); }));
-  app.querySelector('[data-new]')?.addEventListener('click', newProject);
+  app.querySelector('[data-new]')?.addEventListener('click', () => newProject());
 
   const [{ data: projects }, { data: tasks }, { data: myMem }] = await Promise.all([
     sb.from('projects').select(PROJECT_COLS).eq('is_central', false).order('updated_at', { ascending: false }),
@@ -180,7 +181,11 @@ async function homePage() {
   const mineSet = new Set([...(myMem || []).map((m) => m.project_id), ...(tasks || []).filter((t) => t.assignee_id === state.user.id).map((t) => t.project_id)]);
   const norm = (x) => (x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const sorters = { recent: (a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''), az: (a, b) => a.name.localeCompare(b.name, 'pt'), due: (a, b) => (a.ends_on || '9999').localeCompare(b.ends_on || '9999') || a.name.localeCompare(b.name, 'pt') };
-  const pick = () => (projects || []).filter((p) => (homeState.tab === 'trash' ? !!p.deleted_at : !p.deleted_at && p.status === homeState.tab) && (!homeState.mine || mineSet.has(p.id)) && (!homeState.q || norm(`${p.name} ${p.client}`).includes(norm(homeState.q)))).sort(sorters[homeState.sort]);
+  // projetos dentro de uma pasta (ex.: videoclipes de um álbum) aparecem dentro dela; numa pesquisa aparecem soltos
+  const byId = new Map((projects || []).map((p) => [p.id, p]));
+  const inFolder = (p) => { const par = p.parent_id && byId.get(p.parent_id); return !!par && !par.deleted_at && (!homeState.mine || mineSet.has(par.id)); };
+  const kidsOf = (id) => (projects || []).filter((k) => k.parent_id === id && !k.deleted_at);
+  const pick = () => (projects || []).filter((p) => (homeState.tab === 'trash' ? !!p.deleted_at && !(p.parent_id && byId.get(p.parent_id)?.deleted_at === p.deleted_at) : !p.deleted_at && p.status === homeState.tab && (homeState.q || !inFolder(p))) && (!homeState.mine || mineSet.has(p.id) || kidsOf(p.id).some((k) => mineSet.has(k.id))) && (!homeState.q || norm(`${p.name} ${p.client} ${byId.get(p.parent_id)?.name || ''}`).includes(norm(homeState.q)))).sort(sorters[homeState.sort]);
   let list = pick();
   const open = (pid) => (tasks || []).filter((t) => t.project_id === pid && t.status !== 'done').length;
   const covers = await signedUrls((projects || []).map((p) => p.cover_path));
@@ -206,12 +211,17 @@ async function homePage() {
       const p = list.find((x) => x.id === b.dataset.restore);
       const { error } = await sb.from('projects').update({ deleted_at: null, deleted_by: null }).eq('id', p.id);
       if (error) return toast(error.message);
+      // os projetos que foram para a reciclagem com a pasta voltam com ela
+      const inside = (projects || []).filter((k) => k.parent_id === p.id && k.deleted_at === p.deleted_at);
+      if (inside.length) { await sb.from('projects').update({ deleted_at: null, deleted_by: null }).in('id', inside.map((k) => k.id)); inside.forEach((k) => (k.deleted_at = null)); }
       toast(`"${p.name}" voltou para os projetos.`); p.deleted_at = null; drawGrid();
     }));
     grid.querySelectorAll('[data-purge]').forEach((b) => b.addEventListener('click', async () => {
       const p = list.find((x) => x.id === b.dataset.purge);
       if (!(await confirmBox(`Apagar "${p.name}" de vez, com todos os boards, tarefas e ficheiros? Isto não dá para desfazer.`, 'Apagar de vez'))) return;
       toast('A apagar os ficheiros…');
+      const inside = (projects || []).filter((k) => k.parent_id === p.id && k.deleted_at === p.deleted_at);
+      for (const k of inside) { await purgeFiles(k.id); await sb.from('projects').delete().eq('id', k.id); projects.splice(projects.indexOf(k), 1); }
       await purgeFiles(p.id);
       const { error } = await sb.from('projects').delete().eq('id', p.id);
       if (error) return toast(error.message);
@@ -219,8 +229,9 @@ async function homePage() {
     }));
   };
   const drawGrid = () => { list = pick(); if (homeState.tab === 'trash') return drawTrash(); grid.innerHTML = list.length ? list.map((p) => {
-    const ph = phaseOf(p); const n = open(p.id);
-    return `<article class="proj-card">
+    const ph = phaseOf(p); const kids = kidsOf(p.id); const n = open(p.id) + kids.reduce((a, k) => a + open(k.id), 0);
+    const par = p.parent_id && byId.get(p.parent_id);
+    return `<article class="proj-card ${p.kind === 'album' ? 'is-folder' : ''}">
       <a href="#/p/${p.id}" class="proj-link" aria-label="Abrir ${esc(p.name)}"></a>
       <div class="proj-cover" style="${covers[p.cover_path] ? `background-image:url('${esc(covers[p.cover_path])}')` : `background:${coverColor(p.id)}`}">
         <div class="grain-layer soft" aria-hidden="true"></div>
@@ -228,7 +239,8 @@ async function homePage() {
         ${staff ? `<button type="button" class="icon-btn on-cover" data-more="${p.id}" aria-label="Opções de ${esc(p.name)}">${ICON.dots}</button>` : ''}
       </div>
       <div class="proj-body">
-        <div><div class="proj-name">${esc(p.name)}</div><div class="muted small">${esc(p.client || '—')}</div></div>
+        <div><div class="proj-name">${p.kind === 'album' ? `<span class="fold-ic">${ICON.board}</span>` : ''}${esc(p.name)}</div><div class="muted small">${esc(p.client || '—')}${par ? ` · em ${esc(par.name)}` : ''}</div></div>
+        ${p.kind === 'album' ? `<div class="fold-kids">${kids.length ? kids.slice(0, 4).map((k) => `<span>${esc(k.name)}</span>`).join('') + (kids.length > 4 ? `<span>+${kids.length - 4}</span>` : '') : '<span class="muted">Sem projetos lá dentro</span>'}</div>` : ''}
         <div class="proj-prog"><div class="row between small muted"><span>${esc(ph.label || 'Sem datas')}</span><span>${n} ${n === 1 ? 'tarefa aberta' : 'tarefas abertas'}</span></div>
         <div class="bar"><i style="width:${Math.round(ph.pct * 100)}%"></i></div></div>
       </div>
@@ -265,12 +277,15 @@ function coverColor(id) {
   return c[h % c.length];
 }
 
-function newProject() {
-  const m = modal(`<h2>Novo projeto</h2>
+async function newProject(opts = {}) {
+  const parent = opts.parent && opts.parent.id ? opts.parent : null;
+  const { data: folders } = await sb.from('projects').select('id, name').eq('kind', 'album').is('deleted_at', null).order('name');
+  const m = modal(`<h2>${parent ? `Novo projeto em ${esc(parent.name)}` : 'Novo projeto'}</h2>
     <form class="stack">
       <div class="field"><label for="pn">Nome</label><input id="pn" name="name" required></div>
       <div class="field"><label for="pc">Artista ou marca</label><input id="pc" name="client"></div>
-      <div class="field"><label for="pk">Tipo</label><select id="pk" name="kind">${Object.entries(KINDS).filter(([k]) => k !== 'central').map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
+      <div class="field"><label for="pk">Tipo</label><select id="pk" name="kind">${Object.entries(KINDS).filter(([k]) => k !== 'central' && (!parent || k !== 'album')).map(([k, v]) => `<option value="${k}" ${parent && k === 'videoclipe' ? 'selected' : ''}>${v}</option>`).join('')}</select><span class="muted small" data-foldhint hidden>Uma pasta junta vários projetos (ex.: os videoclipes de um álbum). Tem um orçamento geral, e o orçamento de cada projeto lá dentro conta para ele.</span></div>
+      <div class="field" data-parentf><label for="pp">Dentro de</label><select id="pp" name="parent_id"><option value="">— nenhuma pasta —</option>${(folders || []).map((f) => `<option value="${f.id}" ${parent?.id === f.id ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select></div>
       <div class="grid2"><div class="field"><label for="ps">Começa</label><input id="ps" name="starts_on" type="date"></div><div class="field"><label for="pe">Entrega</label><input id="pe" name="ends_on" type="date"></div></div>
       <fieldset class="start-choice"><legend>Começar com</legend>
         <label class="sc-opt"><input type="radio" name="start" value="tpl" checked><span><strong>Modelo de <span data-kname></span></strong><small data-tplpages></small></span></label>
@@ -280,12 +295,13 @@ function newProject() {
       <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Criar</button></div>
     </form>`);
   const syncTpl = () => { const k = m.el.querySelector('#pk').value; m.el.querySelector('[data-kname]').textContent = (KINDS[k] || k).toLowerCase(); m.el.querySelector('[data-tplpages]').textContent = (TEMPLATES[k] || TEMPLATES.default).map((x) => (x === 'elenco' && k === 'ficcao' ? MODULES.elenco.scriptLabel : MODULES[x].label)).join(' · '); };
-  m.el.querySelector('#pk').addEventListener('change', syncTpl); syncTpl();
+  const syncFold = () => { const k = m.el.querySelector('#pk').value; m.el.querySelector('[data-parentf]').hidden = k === 'album' || !(folders || []).length; m.el.querySelector('[data-foldhint]').hidden = k !== 'album'; };
+  m.el.querySelector('#pk').addEventListener('change', () => { syncTpl(); syncFold(); }); syncTpl(); syncFold();
   m.el.querySelector('form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target));
     const modules = { list: f.start === 'zero' ? [] : [...(TEMPLATES[f.kind] || TEMPLATES.default)], removed: [] };
-    const { data, error } = await sb.from('projects').insert({ name: f.name.trim(), client: f.client.trim(), kind: f.kind, starts_on: f.starts_on || null, ends_on: f.ends_on || null, modules, ...(f.kind === 'ficcao' ? { departments: FICTION_DEPTS } : {}) }).select(PROJECT_COLS).single();
+    const { data, error } = await sb.from('projects').insert({ name: f.name.trim(), client: f.client.trim(), kind: f.kind, parent_id: f.kind !== 'album' && f.parent_id ? f.parent_id : null, starts_on: f.starts_on || null, ends_on: f.ends_on || null, modules, ...(f.kind === 'ficcao' ? { departments: FICTION_DEPTS } : {}) }).select(PROJECT_COLS).single();
     if (error) return toast(error.message);
     await sb.from('project_members').insert({ project_id: data.id, user_id: state.user.id });
     if (f.value) await sb.from('project_budgets').upsert({ project_id: data.id, value: Number(f.value) });
@@ -303,6 +319,7 @@ function detailsForm(p) {
       <div class="field"><label for="dst">Estado</label><select id="dst" name="status"><option value="active" ${p.status === 'active' ? 'selected' : ''}>Em curso</option><option value="done" ${p.status === 'done' ? 'selected' : ''}>Finalizado</option><option value="archived" ${p.status === 'archived' ? 'selected' : ''}>Arquivo</option></select></div>
       <div class="field"><label for="ds">Começa</label><input id="ds" name="starts_on" type="date" value="${esc(p.starts_on || '')}"></div>
       <div class="field"><label for="de">Entrega</label><input id="de" name="ends_on" type="date" value="${esc(p.ends_on || '')}"></div>
+      ${p._folders && p._folders.length ? `<div class="field"><label for="dpar">Dentro da pasta</label><select id="dpar" name="parent_id"><option value="">— nenhuma —</option>${p._folders.map((f) => `<option value="${f.id}" ${f.id === p.parent_id ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select></div>` : ''}
       ${p.canBudget ? `<div class="field"><label for="dv">Orçamento (€) <span class="muted small">${ICON.lock} privado</span></label><input id="dv" name="value" type="number" step="0.01" min="0" inputmode="decimal" value="${esc(p.value ?? '')}"></div>` : ''}
     </div>
     <div class="field"><span class="label">Capa</span><div class="row"><button type="button" class="btn ghost" data-cover>${ICON.image} Escolher imagem</button>${p.cover_path ? '<button type="button" class="btn ghost" data-nocover>Tirar capa</button>' : ''}</div></div>`}
@@ -342,6 +359,7 @@ function bindDetails(root, p, after) {
     const f = Object.fromEntries(new FormData(form));
     const patch = { departments: depts.filter((d) => d.name.trim()), updated_at: new Date().toISOString() };
     if (!p.is_central) Object.assign(patch, { name: f.name.trim(), client: f.client.trim(), kind: f.kind, status: f.status, starts_on: f.starts_on || null, ends_on: f.ends_on || null });
+    if ('parent_id' in f) patch.parent_id = f.kind === 'album' ? null : (f.parent_id || null);
     const { data, error } = await sb.from('projects').update(patch).eq('id', p.id).select(PROJECT_COLS).single();
     if (error) return toast(error.message);
     if (p.canBudget && 'value' in f) { const v = f.value === '' ? null : Number(f.value); const r = await sb.from('project_budgets').upsert({ project_id: p.id, value: v, updated_at: new Date().toISOString() }, { onConflict: 'project_id' }).select('updated_at'); if (r.error) return toast(r.error.message); data.value = v; p._budgetAt = r.data?.[0]?.updated_at || p._budgetAt; }
@@ -430,6 +448,7 @@ async function loadProject(id) {
   p._budgetAt = p.canBudget ? fin?.updated_at ?? null : null;
   const { data: boards } = await sb.from('boards').select('id, parent_id, title, group_id, position, created_at, kind').eq('project_id', id).order('position').order('created_at');
   p._boards = boards || [];
+  if (p.parent_id) { const { data: par } = await sb.from('projects').select('id, name, kind, deleted_at').eq('id', p.parent_id).maybeSingle(); p._parent = par && !par.deleted_at ? par : null; }
   return p;
 }
 function notFound() {
@@ -473,6 +492,7 @@ function projectNav(p, active) {
   const mods = p.is_central ? [['tarefas', 'Tarefas', ICON.task]] : modulesOf(p).filter((k) => (k !== 'orcamento' || p.canBudget) && k !== 'equipamento' && k !== 'aderecos').map((k) => [modPath(p, k), modLabel(p, k), ICON[MODULES[k].icon]]);
   const pages = [['geral', 'Visão geral', ICON.home], ...(p.is_central && hasPerm('finance') ? [['financas', 'Finanças', ICON.money]] : []), ...mods, ['equipa', p.is_central ? 'Equipa' : 'Equipa e convites', ICON.team], ...(isStaff() ? [['detalhes', 'Detalhes', ICON.info]] : [])];
   return `
+    ${p._parent ? `<a class="pn-parent" href="#/p/${p._parent.id}">${ICON.back}<span>${esc(p._parent.name)}</span></a>` : ''}
     <div class="pn-h"><div><strong>${esc(p.name)}</strong>${p.client ? `<span class="muted small">${esc(p.client)}</span>` : ''}</div>${!p.is_central && isStaff() ? `<button type="button" class="icon-btn sm pn-mods" data-mods title="Páginas do projeto" aria-label="Juntar ou tirar páginas">${ICON.plus}</button>` : ''}</div>
     <div class="pn-online" data-online></div>
     ${pages.map(([k, l, ic]) => `<a class="side-a" href="${base}${k === 'geral' ? '' : '/' + k}" ${active === k ? 'aria-current="page"' : ''}>${ic}<span>${l}</span></a>`).join('')}
@@ -628,7 +648,13 @@ async function projectPage(projectId, page, sub) {
   }
   if (page === 'geral') return projectOverview(main, p);
   if (page === 'financas' && p.is_central && hasPerm('finance')) return financePage(main, sub);
-  if (page === 'orcamento' && p.canBudget) { main.innerHTML = `<div class="row between wrap-gap"><div><h1 class="h1 pm-title">Orçamento</h1><p class="muted">Soma tudo o que está na tabela e compara com o orçamento geral do projeto.</p></div><div data-who></div></div><div class="budget-wrap" data-b></div>`; budgetWhoChip(main.querySelector('[data-who]'), p); return budgetPage(main.querySelector('[data-b]'), p); }
+  if (page === 'orcamento' && p.canBudget) {
+    const folder = isFolder(p);
+    main.innerHTML = `<div class="row between wrap-gap"><div><h1 class="h1 pm-title">Orçamento</h1><p class="muted">${folder ? 'Orçamento geral da pasta: os custos próprios (tabela em baixo) mais o que está atribuído a cada projeto lá dentro.' : 'Soma tudo o que está na tabela e compara com o orçamento geral do projeto.'}</p></div><div data-who></div></div>${folder ? '<div data-kids></div>' : ''}<div class="budget-wrap" data-b></div>`;
+    budgetWhoChip(main.querySelector('[data-who]'), p);
+    if (folder) { const kids = await loadChildren(p); p._extra = { amount: budgetChildrenPanel(main.querySelector('[data-kids]'), p, kids), label: 'atribuídos aos projetos dentro' }; }
+    return budgetPage(main.querySelector('[data-b]'), p);
+  }
   if (page === 'shotlist') return shotlistPage(main, p, projBase(p));
   if (page === 'equipamento' && !p.is_central) return gearPage(main, p, projBase(p));
   if (page === 'plano' && sub) return shotPage(main, p, sub, projBase(p), onCleanup);
@@ -643,7 +669,10 @@ async function projectPage(projectId, page, sub) {
   const body = main.querySelector('[data-body]');
   if (page === 'tarefas') { body.classList.remove('panel'); body.classList.add('tc'); const t = mountTaskCenter(body, { projectId: p.id }); onCleanup(() => t.destroy()); }
   if (page === 'equipa') projectTeam(body, p);
-  if (page === 'detalhes') { body.innerHTML = detailsForm(p); bindDetails(body, p, () => projectPage(projectId, 'detalhes')); }
+  if (page === 'detalhes') {
+    if (!p.is_central && p.kind !== 'album') { const { data: fs } = await sb.from('projects').select('id, name').eq('kind', 'album').is('deleted_at', null).neq('id', p.id).order('name'); p._folders = fs || []; }
+    body.innerHTML = detailsForm(p); bindDetails(body, p, () => projectPage(projectId, 'detalhes'));
+  }
 }
 
 function budgetUsed(p) {
@@ -653,6 +682,8 @@ function budgetUsed(p) {
 
 async function projectOverview(main, p) {
   const base = projBase(p);
+  const kids = isFolder(p) ? await loadChildren(p) : null;
+  p._kidsAlloc = kids ? rollup(kids).alloc : 0;
   const [{ data: tasks }, { data: items }, people] = await Promise.all([
     sb.from('tasks').select('*').eq('project_id', p.id).neq('status', 'done'),
     sb.from('board_items').select('board_id, kind, data').eq('project_id', p.id),
@@ -675,11 +706,13 @@ async function projectOverview(main, p) {
         <span class="tag dark">${esc(KINDS[p.kind] || p.kind)}</span>
         <h1 class="pm-name">${esc(p.name)}</h1>
         <p class="pm-sub">${[p.client, p.starts_on && p.ends_on ? `${fmtDate(p.starts_on)} – ${fmtDate(p.ends_on)}` : ''].filter(Boolean).map(esc).join(' · ')}</p>
-        ${p.canBudget && hasMod(p, 'orcamento') ? (() => { const used = budgetUsed(p); const over = p.value != null && used > p.value; return `<button type="button" class="pm-budget ${over ? 'over' : ''}" data-budget title="Só quem tem acesso ao orçamento vê isto"><span>${ICON.lock} Orçamento</span>${p.value != null ? `<strong>${eur.format(p.value)}</strong>${used ? `<small>${eur.format(used)} na tabela${over ? ` · ${eur.format(used - p.value)} acima` : ''}</small>` : ''}` : '<strong class="muted-w">Definir</strong>'}</button>`; })() : ''}
+        ${p.canBudget && hasMod(p, 'orcamento') ? (() => { const used = budgetUsed(p) + (p._kidsAlloc || 0); const over = p.value != null && used > p.value; return `<button type="button" class="pm-budget ${over ? 'over' : ''}" data-budget title="Só quem tem acesso ao orçamento vê isto"><span>${ICON.lock} Orçamento</span>${p.value != null ? `<strong>${eur.format(p.value)}</strong>${used ? `<small>${eur.format(used)} na tabela${over ? ` · ${eur.format(used - p.value)} acima` : ''}</small>` : ''}` : '<strong class="muted-w">Definir</strong>'}</button>`; })() : ''}
         ${ph.label ? `<div class="pm-phase"><div class="row between small"><span>${esc(ph.label)}</span><span>${Math.round(ph.pct * 100)}%</span></div><div class="bar light"><i style="width:${Math.round(ph.pct * 100)}%"></i></div></div>` : ''}
       </div>
     </section>
     ${fs ? `<div class="stats">${[['cenas', 'Cenas', fs.scenes], ['personagens', 'Personagens', fs.characters], ['decors', 'Décors', fs.locations], ['storyboard', 'Planos', fs.shots]].map(([k, l, n]) => `<a class="stat" href="${base}/${k}"><strong>${n}</strong><span>${l}</span></a>`).join('')}${fs.scenes ? '' : `<a class="stat cta" href="${base}/guiao"><strong>${ICON.plus}</strong><span>Importar guião</span></a>`}</div>` : ''}
+    ${kids ? '<section class="panel fold-sec" data-kids></section>' : ''}
+    ${p._parent ? `<a class="fold-up" href="#/p/${p._parent.id}">${ICON.back} Faz parte de <b>${esc(p._parent.name)}</b></a>` : ''}
     ${p.is_central ? '' : '<div class="ov" data-situation></div>'}
     <div class="pm-grid ${p.is_central ? '' : 'solo'}">
       <section class="pm-boards" aria-labelledby="h-boards">
@@ -713,6 +746,7 @@ async function projectOverview(main, p) {
   });
   main.querySelectorAll('[data-bopt]').forEach((btn) => btn.addEventListener('click', () => boardOptions(p, p._boards.find((x) => x.id === btn.dataset.bopt), () => projectPage(p.id, 'geral'))));
   if (!p.is_central) { mountSituation(main.querySelector('[data-situation]'), p, base); autoModules(p); }
+  if (kids) childrenSection(main.querySelector('[data-kids]'), p, kids, { base, canBudget: p.canBudget, onNew: isStaff() ? () => newProject({ parent: p }) : null });
   if (p.is_central) { const box = document.createElement('div'); box.className = 'co'; main.querySelector('.pm-head').after(box); centralOverview(box); }
 }
 

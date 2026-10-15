@@ -30,6 +30,7 @@ export const TEMPLATES = {
   campanha: ['orcamento', 'seguimento', 'elenco', 'decors', 'storyboard', 'shotlist', 'equipamento', 'aderecos', 'tarefas'],
   branded: ['orcamento', 'seguimento', 'decors', 'shotlist', 'equipamento', 'aderecos', 'tarefas'],
   documentario: ['orcamento', 'elenco', 'decors', 'equipamento', 'tarefas'],
+  album: ['orcamento', 'tarefas'],
   default: ['orcamento', 'tarefas'],
 };
 

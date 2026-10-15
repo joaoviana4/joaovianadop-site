@@ -103,11 +103,13 @@ export async function budgetPage(main, p) {
   }
 
   function summary() {
-    const { tot } = sums(b); const t = (b.main && tot[b.main]) || 0;
+    const { tot } = sums(b); const own = (b.main && tot[b.main]) || 0;
+    // numa pasta (ex.: álbum), o que está atribuído aos projetos lá dentro também conta
+    const extra = p._extra?.amount || 0; const t = own + extra;
     const has = total != null && total > 0; const ratio = has ? t / total : 0; const diff = has ? total - t : 0;
     const stt = !has ? 'none' : diff < 0 ? 'over' : ratio >= 0.9 ? 'near' : 'ok';
     const label = { none: p._capLabel ? 'Sem limite definido' : 'Sem orçamento geral definido', over: 'Fora do orçamento', near: 'Dentro, mas perto do limite', ok: 'Dentro do orçamento' }[stt];
-    return `<div class="bsum-grid"><div><span class="fl">Total da tabela</span><strong class="bbig">${eur.format(t)}</strong></div>
+    return `<div class="bsum-grid"><div><span class="fl">${extra ? 'Total comprometido' : 'Total da tabela'}</span><strong class="bbig">${eur.format(t)}</strong>${extra ? `<small class="muted">${eur.format(own)} nesta tabela + ${eur.format(extra)} ${esc(p._extra.label || 'nos projetos dentro')}</small>` : ''}</div>
       ${has ? `<div><span class="fl">${diff < 0 ? 'Passa' : 'Sobram'}</span><strong class="bbig bst-${stt}">${eur.format(Math.abs(diff))}</strong></div>` : ''}
       <div class="bstate"><span class="bchip bst-${stt}">${label}</span></div></div>
       ${has ? `<div class="bbar" role="img" aria-label="${Math.round(ratio * 100)} % do orçamento geral"><span class="bst-${stt}" style="width:${Math.min(100, ratio * 100).toFixed(1)}%"></span>${ratio > 1 ? `<i style="left:${(100 / ratio).toFixed(1)}%"></i>` : ''}</div><p class="muted small">${Math.round(ratio * 100)} % do orçamento geral</p>` : ''}`;

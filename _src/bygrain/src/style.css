@@ -1584,3 +1584,28 @@ tr:hover > td > .cst-x, tr:hover > td > .cst-mv, tr:hover .cst-colh .cst-x, .cst
 @media (max-width: 900px) { .lm-actions { max-width: calc(100vw - 24px); top: 64px; } .lm-pop, .lm-full .lm-props { right: 88px; width: min(300px, calc(100vw - 110px)); } }
 .new-version { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 200; display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 16px; border-radius: 14px; background: var(--panel2); border: 1px solid var(--line2); box-shadow: 0 18px 50px rgba(0,0,0,.45); font-size: 14px; }
 .new-x { all: unset; cursor: pointer; padding: 0 6px; font-size: 18px; color: var(--muted); }
+/* pastas (ex.: álbum com videoclipes) */
+.pn-parent { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin: 0 0 4px 10px; text-decoration: none; } .pn-parent:hover { color: var(--text); } .pn-parent svg { width: 13px; height: 13px; }
+.fold-up { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); text-decoration: none; margin: 4px 0 10px; } .fold-up svg { width: 14px; height: 14px; }
+.fold-sec { margin: 14px 0; }
+.fold-sum { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 6px 0 4px; }
+.fold-sum > div:not(.fold-bar) { background: rgba(244,241,232,.04); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.fold-sum span { font-size: 12px; color: var(--muted); } .fold-sum b { font-size: 18px; font-variant-numeric: tabular-nums; } .fold-sum .over b { color: var(--late); }
+.fold-sum .fold-bar, .fold-sum p { grid-column: 1 / -1; }
+.fold-bar { display: block; height: 8px; border-radius: 99px; background: rgba(244,241,232,.08); overflow: hidden; } .fold-bar i { display: block; height: 100%; background: var(--ok); }
+.fold-bar.near i { background: var(--soon); } .fold-bar.over i { background: var(--late); }
+.fold-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-top: 8px; }
+.fold-card { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; text-decoration: none; color: inherit; background: var(--panel2); }
+.fold-card:hover { border-color: var(--line2); }
+.fold-cover { aspect-ratio: 16 / 7; background: #232A7A center / cover; position: relative; } .fold-cover .tag { position: absolute; left: 8px; top: 8px; }
+.fold-b { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; } .fold-b small { color: var(--muted); font-size: 12px; } .fold-money { color: var(--text) !important; font-variant-numeric: tabular-nums; }
+.fold-bud { margin-bottom: 14px; }
+.fold-t { width: 100%; border-collapse: collapse; font-size: 14px; } .fold-t th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--line2); }
+.fold-t td { padding: 8px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; } .fold-t td small { display: block; color: var(--muted); font-size: 12px; }
+.fold-t tfoot td { font-weight: 700; border-bottom: 0; } .fold-mini { width: 120px; }
+.proj-card.is-folder .proj-cover { box-shadow: inset 0 0 0 2px rgba(244,241,232,.08); }
+.proj-card.is-folder::before { content: ''; position: absolute; left: 14px; right: 14px; top: -6px; height: 10px; border-radius: 10px 10px 0 0; background: rgba(244,241,232,.12); }
+.proj-card { position: relative; }
+.fold-ic svg { width: 15px; height: 15px; vertical-align: -2px; margin-right: 6px; opacity: .7; }
+.fold-kids { display: flex; flex-wrap: wrap; gap: 4px; } .fold-kids span { font-size: 11px; padding: 2px 8px; border-radius: 99px; background: rgba(244,241,232,.07); }
+@media (max-width: 760px) { .fold-sum { grid-template-columns: 1fr 1fr; } }
