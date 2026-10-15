@@ -27,7 +27,8 @@ async function boot() {
   shell();
   load();
   if (!st.ch) {
-    st.ch = sb.channel('my-tasks').on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => { clearTimeout(st.t); st.t = setTimeout(load, 500); }).subscribe();
+    const re = () => { clearTimeout(st.t); st.t = setTimeout(load, 500); };
+    st.ch = sb.channel('my-tasks').on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, re).on('postgres_changes', { event: '*', schema: 'public', table: 'project_questions' }, re).subscribe();
   }
 }
 boot();
@@ -79,12 +80,16 @@ async function drawPush() {
 }
 
 async function load() {
-  const [{ data: tasks, error }, { data: projects }, people] = await Promise.all([
+  const [{ data: tasks, error }, { data: projects }, people, { data: qs }] = await Promise.all([
     sb.from('tasks').select('*').eq('assignee_id', state.user.id),
     sb.from('projects').select('id, name, departments, is_central').is('deleted_at', null),
     loadPeople(),
+    sb.from('project_questions').select('id, project_id, text, department, created_at').eq('owner_id', state.user.id).is('resolved_at', null).order('created_at', { ascending: false }),
   ]);
   if (error) return toast(error.message);
+  const qBefore = new Set((st.qs || []).map((q) => q.id));
+  if (st.loaded) (qs || []).filter((q) => !qBefore.has(q.id)).forEach((q) => toast(`Nova questão: ${q.text}`));
+  st.qs = qs || [];
   const before = new Set(st.tasks.map((t) => t.id));
   if (st.loaded) (tasks || []).filter((t) => !before.has(t.id) && t.status !== 'done').forEach((t) => toast(`Nova tarefa: ${t.title}`));
   st.loaded = true;
@@ -116,16 +121,28 @@ function card(t) {
 function draw() {
   const open = st.tasks.filter((t) => t.status !== 'done').sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999'));
   const done = st.tasks.filter((t) => t.status === 'done').sort((a, b) => (b.done_at || '').localeCompare(a.done_at || ''));
-  const late = open.filter((t) => group(t) === 'late').length;
+  const late = open.filter((t) => group(t) === 'late').length; const nq = st.qs?.length || 0;
   const today = open.filter((t) => group(t) === 'today').length;
-  $('[data-sum]').innerHTML = `<strong>${open.length}</strong> ${open.length === 1 ? 'tarefa aberta' : 'tarefas abertas'}${late ? ` · <span class="late-txt">${late} ${late === 1 ? 'atrasada' : 'atrasadas'}</span>` : ''}${today ? ` · ${today} para hoje` : ''}`;
+  $('[data-sum]').innerHTML = `<strong>${open.length}</strong> ${open.length === 1 ? 'tarefa aberta' : 'tarefas abertas'}${late ? ` · <span class="late-txt">${late} ${late === 1 ? 'atrasada' : 'atrasadas'}</span>` : ''}${today ? ` · ${today} para hoje` : ''}${nq ? ` · ${nq} para decidir` : ''}`;
   const body = $('[data-body]');
-  body.innerHTML = (open.length ? GROUPS.map(([k, label]) => {
+  const qHtml = st.qs?.length ? `<section class="m-group m-qs"><h2>Para decidir <span>${st.qs.length}</span></h2><ul>${st.qs.map((q) => { const p = st.projects.get(q.project_id); const dept = deptOf(p, q.department); return `<li class="m-task m-q" data-q="${q.id}" ${dept ? `style="--dept:${esc(dept.color)}"` : ''}><span class="t-status q-ic" aria-hidden="true">?</span><button type="button" class="m-main" data-qopen="${q.id}"><span class="t-title">${esc(q.text)}</span><span class="t-meta"><span class="t-proj">${esc(p?.is_central ? 'Central de Produção' : p?.name || '')}</span>${dept ? `<span class="t-dept"><i></i>${esc(dept.name)}</span>` : ''}</span></button></li>`; }).join('')}</ul></section>` : '';
+  body.innerHTML = qHtml + (open.length ? GROUPS.map(([k, label]) => {
     const g = open.filter((t) => group(t) === k);
     return g.length ? `<section class="m-group"><h2>${label} <span>${g.length}</span></h2><ul>${g.map(card).join('')}</ul></section>` : '';
   }).join('') : '<p class="empty-note">Não tens tarefas abertas. Bom trabalho.</p>')
   + (done.length ? `<div class="done-block"><button type="button" class="link-btn" data-toggle aria-expanded="${st.showDone}">${st.showDone ? 'Esconder' : 'Ver'} as tarefas feitas (${done.length})</button>${st.showDone ? `<ul class="m-done">${done.map(card).join('')}</ul>` : ''}</div>` : '');
   body.querySelector('[data-toggle]')?.addEventListener('click', () => { st.showDone = !st.showDone; draw(); });
+  body.querySelectorAll('[data-qopen]').forEach((b) => b.addEventListener('click', async () => {
+    const q = st.qs.find((x) => x.id === b.dataset.qopen); const p = st.projects.get(q.project_id);
+    const { modal } = await import('./lib.js');
+    const m = modal(`<h2>${esc(q.text)}</h2><p class="muted small">${esc(p?.name || '')}</p><form class="stack"><div class="field"><label for="qa">Resposta ou decisão</label><textarea id="qa" rows="3" placeholder="O que ficou decidido (opcional)"></textarea></div><div class="row end"><button type="button" class="btn ghost" data-close>Fechar</button><button class="btn primary">Marcar como decidida</button></div></form>`);
+    m.el.querySelector('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const { error } = await sb.from('project_questions').update({ answer: m.el.querySelector('#qa').value.trim() || null, resolved_at: new Date().toISOString() }).eq('id', q.id);
+      if (error) return toast(error.message);
+      m.close(); st.qs = st.qs.filter((x) => x.id !== q.id); draw(); toast('Decidida.');
+    });
+  }));
 }
 
 app.addEventListener('click', async (e) => {

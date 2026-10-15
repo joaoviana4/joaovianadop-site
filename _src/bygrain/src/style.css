@@ -1779,3 +1779,5 @@ tr:hover > td > .cst-x, tr:hover > td > .cst-mv, tr:hover .cst-colh .cst-x, .cst
 .tool-ghost.tg-title { background: transparent; box-shadow: none; font-family: var(--logo); font-size: 22px; font-weight: 800; }
 .tool-ghost.out { opacity: .35; }
 body.tool-dragging, body.tool-dragging * { cursor: grabbing !important; user-select: none; }
+.m-q .q-ic { display: grid; place-items: center; font-weight: 800; color: #E3B341; border: 2px solid #E3B341; border-radius: 99px; width: 24px; height: 24px; font-size: 13px; }
+.m-qs h2 { color: #E3B341; }
