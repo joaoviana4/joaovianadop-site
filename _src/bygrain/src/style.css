@@ -1128,3 +1128,23 @@ body.fs-lock { overflow: hidden; }
 .fs-btn.fs-float { position: fixed; top: 14px; right: 18px; z-index: 210; background: var(--panel); box-shadow: 0 6px 24px rgba(0, 0, 0, .5); }
 .sl-sw { border: 0 !important; width: 26px !important; height: 26px !important; display: inline-flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .2); border-radius: 7px !important; color: #fff; }
 .sl-sw svg { width: 15px; height: 15px; }
+
+/* edição a várias mãos */
+.card.card-locked { outline: 2px solid var(--lk); outline-offset: 2px; cursor: not-allowed; }
+.card.card-locked::before { content: attr(data-lock-name) ' está a mexer'; position: absolute; left: -2px; top: -24px; z-index: 5; white-space: nowrap; background: var(--lk); color: #fff; font: 600 11px/1 var(--sans); padding: 5px 7px; border-radius: 6px 6px 6px 0; pointer-events: none; }
+.lock-banner { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 300; display: flex; align-items: center; gap: 12px; max-width: min(720px, calc(100vw - 32px)); padding: 12px 14px; border-radius: 14px; background: #22222c; border: 1px solid var(--line2); box-shadow: 0 12px 40px rgba(0, 0, 0, .55); font-size: 14px; }
+.lock-banner > svg { width: 18px; height: 18px; flex: 0 0 auto; }
+.lock-banner .btn { flex: 0 0 auto; }
+.is-locked { opacity: .78; }
+.pn-online { display: flex; align-items: center; gap: 6px; padding: 0 12px 8px; min-height: 0; }
+.pn-online:empty { display: none; }
+.pn-online small { color: var(--muted); font-size: 11px; }
+.board-people { display: flex; align-items: center; }
+.board-people .avatar { margin-left: -6px; box-shadow: 0 0 0 2px var(--bg); }
+.pick-list { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow: auto; margin-bottom: 12px; }
+.pick-it { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.pick-it:hover { border-color: var(--blue); }
+.pick-it > svg { width: 18px; height: 18px; flex: 0 0 auto; }
+.pick-it img { width: 64px; height: 36px; object-fit: cover; border-radius: 4px; flex: 0 0 auto; background: #000; }
+.pick-it span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pick-it small { color: var(--muted); font-size: 12px; }

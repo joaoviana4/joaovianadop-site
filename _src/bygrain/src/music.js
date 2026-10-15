@@ -74,6 +74,12 @@ export function ytId(url) {
   const m = String(url || '').match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/))([\w-]{11})/);
   return m ? m[1] : null;
 }
+// um ficheiro de música pode estar a ser usado em boards: só se apaga se mais nada o usar
+async function removeIfUnused(pid, path) {
+  if (!path) return;
+  const { count } = await sb.from('board_items').select('id', { count: 'exact', head: true }).eq('project_id', pid).eq('kind', 'audio').eq('data->>path', path);
+  if (!count) await sb.storage.from('files').remove([path]);
+}
 const normUrl = (u) => { u = String(u || '').trim(); return u && !/^https?:\/\//i.test(u) ? 'https://' + u : u; };
 
 // música (ficheiro ou link), pre-vis (YouTube, toca aqui) e referências (links, abrem no YouTube)
@@ -122,14 +128,14 @@ export async function mediaPanel(slots, p, music, saveNow) {
       if (error) return toast(error.message);
       const old = music.audio_path;
       await set({ audio_path: path, audio_name: file.name });
-      if (old) sb.storage.from('files').remove([old]);
+      removeIfUnused(p.id, old);
       toast('Música carregada.');
     };
     inp.click();
   }));
   box.querySelector('[data-audio-rm]')?.addEventListener('click', async () => {
     if (!(await confirmBox('Tirar o ficheiro da música?', 'Tirar'))) return;
-    const old = music.audio_path; await set({ audio_path: null, audio_name: null }); if (old) sb.storage.from('files').remove([old]);
+    const old = music.audio_path; await set({ audio_path: null, audio_name: null }); removeIfUnused(p.id, old);
   });
   box.querySelector('[data-ref-form]').addEventListener('submit', (e) => { e.preventDefault(); const u = normUrl(e.target.u.value); if (!u) return; set({ refs: [...refs, { url: u, title: e.target.t.value.trim() }] }); });
   box.querySelectorAll('[data-ref-rm]').forEach((b) => b.addEventListener('click', () => set({ refs: refs.filter((_, i) => i !== +b.dataset.refRm) })));

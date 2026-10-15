@@ -7,7 +7,11 @@ import { ytId } from './music.js';
 const MIN = { note: [140, 80], title: [160, 50], image: [80, 60], palette: [180, 110], list: [180, 120], board: [56, 56], link: [180, 80], video: [240, 170], audio: [220, 110] };
 const SIZE = { note: [280, 180], title: [520, 72], palette: [320, 150], list: [280, 220], board: [96, 96], link: [300, 110], video: [480, 316], audio: [340, 128] };
 
-export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom, onSelect }) {
+export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom, onSelect, presence }) {
+  // cartões que outras pessoas estão a mexer agora (não se podem tocar até largarem)
+  let locked = new Map();
+  const lockedBy = (id) => locked.get(id);
+  const blocked = (id) => { const w = lockedBy(id); if (!w) return false; toast(`${w.uid === presence?.me ? 'Tu, noutra janela' : w.name} está a mexer neste cartão.`); return true; };
   const items = new Map();
   const st = { view: { x: 0, y: 0, k: 1 }, sel: null, editing: null, drag: null, pointers: new Map(), pinch: null, dead: false };
   const viewKey = `bygrain-view-${boardId}`;
@@ -106,11 +110,15 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     else if (bg && it.kind === 'board') el.style.setProperty('--tile', bg);
     else if (bg) el.style.background = bg;
     el.classList.toggle('sel', st.sel === it.id);
+    const lk = lockedBy(it.id);
+    el.classList.toggle('card-locked', !!lk);
+    if (lk) { el.style.setProperty('--lk', lk.color || '#F08A24'); el.dataset.lockName = lk.name; } else delete el.dataset.lockName;
     return el;
   }
   function renderAll() { world.innerHTML = ''; [...items.values()].sort((a, b) => a.z - b.z).forEach(cardEl); }
   function select(id) {
     st.sel = id;
+    presence?.setCard(id || null);
     world.querySelectorAll('.card').forEach((c) => c.classList.toggle('sel', c.dataset.id === id));
     placeBar();
   }
@@ -140,13 +148,48 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     return ins;
   }
 
-  async function add(kind) {
+  // o que o projeto já tem: música e pre-vis do seguimento, das ferramentas "Música e pre-vis" e de outros boards
+  async function projectMedia() {
+    const [{ data: pr }, { data: tools }, { data: cards }] = await Promise.all([
+      sb.from('projects').select('music').eq('id', projectId).maybeSingle(),
+      sb.from('boards').select('id, title, data').eq('project_id', projectId).eq('kind', 'media'),
+      sb.from('board_items').select('id, board_id, kind, data').eq('project_id', projectId).in('kind', ['audio', 'video']),
+    ]);
+    const out = { audio: [], video: [] }; const seen = new Set();
+    const push = (k, x) => { const key = k + (x.path || x.url); if (seen.has(key)) return; seen.add(key); out[k].push(x); };
+    const fromMusic = (m, where) => {
+      if (!m) return;
+      if (m.audio_path) push('audio', { path: m.audio_path, title: (m.audio_name || 'Música').replace(/\.[^.]+$/, ''), where });
+      if (m.previs_url && ytId(m.previs_url)) push('video', { url: m.previs_url, title: 'Pre-vis', where });
+      (m.refs || []).forEach((r) => ytId(r.url) && push('video', { url: r.url, title: r.title || 'Referência', where: `${where} · referência` }));
+    };
+    fromMusic(pr?.music, 'Seguimento');
+    (tools || []).forEach((t) => fromMusic(t.data, t.title));
+    (cards || []).filter((c) => c.board_id !== boardId).forEach((c) => (c.kind === 'audio' ? c.data?.path && push('audio', { path: c.data.path, title: c.data.title || c.data.name || 'Música', where: 'Outro board' }) : c.data?.url && push('video', { url: c.data.url, title: c.data.title || 'Vídeo', where: 'Outro board' })));
+    return out;
+  }
+  async function pickMedia(kind) {
+    const m = modal(`<h2>${kind === 'audio' ? 'Juntar música' : 'Juntar pre-vis ou vídeo'}</h2><div data-mlist><p class="muted">A procurar no projeto…</p></div>`);
+    const list = (await projectMedia())[kind];
+    m.el.querySelector('[data-mlist]').innerHTML = `${list.length ? `<p class="muted small">Já existe no projeto:</p><div class="pick-list">${list.map((x, i) => `<button type="button" class="pick-it" data-i="${i}">${kind === 'audio' ? ICON.music : `<img src="https://i.ytimg.com/vi/${ytId(x.url)}/default.jpg" alt="" onerror="this.remove()">`}<span><strong>${esc(x.title)}</strong><small>${esc(x.where)}</small></span>${ICON.plus}</button>`).join('')}</div>` : `<p class="muted small">Ainda não há ${kind === 'audio' ? 'música' : 'vídeos'} no projeto.</p>`}
+      <div class="row between"><button type="button" class="btn ghost" data-close>Cancelar</button><button type="button" class="btn primary" data-new>${kind === 'audio' ? `${ICON.plus} Carregar outro ficheiro` : `${ICON.plus} Colar outro link`}</button></div>`;
+    m.el.querySelectorAll('[data-i]').forEach((b) => b.addEventListener('click', async () => {
+      const x = list[+b.dataset.i]; m.close();
+      if (kind === 'audio') { urls = { ...urls, ...(await signedUrls([x.path])) }; create('audio', null, { path: x.path, title: x.title, shared: true }); }
+      else create('video', null, { url: x.url, title: x.title });
+    }));
+    m.el.querySelector('[data-new]').addEventListener('click', () => { m.close(); add(kind, { fresh: true }); });
+    m.el.querySelector('[data-mlist] [data-close]').addEventListener('click', () => m.close());
+  }
+
+  async function add(kind, opts = {}) {
     if (kind === 'image') return pickImages();
     if (kind === 'board') {
       const { data: b, error } = await sb.from('boards').insert({ project_id: projectId, parent_id: boardId, title: 'Novo board' }).select().single();
       if (error) return toast(error.message);
       return create('board', null, { board_id: b.id, title: 'Novo board' });
     }
+    if ((kind === 'video' || kind === 'audio') && !opts.fresh) return pickMedia(kind);
     if (kind === 'video') {
       const m = modal(`<h2>Pre-vis ou vídeo</h2><p class="muted small">Toca dentro do board.</p><form class="stack"><div class="field"><label for="vurl">Link do YouTube</label><input id="vurl" type="url" placeholder="https://youtu.be/…" required></div><div class="field"><label for="vtit">Nome</label><input id="vtit" value="Pre-vis"></div><div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Juntar</button></div></form>`);
       m.el.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); let u = m.el.querySelector('#vurl').value.trim(); if (!/^https?:\/\//.test(u)) u = 'https://' + u; if (!ytId(u)) return toast('Esse link não parece ser do YouTube.'); create('video', null, { url: u, title: m.el.querySelector('#vtit').value.trim() }); m.close(); });
@@ -285,6 +328,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
       stage.classList.add('panning');
     } else {
       const it = items.get(card.dataset.id); if (!it) return;
+      if (blocked(it.id)) { e.preventDefault(); return; }
       select(it.id);
       if (it.z < maxZ()) { it.z = maxZ() + 1; card.style.zIndex = it.z; save(it, ['z']); }
       const rs = e.target.closest('[data-rs]');
@@ -331,6 +375,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   stage.addEventListener('dblclick', (e) => {
     const card = e.target.closest('.card'); if (!card) { add('note').then(() => {}); return; }
     const it = items.get(card.dataset.id); if (!it) return;
+    if (blocked(it.id)) return;
     const txt = e.target.closest('.txt') || (it.kind === 'note' || it.kind === 'title' ? card.querySelector('.txt') : null);
     if (it.kind === 'board') { if (!e.target.closest('[data-ui]')) onOpenBoard(it.data.board_id); return; }
     if (it.kind === 'image') return editCaption(it);
@@ -339,6 +384,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   stage.addEventListener('click', (e) => {
     const ui = e.target.closest('[data-ui]'); if (!ui) return;
     const card = ui.closest('.card'); const it = card && items.get(card.dataset.id); if (!it) return;
+    if (!['link', 'media', 'play', 'openboard'].includes(ui.dataset.ui) && blocked(it.id)) { e.preventDefault(); return; }
     if (ui.dataset.ui !== 'link') e.preventDefault();
     onUi(ui, it);
   });
@@ -403,7 +449,17 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     const { error } = await sb.from('board_items').delete().eq('id', it.id);
     if (error) return toast(error.message);
     if (it.kind === 'board' && it.data?.board_id) await sb.from('boards').delete().eq('id', it.data.board_id);
-    if ((it.kind === 'image' || it.kind === 'audio') && it.data?.path) await sb.storage.from('files').remove([it.data.path]);
+    if (it.kind === 'image' && it.data?.path) await sb.storage.from('files').remove([it.data.path]);
+    if (it.kind === 'audio' && it.data?.path && !it.data.shared) {
+      // só apaga o ficheiro se mais nada no projeto o usar
+      const [{ count }, { data: pr }, { data: tools }] = await Promise.all([
+        sb.from('board_items').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('kind', 'audio').eq('data->>path', it.data.path),
+        sb.from('projects').select('music').eq('id', projectId).maybeSingle(),
+        sb.from('boards').select('data').eq('project_id', projectId).eq('kind', 'media'),
+      ]);
+      const used = (count || 0) > 0 || pr?.music?.audio_path === it.data.path || (tools || []).some((t) => t.data?.audio_path === it.data.path);
+      if (!used) await sb.storage.from('files').remove([it.data.path]);
+    }
     toast('Apagado.');
   }
 
@@ -442,13 +498,23 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   })();
   applyView();
   stage.focus({ preventScroll: true });
+  // marcar os cartões em uso por outras pessoas (sem redesenhar o conteúdo)
+  const offLocks = presence?.onCards((m) => {
+    locked = m;
+    world.querySelectorAll('.card').forEach((el) => {
+      const lk = locked.get(el.dataset.id);
+      el.classList.toggle('card-locked', !!lk);
+      if (lk) { el.style.setProperty('--lk', lk.color || '#F08A24'); el.dataset.lockName = lk.name; } else delete el.dataset.lockName;
+    });
+    if (st.sel && locked.has(st.sel) && !st.editing) select(null);
+  });
 
   return {
     add, fit, zoomBy, setZoom, colors: COLORS,
     setColor: (c, delay) => setBg(c, delay),
     get zoom() { return st.view.k; },
     destroy() {
-      st.dead = true; commitEdit();
+      st.dead = true; commitEdit(); offLocks && offLocks(); presence?.setCard(null);
       document.removeEventListener('keydown', onKey); document.removeEventListener('paste', onPaste);
       window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end);
       sb.removeChannel(ch);

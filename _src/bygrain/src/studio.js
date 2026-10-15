@@ -14,6 +14,7 @@ import { clipPage, CLIP_PAGES, mediaTool } from './music.js';
 import { mountSituation } from './overview.js';
 import { shotlistPage } from './shotlist.js';
 import { clearFullscreen } from './layout.js';
+import { joinProject, leaveProject, lockPage, boardPresence, onPresence, whoLabel } from './presence.js';
 import { budgetWhoChip, budgetAccessPanel, globalPermsPanel } from './perms.js';
 import { MODULES, TEMPLATES, modulesOf, hasMod, scriptMode, modLabel, modPath, modulesModal, autoModules } from './modules.js';
 import { FICTION_PAGES, FICTION_DEPTS, fictionPage, fictionStats } from './fiction.js';
@@ -62,6 +63,7 @@ async function route() {
     if (!data) return toast('A Central de Produção ainda não existe.');
     return parts[1] === 'b' ? boardView(data.id, parts[2]) : parts[1] === 'f' ? toolPage(data.id, parts[2]) : projectPage(data.id, parts[1] || 'geral', parts[2]);
   }
+  leaveProject();
   if (parts[0] === 'tarefas') return tasksPage();
   if (parts[0] === 'equipa') return isAdmin() ? teamPage() : go('#/');
   return homePage();
@@ -407,6 +409,7 @@ function projectNav(p, active) {
   const pages = [['geral', 'Visão geral', ICON.home], ...(p.is_central && hasPerm('finance') ? [['financas', 'Finanças', ICON.money]] : []), ...mods, ['equipa', p.is_central ? 'Equipa' : 'Equipa e convites', ICON.team], ...(isStaff() ? [['detalhes', 'Detalhes', ICON.info]] : [])];
   return `
     <div class="pn-h"><div><strong>${esc(p.name)}</strong>${p.client ? `<span class="muted small">${esc(p.client)}</span>` : ''}</div>${!p.is_central && isStaff() ? `<button type="button" class="icon-btn sm pn-mods" data-mods title="Páginas do projeto" aria-label="Juntar ou tirar páginas">${ICON.plus}</button>` : ''}</div>
+    <div class="pn-online" data-online></div>
     ${pages.map(([k, l, ic]) => `<a class="side-a" href="${base}${k === 'geral' ? '' : '/' + k}" ${active === k ? 'aria-current="page"' : ''}>${ic}<span>${l}</span></a>`).join('')}
     <div class="pn-sec"><span>Ferramentas</span><button type="button" class="icon-btn sm" data-newboard="" aria-label="Nova ferramenta">${ICON.plus}</button></div>
     ${boardGroups(p).map((g) => `<div class="pn-group" style="--g:${esc(g.color)}">
@@ -421,6 +424,16 @@ window.addEventListener('bg-modules', () => {
   nav.innerHTML = projectNav(navState.p, navState.active); bindProjectNav(nav, navState.p);
 });
 function bindProjectNav(root, p) {
+  const box = root.querySelector('[data-online]');
+  if (box) {
+    joinProject(p.id);
+    const off = onPresence((list) => {
+      const seen = new Map(); list.forEach((x) => seen.set(x.uid === state.user.id ? x.tab : x.uid, x));
+      const ppl = [...seen.values()];
+      box.innerHTML = ppl.length ? `<span class="av-stack">${ppl.slice(0, 5).map((x) => `<span class="avatar sm" style="--c:${esc(x.color)}" title="${esc(whoLabel(x))}">${esc(initials(x.name))}</span>`).join('')}</span><small>${ppl.length === 1 ? `${esc(whoLabel(ppl[0]))} também está aqui` : `+${ppl.length} aqui agora`}</small>` : '';
+    });
+    onCleanup(off);
+  }
   root.querySelector('[data-mods]')?.addEventListener('click', () => modulesModal(p));
   root.querySelectorAll('[data-newboard]').forEach((b) => b.addEventListener('click', () => newBoard(p, b.dataset.newboard)));
 }
@@ -473,6 +486,8 @@ async function toolPage(projectId, toolId) {
   bindHeader(app); bindProjectNav(app, p);
   app.querySelector('[data-topt]').addEventListener('click', () => boardOptions(p, tool, () => toolPage(projectId, toolId)));
   const box = app.querySelector('[data-tool]');
+  joinProject(p.id);
+  { const lk = lockPage(`${p.id}:f:${tool.id}`, app.querySelector('[data-main]'), { reopen: () => route() }); onCleanup(() => lk.destroy()); }
   if (tool.kind === 'table') tableTool(box, p, tool);
   if (tool.kind === 'timeline') timelineTool(box, p, tool);
   if (tool.kind === 'budget') budgetTool(box, p, tool);
@@ -523,6 +538,12 @@ async function projectPage(projectId, page, sub) {
   bindHeader(app); bindProjectNav(app, p);
   const main = app.querySelector('[data-main]');
   const titles = { tarefas: 'Tarefas', equipa: p.is_central ? 'Equipa' : 'Equipa e convites', detalhes: 'Detalhes' };
+  joinProject(p.id);
+  // páginas de trabalho: só uma janela edita de cada vez (as outras ficam só a ver)
+  if (['orcamento', 'seguimento', 'decors', 'elenco', 'personagens', 'aderecos', 'cenas', 'guiao', 'planificacao', 'detalhes', 'shotlist', 'storyboard', 'financas'].includes(page)) {
+    const lk = lockPage(`${p.id}:${page}:${sub || ''}`, main, { reopen: () => route() });
+    onCleanup(() => lk.destroy());
+  }
   if (page === 'geral') return projectOverview(main, p);
   if (page === 'financas' && p.is_central && hasPerm('finance')) return financePage(main, sub);
   if (page === 'orcamento' && p.canBudget) { main.innerHTML = `<div class="row between wrap-gap"><div><h1 class="h1 pm-title">Orçamento</h1><p class="muted">Soma tudo o que está na tabela e compara com o orçamento geral do projeto.</p></div><div data-who></div></div><div class="budget-wrap" data-b></div>`; budgetWhoChip(main.querySelector('[data-who]'), p); return budgetPage(main.querySelector('[data-b]'), p); }
@@ -714,8 +735,11 @@ async function boardView(projectId, boardId) {
   document.addEventListener('pointerdown', popOutside, true); onCleanup(() => document.removeEventListener('pointerdown', popOutside, true));
 
   const pct = app.querySelector('.pct');
+  joinProject(p.id);
+  const bp = boardPresence(cur.id);
+  onCleanup(() => bp.leave());
   const board = mountBoard(app.querySelector('.pv-board'), {
-    projectId: p.id, boardId: cur.id,
+    projectId: p.id, boardId: cur.id, presence: bp,
     onOpenBoard: (id) => go(`${base}/b/${id}`),
     onUp: () => go(cur.parent_id ? `${base}/b/${cur.parent_id}` : base),
     onZoom: (k) => (pct.textContent = Math.round(k * 100) + '%'),

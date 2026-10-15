@@ -110,6 +110,7 @@ export function lockPage(key, root, { reopen } = {}) {
 export function boardPresence(boardId) {
   update({ board: boardId, card: null, page: `board:${boardId}` });
   return {
+    me: state.user?.id,
     setCard(id) { if (room && room.me.card !== id) update({ card: id }); },
     // devolve Map(cardId -> pessoa) com os cartões que outras janelas estão a mexer
     onCards(fn) { return onPresence((list) => fn(new Map(list.filter((x) => x.board === boardId && x.card).map((x) => [x.card, x])))); },
