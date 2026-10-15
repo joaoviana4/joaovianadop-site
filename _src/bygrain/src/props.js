@@ -10,76 +10,119 @@ export const PROP_STATUS = [
   ['construido', 'Construído pela arte', '#9B6CFF'], ['pronto', 'Pronto', '#1F7A4D'],
 ];
 const statusOf = (k) => PROP_STATUS.find((s) => s[0] === k) || PROP_STATUS[0];
-const st = { tab: 'acao', sort: 'scene', filter: '' };
+const st = { tab: 'acao', sort: 'scene', filter: '', q: '', view: (() => { try { return localStorage.getItem('bg-props-view') || 'list'; } catch { return 'list'; } })() };
 const debounce = (fn, ms = 600) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const eur = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 });
+export const RENTED = new Set(['alugado', 'emprestado']);
 
 async function load(pid) {
-  const [pr, sc, ch, lo] = await Promise.all([
+  const [pr, sc, ch, lo, bu] = await Promise.all([
     sb.from('props').select('*').eq('project_id', pid).order('name'),
     sb.from('scenes').select('id, number, heading, body, character_ids, location_id, position').eq('project_id', pid).order('position'),
     sb.from('characters').select('id, name').eq('project_id', pid),
     sb.from('locations').select('id, name').eq('project_id', pid),
+    sb.from('prop_bundles').select('*').eq('project_id', pid).order('created_at'),
   ]);
-  return { props: pr.data || [], scenes: sc.data || [], characters: ch.data || [], locations: lo.data || [] };
+  return { props: pr.data || [], scenes: sc.data || [], characters: ch.data || [], locations: lo.data || [], bundles: bu.data || [] };
 }
+
+// custo total: adereços soltos + cada pacote contado uma vez
+export function propsCost(props, bundles) {
+  const live = props.filter((x) => !x.removed);
+  const loose = live.filter((x) => !x.bundle_id).reduce((a, x) => a + (Number(x.price) || 0), 0);
+  const used = new Set(live.map((x) => x.bundle_id).filter(Boolean));
+  return loose + bundles.filter((b) => used.has(b.id)).reduce((a, b) => a + (Number(b.total) || 0), 0);
+}
+const priceLabel = (x, f) => { const bu = x.bundle_id && f.bundles.find((b) => b.id === x.bundle_id); if (bu) return `Pacote · ${esc(bu.name)}`; return x.price != null && x.price !== '' ? eur.format(x.price) : ''; };
 
 export async function propsPage(main, p, sub, base, cleanup) {
   main.innerHTML = '<p class="muted">A carregar…</p>';
   const f = await load(p.id);
   if (sub) return propPage(main, p, f, sub, base, cleanup);
-  const hasScenes = f.scenes.length > 0;
+  const hasScenes = f.scenes.length > 0; const clip = p.kind === 'videoclipe';
   if (!hasScenes && st.sort === 'scene') st.sort = 'name';
-  const visible = f.props.filter((x) => !x.removed && x.type === st.tab);
-  const counts = Object.fromEntries(PROP_STATUS.map(([k]) => [k, visible.filter((x) => x.status === k).length]));
-  const list = visible.filter((x) => !st.filter || x.status === st.filter);
-  const sceneNo = (id) => f.scenes.find((s) => s.id === id)?.number;
-  main.innerHTML = `
-    <div class="row between wrap-gap"><h1 class="h1 pm-title">Adereços</h1>
-      <div class="row wrap-gap"><button type="button" class="btn ghost" data-add>${ICON.plus} Adereço</button>${hasScenes ? '<button type="button" class="btn primary" data-analyze>Analisar o guião</button>' : ''}</div></div>
-    <div class="row between wrap-gap">
-      <div class="seg dark" role="tablist">${[['acao', 'De ação'], ['cenario', 'De cenário']].map(([k, l]) => `<button type="button" role="tab" aria-selected="${st.tab === k}" data-tab="${k}">${l} (${f.props.filter((x) => !x.removed && x.type === k).length})</button>`).join('')}</div>
-      <label class="sel"><span class="vh">Ordenar</span><select data-sort>${[...(hasScenes ? [['scene', 'Por cena']] : []), ['name', 'Nome (A–Z)'], ['status', 'Por estado'], ['category', 'Por categoria']].map(([k, l]) => `<option value="${k}" ${st.sort === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-    </div>
-    ${visible.length ? `<div class="status-bar">${PROP_STATUS.filter(([k]) => counts[k]).map(([k, l, c]) => `<i style="flex:${counts[k]};background:${c}" title="${l}: ${counts[k]}"></i>`).join('')}</div>
-    <div class="pills">${PROP_STATUS.filter(([k]) => counts[k]).map(([k, l, c]) => `<button type="button" class="pill ${st.filter === k ? 'on' : ''}" data-filter="${k}" style="--c:${c}"><i></i>${l} ${counts[k]}</button>`).join('')}${st.filter ? '<button type="button" class="link-btn" data-filter="">Ver todos</button>' : ''}</div>` : ''}
-    <section class="panel">${list.length ? renderList(list, f, base) : `<p class="empty-note">${f.props.length ? 'Nada com este filtro.' : (hasScenes ? 'Ainda não há adereços. Analisa o guião ou junta-os à mão.' : 'Ainda não há adereços. Junta-os em "Adereço".')}</p>`}</section>`;
-  main.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { st.tab = b.dataset.tab; st.filter = ''; propsPage(main, p, null, base, cleanup); }));
-  main.querySelector('[data-sort]').addEventListener('change', (e) => { st.sort = e.target.value; propsPage(main, p, null, base, cleanup); });
-  main.querySelectorAll('[data-filter]').forEach((b) => b.addEventListener('click', () => { st.filter = b.dataset.filter; propsPage(main, p, null, base, cleanup); }));
-  main.querySelectorAll('[data-status]').forEach((s) => s.addEventListener('change', async () => {
-    await sb.from('props').update({ status: s.value }).eq('id', s.dataset.status);
-    s.closest('[data-prop]').style.setProperty('--c', statusOf(s.value)[2]);
-  }));
-  main.querySelector('[data-add]').addEventListener('click', () => {
-    const m = modal(`<h2>Novo adereço</h2><form class="stack"><div class="field"><label for="pn">Nome</label><input id="pn" required></div>
-      <div class="field"><label for="pt">Tipo</label><select id="pt"><option value="acao" ${st.tab === 'acao' ? 'selected' : ''}>De ação</option><option value="cenario" ${st.tab === 'cenario' ? 'selected' : ''}>De cenário</option></select></div>
-      <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Criar</button></div></form>`);
-    m.el.querySelector('form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const { data, error } = await sb.from('props').insert({ project_id: p.id, name: m.el.querySelector('#pn').value.trim(), type: m.el.querySelector('#pt').value, manual: true }).select().single();
-      if (error) return toast(error.message); m.close(); location.hash = `${base}/aderecos/${data.id}`;
+  const urls = await signedUrls(f.props.map((x) => (x.refs || []).find((r) => r.kind === 'image')?.path).filter(Boolean));
+  const draw = () => {
+    const visible = f.props.filter((x) => !x.removed && x.type === st.tab);
+    const counts = Object.fromEntries(PROP_STATUS.map(([k]) => [k, visible.filter((x) => x.status === k).length]));
+    const norm = (v) => String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const list = visible.filter((x) => (!st.filter || x.status === st.filter) && (!st.q || norm(`${x.name} ${x.category} ${x.supplier}`).includes(norm(st.q))));
+    const cost = propsCost(f.props, f.bundles);
+    main.innerHTML = `
+      <div class="row between wrap-gap"><div><h1 class="h1 pm-title">Adereços</h1>${cost ? `<p class="muted">Custo total ${eur.format(cost)}${f.bundles.length ? ` · ${f.bundles.length} ${f.bundles.length === 1 ? 'pacote de aluguer' : 'pacotes de aluguer'}` : ''}</p>` : ''}</div>
+        <div class="row wrap-gap"><button type="button" class="btn ghost" data-add>${ICON.plus} Adereço</button>${hasScenes && !clip ? '<button type="button" class="btn primary" data-analyze>Analisar o guião</button>' : ''}</div></div>
+      <div class="props-bar">
+        <div class="seg dark" role="tablist">${[['acao', 'De ação'], ['cenario', 'De cenário']].map(([k, l]) => `<button type="button" role="tab" aria-selected="${st.tab === k}" data-tab="${k}">${l} (${f.props.filter((x) => !x.removed && x.type === k).length})</button>`).join('')}</div>
+        <label class="search"><span class="vh">Procurar adereços</span>${ICON.search}<input type="search" data-q value="${esc(st.q)}" placeholder="Procurar…" autocomplete="off"></label>
+        <label class="sel"><span class="vh">Ordenar</span><select data-sort>${[...(hasScenes ? [['scene', clip ? 'Por secção' : 'Por cena']] : []), ['name', 'Ordem alfabética'], ['status', 'Por estado'], ['category', 'Por categoria'], ['price_desc', 'Preço: mais caro'], ['price_asc', 'Preço: mais barato'], ['supplier', 'Por fornecedor'], ['recent', 'Mais recentes']].map(([k, l]) => `<option value="${k}" ${st.sort === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+        <div class="seg dark view-seg" role="radiogroup" aria-label="Vista">${[['list', ICON.list, 'Lista'], ['grid', ICON.image, 'Grelha']].map(([k, ic, l]) => `<button type="button" role="radio" aria-checked="${st.view === k}" aria-selected="${st.view === k}" data-view="${k}" title="${l}">${ic}<span>${l}</span></button>`).join('')}</div>
+      </div>
+      ${visible.length ? `<div class="status-bar">${PROP_STATUS.filter(([k]) => counts[k]).map(([k, l, c]) => `<i style="flex:${counts[k]};background:${c}" title="${l}: ${counts[k]}"></i>`).join('')}</div>
+      <div class="pills">${PROP_STATUS.filter(([k]) => counts[k]).map(([k, l, c]) => `<button type="button" class="pill ${st.filter === k ? 'on' : ''}" data-filter="${k}" style="--c:${c}"><i></i>${l} ${counts[k]}</button>`).join('')}${st.filter ? '<button type="button" class="link-btn" data-filter="">Ver todos</button>' : ''}</div>` : ''}
+      <section class="${st.view === 'grid' ? 'props-gridwrap' : 'panel'}" data-listbox>${list.length ? renderList(list, f, base, urls) : `<p class="empty-note">${st.q ? `Nenhum adereço com "${esc(st.q)}".` : f.props.length ? 'Nada com este filtro.' : (hasScenes ? 'Ainda não há adereços. Analisa o guião ou junta-os à mão.' : 'Ainda não há adereços. Junta-os em "Adereço".')}</p>`}</section>`;
+    main.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { st.tab = b.dataset.tab; st.filter = ''; draw(); }));
+    main.querySelector('[data-sort]').addEventListener('change', (e) => { st.sort = e.target.value; draw(); });
+    main.querySelectorAll('[data-filter]').forEach((b) => b.addEventListener('click', () => { st.filter = b.dataset.filter; draw(); }));
+    main.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => { st.view = b.dataset.view; try { localStorage.setItem('bg-props-view', st.view); } catch { /* sem armazenamento */ } draw(); }));
+    const q = main.querySelector('[data-q]');
+    q.addEventListener('input', () => { st.q = q.value; const pos = q.selectionStart; draw(); const nq = main.querySelector('[data-q]'); nq.focus(); nq.setSelectionRange(pos, pos); });
+    main.querySelectorAll('[data-status]').forEach((sel) => sel.addEventListener('change', async () => {
+      const x = f.props.find((y) => y.id === sel.dataset.status); x.status = sel.value;
+      await sb.from('props').update({ status: sel.value }).eq('id', x.id);
+      sel.closest('[data-prop]').style.setProperty('--c', statusOf(sel.value)[2]);
+    }));
+    main.querySelector('[data-add]').addEventListener('click', () => {
+      const m = modal(`<h2>Novo adereço</h2><form class="stack"><div class="field"><label for="pn">Nome</label><input id="pn" required></div>
+        <div class="field"><label for="pt">Tipo</label><select id="pt"><option value="acao" ${st.tab === 'acao' ? 'selected' : ''}>De ação</option><option value="cenario" ${st.tab === 'cenario' ? 'selected' : ''}>De cenário</option></select></div>
+        <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Criar</button></div></form>`);
+      m.el.querySelector('form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const { data, error } = await sb.from('props').insert({ project_id: p.id, name: m.el.querySelector('#pn').value.trim(), type: m.el.querySelector('#pt').value, manual: true }).select().single();
+        if (error) return toast(error.message); m.close(); location.hash = `${base}/aderecos/${data.id}`;
+      });
     });
-  });
-  main.querySelector('[data-analyze]')?.addEventListener('click', () => analyze(p, f, () => propsPage(main, p, null, base, cleanup)));
-  void sceneNo;
+    main.querySelector('[data-analyze]')?.addEventListener('click', () => analyze(p, f, () => propsPage(main, p, null, base, cleanup)));
+  };
+  draw();
 }
 
 function row(x, f, base) {
   const [, , c] = statusOf(x.status);
   const scenes = (x.scene_ids || []).map((id) => f.scenes.find((s) => s.id === id)?.number).filter(Boolean);
+  const pr = priceLabel(x, f);
   return `<li class="prop-row" data-prop="${x.id}" style="--c:${c}">
-    <a href="${base}/aderecos/${x.id}" class="prop-main"><strong>${esc(x.name)}</strong><span class="small muted">${[x.category, x.quantity > 1 ? `${x.quantity} un.` : '', scenes.length ? `Cenas ${scenes.join(', ')}` : ''].filter(Boolean).map(esc).join(' · ')}</span></a>
+    <a href="${base}/aderecos/${x.id}" class="prop-main"><strong>${esc(x.name)}</strong><span class="small muted">${[x.category, x.quantity > 1 ? `${x.quantity} un.` : '', x.supplier, scenes.length ? `Cenas ${scenes.join(', ')}` : ''].filter(Boolean).map(esc).join(' · ')}</span></a>
+    ${pr ? `<span class="prop-price">${pr}</span>` : ''}
     <label class="sel"><span class="vh">Estado de ${esc(x.name)}</span><select data-status="${x.id}">${PROP_STATUS.map(([k, l]) => `<option value="${k}" ${x.status === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
   </li>`;
 }
-function renderList(list, f, base) {
+function tile(x, f, base, urls) {
+  const [, l, c] = statusOf(x.status);
+  const img = urls[(x.refs || []).find((r) => r.kind === 'image')?.path];
+  const pr = priceLabel(x, f); const n = (x.refs || []).filter((r) => r.kind === 'image').length;
+  return `<a class="prop-tile" href="${base}/aderecos/${x.id}" style="--c:${c}">
+    <span class="pt-img">${img ? `<img src="${esc(img)}" alt="" loading="lazy">` : `<span class="pt-empty">${ICON.prop}</span>`}<span class="pt-st"><i></i>${l}</span>${n > 1 ? `<span class="pt-n">${n} fotos</span>` : ''}</span>
+    <span class="pt-name">${esc(x.name)}</span>
+    <span class="pt-meta">${[x.category, pr].filter(Boolean).join(' · ') || '&nbsp;'}</span>
+  </a>`;
+}
+function renderList(list, f, base, urls) {
+  const wrap = (ps) => (st.view === 'grid' ? `<div class="prop-grid">${ps.map((x) => tile(x, f, base, urls)).join('')}</div>` : `<ul class="prop-list">${ps.map((x) => row(x, f, base)).join('')}</ul>`);
+  const group = (title, ps) => (ps.length ? `<h3 class="prop-gh">${title}</h3>${wrap(ps)}` : '');
   if (st.sort === 'scene') {
-    return f.scenes.map((s) => { const ps = list.filter((x) => (x.scene_ids || []).includes(s.id)); return ps.length ? `<h3 class="prop-gh"><span class="scene-n sm">${esc(s.number)}</span>${esc(s.heading)}</h3><ul class="prop-list">${ps.map((x) => row(x, f, base)).join('')}</ul>` : ''; }).join('')
-      + (() => { const none = list.filter((x) => !(x.scene_ids || []).length); return none.length ? `<h3 class="prop-gh">Sem cena</h3><ul class="prop-list">${none.map((x) => row(x, f, base)).join('')}</ul>` : ''; })();
+    return f.scenes.map((s) => group(`<span class="scene-n sm">${esc(s.number)}</span>${esc(s.heading)}`, list.filter((x) => (x.scene_ids || []).includes(s.id)))).join('')
+      + group('Sem cena', list.filter((x) => !(x.scene_ids || []).length));
   }
-  if (st.sort === 'status') return PROP_STATUS.map(([k, l]) => { const ps = list.filter((x) => x.status === k); return ps.length ? `<h3 class="prop-gh">${l}</h3><ul class="prop-list">${ps.map((x) => row(x, f, base)).join('')}</ul>` : ''; }).join('');
-  if (st.sort === 'category') { const cats = [...new Set(list.map((x) => x.category || 'Sem categoria'))].sort(); return cats.map((c) => `<h3 class="prop-gh">${esc(c)}</h3><ul class="prop-list">${list.filter((x) => (x.category || 'Sem categoria') === c).map((x) => row(x, f, base)).join('')}</ul>`).join(''); }
-  return `<ul class="prop-list">${[...list].sort((a, b) => a.name.localeCompare(b.name, 'pt')).map((x) => row(x, f, base)).join('')}</ul>`;
+  if (st.sort === 'status') return PROP_STATUS.map(([k, l]) => group(l, list.filter((x) => x.status === k))).join('');
+  if (st.sort === 'category') { const cats = [...new Set(list.map((x) => x.category || 'Sem categoria'))].sort(); return cats.map((c) => group(esc(c), list.filter((x) => (x.category || 'Sem categoria') === c))).join(''); }
+  if (st.sort === 'supplier') { const sups = [...new Set(list.map((x) => x.supplier || 'Sem fornecedor'))].sort(); return sups.map((c) => group(esc(c), list.filter((x) => (x.supplier || 'Sem fornecedor') === c))).join(''); }
+  const cost = (x) => { if (x.bundle_id) { const bu = f.bundles.find((b) => b.id === x.bundle_id); const n = f.props.filter((y) => y.bundle_id === x.bundle_id && !y.removed).length || 1; return (Number(bu?.total) || 0) / n; } return x.price == null ? null : Number(x.price); };
+  const sorted = [...list].sort((a, b) => {
+    if (st.sort === 'price_desc' || st.sort === 'price_asc') { const A = cost(a), B = cost(b); if (A == null && B == null) return a.name.localeCompare(b.name, 'pt'); if (A == null) return 1; if (B == null) return -1; return st.sort === 'price_desc' ? B - A : A - B; }
+    if (st.sort === 'recent') return (b.created_at || '').localeCompare(a.created_at || '');
+    return a.name.localeCompare(b.name, 'pt');
+  });
+  return wrap(sorted);
 }
 
 // ---------- página do adereço ----------
@@ -103,6 +146,7 @@ async function propPage(main, p, f, id, base, cleanup) {
       </div>
       <div class="field"><label for="pd">Descrição</label><textarea id="pd" rows="3" data-k="description">${esc(x.description)}</textarea></div>
       <div class="field"><label for="pco">Continuidade (parte-se, molha-se, fica vazio…)</label><textarea id="pco" rows="2" data-k="continuity">${esc(x.continuity)}</textarea></div></section>
+      <section class="panel stack" data-acq></section>
       <section class="panel"><h2 class="h3">Interações</h2>${(x.interactions || []).length ? `<ul class="inter">${x.interactions.map((it) => `<li><strong>${esc(it.character || '—')}</strong> · ${esc(it.action || '')}${it.scene ? ` <span class="muted small">(cena ${esc(it.scene)})</span>` : ''}</li>`).join('')}</ul>` : '<p class="muted small">Sem interações registadas.</p>'}</section>
       <section class="panel"><div class="row between"><h2 class="h3">Referências</h2><div class="row"><button type="button" class="btn ghost" data-addimg>${ICON.image} Imagens</button><button type="button" class="btn ghost" data-addlink>${ICON.link} Link</button></div></div>
         ${imgs.length ? `<div class="photo-grid">${imgs.map((r, i) => `<figure><img src="${esc(urls[r.path] || '')}" alt=""><button type="button" class="icon-btn sm" data-rmimg="${i}" aria-label="Tirar imagem">${ICON.close}</button></figure>`).join('')}</div>` : ''}
@@ -110,8 +154,8 @@ async function propPage(main, p, f, id, base, cleanup) {
         ${!imgs.length && !links.length ? '<p class="muted small">Imagens e links para produtos.</p>' : ''}</section>
       <section class="panel"><h2 class="h3">Tarefas</h2><div data-tasks></div></section>
     </div><aside class="pm-side stack">
-      ${f.scenes.length ? `<section class="panel"><h2 class="h3">Cenas (${scenes.length})</h2>${scenes.map((s) => `<a class="scene-ex" href="${base}/cenas/${s.id}"><span class="scene-n sm">${esc(s.number)}</span><span><span class="small">${esc(s.heading)}</span>${excerpt(s) ? `<span class="small muted mono">${esc(excerpt(s))}</span>` : ''}</span></a>`).join('')}${chips(x.scene_ids, f.scenes.map((s) => ({ id: s.id, name: `Cena ${s.number}` })), 'scene_ids')}</section>` : ''}
-      ${f.characters.length ? `<section class="panel"><h2 class="h3">Personagens</h2>${chips(x.character_ids, f.characters, 'character_ids')}</section>` : ''}
+      ${f.scenes.length ? `<section class="panel"><h2 class="h3">${p.kind === 'videoclipe' ? 'Secções' : 'Cenas'} (${scenes.length})</h2>${scenes.map((s) => `<a class="scene-ex" href="${base}/${p.kind === 'videoclipe' ? 'seguimento' : 'cenas'}/${s.id}"><span class="scene-n sm">${esc(s.number)}</span><span><span class="small">${esc(s.heading)}</span>${excerpt(s) ? `<span class="small muted mono">${esc(excerpt(s))}</span>` : ''}</span></a>`).join('')}${chips(x.scene_ids, f.scenes.map((s) => ({ id: s.id, name: p.kind === 'videoclipe' ? s.heading : `Cena ${s.number}` })), 'scene_ids')}</section>` : ''}
+      ${f.characters.length ? `<section class="panel"><h2 class="h3">${p.kind === 'videoclipe' ? 'Atores e figurantes' : 'Personagens'}</h2>${chips(x.character_ids, f.characters, 'character_ids')}</section>` : ''}
       ${f.locations.length ? `<section class="panel"><h2 class="h3">Décors</h2>${chips(x.location_ids, f.locations, 'location_ids')}</section>` : ''}
     </aside></div>`;
   const savers = {};
@@ -140,6 +184,58 @@ async function propPage(main, p, f, id, base, cleanup) {
     await sb.from('props').update({ removed: true }).eq('id', x.id); location.hash = `${base}/aderecos`;
   });
   const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: 'prop', id: x.id } }); cleanup(() => t.destroy());
+  acquisition(main.querySelector('[data-acq]'), p, f, x);
+  main.querySelector('#pst').addEventListener('change', () => acquisition(main.querySelector('[data-acq]'), p, f, x));
+}
+
+// ---------- quanto custa e de onde vem ----------
+function acquisition(box, p, f, x) {
+  const rented = RENTED.has(x.status);
+  const bu = x.bundle_id ? f.bundles.find((b) => b.id === x.bundle_id) : null;
+  const mates = bu ? f.props.filter((y) => y.bundle_id === bu.id && !y.removed && y.id !== x.id) : [];
+  const lbl = { comprado: 'Preço de compra', construido: 'Custo de construção (materiais)', alugado: 'Valor do aluguer', emprestado: 'Valor (se houver)', encomendado: 'Preço', pronto: 'Custo' }[x.status] || 'Preço previsto';
+  const supLbl = x.status === 'emprestado' ? 'Quem emprestou' : x.status === 'alugado' ? 'Alugado a' : x.status === 'construido' ? 'Quem construiu' : 'Onde se compra / fornecedor';
+  box.innerHTML = `<div class="row between"><h2 class="h3">${ICON.money} Custo e origem</h2>${bu ? '<span class="tag internal">Pacote</span>' : ''}</div>
+    <div class="grid2">
+      <div class="field"><label for="psu">${supLbl}</label><input id="psu" data-acqk="supplier" value="${esc(x.supplier || bu?.supplier || '')}" list="psups" placeholder="ex: Adereços & Cia, Feira da Ladra, IKEA"><datalist id="psups">${[...new Set(f.props.map((y) => y.supplier).concat(f.bundles.map((b) => b.supplier)).filter(Boolean))].map((v) => `<option value="${esc(v)}">`).join('')}</datalist></div>
+      ${bu ? `<div class="field"><span class="label">${lbl}</span><p class="acq-in">Incluído no pacote</p></div>` : `<div class="field"><label for="ppr">${lbl} (€)</label><input id="ppr" data-acqk="price" type="number" step="0.01" min="0" inputmode="decimal" value="${esc(x.price ?? '')}" placeholder="0,00"></div>`}
+      ${rented ? `<div class="field"><label for="prb">Devolver até</label><input id="prb" data-acqk="return_by" type="date" value="${esc(x.return_by || '')}"></div>` : ''}
+    </div>
+    ${rented ? `<div class="acq-bundle">
+      <div class="seg dark" role="radiogroup" aria-label="Como foi alugado">${[['solo', 'Sozinho'], ['bundle', 'Em pacote com outros adereços']].map(([k, l]) => `<button type="button" role="radio" aria-checked="${(k === 'bundle') === !!bu}" aria-selected="${(k === 'bundle') === !!bu}" data-bmode="${k}">${l}</button>`).join('')}</div>
+      ${bu ? `<div class="bundle-card">
+          <div class="grid2"><div class="field"><label for="bn">Nome do pacote</label><input id="bn" data-bk="name" value="${esc(bu.name)}"></div>
+          <div class="field"><label for="bt">Valor total do pacote (€)</label><input id="bt" data-bk="total" type="number" step="0.01" min="0" value="${esc(bu.total ?? '')}"></div></div>
+          <p class="small muted">${mates.length ? `No mesmo pacote: ${mates.map((y) => `<a href="#${location.hash.slice(1).replace(/[^/]+$/, y.id)}">${esc(y.name)}</a>`).join(', ')}` : 'Ainda é o único adereço neste pacote. Junta os outros na página de cada um.'}${bu.total ? ` · ${eur.format(bu.total / (mates.length + 1))} por adereço, em média` : ''}</p>
+          <label class="sel"><span class="vh">Mudar de pacote</span><select data-pickb><option value="">Mudar para outro pacote…</option>${f.bundles.filter((b) => b.id !== bu.id).map((b) => `<option value="${b.id}">${esc(b.name)}${b.supplier ? ` · ${esc(b.supplier)}` : ''}</option>`).join('')}<option value="__new">+ Novo pacote</option></select></label>
+        </div>` : ''}
+    </div>` : ''}`;
+  const save = debounce((k, v) => sb.from('props').update({ [k]: v }).eq('id', x.id).then(({ error }) => error && toast(error.message)), 500);
+  box.querySelectorAll('[data-acqk]').forEach((el) => el.addEventListener('input', () => { const k = el.dataset.acqk; const v = el.value === '' ? null : el.type === 'number' ? Number(el.value) : el.value; x[k] = v; save(k, v); }));
+  const saveB = debounce((k, v) => sb.from('prop_bundles').update({ [k]: v }).eq('id', bu.id).then(({ error }) => error && toast(error.message)), 500);
+  box.querySelectorAll('[data-bk]').forEach((el) => el.addEventListener('input', () => { const k = el.dataset.bk; const v = el.type === 'number' ? (el.value === '' ? null : Number(el.value)) : el.value; bu[k] = v; saveB(k, v); }));
+  const setBundle = async (id) => { const { error } = await sb.from('props').update({ bundle_id: id }).eq('id', x.id); if (error) return toast(error.message); x.bundle_id = id; acquisition(box, p, f, x); };
+  const newBundle = () => {
+    const m = modal(`<h2>Novo pacote de aluguer</h2><p class="muted small">Quando vários adereços são alugados juntos por um só valor.</p><form class="stack">
+      <div class="field"><label for="nbn">Nome</label><input id="nbn" required placeholder="ex: Pacote bar — Adereços & Cia"></div>
+      <div class="grid2"><div class="field"><label for="nbs">Alugado a</label><input id="nbs" value="${esc(x.supplier || '')}"></div><div class="field"><label for="nbt">Valor total (€)</label><input id="nbt" type="number" step="0.01" min="0"></div></div>
+      <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Criar pacote</button></div></form>`);
+    m.el.querySelector('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const tv = m.el.querySelector('#nbt').value;
+      const { data, error } = await sb.from('prop_bundles').insert({ project_id: p.id, name: m.el.querySelector('#nbn').value.trim(), supplier: m.el.querySelector('#nbs').value.trim() || null, total: tv === '' ? null : Number(tv) }).select().single();
+      if (error) return toast(error.message);
+      f.bundles.push(data); m.close(); setBundle(data.id);
+    });
+  };
+  box.querySelectorAll('[data-bmode]').forEach((b) => b.addEventListener('click', () => {
+    if (b.dataset.bmode === 'solo') { if (x.bundle_id) setBundle(null); return; }
+    if (x.bundle_id) return;
+    if (!f.bundles.length) return newBundle();
+    const m = modal(`<h2>Em que pacote?</h2><div class="stack">${f.bundles.map((bb) => `<button type="button" class="btn ghost" data-b="${bb.id}">${esc(bb.name)}${bb.supplier ? ` · ${esc(bb.supplier)}` : ''}${bb.total ? ` · ${eur.format(bb.total)}` : ''}</button>`).join('')}<button type="button" class="btn primary" data-b="__new">${ICON.plus} Novo pacote</button></div>`);
+    m.el.querySelectorAll('[data-b]').forEach((bb) => bb.addEventListener('click', () => { m.close(); if (bb.dataset.b === '__new') newBundle(); else setBundle(bb.dataset.b); }));
+  }));
+  box.querySelector('[data-pickb]')?.addEventListener('change', (e) => { const v = e.target.value; if (!v) return; if (v === '__new') newBundle(); else setBundle(v); });
 }
 
 // ---------- análise ----------
