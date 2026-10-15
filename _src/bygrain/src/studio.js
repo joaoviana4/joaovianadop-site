@@ -472,21 +472,22 @@ async function crewPanel(el, p, people, members, reload) {
     <span class="crew-n"><b>${esc(x.name)}</b><small class="muted">${esc(x.job || x.sub || '')}${x.job && x.sub ? ` · ${esc(x.sub)}` : ''}</small></span>
     <span class="crew-d">${x.depts.map(dchip).join('')}</span>
     ${canEdit ? `<span class="crew-a"><button type="button" class="link-btn" data-cedit="${x.t}:${x.id}">Editar</button><button type="button" class="link-btn danger-text" data-crm="${x.t}:${x.id}">Tirar</button></span>` : ''}</li>`;
-  const groups = depts.map((d) => ({ d, xs: list.filter((x) => x.depts.includes(d.id)) })).filter((g) => g.xs.length);
+  const groups = depts.map((d) => ({ d, xs: list.filter((x) => x.depts.includes(d.id)) }));
   const none = list.filter((x) => !x.depts.some((id) => depts.some((d) => d.id === id)));
   el.innerHTML = `<div class="row between wrap-gap"><div><h3 class="h3">Equipa do projeto</h3><p class="muted small">Quem trabalha neste projeto, por departamento. Todos os membros da Grain continuam a ter acesso.</p></div>${canEdit ? `<button type="button" class="btn primary" data-cadd>${ICON.plus} Adicionar pessoa</button>` : ''}</div>
-    ${list.length ? `${groups.map((g) => `<div class="crew-g"><h4 class="crew-h"><i style="background:${esc(g.d.color)}"></i>${esc(g.d.name)} <span class="muted">${g.xs.length}</span></h4><ul class="crew">${g.xs.map(row).join('')}</ul></div>`).join('')}
-      ${none.length ? `<div class="crew-g"><h4 class="crew-h"><i></i>Sem departamento <span class="muted">${none.length}</span></h4><ul class="crew">${none.map(row).join('')}</ul></div>` : ''}`
-      : `<p class="empty-note">Ainda ninguém na equipa.${canEdit ? ' Usa “Adicionar pessoa”.' : ''}</p>`}`;
-  const form = (x) => {
-    const isNew = !x; const free = people.filter((y) => y.role !== 'guest' && !members.some((m) => m.user_id === y.id));
+    ${groups.map((g) => `<div class="crew-g"><div class="crew-hrow"><h4 class="crew-h"><i style="background:${esc(g.d.color)}"></i>${esc(g.d.name)} <span class="muted">${g.xs.length}</span></h4>${canEdit ? `<button type="button" class="link-btn" data-cadd-d="${esc(g.d.id)}">${ICON.plus} Juntar a ${esc(g.d.name)}</button>` : ''}</div>${g.xs.length ? `<ul class="crew">${g.xs.map(row).join('')}</ul>` : '<p class="crew-empty muted small">Ninguém neste departamento.</p>'}</div>`).join('')}
+    ${none.length ? `<div class="crew-g"><div class="crew-hrow"><h4 class="crew-h"><i></i>Sem departamento <span class="muted">${none.length}</span></h4></div><ul class="crew">${none.map(row).join('')}</ul></div>` : ''}
+    ${!list.length && !depts.length ? `<p class="empty-note">Ainda ninguém na equipa.${canEdit ? ' Usa “Adicionar pessoa”.' : ''}</p>` : ''}`;
+  const form = (x, preDept) => {
+    const isNew = !x; const inProj = (id) => members.find((m) => m.user_id === id);
+    const free = people.filter((y) => y.role !== 'guest');
     const m = modal(`<h2>${isNew ? 'Adicionar pessoa' : esc(x.name)}</h2><form class="stack" data-cf>
       ${isNew ? `<div class="seg dark" role="tablist"><button type="button" role="tab" aria-selected="true" data-ct="m">Da Grain</button><button type="button" role="tab" aria-selected="false" data-ct="c">Sem conta</button></div>
-        <div class="field" data-for="m"><label for="cu">Pessoa</label><select id="cu" name="user_id">${free.length ? free.map((y) => `<option value="${y.id}">${esc(y.display_name)}</option>`).join('') : '<option value="">Toda a Grain já está no projeto</option>'}</select></div>
+        <div class="field" data-for="m"><label for="cu">Pessoa</label><select id="cu" name="user_id">${free.map((y) => `<option value="${y.id}">${esc(y.display_name)}${inProj(y.id) ? ' — já está no projeto' : ''}</option>`).join('')}</select></div>
         <div data-for="c" hidden class="grid2"><div class="field"><label for="cn2">Nome</label><input id="cn2" name="name"></div><div class="field"><label for="ce">Email</label><input id="ce" name="email" type="email"></div><div class="field"><label for="cp">Telefone</label><input id="cp" name="phone" inputmode="tel"></div></div>`
         : x.t === 'c' ? `<div class="grid2"><div class="field"><label for="cn2">Nome</label><input id="cn2" name="name" value="${esc(x.name)}" required></div><div class="field"><label for="ce">Email</label><input id="ce" name="email" type="email" value="${esc(x.email || '')}"></div><div class="field"><label for="cp">Telefone</label><input id="cp" name="phone" value="${esc(x.phone || '')}"></div></div>` : ''}
       <div class="field"><label for="cj">Função</label><input id="cj" name="job" value="${esc(x?.job || '')}" placeholder="Ex.: Gaffer, 1.º AC, Produtora" list="crew-jobs"></div>
-      <fieldset class="dpick"><legend>Departamentos</legend>${depts.length ? depts.map((d) => `<label><input type="checkbox" name="dept" value="${esc(d.id)}" ${x?.depts.includes(d.id) ? 'checked' : ''}><span style="--dc:${esc(d.color)}">${esc(d.name)}</span></label>`).join('') : '<p class="muted small">Este projeto ainda não tem departamentos (Detalhes → Departamentos e cores).</p>'}</fieldset>
+      <fieldset class="dpick"><legend>Departamentos</legend>${depts.length ? depts.map((d) => `<label><input type="checkbox" name="dept" value="${esc(d.id)}" ${x?.depts.includes(d.id) || (isNew && preDept === d.id) ? 'checked' : ''}><span style="--dc:${esc(d.color)}">${esc(d.name)}</span></label>`).join('') : '<p class="muted small">Este projeto ainda não tem departamentos (Detalhes → Departamentos e cores).</p>'}</fieldset>
       <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">${isNew ? 'Adicionar' : 'Guardar'}</button></div></form>
       <datalist id="crew-jobs">${['Realização', 'Produção', 'Direção de fotografia', '1.º assistente de câmara', '2.º assistente de câmara', 'Gaffer', 'Eletricista', 'Maquinista', 'Direção de arte', 'Adereços', 'Guarda-roupa', 'Cabelos e maquilhagem', 'Som direto', 'Montagem', 'Cor', 'Assistente de produção', 'Making of'].map((j) => `<option value="${j}">`).join('')}</datalist>`, { wide: true });
     let tab = 'm';
@@ -494,7 +495,13 @@ async function crewPanel(el, p, people, members, reload) {
     m.el.querySelector('[data-cf]').addEventListener('submit', async (e) => {
       e.preventDefault(); const fd = new FormData(e.target); const dsel = fd.getAll('dept'); const job = (fd.get('job') || '').trim() || null;
       let r;
-      if (isNew && tab === 'm') { if (!fd.get('user_id')) return toast('Escolhe uma pessoa.'); r = await sb.from('project_members').insert({ project_id: p.id, user_id: fd.get('user_id'), depts: dsel, job }); }
+      if (isNew && tab === 'm') {
+        const uid = fd.get('user_id'); if (!uid) return toast('Escolhe uma pessoa.');
+        const cur = inProj(uid);
+        // quem já está no projeto: junta os departamentos novos aos que já tinha
+        r = cur ? await sb.from('project_members').update({ depts: [...new Set([...(cur.depts || []), ...dsel])], job: job || cur.job || null }).eq('project_id', p.id).eq('user_id', uid)
+          : await sb.from('project_members').insert({ project_id: p.id, user_id: uid, depts: dsel, job });
+      }
       else if (isNew) { const name = (fd.get('name') || '').trim(); if (!name) return toast('Escreve o nome.'); r = await sb.from('project_crew').insert({ project_id: p.id, name, email: (fd.get('email') || '').trim() || null, phone: (fd.get('phone') || '').trim() || null, depts: dsel, job }); }
       else if (x.t === 'm') r = await sb.from('project_members').update({ depts: dsel, job }).eq('project_id', p.id).eq('user_id', x.id);
       else r = await sb.from('project_crew').update({ name: (fd.get('name') || '').trim() || x.name, email: (fd.get('email') || '').trim() || null, phone: (fd.get('phone') || '').trim() || null, depts: dsel, job }).eq('id', x.id);
@@ -504,6 +511,7 @@ async function crewPanel(el, p, people, members, reload) {
   };
   const find = (k) => { const [t, id] = k.split(':'); return list.find((x) => x.t === t && x.id === id); };
   el.querySelector('[data-cadd]')?.addEventListener('click', () => form(null));
+  el.querySelectorAll('[data-cadd-d]').forEach((b) => b.addEventListener('click', () => form(null, b.dataset.caddD)));
   el.querySelectorAll('[data-cedit]').forEach((b) => b.addEventListener('click', () => form(find(b.dataset.cedit))));
   el.querySelectorAll('[data-crm]').forEach((b) => b.addEventListener('click', async () => {
     const x = find(b.dataset.crm); if (!(await confirmBox(`Tirar ${x.name} da equipa deste projeto?`, 'Tirar'))) return;

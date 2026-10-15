@@ -1781,3 +1781,8 @@ tr:hover > td > .cst-x, tr:hover > td > .cst-mv, tr:hover .cst-colh .cst-x, .cst
 body.tool-dragging, body.tool-dragging * { cursor: grabbing !important; user-select: none; }
 .m-q .q-ic { display: grid; place-items: center; font-weight: 800; color: #E3B341; border: 2px solid #E3B341; border-radius: 99px; width: 24px; height: 24px; font-size: 13px; }
 .m-qs h2 { color: #E3B341; }
+.crew-hrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+.crew-hrow .crew-h { margin: 0; }
+.crew-hrow .link-btn { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+.crew-hrow .link-btn svg { width: 14px; height: 14px; }
+.crew-empty { margin: 0; padding: 10px 14px; border: 1px dashed var(--line); border-radius: 12px; }
