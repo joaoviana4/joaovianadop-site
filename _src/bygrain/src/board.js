@@ -7,6 +7,46 @@ import { ytId } from './music.js';
 const MIN = { note: [140, 80], title: [160, 50], image: [80, 60], palette: [180, 110], list: [180, 120], board: [56, 56], link: [180, 80], video: [240, 170], audio: [220, 110] };
 const SIZE = { note: [280, 180], title: [520, 72], palette: [320, 150], list: [280, 220], board: [96, 96], link: [300, 110], video: [480, 316], audio: [340, 128] };
 
+// ---------- formatação de texto (notas, títulos, listas) ----------
+// Alinhamento, letra e tamanho valem para o cartão inteiro. Negrito, itálico, sublinhado e cor valem para o
+// texto selecionado (a escrever) ou para o cartão inteiro (sem seleção). Fontes grátis do Google Fonts.
+export const FONTS = [['', 'Predefinida'], ['Instrument Sans', 'Instrument Sans'], ['Inter', 'Inter'], ['Montserrat', 'Montserrat'], ['Archivo Black', 'Archivo Black'], ['Bebas Neue', 'Bebas Neue'],
+  ['Playfair Display', 'Playfair Display'], ['DM Serif Display', 'DM Serif Display'], ['Lora', 'Lora'], ['Instrument Serif', 'Instrument Serif'], ['Space Mono', 'Space Mono'], ['Courier Prime', 'Courier Prime'], ['Caveat', 'Caveat (à mão)']];
+const SIZES = [['s', 'Pequeno', 0.8], ['m', 'Normal', 1], ['l', 'Grande', 1.35], ['xl', 'Muito grande', 1.8]];
+const BASE = { note: 15, title: 44, list: 14 };
+const TEXT_COLORS = ['', '#0B0B14', '#F4F1E8', '#C8382D', '#F08A24', '#E3B341', '#2FB67C', '#2AA8C9', '#1E2AD4', '#7C5CFF', '#E5579B'];
+let fontsLoaded = false;
+function loadFonts() {
+  if (fontsLoaded) return; fontsLoaded = true;
+  const l = document.createElement('link'); l.rel = 'stylesheet';
+  l.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Montserrat:ital,wght@0,400;0,700;1,400&family=Archivo+Black&family=Bebas+Neue&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Serif+Display:ital@0;1&family=Lora:ital,wght@0,400;0,700;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Caveat:wght@400;700&display=swap';
+  document.head.append(l);
+}
+// só deixa passar formatação simples (nada de scripts, links ou estilos estranhos)
+const OK_TAGS = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'S', 'STRIKE', 'BR', 'DIV', 'P', 'SPAN', 'FONT']);
+const OK_STYLE = ['color', 'font-weight', 'font-style', 'text-decoration', 'text-decoration-line'];
+export function cleanHtml(html) {
+  const t = document.createElement('template'); t.innerHTML = html || '';
+  const walk = (node) => {
+    [...node.childNodes].forEach((n) => {
+      if (n.nodeType === 3) return;
+      if (n.nodeType !== 1 || !OK_TAGS.has(n.tagName)) { if (n.nodeType === 1) { walk(n); n.replaceWith(...n.childNodes); } else n.remove(); return; }
+      walk(n);
+      let el = n;
+      if (n.tagName === 'FONT') { el = document.createElement('span'); if (n.getAttribute('color')) el.style.color = n.getAttribute('color'); el.append(...n.childNodes); n.replaceWith(el); }
+      const keep = OK_STYLE.map((k) => [k, el.style.getPropertyValue(k)]).filter(([, v]) => v);
+      [...el.attributes].forEach((a) => el.removeAttribute(a.name));
+      keep.forEach(([k, v]) => el.style.setProperty(k, v));
+    });
+  };
+  walk(t.content);
+  return t.innerHTML;
+}
+const fmtStyle = (kind, f = {}) => {
+  const k = (SIZES.find((x) => x[0] === f.size) || SIZES[1])[2];
+  return [f.align ? `text-align:${f.align}` : '', f.font ? `font-family:'${f.font}',var(--sans)` : '', f.size && BASE[kind] ? `font-size:${Math.round(BASE[kind] * k)}px` : '', f.color ? `color:${f.color}` : '', f.b ? 'font-weight:700' : '', f.i ? 'font-style:italic' : '', f.u ? 'text-decoration:underline' : ''].filter(Boolean).join(';');
+};
+
 export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom, onSelect, presence }) {
   // cartões que outras pessoas estão a mexer agora (não se podem tocar até largarem)
   let locked = new Map();
@@ -14,6 +54,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   const blocked = (id) => { const w = lockedBy(id); if (!w) return false; toast(`${w.uid === presence?.me ? 'Tu, noutra janela' : w.name} está a mexer neste cartão.`); return true; };
   const items = new Map();
   const st = { view: { x: 0, y: 0, k: 1 }, sel: null, editing: null, drag: null, pointers: new Map(), pinch: null, dead: false };
+  let fmtReady = false;
   const viewKey = `bygrain-view-${boardId}`;
 
   root.innerHTML = `<div class="stage" tabindex="0" aria-label="Board"><div class="world"></div><div class="drop-hint" hidden>Larga as imagens para as juntar ao board</div><div class="color-bar" hidden role="toolbar" aria-label="Cor do cartão"></div></div>`;
@@ -24,6 +65,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   const isDark = (hex) => { const h = (hex || '').replace('#', ''); if (h.length !== 6) return false; const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255); return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.55; };
   function placeBar() {
     bar.hidden = true;
+    updateFmt();
     const it = st.sel && items.get(st.sel);
     onSelect && onSelect(it && it.kind !== 'image' ? { kind: it.kind, bg: it.data?.bg || '' } : null);
   }
@@ -35,6 +77,84 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     it.data = { ...(it.data || {}), bg: c || undefined }; if (!c) delete it.data.bg;
     cardEl(it); save(it, ['data'], delay); if (!delay) placeBar();
   }
+
+  // ---------- barra de formatação de texto ----------
+  loadFonts();
+  const fbar = document.createElement('div');
+  fbar.className = 'fmt-bar'; fbar.hidden = true; fbar.setAttribute('role', 'toolbar'); fbar.setAttribute('aria-label', 'Formatar texto');
+  fbar.innerHTML = `
+    <label class="fmt-sel" title="Letra"><span class="vh">Letra</span><select data-font>${FONTS.map(([v, l]) => `<option value="${esc(v)}" style="${v ? `font-family:'${v}'` : ''}">${esc(l)}</option>`).join('')}</select></label>
+    <label class="fmt-sel" title="Tamanho"><span class="vh">Tamanho</span><select data-size>${SIZES.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></label>
+    <span class="fmt-sep"></span>
+    <button type="button" data-cmd="bold" title="Negrito (Ctrl+B)" aria-label="Negrito"><b>B</b></button>
+    <button type="button" data-cmd="italic" title="Itálico (Ctrl+I)" aria-label="Itálico"><i>I</i></button>
+    <button type="button" data-cmd="underline" title="Sublinhado (Ctrl+U)" aria-label="Sublinhado"><u>U</u></button>
+    <span class="fmt-col"><button type="button" data-colbtn title="Cor do texto" aria-label="Cor do texto" aria-expanded="false"><span class="fmt-a">A</span><i data-colbar></i></button>
+      <span class="fmt-pop" data-colpop hidden>${TEXT_COLORS.map((c) => `<button type="button" data-tc="${c}" class="${c ? '' : 'none'}" style="${c ? `background:${c}` : ''}" aria-label="${c || 'Predefinida'}"></button>`).join('')}<label class="cb-custom" title="Outra cor"><input type="color" data-tcc value="#C8382D" aria-label="Outra cor"><span>+</span></label></span></span>
+    <span class="fmt-sep"></span>
+    ${[['left', 'Alinhar à esquerda', '<path d="M4 6h16M4 10h10M4 14h16M4 18h10"/>'], ['center', 'Centrar', '<path d="M4 6h16M7 10h10M4 14h16M7 18h10"/>'], ['right', 'Alinhar à direita', '<path d="M4 6h16M10 10h10M4 14h16M10 18h10"/>']].map(([a, l, d]) => `<button type="button" data-align="${a}" title="${l}" aria-label="${l}"><svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg></button>`).join('')}
+    <span class="fmt-sep"></span>
+    <button type="button" data-clear title="Tirar a formatação" aria-label="Tirar a formatação"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h12M12 5l-3 14M4 20l16-16"/></svg></button>`;
+  root.appendChild(fbar);
+  fbar.addEventListener('pointerdown', (e) => { e.stopPropagation(); if (!e.target.closest('select, input')) e.preventDefault(); });
+  const fmtTarget = () => { const it = st.sel && items.get(st.sel); return it && ['note', 'title', 'list'].includes(it.kind) ? it : null; };
+  const selInEdit = () => { const ed = st.editing; if (!ed) return false; const s2 = getSelection(); return s2.rangeCount && !s2.isCollapsed && ed.el.contains(s2.anchorNode); };
+  function updateFmt() {
+    if (!fmtReady) return;
+    const it = fmtTarget();
+    fbar.hidden = !it;
+    if (!it) { fbar.querySelector('[data-colpop]').hidden = true; return; }
+    const f = it.data?.fmt || {};
+    fbar.querySelector('[data-font]').value = f.font || '';
+    fbar.querySelector('[data-size]').value = f.size || 'm';
+    fbar.querySelectorAll('[data-align]').forEach((b) => b.classList.toggle('on', (f.align || 'left') === b.dataset.align));
+    const rich = st.editing && ['note', 'title'].includes(it.kind);
+    fbar.querySelectorAll('[data-cmd]').forEach((b) => { const k = { bold: 'b', italic: 'i', underline: 'u' }[b.dataset.cmd]; b.classList.toggle('on', rich && selInEdit() ? document.queryCommandState(b.dataset.cmd) : !!f[k]); });
+    fbar.querySelector('[data-colbar]').style.background = f.color || 'currentColor';
+  }
+  const onSelChange = () => { if (st.editing && !fbar.hidden) updateFmt(); };
+  document.addEventListener('selectionchange', onSelChange);
+  fmtReady = true;
+  const setFmt = (patch) => {
+    const it = fmtTarget(); if (!it) return;
+    const fmt = { ...(it.data?.fmt || {}), ...patch }; Object.keys(fmt).forEach((k) => { if (fmt[k] === '' || fmt[k] == null || fmt[k] === false) delete fmt[k]; });
+    it.data = { ...(it.data || {}), fmt }; if (!Object.keys(fmt).length) delete it.data.fmt;
+    if (st.editing && st.editing.id === it.id) {
+      // a escrever: aplica o estilo ao elemento sem refazer o cartão (para não perder o cursor)
+      const box = it.kind === 'list' ? st.editing.el.closest('.list-fmt') : st.editing.el;
+      if (box) box.setAttribute('style', fmtStyle(it.kind, fmt));
+    } else cardEl(it);
+    save(it, ['data'], 300); updateFmt();
+  };
+  fbar.querySelectorAll('[data-cmd]').forEach((b) => b.addEventListener('click', () => {
+    const it = fmtTarget(); if (!it) return;
+    if (['note', 'title'].includes(it.kind) && selInEdit()) { document.execCommand('styleWithCSS', false, false); document.execCommand(b.dataset.cmd); updateFmt(); return; }
+    const k = { bold: 'b', italic: 'i', underline: 'u' }[b.dataset.cmd]; setFmt({ [k]: !(it.data?.fmt || {})[k] });
+  }));
+  const colPop = fbar.querySelector('[data-colpop]'); const colBtn = fbar.querySelector('[data-colbtn]');
+  colBtn.addEventListener('click', () => { colPop.hidden = !colPop.hidden; colBtn.setAttribute('aria-expanded', String(!colPop.hidden)); });
+  let savedRange = null;
+  colBtn.addEventListener('pointerdown', () => { const s2 = getSelection(); savedRange = selInEdit() ? s2.getRangeAt(0).cloneRange() : null; });
+  const applyColor = (c) => {
+    const it = fmtTarget(); if (!it) return;
+    if (['note', 'title'].includes(it.kind) && st.editing && savedRange) {
+      const s2 = getSelection(); s2.removeAllRanges(); s2.addRange(savedRange);
+      document.execCommand('styleWithCSS', false, true); document.execCommand('foreColor', false, c || 'inherit'); document.execCommand('styleWithCSS', false, false);
+    } else setFmt({ color: c });
+    colPop.hidden = true; updateFmt();
+  };
+  colPop.querySelectorAll('[data-tc]').forEach((b) => b.addEventListener('click', () => applyColor(b.dataset.tc)));
+  colPop.querySelector('[data-tcc]').addEventListener('change', (e) => applyColor(e.target.value));
+  fbar.querySelectorAll('[data-align]').forEach((b) => b.addEventListener('click', () => setFmt({ align: b.dataset.align === 'left' ? '' : b.dataset.align })));
+  fbar.querySelector('[data-font]').addEventListener('change', (e) => setFmt({ font: e.target.value }));
+  fbar.querySelector('[data-size]').addEventListener('change', (e) => setFmt({ size: e.target.value === 'm' ? '' : e.target.value }));
+  fbar.querySelector('[data-clear]').addEventListener('click', () => {
+    const it = fmtTarget(); if (!it) return;
+    if (st.editing && st.editing.id === it.id) { const el = st.editing.el; el.innerText = el.innerText; }
+    const d = { ...(it.data || {}) }; delete d.fmt; delete d.html; it.data = d;
+    if (!(st.editing && st.editing.id === it.id)) cardEl(it); else { const box = it.kind === 'list' ? st.editing.el.closest('.list-fmt') : st.editing.el; box?.removeAttribute('style'); }
+    save(it, ['data']); updateFmt();
+  });
 
   // ---------- vista ----------
   function applyView() {
@@ -75,15 +195,15 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   function inner(it) {
     const d = it.data || {};
     switch (it.kind) {
-      case 'note': return `<div class="txt note-txt" data-field="text">${esc(d.text || '')}</div>`;
-      case 'title': return `<div class="txt title-txt" data-field="text">${esc(d.text || 'Título')}</div>`;
+      case 'note': return `<div class="txt note-txt" data-field="text" style="${fmtStyle('note', d.fmt)}">${d.html ? cleanHtml(d.html) : esc(d.text || '')}</div>`;
+      case 'title': return `<div class="txt title-txt" data-field="text" style="${fmtStyle('title', d.fmt)}">${d.html ? cleanHtml(d.html) : esc(d.text || 'Título')}</div>`;
       case 'image': return `${urls[d.path] ? `<img src="${esc(urls[d.path])}" alt="${esc(d.caption || '')}" draggable="false">` : '<div class="img-wait">A carregar…</div>'}${d.caption ? `<div class="caption">${esc(d.caption)}</div>` : ''}`;
       case 'palette': return `<div class="txt card-h" data-field="title">${esc(d.title || 'Paleta')}</div>
         <div class="swatches">${(d.colors || []).map((c, i) => `<div class="sw"><button type="button" data-ui="color" data-i="${i}" style="background:${esc(c)}" aria-label="Mudar cor ${esc(c)}"></button><span>${esc(c.toUpperCase())}</span><button type="button" class="x" data-ui="rmcolor" data-i="${i}" aria-label="Tirar cor">${ICON.close}</button></div>`).join('')}
         <button type="button" class="sw-add" data-ui="addcolor" aria-label="Juntar cor">${ICON.plus}</button></div>`;
-      case 'list': return `<div class="txt card-h" data-field="title">${esc(d.title || 'Lista')}</div>
+      case 'list': return `<div class="list-fmt" style="${fmtStyle('list', d.fmt)}"><div class="txt card-h" data-field="title">${esc(d.title || 'Lista')}</div>
         <ul class="checklist">${(d.items || []).map((li, i) => `<li class="${li.done ? 'done' : ''}"><button type="button" class="chk" data-ui="toggle" data-i="${i}" aria-label="${li.done ? 'Desmarcar' : 'Marcar'}">${li.done ? ICON.check : ''}</button><span class="txt" data-field="item" data-i="${i}">${esc(li.text)}</span><button type="button" class="x" data-ui="rmitem" data-i="${i}" aria-label="Tirar">${ICON.close}</button></li>`).join('')}</ul>
-        <button type="button" class="add-item" data-ui="additem">${ICON.plus} Item</button>`;
+        <button type="button" class="add-item" data-ui="additem">${ICON.plus} Item</button></div>`;
       case 'board': { const cov = urls[d.cover] || covers[d.board_id];
         return `<div class="bcov" ${cov ? `style="background-image:url('${esc(cov)}')"` : ''}>${cov ? '' : ICON.board}</div><div class="txt bname" data-field="title">${esc(d.title || 'Board')}</div><button type="button" class="cov-btn" data-ui="cover" title="Mudar a capa" aria-label="Mudar a capa">${ICON.image}</button>`; }
       case 'video': { const id = ytId(d.url); const playing = st.playing === it.id;
@@ -247,8 +367,12 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   function startEdit(id, el) {
     if (!el) return;
     st.editing = { id, el }; bar.hidden = true;
-    el.contentEditable = 'plaintext-only';
-    if (el.contentEditable !== 'plaintext-only') el.contentEditable = 'true';
+    const rich = el.dataset.field === 'text' && ['note', 'title'].includes(items.get(id)?.kind);
+    if (rich) el.contentEditable = 'true';
+    else { el.contentEditable = 'plaintext-only'; if (el.contentEditable !== 'plaintext-only') el.contentEditable = 'true'; }
+    // colar sempre como texto simples (sem formatação de outros sites)
+    el.onpaste = (e) => { e.preventDefault(); e.stopPropagation(); const t = e.clipboardData?.getData('text/plain') || ''; document.execCommand('insertText', false, t); };
+    updateFmt();
     el.focus();
     const r = document.createRange(); r.selectNodeContents(el); r.collapse(false);
     const s = getSelection(); s.removeAllRanges(); s.addRange(r);
@@ -262,6 +386,10 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     const d = { ...(it.data || {}) };
     if (f === 'item') { const i = +ed.el.dataset.i; d.items = [...(d.items || [])]; if (text.trim()) d.items[i] = { ...d.items[i], text }; else d.items.splice(i, 1); }
     else d[f] = text;
+    if (f === 'text' && ['note', 'title'].includes(it.kind)) {
+      const html = cleanHtml(ed.el.innerHTML);
+      if (/<(b|strong|i|em|u|s|strike|span)\b/i.test(html)) d.html = html; else delete d.html;
+    }
     it.data = d; save(it, ['data']);
     if (f === 'item' || it.kind === 'board') cardEl(it);
     if (it.kind === 'board' && f === 'title' && d.board_id) sb.from('boards').update({ title: text || 'Board' }).eq('id', d.board_id).then(() => {});
@@ -515,7 +643,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     get zoom() { return st.view.k; },
     destroy() {
       st.dead = true; commitEdit(); offLocks && offLocks(); presence?.setCard(null);
-      document.removeEventListener('keydown', onKey); document.removeEventListener('paste', onPaste);
+      document.removeEventListener('keydown', onKey); document.removeEventListener('paste', onPaste); document.removeEventListener('selectionchange', onSelChange);
       window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end);
       sb.removeChannel(ch);
     },

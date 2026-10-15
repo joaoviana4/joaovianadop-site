@@ -1656,3 +1656,21 @@ tr:hover > td > .cst-x, tr:hover > td > .cst-mv, tr:hover .cst-colh .cst-x, .cst
 .earn-tot span { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #8fe0bb; font-weight: 700; } .earn-tot b { font-size: 17px; font-variant-numeric: tabular-nums; }
 .earn-colors label { cursor: pointer; } .earn-colors input { position: absolute; opacity: 0; } .earn-colors span { display: block; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--line2); }
 .earn-colors span.none { background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(244,241,232,.2) 4px 5px); } .earn-colors input:checked + span { outline: 2px solid var(--cream); outline-offset: 2px; }
+/* barra de formatação de texto dos boards */
+.fmt-bar { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 11; display: flex; align-items: center; gap: 2px; padding: 5px 6px; border-radius: 12px; background: rgba(21, 21, 29, .94); border: 1px solid var(--line2); box-shadow: 0 10px 30px rgba(0,0,0,.35); backdrop-filter: blur(8px); }
+.fmt-bar[hidden] { display: none; }
+.fmt-bar button { width: 34px; height: 34px; border: 0; border-radius: 8px; background: none; color: var(--text); font: inherit; font-size: 16px; cursor: pointer; display: grid; place-items: center; }
+.fmt-bar button:hover { background: rgba(244,241,232,.08); } .fmt-bar button.on { background: rgba(244,241,232,.16); }
+.fmt-bar button svg { width: 18px; height: 18px; }
+.fmt-sel select { min-height: 34px; height: 34px; padding: 0 28px 0 10px; font-size: 13px; width: auto; border-radius: 8px; background-color: transparent; }
+.fmt-sel:first-child select { width: 150px; }
+.fmt-sep { width: 1px; height: 22px; background: var(--line2); margin: 0 4px; }
+.fmt-col { position: relative; }
+.fmt-col [data-colbtn] { flex-direction: column; gap: 0; line-height: 1; } .fmt-a { font-weight: 700; font-size: 15px; } .fmt-col i { display: block; width: 16px; height: 3px; border-radius: 2px; margin-top: 2px; }
+.fmt-pop { position: absolute; top: 42px; left: 50%; transform: translateX(-50%); display: grid; grid-template-columns: repeat(6, 26px); gap: 6px; padding: 10px; border-radius: 12px; background: rgba(21, 21, 29, .98); border: 1px solid var(--line2); box-shadow: 0 10px 30px rgba(0,0,0,.4); }
+.fmt-pop[hidden] { display: none; }
+.fmt-pop button { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line2); }
+.fmt-pop button.none { background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(244,241,232,.25) 4px 5px); }
+.list-fmt { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.list-fmt .checklist { flex: 1; }
+@media (max-width: 760px) { .fmt-bar { top: auto; bottom: 70px; max-width: calc(100vw - 24px); overflow-x: auto; } }
