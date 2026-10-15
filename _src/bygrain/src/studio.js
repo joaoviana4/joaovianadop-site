@@ -771,16 +771,25 @@ async function centralOverview(box) {
   const avatars = (pid) => { const l = who(pid); return l.length ? `<span class="av-stack">${l.slice(0, 4).map((x) => `<span class="avatar sm" title="${esc(x.display_name)}" style="--c:${esc(x.color)}">${esc(initials(x.display_name))}</span>`).join('')}${l.length > 4 ? `<span class="avatar sm more">+${l.length - 4}</span>` : ''}</span>` : '<span class="muted small">—</span>'; };
   const open = (pid) => (tasks || []).filter((t) => t.project_id === pid && t.status !== 'done').length;
   const val = (v) => (v == null ? '<span class="muted">—</span>' : eur.format(v));
-  const ongoing = (projects || []).filter((x) => x.status === 'active').sort((a, b) => (a.ends_on || '9999').localeCompare(b.ends_on || '9999'));
-  const finished = (projects || []).filter((x) => x.status !== 'active' && x.done_at && x.done_at.slice(0, 7) === coState.ym).sort((a, b) => b.done_at.localeCompare(a.done_at));
-  const sum = (l) => l.reduce((a, x) => a + (Number(x.value) || 0), 0);
+  const valOf = (x) => { const par = parentOf(x); if (par) return `<span class="muted" title="Já incluído no orçamento geral de ${esc(par.name)}">${x.value == null ? '—' : eur.format(x.value)} <small>(em ${esc(par.name)})</small></span>`; if (isFolder(x) && x.value == null) { const k = eff(x); return k ? `${eur.format(k)} <small class="muted">(soma dos projetos)</small>` : val(null); } return val(x.value); };
+
+  // projetos dentro de uma pasta (álbum) já contam no orçamento geral da pasta: não se somam outra vez
+  const byPid = new Map((projects || []).map((x) => [x.id, x]));
+  const parentOf = (x) => (x.parent_id && byPid.get(x.parent_id)) || null;
+  const kidsOf = (id) => (projects || []).filter((k) => k.parent_id === id);
+  const eff = (x) => (x.value != null ? Number(x.value) : isFolder(x) ? kidsOf(x.id).reduce((a, k) => a + (Number(k.value) || 0), 0) : 0);
+  const sum = (l) => { const ids = new Set(l.map((x) => x.id)); return l.reduce((a, x) => { const par = parentOf(x); if (par && ids.has(par.id)) return a; return a + eff(x); }, 0); };
+  // os projetos dentro de uma pasta aparecem logo a seguir à pasta
+  const nest = (l) => { const ids = new Set(l.map((x) => x.id)); const out = []; l.filter((x) => !(parentOf(x) && ids.has(x.parent_id))).forEach((x) => { out.push(x); l.filter((k) => k.parent_id === x.id).forEach((k) => out.push(k)); }); return out; };
+  const ongoing = nest((projects || []).filter((x) => x.status === 'active').sort((a, b) => (a.ends_on || '9999').localeCompare(b.ends_on || '9999')));
+  const finished = nest((projects || []).filter((x) => x.status !== 'active' && x.done_at && x.done_at.slice(0, 7) === coState.ym).sort((a, b) => b.done_at.localeCompare(a.done_at)));
   const [y, m] = coState.ym.split('-');
   const stateCell = (x) => { const ph = phaseOf(x); const d = x.ends_on ? daysUntil(x.ends_on) : null; return `<div class="co-state"><span>${esc(ph.label || 'Sem datas')}</span><div class="bar"><i style="width:${Math.round(ph.pct * 100)}%"></i></div>${d != null && d < 0 ? '<span class="small late-txt2">Prazo passado</span>' : ''}</div>`; };
   box.innerHTML = `
     <section class="co-sec">
       <div class="co-h"><h2 class="h2">Projetos em curso</h2><span class="muted">${ongoing.length} ${ongoing.length === 1 ? 'projeto' : 'projetos'}${money ? ` · <strong class="co-total">${eur.format(sum(ongoing))}</strong>` : ''}</span></div>
       <div class="panel table-wrap">${ongoing.length ? `<table class="table co-table"><thead><tr><th>Projeto</th>${money ? '<th class="num">Orçamento</th>' : ''}<th>Atribuídos</th><th>Estado</th><th class="num">Tarefas</th><th>Entrega</th></tr></thead><tbody>
-        ${ongoing.map((x) => `<tr class="click-row" data-href="#/p/${x.id}"><td><a href="#/p/${x.id}" class="co-name"><strong>${esc(x.name)}</strong><span class="small muted">${esc(x.client || '')}${x.client ? ' · ' : ''}${esc(KINDS[x.kind] || x.kind)}</span></a></td>${money ? `<td class="num">${val(x.value)}</td>` : ''}<td>${avatars(x.id)}</td><td>${stateCell(x)}</td><td class="num">${open(x.id) || '<span class="muted">0</span>'}</td><td class="small">${x.ends_on ? fmtDate(x.ends_on) : '<span class="muted">—</span>'}</td></tr>`).join('')}
+        ${ongoing.map((x) => `<tr class="click-row" data-href="#/p/${x.id}"><td${parentOf(x) ? ' class="co-child"' : ''}><a href="#/p/${x.id}" class="co-name"><strong>${esc(x.name)}</strong><span class="small muted">${esc(x.client || '')}${x.client ? ' · ' : ''}${esc(KINDS[x.kind] || x.kind)}</span></a></td>${money ? `<td class="num">${valOf(x)}</td>` : ''}<td>${avatars(x.id)}</td><td>${stateCell(x)}</td><td class="num">${open(x.id) || '<span class="muted">0</span>'}</td><td class="small">${x.ends_on ? fmtDate(x.ends_on) : '<span class="muted">—</span>'}</td></tr>`).join('')}
       </tbody>${money ? `<tfoot><tr><td><strong>Total</strong></td><td class="num"><strong>${eur.format(sum(ongoing))}</strong></td><td colspan="4"></td></tr></tfoot>` : ''}</table>` : '<p class="empty-note">Não há projetos em curso.</p>'}</div>
     </section>
     <section class="co-sec">
@@ -788,7 +797,7 @@ async function centralOverview(box) {
         <div class="month-nav"><button type="button" class="icon-btn" data-cm="-1" aria-label="Mês anterior">${ICON.back}</button><strong>${MESES_L[+m - 1]} ${y}</strong><button type="button" class="icon-btn" data-cm="1" aria-label="Mês seguinte">${ICON.chev}</button></div>
         <span class="muted">${finished.length} ${finished.length === 1 ? 'projeto' : 'projetos'}${money ? ` · <strong class="co-total">${eur.format(sum(finished))}</strong>` : ''}</span></div>
       <div class="panel table-wrap">${finished.length ? `<table class="table co-table"><thead><tr><th>Projeto</th>${money ? '<th class="num">Orçamento</th>' : ''}<th>Atribuídos</th><th>Fechado a</th></tr></thead><tbody>
-        ${finished.map((x) => `<tr class="click-row" data-href="#/p/${x.id}"><td><a href="#/p/${x.id}" class="co-name"><strong>${esc(x.name)}</strong><span class="small muted">${esc(x.client || '')}${x.client ? ' · ' : ''}${esc(KINDS[x.kind] || x.kind)}</span></a></td>${money ? `<td class="num">${val(x.value)}</td>` : ''}<td>${avatars(x.id)}</td><td class="small">${fmtDate(x.done_at)}</td></tr>`).join('')}
+        ${finished.map((x) => `<tr class="click-row" data-href="#/p/${x.id}"><td${parentOf(x) ? ' class="co-child"' : ''}><a href="#/p/${x.id}" class="co-name"><strong>${esc(x.name)}</strong><span class="small muted">${esc(x.client || '')}${x.client ? ' · ' : ''}${esc(KINDS[x.kind] || x.kind)}</span></a></td>${money ? `<td class="num">${valOf(x)}</td>` : ''}<td>${avatars(x.id)}</td><td class="small">${fmtDate(x.done_at)}</td></tr>`).join('')}
       </tbody>${money ? `${money ? `<tfoot><tr><td><strong>Total</strong></td><td class="num"><strong>${eur.format(sum(finished))}</strong></td><td colspan="2"></td></tr></tfoot>` : ''}` : ''}</table>` : `<p class="empty-note">Nenhum projeto finalizado em ${MESES_L[+m - 1]}.</p>`}</div>
     </section>`;
   box.querySelectorAll('[data-href]').forEach((tr) => tr.addEventListener('click', (e) => { if (!e.target.closest('a')) go(tr.dataset.href); }));

@@ -1686,3 +1686,4 @@ tr:hover > td > .cst-x, tr:hover > td > .cst-mv, tr:hover .cst-colh .cst-x, .cst
 .fmt-colors { grid-template-columns: repeat(4, 26px); }
 @media (max-width: 760px) { .fmt-bar { right: 88px; top: auto !important; bottom: 70px; transform: none !important; max-height: 60vh; overflow-y: auto; } }
 .fmt-list button { border: 0 !important; border-radius: 8px !important; background: none; } .fmt-list button:hover { background: rgba(244,241,232,.08); } .fmt-list button.on { background: rgba(244,241,232,.16); }
+.co-child { padding-left: 34px !important; position: relative; } .co-child::before { content: "↳"; position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: rgba(244,241,232,.4); }
