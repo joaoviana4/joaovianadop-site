@@ -65,3 +65,38 @@ export function tableShortcuts(table, { rowBelow, rowAbove, section, colRight, c
 
 export const rowStyle = (r) => (r.color ? ` style="--rc:${esc(r.color)}"` : '');
 export const colStyle = (c) => (c.color ? ` style="--cc:${esc(c.color)}"` : '');
+
+// ---------- desfazer / refazer (Ctrl+Z, Ctrl+Shift+Z ou Ctrl+Y) ----------
+// Guarda o estado da tabela antes de cada operação (linha, coluna, secção, cor, modelo, texto escrito numa célula).
+// Enquanto se escreve numa célula, o Ctrl+Z desfaz as letras (o normal do browser); fora disso desfaz a última operação.
+export function makeHistory({ get, set, after, notify }) {
+  const past = []; const future = [];
+  const snap = () => JSON.stringify(get());
+  const h = {
+    push(label, raw) { past.push({ label, data: raw ?? snap() }); if (past.length > 60) past.shift(); future.length = 0; },
+    get last() { return past[past.length - 1]?.label || null; },
+    undo() { const s = past.pop(); if (!s) return notify?.('Nada para desfazer.'); future.push({ label: s.label, data: snap() }); set(JSON.parse(s.data)); after(); notify?.(`Desfeito: ${s.label}.`); },
+    redo() { const s = future.pop(); if (!s) return notify?.('Nada para refazer.'); past.push({ label: s.label, data: snap() }); set(JSON.parse(s.data)); after(); notify?.(`Refeito: ${s.label}.`); },
+    // texto: guarda o estado antes da primeira tecla numa célula
+    watch(table) {
+      let before = null;
+      table.addEventListener('focusin', (e) => { if (e.target.matches('input, textarea, select')) { before = snap(); delete e.target.dataset.dirty; } }, true);
+      table.addEventListener('input', (e) => { const t = e.target; if (!t.matches('input, textarea, select') || t.dataset.dirty) return; t.dataset.dirty = '1'; if (before) h.push('escrever', before); }, true);
+    },
+  };
+  return h;
+}
+export function bindUndoKeys(root, h) {
+  const onKey = (e) => {
+    if (!document.body.contains(root)) { document.removeEventListener('keydown', onKey); return; }
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    const k = e.key.toLowerCase(); const redo = (k === 'z' && e.shiftKey) || k === 'y'; const undo = k === 'z' && !e.shiftKey;
+    if (!undo && !redo) return;
+    if (document.querySelector('#modal .modal')) return;
+    const a = document.activeElement;
+    // a escrever fora da tabela, ou já com letras escritas nesta célula: deixa o browser desfazer o texto
+    if (a && a.matches('input, textarea, [contenteditable=true]') && (!root.contains(a) || a.dataset.dirty)) return;
+    e.preventDefault(); if (undo) h.undo(); else h.redo();
+  };
+  document.addEventListener('keydown', onKey);
+}

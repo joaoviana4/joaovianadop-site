@@ -47,10 +47,12 @@ export async function tableTemplate(p, tpl) {
 
 // ---------- tabela ----------
 import { exportPdf } from './pdf.js';
-import { colorField, readColor, bindColorField, colorPop, tableShortcuts, rowStyle, colStyle } from './tablekit.js';
+import { colorField, readColor, bindColorField, colorPop, tableShortcuts, rowStyle, colStyle, makeHistory, bindUndoKeys } from './tablekit.js';
 
 export function tableTool(main, p, tool) {
-  const data = { columns: [], rows: [], ...(tool.data || {}) };
+  let data = { columns: [], rows: [], ...(tool.data || {}) };
+  const hist = makeHistory({ get: () => data, set: (v) => { data = v; }, after: () => { draw(); save(); }, notify: toast });
+  const snap = (l) => hist.push(l);
   const save = debounce(async () => {
     const { error } = await sb.from('boards').update({ data, updated_at: new Date().toISOString() }).eq('id', tool.id);
     if (error) toast('Não foi possível guardar: ' + error.message);
@@ -67,10 +69,12 @@ export function tableTool(main, p, tool) {
       <tbody>${data.rows.map((r) => `<tr data-row="${r.id}" class="${r.color ? 'has-rc' : ''}"${rowStyle(r)}>${data.columns.map((c, i) => `<td class="t-${c.type} ${c.color ? 'has-cc' : ''} ${i === 0 ? 'rd-cell' : ''}" data-colid="${c.id}"${colStyle(c)}>${i === 0 ? '<button type="button" class="row-dot" data-rowcolor title="Cor da linha" aria-label="Cor da linha"></button>' : ''}${cell(r, c)}</td>`).join('')}<td><button type="button" class="icon-btn sm" data-rmrow aria-label="Apagar linha">${ICON.close}</button></td></tr>`).join('')}</tbody></table>
       <div class="row wrap-gap"><button type="button" class="link-btn" data-addrow>${ICON.plus} Linha</button><span class="muted small"><kbd>Alt</kbd>+<kbd>↓</kbd> linha e <kbd>Alt</kbd>+<kbd>→</kbd> coluna onde está o rato · cor da linha no ponto à esquerda · cor da coluna clicando no nome</span></div>`;
     const at = (id) => { const i = data.rows.findIndex((x) => x.id === id); return i < 0 ? data.rows.length - 1 : i; };
-    const insRow = (i) => { const r = { id: uid(), cells: {} }; data.rows.splice(i, 0, r); draw(); save(); main.querySelector(`[data-row="${r.id}"] [data-c]`)?.focus(); };
-    const insCol = (id, side) => { const i = data.columns.findIndex((c) => c.id === id); const c = { id: uid(), name: 'Nova coluna', type: 'text' }; data.columns.splice(i < 0 ? data.columns.length : i + side, 0, c); draw(); save(); colForm(c, true); };
+    const insRow = (i) => { snap('juntar linha'); const r = { id: uid(), cells: {} }; data.rows.splice(i, 0, r); draw(); save(); main.querySelector(`[data-row="${r.id}"] [data-c]`)?.focus(); };
+    const insCol = (id, side) => { snap('juntar coluna'); const i = data.columns.findIndex((c) => c.id === id); const c = { id: uid(), name: 'Nova coluna', type: 'text' }; data.columns.splice(i < 0 ? data.columns.length : i + side, 0, c); draw(); save(); colForm(c, true); };
+    hist.watch(main.querySelector('table.sheet'));
     tableShortcuts(main.querySelector('table.sheet'), { rowBelow: (id) => insRow(at(id) + 1), rowAbove: (id) => insRow(Math.max(0, at(id))), colRight: (id) => insCol(id, 1), colLeft: (id) => insCol(id, 0) });
   }
+  bindUndoKeys(main, hist);
   main.innerHTML = `<div class="row end"><button type="button" class="btn ghost" data-pdf>${ICON.open} Exportar PDF</button></div><div class="tbl-wrap" data-tbl></div>`;
   draw();
   main.querySelector('[data-pdf]').addEventListener('click', () => exportPdf({
@@ -89,14 +93,14 @@ export function tableTool(main, p, tool) {
     e.preventDefault();
     const tr = inp.closest('tr'); const idx = [...tr.querySelectorAll('[data-c]')].indexOf(inp);
     let next = tr.nextElementSibling;
-    if (!next) { data.rows.push({ id: uid(), cells: {} }); draw(); save(); next = main.querySelector('tbody tr:last-child'); }
+    if (!next) { snap('juntar linha'); data.rows.push({ id: uid(), cells: {} }); draw(); save(); next = main.querySelector('tbody tr:last-child'); }
     next.querySelectorAll('[data-c]')[idx]?.focus();
   });
   main.addEventListener('click', (e) => {
     const dot = e.target.closest('[data-rowcolor]');
-    if (dot) { const r = data.rows.find((x) => x.id === dot.closest('[data-row]').dataset.row); colorPop(dot, r.color, (c) => { if (c) r.color = c; else delete r.color; draw(); save(); }); return; }
-    if (e.target.closest('[data-addrow]')) { data.rows.push({ id: uid(), cells: {} }); draw(); save(); main.querySelector('tbody tr:last-child [data-c]')?.focus(); return; }
-    if (e.target.closest('[data-rmrow]')) { const id = e.target.closest('[data-row]').dataset.row; data.rows = data.rows.filter((r) => r.id !== id); draw(); save(); return; }
+    if (dot) { const r = data.rows.find((x) => x.id === dot.closest('[data-row]').dataset.row); colorPop(dot, r.color, (c) => { snap('cor da linha'); if (c) r.color = c; else delete r.color; draw(); save(); }); return; }
+    if (e.target.closest('[data-addrow]')) { snap('juntar linha'); data.rows.push({ id: uid(), cells: {} }); draw(); save(); main.querySelector('tbody tr:last-child [data-c]')?.focus(); return; }
+    if (e.target.closest('[data-rmrow]')) { snap('apagar linha'); const id = e.target.closest('[data-row]').dataset.row; data.rows = data.rows.filter((r) => r.id !== id); draw(); save(); return; }
     if (e.target.closest('[data-addcol]')) return colForm(null);
     const th = e.target.closest('[data-col]'); if (th) colForm(data.columns.find((c) => c.id === th.dataset.col));
   });
@@ -110,13 +114,13 @@ export function tableTool(main, p, tool) {
     bindColorField(m.el);
     if (justAdded) m.el.querySelector('#cn').select();
     m.el.querySelector('form').addEventListener('submit', (e) => {
-      e.preventDefault(); c.name = m.el.querySelector('#cn').value.trim() || 'Coluna'; c.type = m.el.querySelector('#ct').value;
+      e.preventDefault(); if (!justAdded) snap(isNew ? 'juntar coluna' : 'mudar coluna'); c.name = m.el.querySelector('#cn').value.trim() || 'Coluna'; c.type = m.el.querySelector('#ct').value;
       const col = readColor(m.el); if (col) c.color = col; else delete c.color;
       if (isNew) data.columns.push(c); m.close(); draw(); save();
     });
     m.el.querySelector('[data-del]')?.addEventListener('click', async () => {
       m.close(); if (!(await confirmBox(`Apagar a coluna "${c.name}"?`, 'Apagar'))) return;
-      data.columns = data.columns.filter((x) => x.id !== c.id); draw(); save();
+      snap('apagar coluna'); data.columns = data.columns.filter((x) => x.id !== c.id); draw(); save();
     });
   }
 }

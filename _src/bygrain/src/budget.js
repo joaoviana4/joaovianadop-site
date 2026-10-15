@@ -1,6 +1,6 @@
 import { sb, esc, toast, modal, confirmBox, ICON } from './lib.js';
 import { exportPdf } from './pdf.js';
-import { colorField, readColor, bindColorField, colorPop, tableShortcuts, rowStyle, colStyle } from './tablekit.js';
+import { colorField, readColor, bindColorField, colorPop, tableShortcuts, rowStyle, colStyle, makeHistory, bindUndoKeys } from './tablekit.js';
 
 // Orçamento do projeto, como no Studio: tabela com secções, colunas de texto, valor (€) e número,
 // subtotais por secção, comparação com o orçamento geral, modelos por tipo de projeto, importar e exportar Excel.
@@ -57,7 +57,8 @@ function sums(b) {
 export async function budgetPage(main, p) {
   let b = p.budget && p.budget.cols ? JSON.parse(JSON.stringify(p.budget)) : null;
   let total = p.value != null ? Number(p.value) : null;
-  let undo = null;
+  const hist = makeHistory({ get: () => b, set: (v) => { b = v; }, after: () => { save(0); draw(); }, notify: toast });
+  let undoKeysBound = false;
   let saveT;
   // Guardar com proteção: só grava se ninguém (outra janela, outra pessoa) mudou o orçamento entretanto.
   // Cada versão anterior fica guardada na base de dados (project_budget_history).
@@ -144,7 +145,7 @@ export async function budgetPage(main, p) {
         <button type="button" class="btn ghost" data-export>${ICON.copy} Exportar para Excel</button>
         <button type="button" class="btn ghost" data-pdf>${ICON.open} Exportar PDF</button>
         ${p._store ? '' : `<button type="button" class="btn ghost" data-hist>${ICON.refresh} Versões anteriores</button>`}
-        ${undo ? `<button type="button" class="link-btn" data-undo>Desfazer: ${esc(undo.label)}</button>` : ''}
+        ${hist.last ? `<button type="button" class="link-btn" data-undo title="Ctrl+Z">Desfazer: ${esc(hist.last)}</button>` : ''}
       </div>
       <div class="panel table-wrap btable"><table class="table budget">
         <thead><tr>${b.cols.map((c) => `<th class="${c.type !== 'text' ? 'num' : ''} ${c.color ? 'has-cc' : ''}" data-colid="${c.id}"${colStyle(c)}><button type="button" class="th-btn" data-col="${c.id}">${esc(c.name)}${c.id === b.main ? ' ●' : ''}</button></th>`).join('')}<th class="bact"><button type="button" class="icon-btn sm" data-addcol aria-label="Juntar coluna">${ICON.plus}</button></th></tr></thead>
@@ -163,7 +164,7 @@ export async function budgetPage(main, p) {
     main.querySelectorAll('[data-ssum]').forEach((el) => { const [sid, cid] = el.dataset.ssum.split(':'); const c = b.cols.find((x) => x.id === cid); el.textContent = fmt(c, sec[sid]?.[cid] || 0); });
     main.querySelector('[data-sum]').innerHTML = summary();
   }
-  const snapshot = (label) => { undo = { label, data: JSON.parse(JSON.stringify(b)) }; };
+  const snapshot = (label) => hist.push(label);
 
   function bind() {
     const totalIn = main.querySelector('[data-total]');
@@ -177,7 +178,9 @@ export async function budgetPage(main, p) {
       if (!b.cols.some((c) => c.id === 'd')) b.cols.unshift({ id: 'd', name: 'Descrição', type: 'text' });
       save(0); draw();
     });
-    main.querySelector('[data-undo]')?.addEventListener('click', () => { b = undo.data; undo = null; save(0); draw(); toast('Desfeito.'); });
+    main.querySelector('[data-undo]')?.addEventListener('click', () => hist.undo());
+    hist.watch(main.querySelector('table.budget'));
+    if (!undoKeysBound) { bindUndoKeys(main, hist); undoKeysBound = true; }
     main.querySelector('[data-import]').addEventListener('click', pickImport);
     main.querySelector('[data-export]').addEventListener('click', () => exportXlsx(b, total, p.name));
     main.querySelector('[data-hist]')?.addEventListener('click', history);
@@ -214,17 +217,17 @@ export async function budgetPage(main, p) {
     });
     tbody.addEventListener('click', (e) => {
       const dot = e.target.closest('[data-rowcolor]');
-      if (dot) { const r = b.rows.find((x) => x.id === dot.closest('[data-row]').dataset.row); colorPop(dot, r.color, (c) => { if (c) r.color = c; else delete r.color; save(); draw(); }); return; }
+      if (dot) { const r = b.rows.find((x) => x.id === dot.closest('[data-row]').dataset.row); colorPop(dot, r.color, (c) => { snapshot('cor da linha'); if (c) r.color = c; else delete r.color; save(); draw(); }); return; }
       if (!e.target.closest('[data-rm]')) return;
       const id = e.target.closest('[data-row]').dataset.row; const r = b.rows.find((x) => x.id === id);
       snapshot(r.kind === 'section' ? 'apagar secção' : 'apagar linha'); b.rows = b.rows.filter((x) => x.id !== id); save(); draw();
     });
-    main.querySelector('[data-addrow]').addEventListener('click', () => { b.rows.push({ id: uid(), kind: 'item', cells: {} }); save(); draw(); main.querySelector('tbody tr:last-child [data-cell]')?.focus(); });
-    main.querySelector('[data-addsec]').addEventListener('click', () => { b.rows.push({ id: uid(), kind: 'section', title: 'Nova secção' }); save(); draw(); const s = main.querySelector('tbody tr:last-child [data-sec]'); s?.focus(); s?.select(); });
+    main.querySelector('[data-addrow]').addEventListener('click', () => { snapshot('juntar linha'); b.rows.push({ id: uid(), kind: 'item', cells: {} }); save(); draw(); main.querySelector('tbody tr:last-child [data-cell]')?.focus(); });
+    main.querySelector('[data-addsec]').addEventListener('click', () => { snapshot('juntar secção'); b.rows.push({ id: uid(), kind: 'section', title: 'Nova secção' }); save(); draw(); const s = main.querySelector('tbody tr:last-child [data-sec]'); s?.focus(); s?.select(); });
     main.querySelector('[data-addcol]').addEventListener('click', () => colForm(null));
     const at = (id) => { const i = b.rows.findIndex((x) => x.id === id); return i < 0 ? b.rows.length - 1 : i; };
-    const insertRow = (i, row) => { b.rows.splice(i, 0, row); save(); draw(); const el = main.querySelector(`[data-row="${row.id}"] ${row.kind === 'section' ? '[data-sec]' : '[data-cell]'}`); el?.focus(); if (row.kind === 'section') el?.select(); };
-    const insertCol = (id, side) => { const i = b.cols.findIndex((c) => c.id === id); const c = { id: uid(), name: 'Nova coluna', type: 'text' }; b.cols.splice(i < 0 ? b.cols.length : i + side, 0, c); save(); draw(); colForm(c, true); };
+    const insertRow = (i, row) => { snapshot(row.kind === 'section' ? 'juntar secção' : 'juntar linha'); b.rows.splice(i, 0, row); save(); draw(); const el = main.querySelector(`[data-row="${row.id}"] ${row.kind === 'section' ? '[data-sec]' : '[data-cell]'}`); el?.focus(); if (row.kind === 'section') el?.select(); };
+    const insertCol = (id, side) => { snapshot('juntar coluna'); const i = b.cols.findIndex((c) => c.id === id); const c = { id: uid(), name: 'Nova coluna', type: 'text' }; b.cols.splice(i < 0 ? b.cols.length : i + side, 0, c); save(); draw(); colForm(c, true); };
     tableShortcuts(main.querySelector('table.budget'), {
       rowBelow: (id) => insertRow(at(id) + 1, { id: uid(), kind: 'item', cells: {} }),
       rowAbove: (id) => insertRow(Math.max(0, at(id)), { id: uid(), kind: 'item', cells: {} }),
@@ -244,7 +247,7 @@ export async function budgetPage(main, p) {
     bindColorField(m.el);
     if (justAdded) { const n = m.el.querySelector('#cn'); n.select(); }
     m.el.querySelector('form').addEventListener('submit', (e) => {
-      e.preventDefault(); c.name = m.el.querySelector('#cn').value.trim() || 'Coluna'; c.type = m.el.querySelector('#ct').value;
+      e.preventDefault(); if (!justAdded) snapshot(isNew ? 'juntar coluna' : 'mudar coluna'); c.name = m.el.querySelector('#cn').value.trim() || 'Coluna'; c.type = m.el.querySelector('#ct').value;
       const col = readColor(m.el); if (col) c.color = col; else delete c.color;
       if (isNew) b.cols.push(c);
       if (!b.main || !b.cols.some((x) => x.id === b.main && x.type !== 'text')) b.main = b.cols.find((x) => x.type === 'money')?.id || b.cols.find((x) => x.type !== 'text')?.id || null;
