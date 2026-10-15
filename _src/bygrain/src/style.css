@@ -971,3 +971,19 @@ a.ov-kpi:hover { border-color: var(--line2); }
 .ref-card .icon-btn { position: absolute; top: 6px; right: 6px; background: rgba(12, 12, 18, .75); }
 .ref-add input[name=t] { flex: 2 1 240px; }
 .prop-head span:nth-child(2) { text-align: right; padding-right: 26px; }
+.props-total { display: flex; flex-wrap: wrap; gap: 14px 32px; align-items: flex-end; padding: 18px 20px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); }
+.props-total > div { display: flex; flex-direction: column; gap: 2px; }
+.props-total span { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+.props-total strong { font-family: var(--logo); font-size: 24px; font-weight: 800; }
+.props-total .muted-s { color: var(--muted); }
+.props-total p { flex-basis: 100%; margin: 0; }
+.ask-mode { align-self: flex-start; }
+.ask-mode label { display: flex; }
+.ask-mode input { position: absolute; opacity: 0; pointer-events: none; }
+.ask-mode span { display: flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: 999px; cursor: pointer; font-size: 14px; }
+.ask-mode input:checked + span { background: var(--cream); color: var(--ink); font-weight: 600; }
+.ask-mode input:focus-visible + span { outline: 2px solid var(--cream); outline-offset: 2px; }
+.ask-others { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin: 0; max-height: 220px; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
+.ask-others legend { font-size: 13px; color: var(--muted); padding: 0 6px; }
+.ask-others label { display: flex; align-items: center; gap: 10px; padding: 6px 0; cursor: pointer; }
+.ask-others small { margin-left: auto; }

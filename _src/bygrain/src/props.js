@@ -26,6 +26,87 @@ async function load(pid) {
   return { props: pr.data || [], scenes: sc.data || [], characters: ch.data || [], locations: lo.data || [], bundles: bu.data || [] };
 }
 
+const ASK = new Set(['comprado', 'alugado', 'construido']);
+const SPENT = new Set(['comprado', 'alugado', 'emprestado', 'construido', 'pronto']);
+// gasto (já comprado/alugado/construído) e previsto (ainda por arranjar, com valor estimado)
+export function propsSpend(props, bundles) {
+  const live = props.filter((x) => !x.removed);
+  let spent = 0, planned = 0;
+  live.filter((x) => !x.bundle_id).forEach((x) => { const v = Number(x.price) || 0; if (SPENT.has(x.status)) spent += v; else planned += v; });
+  bundles.forEach((b) => { const ps = live.filter((x) => x.bundle_id === b.id); if (!ps.length) return; const v = Number(b.total) || 0; if (ps.some((x) => SPENT.has(x.status))) spent += v; else planned += v; });
+  return { spent, planned };
+}
+
+// ao passar a comprado / alugado / construído, pergunta logo quanto custou (e se foi num pacote)
+export function askCost(p, f, x, after) {
+  if (!ASK.has(x.status)) return;
+  const rented = x.status === 'alugado';
+  const others = f.props.filter((y) => !y.removed && y.id !== x.id);
+  const verb = { comprado: 'Comprado', alugado: 'Alugado', construido: 'Construído' }[x.status];
+  const m = modal(`<h2>${verb}: ${esc(x.name)}</h2>
+    <form class="stack" data-ask>
+      ${rented ? `<div class="seg dark ask-mode" role="radiogroup" aria-label="Como foi alugado">${[['solo', 'Sozinho'], ['bundle', 'Em pacote com outros']].map(([k, l], i) => `<label><input type="radio" name="mode" value="${k}" ${(x.bundle_id ? k === 'bundle' : i === 0) ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>` : ''}
+      <div data-solo class="grid2">
+        <div class="field"><label for="ap">${rented ? 'Valor do aluguer' : x.status === 'construido' ? 'Custo (materiais)' : 'Preço'} (€)</label><input id="ap" name="price" type="number" step="0.01" min="0" inputmode="decimal" value="${esc(x.price ?? '')}" autofocus></div>
+        <div class="field"><label for="as">${rented ? 'Alugado a' : x.status === 'construido' ? 'Quem construiu' : 'Onde'}</label><input id="as" name="supplier" value="${esc(x.supplier || '')}" list="asups"></div>
+      </div>
+      ${rented ? `<div data-bundle hidden class="stack">
+        ${f.bundles.length ? `<div class="field"><label for="ab">Pacote</label><select id="ab" name="bundle"><option value="__new">+ Novo pacote</option>${f.bundles.map((b) => `<option value="${b.id}" ${x.bundle_id === b.id ? 'selected' : ''}>${esc(b.name)}${b.supplier ? ` · ${esc(b.supplier)}` : ''}</option>`).join('')}</select></div>` : '<input type="hidden" name="bundle" value="__new">'}
+        <div class="grid2" data-newb>
+          <div class="field"><label for="abn">Nome do pacote</label><input id="abn" name="bname" placeholder="ex: Pacote bar"></div>
+          <div class="field"><label for="abs">Alugado a</label><input id="abs" name="bsupplier" value="${esc(x.supplier || '')}" list="asups"></div>
+        </div>
+        <div class="field"><label for="abt">Valor total do pacote (€)</label><input id="abt" name="btotal" type="number" step="0.01" min="0" inputmode="decimal"></div>
+        ${others.length ? `<fieldset class="ask-others"><legend>Que outros adereços vieram neste pacote?</legend>${others.map((y) => `<label><input type="checkbox" name="with" value="${y.id}"><span>${esc(y.name)}</span>${y.bundle_id ? `<small class="muted" data-inb="${y.bundle_id}">já noutro pacote</small>` : ''}</label>`).join('')}</fieldset>` : ''}
+      </div>` : ''}
+      <datalist id="asups">${[...new Set(f.props.map((y) => y.supplier).concat(f.bundles.map((b) => b.supplier)).filter(Boolean))].map((v) => `<option value="${esc(v)}">`).join('')}</datalist>
+      <div class="row end"><button type="button" class="btn ghost" data-close>Agora não</button><button class="btn primary">Guardar</button></div>
+    </form>`);
+  const form = m.el.querySelector('[data-ask]');
+  const sync = () => {
+    const bundle = rented && form.elements.mode && [...form.querySelectorAll('[name=mode]')].find((r) => r.checked)?.value === 'bundle';
+    form.querySelector('[data-solo]').hidden = bundle;
+    if (form.querySelector('[data-bundle]')) form.querySelector('[data-bundle]').hidden = !bundle;
+    const sel = form.elements.bundle; const isNew = !sel || sel.value === '__new';
+    const nb = form.querySelector('[data-newb]'); if (nb) nb.hidden = !isNew;
+    form.querySelectorAll('[data-inb]').forEach((el) => (el.hidden = !isNew && el.dataset.inb === sel.value));
+    if (!isNew) { const b = f.bundles.find((y) => y.id === sel.value); form.elements.btotal.value = b?.total ?? ''; form.querySelectorAll('[name=with]').forEach((c) => (c.checked = f.props.some((y) => y.id === c.value && y.bundle_id === b.id))); }
+  };
+  form.querySelectorAll('[name=mode]').forEach((r) => r.addEventListener('change', sync));
+  form.elements.bundle?.addEventListener?.('change', sync);
+  sync();
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form); const num = (v) => (v === '' || v == null ? null : Number(v));
+    const bundle = rented && fd.get('mode') === 'bundle';
+    if (!bundle) {
+      const patch = { price: num(fd.get('price')), supplier: fd.get('supplier')?.trim() || null, bundle_id: null };
+      const { error } = await sb.from('props').update(patch).eq('id', x.id); if (error) return toast(error.message);
+      Object.assign(x, patch);
+    } else {
+      let bid = fd.get('bundle');
+      if (bid === '__new') {
+        const name = fd.get('bname')?.trim() || `Pacote ${fd.get('bsupplier')?.trim() || f.bundles.length + 1}`;
+        const { data, error } = await sb.from('prop_bundles').insert({ project_id: p.id, name, supplier: fd.get('bsupplier')?.trim() || null, total: num(fd.get('btotal')) }).select().single();
+        if (error) return toast(error.message); f.bundles.push(data); bid = data.id;
+      } else {
+        const b = f.bundles.find((y) => y.id === bid); b.total = num(fd.get('btotal'));
+        await sb.from('prop_bundles').update({ total: b.total }).eq('id', bid);
+      }
+      const ids = [x.id, ...fd.getAll('with')];
+      const b = f.bundles.find((y) => y.id === bid);
+      // os adereços do pacote ficam alugados, do mesmo fornecedor
+      const { error } = await sb.from('props').update({ bundle_id: bid, status: 'alugado', supplier: b.supplier || null, price: null }).in('id', ids);
+      if (error) return toast(error.message);
+      f.props.filter((y) => ids.includes(y.id)).forEach((y) => Object.assign(y, { bundle_id: bid, status: 'alugado', supplier: b.supplier || null, price: null }));
+      // quem saiu do pacote deixa de estar nele
+      const out = f.props.filter((y) => y.bundle_id === bid && !ids.includes(y.id));
+      if (out.length) { await sb.from('props').update({ bundle_id: null }).in('id', out.map((y) => y.id)); out.forEach((y) => (y.bundle_id = null)); }
+    }
+    m.close(); toast('Guardado.'); after && after();
+  });
+}
+
 // custo total: adereços soltos + cada pacote contado uma vez
 export function propsCost(props, bundles) {
   const live = props.filter((x) => !x.removed);
@@ -49,7 +130,7 @@ export async function propsPage(main, p, sub, base, cleanup) {
     const list = visible.filter((x) => (!st.filter || x.status === st.filter) && (!st.q || norm(`${x.name} ${x.category} ${x.supplier}`).includes(norm(st.q))));
     const cost = propsCost(f.props, f.bundles);
     main.innerHTML = `
-      <div class="row between wrap-gap"><div><h1 class="h1 pm-title">Adereços</h1>${cost ? `<p class="muted">Custo total ${eur.format(cost)}${f.bundles.length ? ` · ${f.bundles.length} ${f.bundles.length === 1 ? 'pacote de aluguer' : 'pacotes de aluguer'}` : ''}</p>` : ''}</div>
+      <div class="row between wrap-gap"><div><h1 class="h1 pm-title">Adereços</h1>${cost ? `<p class="muted">${eur.format(propsSpend(f.props, f.bundles).spent)} já gastos · ${eur.format(cost)} no total${f.bundles.length ? ` · ${f.bundles.length} ${f.bundles.length === 1 ? 'pacote de aluguer' : 'pacotes de aluguer'}` : ''}</p>` : ''}</div>
         <div class="row wrap-gap"><button type="button" class="btn ghost" data-add>${ICON.plus} Adereço</button>${hasScenes && !clip ? '<button type="button" class="btn primary" data-analyze>Analisar o guião</button>' : ''}</div></div>
       <div class="props-bar">
         <div class="seg dark" role="tablist">${[['acao', 'De ação'], ['cenario', 'De cenário']].map(([k, l]) => `<button type="button" role="tab" aria-selected="${st.tab === k}" data-tab="${k}">${l} (${f.props.filter((x) => !x.removed && x.type === k).length})</button>`).join('')}</div>
@@ -65,7 +146,13 @@ export async function propsPage(main, p, sub, base, cleanup) {
         <select name="status" aria-label="Estado">${PROP_STATUS.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select>
         <button class="btn primary">${ICON.plus} Juntar</button>
       </form>
-      <section class="${st.view === 'grid' ? 'props-gridwrap' : 'panel'}" data-listbox>${list.length ? renderList(list, f, base, urls) : `<p class="empty-note">${st.q ? `Nenhum adereço com "${esc(st.q)}".` : f.props.length ? 'Nada com este filtro.' : (hasScenes ? 'Ainda não há adereços. Analisa o guião ou junta-os à mão.' : 'Ainda não há adereços. Junta-os em "Adereço".')}</p>`}</section>`;
+      <section class="${st.view === 'grid' ? 'props-gridwrap' : 'panel'}" data-listbox>${list.length ? renderList(list, f, base, urls) : `<p class="empty-note">${st.q ? `Nenhum adereço com "${esc(st.q)}".` : f.props.length ? 'Nada com este filtro.' : (hasScenes ? 'Ainda não há adereços. Analisa o guião ou junta-os à mão.' : 'Ainda não há adereços. Junta-os em "Adereço".')}</p>`}</section>
+      ${(() => { const sp = propsSpend(f.props, f.bundles); return sp.spent || sp.planned ? `<div class="props-total">
+        <div><span>Já gasto em adereços</span><strong>${eur.format(sp.spent)}</strong></div>
+        ${sp.planned ? `<div><span>Ainda por gastar (previsto)</span><strong class="muted-s">${eur.format(sp.planned)}</strong></div>` : ''}
+        <div><span>Total</span><strong>${eur.format(sp.spent + sp.planned)}</strong></div>
+        ${f.bundles.length ? `<p class="muted small">Cada pacote de aluguer conta uma vez só: ${f.bundles.map((b) => `${esc(b.name)} ${b.total ? eur.format(b.total) : '(sem valor)'}`).join(' · ')}</p>` : ''}
+      </div>` : ''; })()}`;
     main.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { st.tab = b.dataset.tab; st.filter = ''; draw(); }));
     main.querySelector('[data-sort]').addEventListener('change', (e) => { st.sort = e.target.value; draw(); });
     main.querySelectorAll('[data-filter]').forEach((b) => b.addEventListener('click', () => { st.filter = b.dataset.filter; draw(); }));
@@ -76,6 +163,7 @@ export async function propsPage(main, p, sub, base, cleanup) {
       const x = f.props.find((y) => y.id === sel.dataset.status); x.status = sel.value;
       await sb.from('props').update({ status: sel.value }).eq('id', x.id);
       sel.closest('[data-prop]').style.setProperty('--c', statusOf(sel.value)[2]);
+      if (ASK.has(x.status)) askCost(p, f, x, draw); else draw();
     }));
     // juntar sem sair da página: escreve, Enter, e continua a escrever o próximo
     main.querySelector('[data-add]').addEventListener('click', () => main.querySelector('[data-quick] [name=name]').focus());
@@ -89,6 +177,7 @@ export async function propsPage(main, p, sub, base, cleanup) {
       f.props.push(data); st.filter = ''; st.q = ''; st.lastAdded = data.id;
       draw();
       main.querySelector('[data-quick] [name=name]').focus();
+      if (ASK.has(data.status) && data.price == null) askCost(p, f, data, draw);
       toast(`"${name}" juntado.`);
     });
     main.querySelectorAll('[data-price]').forEach((inp) => {
@@ -205,7 +294,7 @@ async function propPage(main, p, f, id, base, cleanup) {
   });
   const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: 'prop', id: x.id } }); cleanup(() => t.destroy());
   acquisition(main.querySelector('[data-acq]'), p, f, x);
-  main.querySelector('#pst').addEventListener('change', () => acquisition(main.querySelector('[data-acq]'), p, f, x));
+  main.querySelector('#pst').addEventListener('change', () => { acquisition(main.querySelector('[data-acq]'), p, f, x); if (ASK.has(x.status)) setTimeout(() => askCost(p, f, x, () => acquisition(main.querySelector('[data-acq]'), p, f, x)), 50); });
 }
 
 // ---------- quanto custa e de onde vem ----------
