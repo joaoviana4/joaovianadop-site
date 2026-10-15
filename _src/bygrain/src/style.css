@@ -1061,3 +1061,17 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
 .sc-opt input { margin-top: 3px; accent-color: var(--blue); }
 .sc-opt span { display: flex; flex-direction: column; gap: 2px; }
 .sc-opt small { color: var(--muted); font-size: 13px; }
+
+/* seguimento em grelha (colunas, como no Milanote) */
+.seg-viewbar { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.seg-viewbar .seg button { min-height: 32px; font-size: 13px; }
+.seg-cols { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 10px; align-items: flex-start; scroll-snap-type: x proximity; }
+.seg-col { flex: 0 0 250px; display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--sc); color: var(--text); text-decoration: none; scroll-snap-align: start; }
+.seg-col:hover { border-color: var(--line2); border-top-color: var(--sc); }
+.sc-h { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; padding: 6px 0 4px; }
+.sc-h strong { font-family: var(--serif); font-size: 18px; font-weight: 400; letter-spacing: .01em; }
+.sc-h small { color: var(--muted); font-size: 11px; }
+.sc-desc { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg2); font-size: 13px; line-height: 1.45; }
+.sc-desc b { font-size: 12px; }
+.sc-desc.empty { color: var(--muted); font-style: italic; }
+.seg-col img { width: 100%; border-radius: 6px; display: block; background: #0a0a10; }

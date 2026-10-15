@@ -142,6 +142,14 @@ async function musicPage(main, p, f, sub, base, cleanup) {
   const music = { ...(p.music || {}) };
   const saveNow = async () => { const { error } = await sb.from('projects').update({ music }).eq('id', p.id); if (error) { toast(error.message); return false; } p.music = { ...music }; return true; };
   const saveMusic = debounce(async () => { const { error } = await sb.from('projects').update({ music }).eq('id', p.id); if (error) toast(error.message); else p.music = { ...music }; }, 500);
+  const shotUrls = await signedUrls(f.shots.map((x) => x.image_path).filter(Boolean));
+  let view = (() => { try { return localStorage.getItem('bg-seg-view') || 'grid'; } catch { return 'grid'; } })();
+  // secções em colunas, como no Milanote: nome, descrição e as imagens dos planos
+  const gridHtml = (L) => `<div class="seg-cols">${L.items.map((x) => { const sh = f.shots.filter((y) => y.scene_id === x.s.id); return `<a class="seg-col" href="${base}/seguimento/${x.s.id}" style="--sc:${x.col}">
+      <span class="sc-h"><strong>${esc(x.s.heading || 'Sem nome')}</strong><small>${x.a != null ? `${fmtT(x.a)}${x.b != null ? '–' + fmtT(x.b) : ''} · ` : ''}${sh.length} ${sh.length === 1 ? 'plano' : 'planos'}</small></span>
+      ${x.s.notes ? `<span class="sc-desc"><b>Descrição:</b>${x.s.notes.split('\n').filter((l) => l.trim()).map((l) => `<span>${esc(l)}</span>`).join('')}</span>` : '<span class="sc-desc empty">Sem descrição. Abre para escrever a ideia desta secção.</span>'}
+      ${sh.filter((y) => shotUrls[y.image_path]).map((y) => `<img src="${esc(shotUrls[y.image_path])}" alt="${esc(y.code)}" loading="lazy">`).join('')}
+    </a>`; }).join('')}</div>`;
   const draw = () => {
     const L = layout(f.scenes, music.duration);
     main.innerHTML = `
@@ -158,7 +166,7 @@ async function musicPage(main, p, f, sub, base, cleanup) {
         </div>
         ${f.scenes.length ? trackHtml(f.scenes, music.duration, { base, f }) + (L.scaled ? '' : '<p class="muted small">Escreve quando começa cada secção (e a duração da música) para a barra ficar à escala.</p>') : '<p class="muted">Ainda sem secções. Junta-as em baixo, uma a uma, ou parte já com as secções habituais de uma música (intro, versos, refrões, ponte).</p>'}
       </section></div>
-      ${f.scenes.length ? `<div data-blk="table"><div class="panel table-wrap"><table class="table seg-table"><thead><tr><th></th><th>Secção</th><th>Começa</th><th>Acaba</th><th>Décors</th><th>Pessoas</th><th class="num">Planos</th><th></th></tr></thead><tbody>
+      ${f.scenes.length ? `<div data-blk="table"><div class="seg-viewbar"><div class="seg dark" role="radiogroup" aria-label="Vista das secções">${[['grid', 'Grelha'], ['list', 'Lista']].map(([k, l]) => `<button type="button" role="radio" aria-checked="${view === k}" aria-selected="${view === k}" data-segview="${k}">${l}</button>`).join('')}</div></div>${view === 'grid' ? gridHtml(L) : `<div class="panel table-wrap"><table class="table seg-table"><thead><tr><th></th><th>Secção</th><th>Começa</th><th>Acaba</th><th>Décors</th><th>Pessoas</th><th class="num">Planos</th><th></th></tr></thead><tbody>
         ${L.items.map((x) => `<tr data-sid="${x.s.id}">
           <td><i class="seg-dot" style="--sc:${x.col}"></i></td>
           <td><input class="cell-in" data-f="heading" value="${esc(x.s.heading || '')}" list="dl-parts" aria-label="Nome da secção"></td>
@@ -168,7 +176,7 @@ async function musicPage(main, p, f, sub, base, cleanup) {
           <td class="small">${esc([...(x.s.character_ids || []), ...(x.s.extra_ids || [])].map((id) => f.characters.find((c) => c.id === id)?.name).filter(Boolean).join(', ')) || '<span class="muted">—</span>'}</td>
           <td class="num">${f.shots.filter((y) => y.scene_id === x.s.id).length || '<span class="muted">—</span>'}</td>
           <td><a class="btn ghost sm-btn" href="${base}/seguimento/${x.s.id}">Abrir ${ICON.chev}</a></td></tr>`).join('')}
-      </tbody></table></div></div>` : ''}
+      </tbody></table></div>`}</div>` : ''}
       <div data-blk="add"><form class="panel row wrap-gap seg-add" data-add>
         <strong class="small">Nova secção</strong>
         <input name="name" placeholder="ex: Refrão" list="dl-parts" aria-label="Nome da secção" required>
@@ -181,8 +189,9 @@ async function musicPage(main, p, f, sub, base, cleanup) {
     mediaPanel({ previs: main.querySelector('[data-slot=previs]'), song: main.querySelector('[data-slot=song]'), refs: main.querySelector('[data-slot=refs]') }, p, music, saveNow);
     mountLayout(main.querySelector('[data-lay]'), { project: p, key: 'seguimento', title: 'página do seguimento', blocks: [
       { id: 'previs', label: 'Pre-vis', pos: 'left' }, { id: 'song', label: 'A música', pos: 'right' }, { id: 'refs', label: 'Referências', pos: 'full' },
-      { id: 'track', label: 'Barra das secções', pos: 'full' }, { id: 'table', label: 'Tabela das secções', pos: 'full' }, { id: 'add', label: 'Nova secção', pos: 'full' },
+      { id: 'track', label: 'Barra das secções', pos: 'full' }, { id: 'table', label: 'Secções (grelha ou lista)', pos: 'full' }, { id: 'add', label: 'Nova secção', pos: 'full' },
     ] });
+    main.querySelectorAll('[data-segview]').forEach((b) => b.addEventListener('click', () => { view = b.dataset.segview; try { localStorage.setItem('bg-seg-view', view); } catch { /* sem armazenamento */ } draw(); }));
     main.querySelector('[data-dur]').addEventListener('input', (e) => { music.duration = e.target.value.trim(); saveMusic(); });
     main.querySelector('[data-dur]').addEventListener('change', draw);
     main.querySelector('[data-bpm]').addEventListener('input', (e) => { music.bpm = e.target.value.trim(); saveMusic(); });
@@ -245,7 +254,7 @@ async function section(main, p, f, sid, base, cleanup) {
     <section><div class="row between"><h2 class="h3">Planos</h2><span class="muted small">${shots.length} ${shots.length === 1 ? 'plano' : 'planos'}</span></div>
       <div class="shots" data-shots>${shots.map((x) => shotCard(x, urls[x.image_path])).join('')}<button type="button" class="shot-add" data-addshot>${ICON.plus}<span>Plano</span></button></div></section>
     <section class="panel"><h2 class="h3">Tarefas desta secção</h2><div data-tasks></div></section>
-    <section class="panel"><h2 class="h3">Ideia e notas</h2><textarea data-notes rows="4" placeholder="O que acontece nesta parte da música: performance, narrativa, ritmo da montagem…">${esc(s.notes || '')}</textarea></section>
+    <section class="panel"><h2 class="h3">Descrição</h2><textarea data-notes rows="4" placeholder="O que acontece nesta parte da música: performance, narrativa, ritmo da montagem…">${esc(s.notes || '')}</textarea></section>
     <div class="row end"><button type="button" class="btn ghost danger-text" data-del>${ICON.trash} Apagar secção</button></div>`;
   const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: 'scene', id: s.id } }); cleanup(() => t.destroy());
   const saveNotes = debounce((v) => sb.from('scenes').update({ notes: v }).eq('id', s.id));
