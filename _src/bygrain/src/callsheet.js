@@ -1,4 +1,5 @@
 import { sb, esc, toast, modal, confirmBox, ICON, signedUrl } from './lib.js';
+import { CS_MODELS } from './csmodels.js';
 
 // Folha de serviço (call sheet) de um dia de rodagem, no estilo do modelo "A Forma e o Silêncio":
 // cabeçalho com dia, contactos, call e morada, meteorologia, notas, hospital e estacionamento, horários,
@@ -87,6 +88,7 @@ function studioHtml(d) {
   const ta = (path, ph = '', rows = 2) => `<textarea class="cst-in" data-p="${path}" rows="${rows}" placeholder="${esc(ph)}" aria-label="${esc(ph)}">${esc(get(d, path) ?? '')}</textarea>`;
   const x = (attr) => `<button type="button" class="cst-x" ${attr} aria-label="Tirar" title="Tirar">×</button>`;
   const add = (attr, label) => `<button type="button" class="cst-add" ${attr}>${ICON.plus}<span>${label}</span></button>`;
+  const x2 = x;
   const go = (url) => (url && /^https?:/.test(url) ? `<a class="cst-go" href="${esc(url)}" target="_blank" rel="noopener" title="Abrir">${ICON.open}</a>` : '');
   const shots = d.rows.filter((r) => r.kind === 'shot').length;
   return `<div class="cst" style="--acc:${esc(d.accent || '#C8382D')}">
@@ -145,13 +147,32 @@ function studioHtml(d) {
       <div class="row wrap-gap">${add('data-addrow', 'Linha')}${add('data-addband', 'Faixa (almoço, slider in…)')}</div>
     </section>
 
+    <details class="cst-card cst-more" ${Object.values(d.more || {}).some((x) => String(x || '').trim()) || (d.vehicles || []).length || (d.deptNotes || []).length ? 'open' : ''}>
+      <summary><h3>Mais informação</h3><span class="muted small">Aparece nos modelos de exportação que a usam (Longa-metragem, Cartões)</span></summary>
+      <div class="cst-mgrid">
+        <label><span>Unidade</span>${f('more.unit', 'ex: Unidade principal')}</label><label><span>Subtítulo</span>${f('more.subtitle', 'ex: Uma produção …')}</label>
+        <label><span>Base / unit base</span>${f('more.base', 'Onde fica a base')}</label><label><span>Pronto a filmar</span>${f('more.ready', '09:00')}</label>
+        <label><span>Wrap previsto</span>${f('more.wrap_est', '19:00')}</label><label><span>Nascer do sol</span>${f('more.sunrise', '07:45')}</label>
+        <label><span>Pôr do sol</span>${f('more.sunset', '18:58')}</label><label><span>Emergência</span>${f('more.ambulance', '112')}</label>
+        <label><span>Polícia</span>${f('more.police', 'Posto mais próximo')}</label><label><span>Bombeiros</span>${f('more.fire', 'Quartel mais próximo')}</label>
+      </div>
+      <label class="cst-wide"><span>Apontamentos gerais</span>${ta('more.general', 'Avisos para toda a equipa', 2)}</label>
+      <label class="cst-wide"><span>Frase do dia</span>${f('more.quote', 'Opcional')}</label>
+      <h3 class="cst-sub">Veículos</h3>
+      ${(d.vehicles || []).length ? `<div class="cst-tw"><table class="cst-t"><thead><tr><th>Veículo</th><th>Condutor</th><th>Call</th><th>Notas</th><th></th></tr></thead><tbody>${d.vehicles.map((x, i) => `<tr>${['name', 'driver', 'call', 'obs'].map((k) => `<td>${f(`vehicles.${i}.${k}`, '')}</td>`).join('')}<td class="cst-ctl">${x2(`data-rm="vehicles:${x.id}"`)}</td></tr>`).join('')}</tbody></table></div>` : ''}
+      ${add('data-addveh', 'Veículo')}
+      <h3 class="cst-sub">Notas por departamento</h3>
+      <div class="cst-dn">${(d.deptNotes || []).map((x, i) => `<div class="cst-dni">${f(`deptNotes.${i}.dept`, 'Departamento', 'cst-role')}${ta(`deptNotes.${i}.text`, 'O que este departamento precisa de saber', 2)}${x2(`data-rm="deptNotes:${x.id}"`)}</div>`).join('')}</div>
+      ${add('data-adddn', 'Nota de departamento')}
+    </details>
+
     <footer class="cst-foot">${f('footer', 'WRAP', 'cst-footin')}</footer>
   </div>`;
 }
 
 // Uma ferramenta guarda todos os dias de rodagem: { sheets: [folha do dia 1, dia 2, …] }.
 // (as folhas antigas, de um só dia, passam a ser o dia 1)
-const wrap = (data, p) => { const w = data?.sheets?.length ? data : { sheets: [data?.rows ? data : newCallsheet(p, 1)] }; w.sheets.forEach((sh, i) => { if (!sh.day) sh.day = String(i + 1); if (!sh.days) sh.days = String(w.sheets.length); }); return w; };
+const wrap = (data, p) => { const w = data?.sheets?.length ? data : { sheets: [data?.rows ? data : newCallsheet(p, 1)] }; w.sheets.forEach((sh, i) => { if (!sh.day) sh.day = String(i + 1); if (!sh.days) sh.days = String(w.sheets.length); sh.more = sh.more || {}; sh.vehicles = sh.vehicles || []; sh.deptNotes = sh.deptNotes || []; }); return w; };
 const shortDay = (iso) => { if (!iso) return ''; const d = new Date(iso + 'T00:00:00'); return d.toLocaleDateString('pt-PT', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, ''); };
 
 export function callsheetTool(main, p, tool) {
@@ -208,6 +229,8 @@ export function callsheetTool(main, p, tool) {
     on('[data-addrow]', () => d.rows.push({ id: uid(), kind: 'shot', cells: {} }));
     on('[data-addband]', () => d.rows.push({ id: uid(), kind: 'band', text: '', tone: 'grey' }));
     on('[data-addcol]', () => d.cols.push({ id: uid(), label: 'Nova' }));
+    on('[data-addveh]', () => d.vehicles.push({ id: uid(), name: '', driver: '', call: '', obs: '' }));
+    on('[data-adddn]', () => d.deptNotes.push({ id: uid(), dept: '', text: '' }));
     on('[data-tone]', (b) => { const r = d.rows.find((y) => y.id === b.dataset.tone); r.tone = r.tone === 'yellow' ? 'grey' : 'yellow'; });
     on('[data-mv]', (b) => { const [id, dir] = b.dataset.mv.split(':'); const i = d.rows.findIndex((y) => y.id === id); const j = i + Number(dir); if (j < 0 || j >= d.rows.length) return; [d.rows[i], d.rows[j]] = [d.rows[j], d.rows[i]]; });
     main.querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', async () => {
@@ -352,31 +375,44 @@ async function importXlsx(d, done) {
   inp.click();
 }
 
-function printSheet(list) {
+// documento completo (para imprimir e para a pré-visualização), no modelo escolhido
+function docHtml(list, modelId = 'classic') {
   const d = list[0];
-  const css = [...document.styleSheets].map((s) => { try { return [...s.cssRules].map((r) => r.cssText).filter((t) => t.includes('.cs')).join('\n'); } catch { return ''; } }).join('\n');
-  const html = `<!doctype html><html lang="pt"><head><meta charset="utf-8"><title>${esc(d.title)} — Folha de serviço ${list.length > 1 ? 'todos os dias' : 'dia ' + esc(d.day)}</title><style>
+  const model = CS_MODELS.find((x) => x.id === modelId) || CS_MODELS[0];
+  let css = ''; let pages;
+  if (model.render) {
+    const out = list.map((x) => model.render(x, paletteOf(x), inkOn));
+    css = out[0].css; pages = out.map((o) => o.body);
+  } else {
+    css = [...document.styleSheets].map((st) => { try { return [...st.cssRules].map((r) => r.cssText).filter((t) => /\.cs[\s.\-{:,]|\.cs$/.test(t) && !t.includes('.cst')).join('\n'); } catch { return ''; } }).join('\n')
+      + ' .cs-frame { padding: 16px !important; } a { color: #1155cc; } body { font: 9px/1.3 Arial, Helvetica, sans-serif; color: #000; }';
+    pages = list.map((x) => sheetHtml(x, false));
+  }
+  return `<!doctype html><html lang="pt"><head><meta charset="utf-8"><title>${esc(d.title)} — Folha de serviço ${list.length > 1 ? 'todos os dias' : 'dia ' + esc(d.day)}</title><style>
     @page { size: A4 portrait; margin: 8mm; } * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    body { margin: 0; font: 9px/1.3 Arial, Helvetica, sans-serif; color: #000; } ${css}
-    .cs-frame { padding: 16px !important; } a { color: #1155cc; }
-  </style></head><body>${list.map((x, i) => `<div style="${i ? 'break-before: page;' : ''}">${sheetHtml(x, false)}</div>`).join('')}</body></html>`;
+    body { margin: 0; background: #fff; } ${css}
+  </style></head><body>${pages.map((b, i) => `<div style="${i ? 'break-before: page;' : ''}">${b}</div>`).join('')}</body></html>`;
+}
+function printSheet(list, modelId) {
+  const html = docHtml(list, modelId);
   const fr = document.createElement('iframe'); fr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
   document.body.append(fr); const doc = fr.contentWindow.document; doc.open(); doc.write(html); doc.close();
   setTimeout(() => { fr.contentWindow.focus(); fr.contentWindow.print(); setTimeout(() => fr.remove(), 60000); }, 300);
 }
 
-// ---------- exportar: PDF ou Excel, no modelo clássico ou limpo ----------
 function exportDialog(all, cur, changed) {
   let pref = {}; try { pref = JSON.parse(localStorage.getItem('bg-cs-export') || '{}'); } catch { /* nada */ }
   const fmt = pref.fmt || 'pdf';
   const d = all.sheets[cur];
   const pal = paletteOf(d);
+  let model = d.model || 'classic';
   const radio = (name, val, on, title, sub) => `<label class="cs-opt"><input type="radio" name="${name}" value="${val}" ${on ? 'checked' : ''}><span><b>${title}</b>${sub ? `<small>${sub}</small>` : ''}</span></label>`;
   const same = (a, b) => PALETTE_KEYS.every(([k]) => String(a[k]).toLowerCase() === String(b[k]).toLowerCase());
   const chip = ([name, p]) => `<button type="button" class="cs-pre ${same(p, pal) ? 'on' : ''}" data-pre="${esc(name)}" title="${esc(name)}"><span class="cs-pre-sw" style="--f:${p.frame};--h:${p.hi};--l:${p.lo};--b:${p.box};--n:${p.ln}"><i></i><i></i><i></i></span><span>${esc(name)}</span></button>`;
   const m = modal(`<h2>Exportar folha de serviço</h2>
     <form class="stack" data-f>
-      <fieldset class="cs-opts"><legend>Formato</legend>${radio('fmt', 'pdf', fmt === 'pdf', 'PDF', 'Para enviar e imprimir')}${radio('fmt', 'xlsx', fmt === 'xlsx', 'Excel (.xlsx)', 'Para editar no Excel ou Google Sheets')}</fieldset>
+      <fieldset class="cs-opts"><legend>Formato</legend>${radio('fmt', 'pdf', fmt === 'pdf', 'PDF', 'Para enviar e imprimir, no modelo escolhido')}${radio('fmt', 'xlsx', fmt === 'xlsx', 'Excel (.xlsx)', 'Para editar no Excel ou Google Sheets (grelha clássica)')}</fieldset>
+      <fieldset class="cs-opts cs-models"><legend>Modelo</legend>${CS_MODELS.map((x) => radio('model', x.id, x.id === model, x.label, x.desc)).join('')}</fieldset>
       <div class="cs-colors">
         <div class="stack">
           <span class="cs-leg">Cores</span>
@@ -384,31 +420,41 @@ function exportDialog(all, cur, changed) {
           <div class="cs-cols">${PALETTE_KEYS.map(([k, l]) => `<label class="cs-col"><input type="color" name="c-${k}" value="${esc(pal[k])}"><span>${l}</span></label>`).join('')}</div>
           <small class="muted">As cores ficam guardadas nesta folha de serviço (todos os dias). O texto passa a branco ou preto sozinho para se ler bem.</small>
         </div>
-        <div class="cs-prev" aria-hidden="true"><div class="cs-prev-in">${sheetHtml(d, false)}</div></div>
+        <div class="cs-prev" aria-hidden="true"><iframe data-prev title="Pré-visualização" tabindex="-1"></iframe></div>
       </div>
       ${all.sheets.length > 1 ? `<fieldset class="cs-opts"><legend>Dias</legend>${radio('days', 'one', true, `Só o dia ${esc(d.day || cur + 1)}`)}${radio('days', 'all', false, `Todos os dias (${all.sheets.length})`, 'No PDF, um dia por página; no Excel, uma folha por dia')}</fieldset>` : ''}
       <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Exportar</button></div>
     </form>`, { wide: true });
   const f = m.el.querySelector('[data-f]');
   const read = () => Object.fromEntries(PALETTE_KEYS.map(([k]) => [k, f.elements[`c-${k}`].value]));
+  const fr = m.el.querySelector('[data-prev]');
+  let prevT;
   const paint = () => {
     const cur2 = read();
-    m.el.querySelector('.cs-prev .cs-frame').setAttribute('style', paletteVars(cur2));
+    clearTimeout(prevT); prevT = setTimeout(() => { fr.srcdoc = docHtml([{ ...d, palette: cur2, accent: cur2.frame }], model); }, 80);
     m.el.querySelectorAll('[data-pre]').forEach((b) => b.classList.toggle('on', same(PRESETS.find(([n]) => n === b.dataset.pre)[1], cur2)));
   };
   f.querySelectorAll('input[type=color]').forEach((i) => i.addEventListener('input', paint));
+  const xlsxNote = () => { const x = f.elements.fmt.value === 'xlsx'; m.el.querySelector('.cs-models').classList.toggle('dim', x); };
+  f.querySelectorAll('[name=fmt]').forEach((r) => r.addEventListener('change', xlsxNote));
+  f.querySelectorAll('[name=model]').forEach((r) => r.addEventListener('change', () => {
+    model = r.value;
+    const mm = CS_MODELS.find((x) => x.id === model); const p = mm.preset || PRESETS[0][1];
+    PALETTE_KEYS.forEach(([k]) => (f.elements[`c-${k}`].value = p[k])); paint();
+  }));
+  paint(); xlsxNote();
   m.el.querySelectorAll('[data-pre]').forEach((b) => b.addEventListener('click', () => { const p = PRESETS.find(([n]) => n === b.dataset.pre)[1]; PALETTE_KEYS.forEach(([k]) => (f.elements[`c-${k}`].value = p[k])); paint(); }));
   f.addEventListener('submit', async (e) => {
     e.preventDefault();
     const v = Object.fromEntries(new FormData(f));
     const np = read();
     // guarda as cores em todos os dias desta folha
-    all.sheets.forEach((sh) => { sh.palette = { ...np }; sh.accent = np.frame; });
+    all.sheets.forEach((sh) => { sh.palette = { ...np }; sh.accent = np.frame; sh.model = model; });
     changed && changed();
     try { localStorage.setItem('bg-cs-export', JSON.stringify({ fmt: v.fmt })); } catch { /* nada */ }
     const list = v.days === 'all' ? all.sheets : [d];
     m.close();
-    if (v.fmt === 'xlsx') await exportXlsx(list); else printSheet(list);
+    if (v.fmt === 'xlsx') await exportXlsx(list); else printSheet(list, model);
   });
 }
 

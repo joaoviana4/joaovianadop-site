@@ -16,6 +16,7 @@ import { mountSituation } from './overview.js';
 import { shotlistPage } from './shotlist.js';
 import { shotPage } from './shot.js';
 import { callsheetTool, newCallsheet } from './callsheet.js';
+import { transportTool, newTransport } from './transport.js';
 import { clearFullscreen } from './layout.js';
 import { joinProject, leaveProject, lockPage, boardPresence, onPresence, whoLabel } from './presence.js';
 import { budgetWhoChip, budgetAccessPanel, globalPermsPanel } from './perms.js';
@@ -436,20 +437,40 @@ function notFound() {
   bindHeader(app);
 }
 
-// grupos de boards = departamentos do projeto (como no Studio), mais "Outros"
+// grupos de boards = departamentos do projeto (como no Studio), mais "Outros".
+// Algumas ferramentas pertencem a um departamento fixo: Equipamento e mapas de luz → Imagem; Adereços → Arte.
+const FIXED_DEPTS = { imagem: { name: 'Imagem', color: '#2FB67C' }, arte: { name: 'Arte', color: '#E5579B' } };
+const normName = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+export function deptOf(p, key) { return (p.departments || []).find((d) => d.id === key || normName(d.name) === key) || null; }
+// garante que o departamento existe no projeto (cria-o se faltar) e devolve o id
+async function ensureDept(p, key) {
+  const d = deptOf(p, key); if (d) return d.id;
+  const nd = { id: key, ...FIXED_DEPTS[key] };
+  const deps = [...(p.departments || []), nd];
+  const { error } = await sb.from('projects').update({ departments: deps }).eq('id', p.id);
+  if (error) { toast(error.message); return key; }
+  p.departments = deps; return key;
+}
 function boardGroups(p) {
   const top = p._boards.filter((b) => !b.parent_id);
-  const groups = (p.departments || []).map((d) => ({ ...d, boards: top.filter((b) => b.group_id === d.id) }));
+  const img = deptOf(p, 'imagem'); const arte = deptOf(p, 'arte');
+  const imgId = img?.id || 'imagem';
+  const fixedGroup = (b) => (b.kind === 'lightmap' ? imgId : b.group_id);
+  const groups = (p.departments || []).map((d) => ({ ...d, boards: top.filter((b) => fixedGroup(b) === d.id), pages: [] }));
+  const need = (key, mod) => { if (p.is_central || !hasMod(p, mod)) return; let g = groups.find((x) => x.id === (deptOf(p, key)?.id || key)); if (!g) { g = { id: key, ...FIXED_DEPTS[key], boards: [], pages: [], virtual: true }; groups.push(g); } g.pages.push(mod); };
+  need('imagem', 'equipamento'); need('arte', 'aderecos');
+  if (!img && top.some((b) => b.kind === 'lightmap') && !groups.some((g) => g.id === 'imagem')) groups.push({ id: 'imagem', ...FIXED_DEPTS.imagem, boards: top.filter((b) => b.kind === 'lightmap'), pages: [], virtual: true });
+  const vg = groups.find((g) => g.id === 'imagem' && g.virtual); if (vg && !vg.boards.length) vg.boards = top.filter((b) => b.kind === 'lightmap');
   const known = new Set(groups.map((g) => g.id));
-  const other = top.filter((b) => !b.group_id || !known.has(b.group_id));
-  if (other.length) groups.push({ id: '', name: 'Outros', color: '#8A8A99', boards: other });
+  const other = top.filter((b) => b.kind !== 'lightmap' && (!b.group_id || !known.has(b.group_id)));
+  if (other.length) groups.push({ id: '', name: 'Outros', color: '#8A8A99', boards: other, pages: [] });
   return groups;
 }
 
 function projectNav(p, active) {
   const base = projBase(p);
   navState.p = p; navState.active = active;
-  const mods = p.is_central ? [['tarefas', 'Tarefas', ICON.task]] : modulesOf(p).filter((k) => k !== 'orcamento' || p.canBudget).map((k) => [modPath(p, k), modLabel(p, k), ICON[MODULES[k].icon]]);
+  const mods = p.is_central ? [['tarefas', 'Tarefas', ICON.task]] : modulesOf(p).filter((k) => (k !== 'orcamento' || p.canBudget) && k !== 'equipamento' && k !== 'aderecos').map((k) => [modPath(p, k), modLabel(p, k), ICON[MODULES[k].icon]]);
   const pages = [['geral', 'Visão geral', ICON.home], ...(p.is_central && hasPerm('finance') ? [['financas', 'Finanças', ICON.money]] : []), ...mods, ['equipa', p.is_central ? 'Equipa' : 'Equipa e convites', ICON.team], ...(isStaff() ? [['detalhes', 'Detalhes', ICON.info]] : [])];
   return `
     <div class="pn-h"><div><strong>${esc(p.name)}</strong>${p.client ? `<span class="muted small">${esc(p.client)}</span>` : ''}</div>${!p.is_central && isStaff() ? `<button type="button" class="icon-btn sm pn-mods" data-mods title="Páginas do projeto" aria-label="Juntar ou tirar páginas">${ICON.plus}</button>` : ''}</div>
@@ -458,6 +479,7 @@ function projectNav(p, active) {
     <div class="pn-sec"><span>Ferramentas</span><button type="button" class="icon-btn sm" data-newboard="" aria-label="Nova ferramenta">${ICON.plus}</button></div>
     ${boardGroups(p).map((g) => `<div class="pn-group" style="--g:${esc(g.color)}">
       <div class="pn-gh"><i></i><span>${esc(g.name)}</span>${g.id ? `<button type="button" class="icon-btn sm" data-newboard="${esc(g.id)}" aria-label="Novo board em ${esc(g.name)}">${ICON.plus}</button>` : ''}</div>
+      ${(g.pages || []).map((k) => `<a class="side-a sub" href="${base}/${k}" ${active === k ? 'aria-current="page"' : ''}>${ICON[MODULES[k].icon]}<span>${esc(MODULES[k].label)}</span></a>`).join('')}
       ${g.boards.map((b) => `<a class="side-a sub" href="${toolHref(p, b)}" ${active === b.id ? 'aria-current="page"' : ''}>${(TOOL_KINDS[b.kind] || TOOL_KINDS.board).icon}<span>${esc(b.title)}</span></a>`).join('')}
     </div>`).join('')}`;
 }
@@ -490,12 +512,16 @@ function newBoard(p, groupId = '', kind = 'board') {
       <div class="tool-kinds" role="radiogroup" aria-label="Ferramenta">${Object.entries(TOOL_KINDS).map(([k, v]) => `<label class="tool-k"><input type="radio" name="kind" value="${k}" ${k === kind ? 'checked' : ''}><span>${v.icon}${v.label}</span></label>`).join('')}</div>
       <div class="field"><label for="bn">Nome</label><input id="bn" name="title" placeholder="ex: Moodboard, Storyboard, Plano de rodagem" required></div>
       <div class="field" data-tplf hidden><label for="bt">Modelo</label><select id="bt" name="tpl">${tpls.map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
-      <div class="field"><label for="bg">Departamento</label><select id="bg" name="group_id"><option value="">Nenhum</option>${(p.departments || []).map((d) => `<option value="${esc(d.id)}" ${d.id === groupId ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></div>
+      <div class="field"><label for="bg">Departamento</label><select id="bg" name="group_id"><option value="">Nenhum</option>${(p.departments || []).map((d) => `<option value="${esc(d.id)}" ${d.id === groupId ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}${groupId && FIXED_DEPTS[groupId] && !deptOf(p, groupId) ? `<option value="${groupId}" selected>${FIXED_DEPTS[groupId].name}</option>` : ''}</select></div>
       <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Criar e abrir</button></div>
     </form>`);
   const form = m.el.querySelector('form');
   const ttl = form.elements.title;
-  const sync = () => { const k = form.elements.kind.value; m.el.querySelector('[data-tplf]').hidden = k !== 'table'; if (!ttl.dataset.touched) ttl.value = k === 'board' ? '' : TOOL_KINDS[k].label; };
+  const sync = () => {
+    const k = form.elements.kind.value; m.el.querySelector('[data-tplf]').hidden = k !== 'table'; if (!ttl.dataset.touched) ttl.value = k === 'board' ? '' : TOOL_KINDS[k].label;
+    const sel = form.elements.group_id; const img = deptOf(p, 'imagem');
+    if (k === 'lightmap') { if (!img && !sel.querySelector('option[value="imagem"]')) sel.insertAdjacentHTML('beforeend', '<option value="imagem">Imagem</option>'); sel.value = img?.id || 'imagem'; sel.disabled = true; } else sel.disabled = false;
+  };
   ttl.addEventListener('input', () => (ttl.dataset.touched = '1'));
   form.querySelectorAll('[name=kind]').forEach((r) => r.addEventListener('change', sync)); sync();
   const tplNames = { blank: 'Tabela', deliverables: 'Entregas', props: 'Adereços por cena', cast: 'Elenco' };
@@ -503,7 +529,10 @@ function newBoard(p, groupId = '', kind = 'board') {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(form));
-    const data = f.kind === 'table' ? await tableTemplate(p, f.tpl) : f.kind === 'lightmap' ? newLightmapData() : f.kind === 'callsheet' ? { sheets: [newCallsheet(p, 1)] } : {};
+    if (f.kind === 'lightmap') f.group_id = await ensureDept(p, 'imagem');
+    else if (f.group_id === 'imagem' && !deptOf(p, 'imagem')) f.group_id = await ensureDept(p, 'imagem');
+    else if (f.group_id === 'arte' && !deptOf(p, 'arte')) f.group_id = await ensureDept(p, 'arte');
+    const data = f.kind === 'table' ? await tableTemplate(p, f.tpl) : f.kind === 'lightmap' ? newLightmapData() : f.kind === 'callsheet' ? { sheets: [newCallsheet(p, 1)] } : f.kind === 'transport' ? newTransport(p) : {};
     const { data: row, error } = await sb.from('boards').insert({ project_id: p.id, title: f.title.trim(), group_id: f.group_id || null, position: p._boards.length, kind: f.kind, data }).select().single();
     if (error) return toast(error.message);
     m.close(); go(toolHref(p, row));
@@ -517,6 +546,7 @@ async function toolPage(projectId, toolId) {
   const { data: tool } = await sb.from('boards').select('*').eq('id', toolId).maybeSingle();
   if (!tool) return go(projBase(p));
   if (tool.kind === 'board') return go(toolHref(p, tool));
+  if (tool.kind === 'lightmap') return lightmapView(p, tool);
   const d = (p.departments || []).find((x) => x.id === tool.group_id);
   app.innerHTML = `<div class="page">${header(p.is_central ? 'central' : '')}
     <div class="proj-layout">
@@ -537,6 +567,7 @@ async function toolPage(projectId, toolId) {
   if (tool.kind === 'budget') budgetTool(box, p, tool);
   if (tool.kind === 'media') mediaTool(box, p, tool);
   if (tool.kind === 'callsheet') callsheetTool(box, p, tool);
+  if (tool.kind === 'transport') transportTool(box, p, tool);
   if (tool.kind === 'lightmap') {
     const { data: chars } = await sb.from('characters').select('name, actor').eq('project_id', p.id).order('position');
     const lm = lightmapTool(box, p, tool, { characters: (chars || []).map((c) => c.name), base: projBase(p) });
@@ -548,7 +579,7 @@ function boardOptions(p, b, after) {
   const m = modal(`<h2>${esc((TOOL_KINDS[b.kind] || TOOL_KINDS.board).label)}</h2>
     <form class="stack">
       <div class="field"><label for="bn">Nome</label><input id="bn" name="title" value="${esc(b.title)}" required></div>
-      <div class="field"><label for="bg">Departamento</label><select id="bg" name="group_id"><option value="">Nenhum</option>${(p.departments || []).map((d) => `<option value="${esc(d.id)}" ${d.id === b.group_id ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></div>
+      <div class="field"><label for="bg">Departamento</label><select id="bg" name="group_id" ${b.kind === 'lightmap' ? 'disabled title="Os mapas de luz ficam sempre em Imagem"' : ''}><option value="">Nenhum</option>${(p.departments || []).map((d) => `<option value="${esc(d.id)}" ${d.id === b.group_id ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></div>
       <div class="row between">
         <button type="button" class="btn ghost danger-text" data-del>${ICON.trash} Apagar</button>
         <div class="row"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Guardar</button></div>
@@ -557,7 +588,7 @@ function boardOptions(p, b, after) {
   m.el.querySelector('form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target));
-    const { error } = await sb.from('boards').update({ title: f.title.trim(), group_id: f.group_id || null }).eq('id', b.id);
+    const { error } = await sb.from('boards').update({ title: f.title.trim(), ...(b.kind === 'lightmap' ? {} : { group_id: f.group_id || null }) }).eq('id', b.id);
     if (error) return toast(error.message);
     m.close(); after();
   });
@@ -722,6 +753,42 @@ async function centralOverview(box) {
     </section>`;
   box.querySelectorAll('[data-href]').forEach((tr) => tr.addEventListener('click', (e) => { if (!e.target.closest('a')) go(tr.dataset.href); }));
   box.querySelectorAll('[data-cm]').forEach((b) => b.addEventListener('click', () => { const [yy, mm] = coState.ym.split('-').map(Number); const d = new Date(yy, mm - 1 + Number(b.dataset.cm), 1); coState.ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; centralOverview(box); }));
+}
+
+// ---------- mapa de luz em ecrã inteiro (como os boards) ----------
+async function lightmapView(p, tool) {
+  const base = projBase(p);
+  document.body.classList.add('is-board');
+  onCleanup(() => document.body.classList.remove('is-board'));
+  app.innerHTML = `<div class="pv lmv">
+    <div class="lmv-stage" data-main></div>
+    <div class="pv-top">
+      <button type="button" class="pv-mark" data-side aria-label="Abrir o menu do projeto">${LOGO('studio')}</button>
+      <nav class="crumbs" aria-label="Caminho"><a href="${base}">${esc(p.name)}</a><span>/</span><span>Imagem</span><span>/</span><span aria-current="page">${esc(tool.title)}</span></nav>
+    </div>
+    <div class="pv-edge" data-edge aria-hidden="true"></div>
+    <nav class="pv-side" data-sidebar aria-label="Páginas do projeto">
+      ${projectNav(p, tool.id)}
+      <hr>
+      <a class="side-a" href="#/">${ICON.back}<span>Voltar ao início</span></a>
+    </nav>
+  </div>`;
+  bindProjectNav(app, p);
+  const stage = app.querySelector('[data-main]');
+  joinProject(p.id);
+  { const lk = lockPage(`${p.id}:f:${tool.id}`, stage, { reopen: () => route() }); onCleanup(() => lk.destroy()); }
+  const { data: chars } = await sb.from('characters').select('name, actor').eq('project_id', p.id).order('position');
+  const lm = lightmapTool(stage, p, tool, { characters: (chars || []).map((c) => c.name), base, onOptions: () => boardOptions(p, tool, () => toolPage(p.id, tool.id)) });
+  onCleanup(() => lm.destroy());
+  const side = app.querySelector('[data-sidebar]');
+  let hideT;
+  const showSide = () => { clearTimeout(hideT); side.classList.add('open'); };
+  const hideSide = () => { hideT = setTimeout(() => side.classList.remove('open'), 250); };
+  app.querySelector('[data-edge]').addEventListener('mouseenter', showSide);
+  side.addEventListener('mouseenter', showSide); side.addEventListener('mouseleave', hideSide);
+  app.querySelector('[data-side]').addEventListener('click', showSide);
+  const outside = (e) => { if (side.classList.contains('open') && !e.target.closest('[data-sidebar], [data-side], [data-edge], #modal')) side.classList.remove('open'); };
+  document.addEventListener('pointerdown', outside, true); onCleanup(() => document.removeEventListener('pointerdown', outside, true));
 }
 
 // ---------- board em ecrã inteiro ----------

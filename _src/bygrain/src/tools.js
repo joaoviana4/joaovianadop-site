@@ -11,6 +11,7 @@ export const TOOL_KINDS = {
   budget: { label: 'Orçamento', icon: ICON.money },
   media: { label: 'Música e pre-vis', icon: ICON.music },
   callsheet: { label: 'Folha de serviço', icon: ICON.calendar },
+  transport: { label: 'Mapa de transportes', icon: ICON.car },
 };
 const uid = () => Math.random().toString(36).slice(2, 10);
 const debounce = (fn, ms = 700) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };

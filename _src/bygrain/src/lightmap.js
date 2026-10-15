@@ -1,5 +1,5 @@
 import { sb, esc, toast, modal, ICON } from './lib.js';
-import { loadGear, addGearModal, gearName, specLine, lensFocals, MOD_KINDS, FABRICS } from './gear.js';
+import { loadGear, addGearModal, gearName, specLine, lensFocals, MOD_KINDS, FABRICS, CATALOG } from './gear.js';
 import { makeHistory, bindUndoKeys } from './tablekit.js';
 
 // Mapa de luz (planta vista de cima) para DF e gaffers.
@@ -43,7 +43,8 @@ export function newLightmapData({ cameraCode = '', people = [] } = {}) {
   return { items };
 }
 
-export function lightmapTool(main, p, tool, { characters = [], base = '' } = {}) {
+export function lightmapTool(main, p, tool, opts = {}) {
+  const { characters = [], base = '' } = opts;
   const data = { items: [], ...(tool.data || {}) };
   const st = { sel: null, view: null, drag: null };
   let gear = [];
@@ -52,35 +53,41 @@ export function lightmapTool(main, p, tool, { characters = [], base = '' } = {})
   const G = (id) => gear.find((g) => g.id === id);
   const hist = makeHistory({ get: () => data.items, set: (v) => { data.items = v; if (!data.items.some((x) => x.id === st.sel)) st.sel = null; }, after: () => { draw(); save(); }, notify: (m) => toast(m) });
 
+  if (data.limit == null) data.limit = true;
+  const TOOLS = [['light', 'Luzes', ICON.bulb], ['camera', 'Câmaras', ICON.camera], ['mod', 'Modificadores', '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="1"/><path d="M4 12h16M12 4v16" stroke-dasharray="2 2"/></svg>'], ['stand', 'Tripés', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v8M12 11l-7 10M12 11l7 10M12 11v10"/><circle cx="12" cy="4" r="1.5"/></svg>']];
+  const OTHER = [['person', 'Pessoa', ICON.team], ['natural', 'Luz natural', '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg>'], ['set', 'Décor', ICON.home]];
   main.innerHTML = `
-    <div class="lm">
-      ${data.shot_id || data.location_id ? '<div class="lm-links" data-links></div>' : ''}
-      <div class="lm-bar" role="toolbar" aria-label="Juntar ao mapa">
-        <button type="button" class="btn ghost" data-add="person">${ICON.team} Pessoa</button>
-        <label class="sel"><span class="vh">Luz natural</span><select data-addnat><option value="">☀ Luz natural…</option>${Object.entries(NATURAL).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>
-        <label class="sel"><span class="vh">Peça de décor</span><select data-addset><option value="">+ Décor…</option>${Object.entries(SET).map(([k, v]) => `<option value="${k}">${v[0]}</option>`).join('')}</select></label>
-        <span class="lm-sp"></span>
-        <button type="button" class="btn ghost" data-undo title="Desfazer (Ctrl+Z)" aria-label="Desfazer">↶</button>
-        <button type="button" class="btn ghost" data-fit>${ICON.fit} Ver tudo</button>
-        <button type="button" class="btn ghost" data-png>${ICON.image} PNG</button>
-        <button type="button" class="btn primary" data-pdf>${ICON.open} Exportar PDF</button>
+    <div class="lm lm-full">
+      <div class="lm-canvas" tabindex="0" aria-label="Mapa de luz"><svg data-svg xmlns="http://www.w3.org/2000/svg"></svg><div class="lm-scale"><i></i><span>1 m</span></div><div class="lm-hint" data-hint></div></div>
+      <div class="lm-actions">
+        ${data.shot_id || data.location_id ? '<span class="lm-links" data-links></span>' : ''}
+        <label class="lm-limit" title="Ligado: só o que está na lista de equipamento. Desligado: também o catálogo geral, e o que juntares entra sozinho na lista."><input type="checkbox" data-limit ${data.limit ? 'checked' : ''}><span class="lm-sw"></span><span data-limitlabel>${data.limit ? 'Só a lista de equipamento' : 'Lista + catálogo geral'}</span></label>
+        <button type="button" class="lm-ab" data-undo title="Desfazer (Ctrl+Z)" aria-label="Desfazer">↶</button>
+        <button type="button" class="lm-ab" data-fit title="Ver tudo">${ICON.fit}</button>
+        <button type="button" class="lm-ab" data-png title="Exportar imagem">PNG</button>
+        <button type="button" class="lm-ab primary" data-pdf>${ICON.open} PDF</button>
+        ${opts.onOptions ? `<button type="button" class="lm-ab" data-opt title="Opções" aria-label="Opções">${ICON.dots}</button>` : ''}
       </div>
-      <div class="lm-body">
-        <aside class="lm-kit" data-kit aria-label="Equipamento do projeto"></aside>
-        <div class="lm-canvas" tabindex="0" aria-label="Mapa de luz"><svg data-svg xmlns="http://www.w3.org/2000/svg"></svg><div class="lm-scale"><i></i><span>1 m</span></div><div class="lm-hint" data-hint></div></div>
-        <aside class="lm-props" data-props></aside>
+      <div class="pv-tools lm-tools" role="toolbar" aria-label="Juntar ao mapa">
+        ${TOOLS.map(([k, l, ic]) => `<button type="button" data-tool="${k}" title="${l}" aria-haspopup="dialog">${ic}<span>${l}</span></button>`).join('')}
+        <hr>
+        ${OTHER.map(([k, l, ic]) => `<button type="button" data-tool="${k}" title="${l}" aria-haspopup="dialog">${ic}<span>${l}</span></button>`).join('')}
+        <hr>
+        <button type="button" data-drawer-t title="Legenda, consumo e material">${ICON.list}<span>Legenda</span></button>
       </div>
-      <div class="lm-foot">
+      <div class="lm-pop" data-pop hidden role="dialog"></div>
+      <aside class="lm-props" data-props hidden></aside>
+      <div class="lm-drawer" data-drawer hidden><div class="lm-foot">
         <section class="lm-legend" data-legend></section>
         <section class="lm-power" data-power></section>
         <section class="lm-mat" data-mat></section>
-      </div>
+      </div></div>
     </div>`;
   const svg = main.querySelector('[data-svg]');
   const canvas = main.querySelector('.lm-canvas');
 
   // ---------- contas ----------
-  const used = () => { const m = new Map(); data.items.forEach((it) => [it.gear_id, it.lens_id, it.mod_id].filter(Boolean).forEach((g) => m.set(g, (m.get(g) || 0) + 1))); return m; };
+  const used = () => { const m = new Map(); data.items.forEach((it) => [it.gear_id, it.lens_id, it.mod_id, it.stand_id].filter(Boolean).forEach((g) => m.set(g, (m.get(g) || 0) + 1))); return m; };
   const lightInfo = (it) => {
     const g = G(it.gear_id); const s = g?.specs || {};
     const cct = s.cct ? clamp(+it.cct || s.cct[1], s.cct[0], s.cct[1]) : (+it.cct || +it.temp || 5600);
@@ -156,6 +163,10 @@ export function lightmapTool(main, p, tool, { characters = [], base = '' } = {})
       const op = neg || bounce ? 1 : 0.55;
       return `${wrap(`<rect x="-0.05" y="${-w / 2}" width="0.1" height="${w}" fill="${fill}" fill-opacity="${op}" stroke="${g ? '#F4F1E8' : '#FF6B5E'}" stroke-width="0.02" ${!neg && !bounce ? 'stroke-dasharray="0.08 0.05"' : ''}/>`)}${T(it.x, it.y - w / 2 - 0.12, 0.18, g ? `${g.name}${fab && fab !== s.fabric ? ' · ' + fab : ''}` : 'fora da lista', { op: 0.85, w: 500, fill: g ? '#F4F1E8' : '#FF6B5E' })}`;
     }
+    if (it.kind === 'stand') {
+      const g = G(it.gear_id);
+      return `${wrap(`<circle r="0.07" fill="#F4F1E8"/>${[0, 120, 240].map((a2) => `<line x1="0" y1="0" x2="${0.32 * Math.cos(rad(a2 - 90))}" y2="${0.32 * Math.sin(rad(a2 - 90))}" stroke="${g ? '#F4F1E8' : '#FF6B5E'}" stroke-width="0.035" stroke-linecap="round"/>`).join('')}`)}${T(it.x, it.y + 0.5, 0.17, g ? g.name : 'fora da lista', { op: 0.8, w: 500, fill: g ? '#F4F1E8' : '#FF6B5E' })}`;
+    }
     if (it.kind === 'natural') {
       const col = kColor(+it.cct || 5600); const lev = clamp(inten(it), 0, 100) / 100;
       if (it.type === 'sol') return `${wrap(`<circle r="0.32" fill="${col}"/><g stroke="${col}" stroke-width="0.04">${[0, 1, 2, 3, 4, 5, 6, 7].map((i) => `<line x1="${0.42 * Math.cos(i * Math.PI / 4)}" y1="${0.42 * Math.sin(i * Math.PI / 4)}" x2="${0.58 * Math.cos(i * Math.PI / 4)}" y2="${0.58 * Math.sin(i * Math.PI / 4)}"/>`).join('')}</g>${[-0.6, 0, 0.6].map((y) => `<path d="M0.8 ${y} H3.4 M3.15 ${y - 0.16} L3.4 ${y} L3.15 ${y + 0.16}" stroke="${col}" stroke-opacity="${0.35 + 0.5 * lev}" stroke-width="0.05" fill="none"/>`).join('')}`)}${T(it.x, it.y - 0.75, 0.24, `${lab} · Sol`)}`;
@@ -179,7 +190,7 @@ export function lightmapTool(main, p, tool, { characters = [], base = '' } = {})
     const { w, h } = size(); const v = st.view; if (!v) return; const lab = labels();
     const sel = data.items.find((x) => x.id === st.sel);
     const handle = sel ? `<g transform="translate(${sel.x} ${sel.y}) rotate(${sel.rot || 0})"><line x1="0" y1="0" x2="1.1" y2="0" stroke="#6F7BFF" stroke-width="0.02"/><circle class="lm-rot" cx="1.1" cy="0" r="0.13" fill="#6F7BFF" stroke="#fff" stroke-width="0.02"/></g><circle cx="${sel.x}" cy="${sel.y}" r="0.5" fill="none" stroke="#6F7BFF" stroke-width="0.03" stroke-dasharray="0.08 0.06" pointer-events="none"/>` : '';
-    const order = ['set', 'natural', 'light', 'mod', 'person', 'camera'];
+    const order = ['set', 'natural', 'stand', 'light', 'mod', 'person', 'camera'];
     const items = [...data.items].sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
     const defs = [];
     const body = items.map((it) => itemSvg(it, lab[it.id], it.id === st.sel, defs)).join('');
@@ -191,25 +202,66 @@ export function lightmapTool(main, p, tool, { characters = [], base = '' } = {})
     foot(lab);
   }
 
-  // ---------- painel do equipamento ----------
-  function kit() {
-    const box = main.querySelector('[data-kit]'); const u = used();
-    const group = (cat, title) => { const list = gear.filter((g) => g.category === cat && (cat !== 'modifier' || PLACE.includes(g.specs?.mod))); return list.length ? `<h4>${title}</h4>${list.map((g) => { const n = u.get(g.id) || 0; return `<button type="button" class="lm-kit-i ${n >= g.qty ? 'full' : ''} ${n > g.qty ? 'over' : ''}" draggable="true" data-kit-g="${g.id}" title="${esc(specLine(g))}"><span class="lm-kit-n">${esc(g.name)}${g.brand ? `<small>${esc(g.brand)}</small>` : ''}</span><span class="lm-kit-c">${n}/${g.qty}</span></button>`; }).join('')}` : ''; };
-    const lights = group('light', 'Luzes'); const cams = group('camera', 'Câmaras'); const mods = group('modifier', 'Frames, bandeiras, rebatedores');
-    box.innerHTML = `<div class="lm-kit-h"><h3 class="h3">Equipamento</h3>${base ? `<a class="small" href="${base}/equipamento">Ver lista</a>` : ''}</div>
-      ${lights || cams || mods ? `${lights}${cams}${mods}<p class="muted small">Arrasta para o mapa ou carrega para juntar ao centro. O número é usado / disponível.</p>` : '<p class="muted small">Ainda não há luzes nem câmaras no equipamento do projeto.</p>'}
-      <button type="button" class="btn ghost lm-kit-add" data-kit-add>${ICON.plus} Juntar ao equipamento</button>`;
-    box.querySelectorAll('[data-kit-g]').forEach((b) => {
-      b.addEventListener('click', () => addGear(G(b.dataset.kitG)));
+  // ---------- ferramentas da direita: listas do equipamento (e do catálogo, se não estiver limitado) ----------
+  const POP_CAT = { light: 'light', camera: 'camera', mod: 'modifier', stand: 'stand' };
+  const placeable = (g) => g.category !== 'modifier' || PLACE.includes(g.specs?.mod);
+  const norm = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  let popKind = null; let popQ = '';
+  function closePop() { const pop = main.querySelector('[data-pop]'); pop.hidden = true; popKind = null; main.querySelectorAll('[data-tool]').forEach((b) => b.classList.remove('on')); }
+  function openPop(kind, btn) {
+    const pop = main.querySelector('[data-pop]');
+    if (popKind === kind) return closePop();
+    popKind = kind; popQ = '';
+    main.querySelectorAll('[data-tool]').forEach((b) => b.classList.toggle('on', b === btn));
+    const r = btn.getBoundingClientRect(); const host = main.querySelector('.lm-full').getBoundingClientRect();
+    pop.style.top = `${Math.max(8, Math.min(r.top - host.top, host.height - 460))}px`;
+    pop.hidden = false; drawPop();
+  }
+  function drawPop() {
+    const pop = main.querySelector('[data-pop]'); const kind = popKind; if (!kind) return;
+    if (kind === 'person' || kind === 'natural' || kind === 'set') {
+      const list = kind === 'person' ? [...characters.map((c) => [c, c]), ['', 'Outra pessoa']] : kind === 'natural' ? Object.entries(NATURAL) : Object.entries(SET).map(([k, v2]) => [k, v2[0]]);
+      pop.innerHTML = `<h4>${{ person: 'Pessoa', natural: 'Luz natural', set: 'Peça de décor' }[kind]}</h4><div class="lm-pl">${list.map(([k, l]) => `<button type="button" class="lm-pi" data-basic="${esc(k)}"><span>${esc(l)}</span></button>`).join('')}</div>`;
+      pop.querySelectorAll('[data-basic]').forEach((b) => b.addEventListener('click', () => { closePop(); if (kind === 'person') addBasic('person', null, b.dataset.basic); else addBasic(kind, b.dataset.basic); }));
+      return;
+    }
+    const cat = POP_CAT[kind]; const u = used(); const words = norm(popQ).split(/\s+/).filter(Boolean);
+    const match = (g) => words.every((w) => norm(`${g.brand} ${g.name} ${specLine(g)}`).includes(w));
+    const mine = gear.filter((g) => g.category === cat && placeable(g) && match(g));
+    const inList = (c) => gear.some((g) => g.category === c.category && norm(g.name) === norm(c.name) && norm(g.brand) === norm(c.brand));
+    const cat2 = data.limit ? [] : CATALOG.map((c, i) => ({ c, i })).filter(({ c }) => c.category === cat && placeable(c) && !inList(c) && match(c));
+    const title = { light: 'Luzes', camera: 'Câmaras', mod: 'Frames, bandeiras, rebatedores', stand: 'Tripés e suportes' }[kind];
+    pop.innerHTML = `<h4>${title}</h4><input type="search" class="lm-pq" data-pq placeholder="Procurar…" value="${esc(popQ)}" aria-label="Procurar">
+      <div class="lm-pl">${mine.length ? `<span class="lm-plh">Equipamento do projeto</span>${mine.map((g) => { const n = u.get(g.id) || 0; return `<button type="button" class="lm-pi ${n >= g.qty ? 'full' : ''} ${n > g.qty ? 'over' : ''}" draggable="true" data-kit-g="${g.id}" title="${esc(specLine(g))}"><span class="lm-kit-n">${esc(g.name)}<small>${esc([g.brand, specLine(g)].filter(Boolean).join(' · '))}</small></span><span class="lm-kit-c">${n}/${g.qty}</span></button>`; }).join('')}` : `<p class="muted small">${words.length ? 'Nada na lista com isto.' : 'Ainda não há nada desta categoria no equipamento.'}</p>`}
+      ${cat2.length ? `<span class="lm-plh">Catálogo geral <small>(entra sozinho na lista)</small></span>${cat2.slice(0, 40).map(({ c, i }) => `<button type="button" class="lm-pi cat" data-cat-i="${i}" title="${esc(specLine(c))}"><span class="lm-kit-n">${esc(c.name)}<small>${esc([c.brand, specLine(c)].filter(Boolean).join(' · '))}</small></span><span class="lm-kit-c">${ICON.plus}</span></button>`).join('')}` : ''}
+      ${data.limit ? `<p class="muted small lm-limhint">Limitado à lista. Desliga “Só a lista de equipamento” em cima para ir buscar ao catálogo geral.</p>` : ''}</div>
+      <button type="button" class="btn ghost sm" data-own>${ICON.plus} ${data.limit ? 'Juntar ao equipamento…' : 'Outro (escrever à mão)…'}</button>`;
+    const q = pop.querySelector('[data-pq]'); q.addEventListener('input', () => { popQ = q.value; const pos = q.selectionStart; drawPop(); const q2 = pop.querySelector('[data-pq]'); q2.focus(); q2.setSelectionRange(pos, pos); });
+    pop.querySelectorAll('[data-kit-g]').forEach((b) => {
+      b.addEventListener('click', () => { closePop(); addGear(G(b.dataset.kitG)); });
       b.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/x-gear', b.dataset.kitG); e.dataTransfer.effectAllowed = 'copy'; });
     });
-    box.querySelector('[data-kit-add]').addEventListener('click', () => addGearModal(p, { cat: 'light', onDone: async () => { gear = await loadGear(p.id); kit(); props(); } }));
+    pop.querySelectorAll('[data-cat-i]').forEach((b) => b.addEventListener('click', async () => { const row = await fromCatalog(CATALOG[+b.dataset.catI]); if (row) { closePop(); addGear(row, null, true); } }));
+    pop.querySelector('[data-own]').addEventListener('click', () => { closePop(); addGearModal(p, { cat, onDone: async (row) => { gear = await loadGear(p.id); draw(); if (row && !data.limit) addGear(G(row.id), null, true); } }); });
   }
+  // junta uma peça do catálogo geral à lista de equipamento do projeto
+  async function fromCatalog(c) {
+    const { data: row, error } = await sb.from('gear').insert({ project_id: p.id, category: c.category, name: c.name, brand: c.brand || '', qty: 1, specs: JSON.parse(JSON.stringify(c.specs || {})), position: Date.now() / 1000 }).select().single();
+    if (error) { toast(error.message); return null; }
+    gear.push(row); toast(`${gearName(row)} juntado ao equipamento do projeto.`);
+    return row;
+  }
+  function kit() { if (popKind) drawPop(); }
 
   // garante que há unidades na lista; se não houver, pergunta se junta mais uma ao equipamento
-  async function ensureUnit(g, extra = 0) {
+  async function ensureUnit(g, extra = 0, fresh = false) {
     const n = (used().get(g.id) || 0) + extra;
-    if (n < g.qty) return true;
+    if (n < g.qty || fresh) return true;
+    if (!data.limit) {
+      const { error } = await sb.from('gear').update({ qty: n + 1, updated_at: new Date().toISOString() }).eq('id', g.id);
+      if (error) { toast(error.message); return false; }
+      g.qty = n + 1; toast(`Equipamento atualizado: ${gearName(g)} passa a ${g.qty}.`); return true;
+    }
     return new Promise((resolve) => {
       const m = modal(`<h2>Só há ${g.qty} na lista</h2><p>${esc(gearName(g))} já está ${n === 1 ? 'uma vez' : n + ' vezes'} neste mapa e o equipamento do projeto tem ${g.qty}. Para usar mais um, junta-o à lista (a quantidade passa para ${n + 1}).</p>
         <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button type="button" class="btn primary" data-yes>Juntar mais um ao equipamento</button></div>`, { onClose: () => resolve(false) });
@@ -223,21 +275,22 @@ export function lightmapTool(main, p, tool, { characters = [], base = '' } = {})
   }
 
   const center = () => { const { w, h } = size(); const v = st.view; return { x: Math.round(((w / 2 - v.x) / v.k) * 10) / 10, y: Math.round(((h / 2 - v.y) / v.k) * 10) / 10 }; };
-  async function addGear(g, at) {
+  async function addGear(g, at, fresh = false) {
     if (!g) return;
-    if (!(await ensureUnit(g))) return;
+    if (!(await ensureUnit(g, 0, fresh))) return;
     const pos = at || center();
     const b = { id: uid(), x: pos.x, y: pos.y, rot: 0, gear_id: g.id };
     let it;
     if (g.category === 'light') { const s = g.specs || {}; it = { ...b, kind: 'light', intensity: 70, cct: s.cct ? (s.color === 'tungsten' ? s.cct[0] : s.cct[1] >= 5600 && s.cct[0] <= 5600 ? 5600 : s.cct[1]) : 5600, gel: '', diff: '', mod_id: null, height: 2.2, tilt: -15, dmx: '', notes: '' }; }
     else if (g.category === 'camera') { const lens = gear.find((x) => x.category === 'lens'); const f = lens ? (lensFocals(lens)?.[2] || lensFocals(lens)?.[0] || lens.specs?.zoom?.[0] || 35) : 35; it = { ...b, kind: 'camera', rot: -90, code: '', lens_id: lens?.id || null, focal: f, height: 1.5, tilt: 0 }; }
     else if (g.category === 'modifier') it = { ...b, kind: 'mod', fabric: g.specs?.fabric ?? '' };
-    else return toast('Só luzes, câmaras e frames/bandeiras/rebatedores vão para o mapa.');
+    else if (g.category === 'stand') it = { ...b, kind: 'stand', height: g.specs?.max_h ? Math.min(2.2, g.specs.max_h) : null };
+    else return toast('Só luzes, câmaras, modificadores e tripés vão para o mapa.');
     hist.push('juntar'); data.items.push(it); st.sel = it.id; draw(); save();
   }
-  function addBasic(kind, sub) {
+  function addBasic(kind, sub, name) {
     const pos = center(); const b = { id: uid(), kind, x: pos.x, y: pos.y, rot: 0 };
-    const it = kind === 'person' ? { ...b, name: characters[0] || '' }
+    const it = kind === 'person' ? { ...b, name: name ?? characters[0] ?? '' }
       : kind === 'natural' ? { ...b, type: sub, cct: sub === 'ceu' ? 7000 : sub === 'sol' ? 5600 : 6000, intensity: 100, notes: '' }
       : { ...b, piece: sub, w: SET[sub][1], h: SET[sub][2] };
     hist.push('juntar'); data.items.push(it); st.sel = it.id; draw(); save();
@@ -245,9 +298,11 @@ export function lightmapTool(main, p, tool, { characters = [], base = '' } = {})
 
   // ---------- propriedades ----------
   const fld = (k, label, val, type = 'text', extra = '') => `<label class="mini">${label}<input data-k="${k}" type="${type}" value="${esc(val ?? '')}" ${extra}></label>`;
+  const standSel = (it, use) => { const list = gear.filter((g) => g.category === 'stand'); const pref = list.filter((g) => (g.specs?.stand || 'light') === use); const rest = list.filter((g) => !pref.includes(g)); return list.length ? `<label class="mini">Tripé / suporte<select data-k="stand_id"><option value="">—</option>${[...pref, ...rest].map((g) => `<option value="${g.id}" ${g.id === it.stand_id ? 'selected' : ''}>${esc(gearName(g))}</option>`).join('')}</select></label>` : ''; };
   const opt = (list, cur, none) => `${none != null ? `<option value="">${none}</option>` : ''}${list.map((g) => `<option value="${g.id}" ${g.id === cur ? 'selected' : ''}>${esc(gearName(g))}</option>`).join('')}`;
   function props() {
     const it = data.items.find((x) => x.id === st.sel); const box = main.querySelector('[data-props]');
+    box.hidden = !it;
     if (!it) { box.innerHTML = `<h3 class="h3">Como funciona</h3><ul class="lm-help"><li>Junta luzes, câmaras e frames a partir do <b>Equipamento</b> à esquerda.</li><li>Arrasta para mover; a bolinha azul roda (Shift = livre).</li><li>Setas movem 10 cm (Shift: 50 cm).</li><li><kbd>Delete</kbd> apaga · <kbd>Ctrl</kbd>+<kbd>D</kbd> duplica · <kbd>Ctrl</kbd>+<kbd>Z</kbd> desfaz.</li><li>Roda do rato aproxima; arrastar o fundo move o mapa.</li></ul>`; return; }
     let f = ''; let head = '';
     if (it.kind === 'light') {
@@ -262,6 +317,7 @@ export function lightmapTool(main, p, tool, { characters = [], base = '' } = {})
         <label class="mini">Difusão<select data-k="diff">${FABRICS.filter((x) => !/negativo|ultrabounce/i.test(x)).map((x) => `<option value="${esc(x)}" ${x === (it.diff || '') ? 'selected' : ''}>${x || 'Sem difusão'}</option>`).join('')}</select></label>
         <label class="mini">Modificador<select data-k="mod_id">${opt(mods, it.mod_id, mods.length ? 'Sem modificador' : 'Nenhum no equipamento')}</select></label>
         ${L.mod?.specs?.mod === 'fresnel' ? `<label class="mini lm-range">Spot / flood <b data-out="spot">${clamp(+it.spot || 25, 12, 50)}°</b><input data-k="spot" type="range" min="12" max="50" step="1" value="${clamp(+it.spot || 25, 12, 50)}"></label>` : ''}
+        ${standSel(it, 'light')}
         <div class="lm-pair">${fld('height', 'Altura (m)', it.height, 'number', 'step="0.1" min="0"')}${fld('tilt', 'Inclinação (°)', it.tilt, 'number', 'step="5" min="-90" max="90"')}</div>
         <div class="lm-pair">${fld('dmx', 'Canal DMX', it.dmx, 'text', 'placeholder="ex: U1 / 101"')}${s.battery ? `<label class="check mini-check"><input type="checkbox" data-k="battery" ${it.battery ? 'checked' : ''}> A bateria</label>` : ''}</div>
         ${fld('notes', 'Notas', it.notes)}
@@ -276,13 +332,20 @@ export function lightmapTool(main, p, tool, { characters = [], base = '' } = {})
         <label class="mini">Objetiva<select data-k="lens_id">${opt(lenses, it.lens_id, lenses.length ? '— escolher —' : 'Nenhuma no equipamento')}</select></label>
         ${focals && focals.length ? `<label class="mini">Focal<select data-k="focal">${focals.map((x) => `<option value="${x}" ${+x === +it.focal ? 'selected' : ''}>${x} mm</option>`).join('')}</select></label>`
           : fld('focal', `Focal (mm)${lens?.specs?.zoom ? ` · ${lens.specs.zoom[0]}–${lens.specs.zoom[1]}` : ''}`, it.focal, 'number', `min="${lens?.specs?.zoom?.[0] || 4}" max="${lens?.specs?.zoom?.[1] || 1200}"`)}
+        ${standSel(it, 'camera')}
         <div class="lm-pair">${fld('height', 'Altura (m)', it.height, 'number', 'step="0.1" min="0"')}${fld('tilt', 'Inclinação (°)', it.tilt, 'number', 'step="5" min="-90" max="90"')}</div>
         <p class="lm-read" data-read></p>`;
+    }
+    if (it.kind === 'stand') {
+      const g = G(it.gear_id);
+      head = g ? `<p class="lm-gear"><b>${esc(gearName(g))}</b><small>${esc(specLine(g))}</small></p>` : '<p class="lm-warn">Não está no equipamento.</p>';
+      f = `<label class="mini">Tripé / suporte<select data-k="gear_id">${opt(gear.filter((x) => x.category === 'stand'), it.gear_id, g ? null : '— escolher —')}</select></label>${fld('height', 'Altura (m)', it.height, 'number', 'step="0.1" min="0"')}${fld('notes', 'Notas (ex: com bandeira 24x36)', it.notes)}`;
     }
     if (it.kind === 'mod') {
       const g = G(it.gear_id);
       head = g ? `<p class="lm-gear"><b>${esc(gearName(g))}</b><small>${esc(specLine(g))}</small></p>` : '<p class="lm-warn">Não está no equipamento.</p>';
       f = `<label class="mini">Peça<select data-k="gear_id">${opt(gear.filter((x) => x.category === 'modifier' && PLACE.includes(x.specs?.mod)), it.gear_id, g ? null : '— escolher —')}</select></label>
+        ${standSel(it, 'light')}
         <label class="mini">Tela<select data-k="fabric">${FABRICS.map((x) => `<option value="${esc(x)}" ${x === (it.fabric ?? '') ? 'selected' : ''}>${x || '—'}</option>`).join('')}</select></label>${fld('notes', 'Notas', it.notes)}`;
     }
     if (it.kind === 'natural') f = `<label class="mini">Tipo<select data-k="type">${Object.entries(NATURAL).map(([k, v]) => `<option value="${k}" ${k === it.type ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
@@ -290,7 +353,7 @@ export function lightmapTool(main, p, tool, { characters = [], base = '' } = {})
       <label class="mini lm-range">Força <b data-out="intensity">${Math.round(+it.intensity || 0)}%</b><input data-k="intensity" type="range" min="0" max="100" value="${+it.intensity || 0}"></label>${fld('notes', 'Notas (hora, direção…)', it.notes)}`;
     if (it.kind === 'person') f = `<label class="mini">Nome<input data-k="name" list="lm-chars" value="${esc(it.name || '')}"><datalist id="lm-chars">${characters.map((c) => `<option value="${esc(c)}">`).join('')}</datalist></label>`;
     if (it.kind === 'set') f = `<label class="mini">Peça<select data-k="piece">${Object.entries(SET).map(([k, v]) => `<option value="${k}" ${k === it.piece ? 'selected' : ''}>${v[0]}</option>`).join('')}</select></label><div class="lm-pair">${fld('w', 'Largura (m)', it.w, 'number', 'step="0.1" min="0.1"')}${fld('h', 'Profundidade (m)', it.h, 'number', 'step="0.05" min="0.05"')}</div>`;
-    const title = { light: 'Luz', camera: 'Câmara', person: 'Pessoa', set: 'Décor', mod: 'Frame / bandeira', natural: 'Luz natural' }[it.kind];
+    const title = { light: 'Luz', camera: 'Câmara', person: 'Pessoa', set: 'Décor', mod: 'Modificador', natural: 'Luz natural', stand: 'Tripé / suporte' }[it.kind];
     box.innerHTML = `<h3 class="h3">${title} <span class="muted">${esc(labels()[it.id] || '')}</span></h3>${head}${f}${fld('rot', 'Rotação (°)', Math.round(it.rot || 0), 'number', 'step="5"')}
       <div class="row"><button type="button" class="btn ghost" data-dup>Duplicar</button><button type="button" class="btn ghost danger-text" data-del>${ICON.trash} Apagar</button></div>`;
     const readout = () => {
@@ -306,7 +369,7 @@ export function lightmapTool(main, p, tool, { characters = [], base = '' } = {})
       inp.addEventListener(ev, async () => {
         const k = inp.dataset.k;
         let v = inp.type === 'checkbox' ? inp.checked : inp.type === 'number' || inp.type === 'range' ? Number(inp.value) : inp.value;
-        if (['gear_id', 'mod_id', 'lens_id'].includes(k)) {
+        if (['gear_id', 'mod_id', 'lens_id', 'stand_id'].includes(k)) {
           v = v || null;
           if (v && v !== it[k]) { const g = G(v); if (!(await ensureUnit(g))) { inp.value = it[k] || ''; return; } }
         }
@@ -317,7 +380,7 @@ export function lightmapTool(main, p, tool, { characters = [], base = '' } = {})
         if (k === 'lens_id') { const fs = lensFocals(G(v)); if (fs?.length && !fs.includes(+it.focal)) it.focal = fs[Math.min(2, fs.length - 1)]; }
         const out = box.querySelector(`[data-out="${k}"]`); if (out) out.textContent = k === 'cct' ? `${v}K` : k === 'spot' ? `${v}°` : `${Math.round(v)}%`;
         if (k === 'rgb') box.querySelector('[data-norgb]')?.removeAttribute('hidden');
-        if (['gear_id', 'mod_id', 'lens_id', 'piece', 'type'].includes(k) || inp.tagName === 'SELECT') draw(); else { drawSvg(); readout(); }
+        if (['gear_id', 'mod_id', 'lens_id', 'stand_id', 'piece', 'type'].includes(k) || inp.tagName === 'SELECT') draw(); else { drawSvg(); readout(); }
         save();
       });
     });
@@ -327,7 +390,7 @@ export function lightmapTool(main, p, tool, { characters = [], base = '' } = {})
   }
   async function duplicate() {
     const it = data.items.find((x) => x.id === st.sel); if (!it) return;
-    for (const k of ['gear_id', 'mod_id', 'lens_id']) { const g = it[k] && G(it[k]); if (g && !(await ensureUnit(g))) return; }
+    for (const k of ['gear_id', 'mod_id', 'lens_id', 'stand_id']) { const g = it[k] && G(it[k]); if (g && !(await ensureUnit(g))) return; }
     hist.push('duplicar');
     const c = { ...JSON.parse(JSON.stringify(it)), id: uid(), x: it.x + 0.6, y: it.y + 0.6 }; if (c.kind === 'camera') c.code = '';
     data.items.push(c); st.sel = c.id; draw(); save();
@@ -338,8 +401,8 @@ export function lightmapTool(main, p, tool, { characters = [], base = '' } = {})
   function legendRows(lab) {
     const lights = data.items.filter((x) => x.kind === 'light'); const cams = data.items.filter((x) => x.kind === 'camera'); const nat = data.items.filter((x) => x.kind === 'natural'); const mods = data.items.filter((x) => x.kind === 'mod');
     return [
-      ...cams.map((c) => { const cam = G(c.gear_id); const lens = G(c.lens_id); return { lab: lab[c.id], color: '#1E2AD4', what: cam ? gearName(cam) : 'Câmara (fora da lista)', how: [lens ? gearName(lens) : '', c.focal ? `${c.focal}mm` : '', c.height ? `altura ${c.height} m` : '', c.tilt ? `tilt ${c.tilt}°` : ''].filter(Boolean).join(' · '), notes: '' }; }),
-      ...lights.map((l) => { const L = lightInfo(l); return { lab: lab[l.id], color: L.color, what: L.g ? gearName(L.g) : `${l.type || 'Luz'} (fora da lista)`, how: [`${Math.round(+l.intensity || 0)}%`, L.s.color === 'rgb' && l.rgb ? 'RGB ' + l.rgb : `${L.k}K`, l.gel, l.diff, L.mod ? gearName(L.mod) : '', L.beam >= 300 ? '360°' : Math.round(L.beam) + '°', l.height ? `h ${l.height} m` : '', l.tilt ? `tilt ${l.tilt}°` : '', l.dmx ? `DMX ${l.dmx}` : '', l.battery ? 'bateria' : ''].filter(Boolean).join(' · '), notes: l.notes || '' }; }),
+      ...cams.map((c) => { const cam = G(c.gear_id); const lens = G(c.lens_id); return { lab: lab[c.id], color: '#1E2AD4', what: cam ? gearName(cam) : 'Câmara (fora da lista)', how: [lens ? gearName(lens) : '', c.focal ? `${c.focal}mm` : '', c.height ? `altura ${c.height} m` : '', c.tilt ? `tilt ${c.tilt}°` : '', G(c.stand_id) ? gearName(G(c.stand_id)) : ''].filter(Boolean).join(' · '), notes: '' }; }),
+      ...lights.map((l) => { const L = lightInfo(l); return { lab: lab[l.id], color: L.color, what: L.g ? gearName(L.g) : `${l.type || 'Luz'} (fora da lista)`, how: [`${Math.round(+l.intensity || 0)}%`, L.s.color === 'rgb' && l.rgb ? 'RGB ' + l.rgb : `${L.k}K`, l.gel, l.diff, L.mod ? gearName(L.mod) : '', L.beam >= 300 ? '360°' : Math.round(L.beam) + '°', l.height ? `h ${l.height} m` : '', l.tilt ? `tilt ${l.tilt}°` : '', l.dmx ? `DMX ${l.dmx}` : '', l.battery ? 'bateria' : '', G(l.stand_id) ? gearName(G(l.stand_id)) : ''].filter(Boolean).join(' · '), notes: l.notes || '' }; }),
       ...nat.map((n) => ({ lab: lab[n.id], color: kColor(+n.cct || 5600), what: NATURAL[n.type] || 'Luz natural', how: `${n.cct || 5600}K · ${Math.round(+n.intensity || 0)}%`, notes: n.notes || '' })),
       ...mods.map((m) => { const g = G(m.gear_id); return { lab: '', color: '#cfd3e0', what: g ? gearName(g) : 'Frame (fora da lista)', how: m.fabric || g?.specs?.fabric || '', notes: m.notes || '' }; }),
     ];
@@ -368,7 +431,7 @@ export function lightmapTool(main, p, tool, { characters = [], base = '' } = {})
       ${P.cap ? `<div class="lm-cap ${P.max > P.cap ? 'over' : P.max > P.cap * 0.8 ? 'near' : ''}"><i style="width:${pct}%"></i></div><p class="small ${P.max > P.cap ? 'danger-text' : 'muted'}">${P.max > P.cap ? `Passa ${((P.max - P.cap) / 1000).toLocaleString('pt-PT', { maximumFractionDigits: 2 })} kW do que os geradores/baterias da lista dão (${(P.cap / 1000).toLocaleString('pt-PT', { maximumFractionDigits: 1 })} kW).` : `Geradores/baterias da lista: ${(P.cap / 1000).toLocaleString('pt-PT', { maximumFractionDigits: 1 })} kW.`}</p>` : '<p class="small muted">Sem gerador nem bateria no equipamento.</p>'}`;
     const mat = material();
     main.querySelector('[data-mat]').innerHTML = `<h3 class="h3">Material deste mapa</h3>${mat.length ? `<ul>${mat.map(({ g, n }) => `<li class="${n > g.qty ? 'over' : ''}"><span>${n}×</span> ${esc(gearName(g))}${n > g.qty ? ` <small class="danger-text">só há ${g.qty}</small>` : ''}</li>`).join('')}</ul>` : '<p class="muted small">Nada ainda.</p>'}`;
-    const off = data.items.filter((x) => (x.kind === 'light' || x.kind === 'camera' || x.kind === 'mod') && !G(x.gear_id)).length;
+    const off = data.items.filter((x) => (x.kind === 'light' || x.kind === 'camera' || x.kind === 'mod' || x.kind === 'stand') && !G(x.gear_id)).length;
     main.querySelector('[data-hint]').innerHTML = off ? `<span>${off} peça${off > 1 ? 's' : ''} fora do equipamento — seleciona e escolhe da lista</span>` : '';
   }
 
@@ -418,9 +481,12 @@ export function lightmapTool(main, p, tool, { characters = [], base = '' } = {})
   });
   bindUndoKeys(main, hist);
 
-  main.querySelectorAll('[data-add]').forEach((b) => b.addEventListener('click', () => addBasic(b.dataset.add)));
-  main.querySelector('[data-addset]').addEventListener('change', (e) => { if (e.target.value) { addBasic('set', e.target.value); e.target.value = ''; } });
-  main.querySelector('[data-addnat]').addEventListener('change', (e) => { if (e.target.value) { addBasic('natural', e.target.value); e.target.value = ''; } });
+  main.querySelectorAll('[data-tool]').forEach((b) => b.addEventListener('click', () => openPop(b.dataset.tool, b)));
+  main.querySelector('[data-limit]').addEventListener('change', (e) => { data.limit = e.target.checked; main.querySelector('[data-limitlabel]').textContent = data.limit ? 'Só a lista de equipamento' : 'Lista + catálogo geral'; save(); if (popKind) drawPop(); });
+  main.querySelector('[data-drawer-t]').addEventListener('click', (e) => { const d2 = main.querySelector('[data-drawer]'); d2.hidden = !d2.hidden; e.currentTarget.classList.toggle('on', !d2.hidden); });
+  main.querySelector('[data-opt]')?.addEventListener('click', () => opts.onOptions());
+  const popOut = (e) => { if (popKind && !e.target.closest('[data-pop], [data-tool], #modal')) closePop(); };
+  document.addEventListener('pointerdown', popOut, true);
   main.querySelector('[data-undo]').addEventListener('click', () => hist.undo());
   main.querySelector('[data-fit]').addEventListener('click', fit);
   main.querySelector('[data-png]').addEventListener('click', () => exportPng(svg, tool.title));
@@ -446,7 +512,7 @@ export function lightmapTool(main, p, tool, { characters = [], base = '' } = {})
   document.addEventListener('visibilitychange', onVis);
   refresh().then(() => requestAnimationFrame(fit));
   const ro = new ResizeObserver(() => st.view && drawSvg()); ro.observe(canvas);
-  return { destroy() { ro.disconnect(); window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); document.removeEventListener('visibilitychange', onVis); } };
+  return { destroy() { ro.disconnect(); window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); document.removeEventListener('visibilitychange', onVis); document.removeEventListener('pointerdown', popOut, true); } };
 }
 
 async function svgPng(svg, scale = 2) {

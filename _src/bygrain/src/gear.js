@@ -6,7 +6,7 @@ import { exportPdf } from './pdf.js';
 // Tabela `gear`: { category, name, brand, qty, specs, supplier, price_day, notes, position }.
 
 export const CATS = [
-  ['light', 'Luzes'], ['camera', 'Câmaras'], ['lens', 'Objetivas'], ['modifier', 'Modificadores e frames'],
+  ['light', 'Luzes'], ['camera', 'Câmaras'], ['lens', 'Objetivas'], ['modifier', 'Modificadores e frames'], ['stand', 'Tripés e suportes'],
   ['grip', 'Maquinaria'], ['power', 'Elétrico'], ['filter', 'Filtros'], ['other', 'Outros'],
 ];
 export const catLabel = (k) => (CATS.find((c) => c[0] === k) || CATS[CATS.length - 1])[1];
@@ -74,8 +74,15 @@ export const CATALOG = [
   M('', 'Butterfly 12x12', 'frame', 3.6, { fabric: 'Ultrabounce' }), M('', 'Butterfly 20x20', 'frame', 6, { fabric: 'Silk' }),
   M('', 'Bandeira 18x24', 'flag', 0.6), M('', 'Bandeira 24x36', 'flag', 0.9), M('', 'Negativo 4x4', 'flag', 1.2, { fabric: 'Negativo (Duvetyne)' }),
   M('', 'Esferovite / poly', 'bounce', 1.2), M('', 'Rebatedor 5 em 1 (1 m)', 'bounce', 1),
-  { category: 'grip', brand: '', name: 'C-stand', specs: {} }, { category: 'grip', brand: '', name: 'Combo stand', specs: {} }, { category: 'grip', brand: '', name: 'Slider 1 m', specs: {} },
-  { category: 'grip', brand: '', name: 'Dolly + calhas', specs: {} }, { category: 'grip', brand: 'DJI', name: 'Ronin 2', specs: {} }, { category: 'grip', brand: '', name: 'Easyrig', specs: {} },
+  M('', 'Flanela preta (negativo)', 'flag', 1.5, { fabric: 'Negativo (Duvetyne)' }), M('', 'Rebatedor branco/prata 1x1', 'bounce', 1),
+  { category: 'stand', brand: '', name: 'C-stand', specs: { stand: 'light', max_h: 3.2 } }, { category: 'stand', brand: '', name: 'Combo stand', specs: { stand: 'light', max_h: 4.5 } },
+  { category: 'stand', brand: '', name: 'Baby stand', specs: { stand: 'light', max_h: 2.4 } }, { category: 'stand', brand: '', name: 'High roller', specs: { stand: 'light', max_h: 6 } },
+  { category: 'stand', brand: 'Manfrotto', name: 'Tripé de luz 1004BAC', specs: { stand: 'light', max_h: 3.6 } },
+  { category: 'stand', brand: 'Sachtler', name: 'Tripé de câmara Flowtech 75', specs: { stand: 'camera', max_h: 1.6 } },
+  { category: 'stand', brand: "O'Connor", name: 'Tripé de câmara 2575 + pernas', specs: { stand: 'camera', max_h: 1.8 } },
+  { category: 'stand', brand: '', name: 'Hi-hat', specs: { stand: 'camera', max_h: 0.2 } },
+  { category: 'stand', brand: '', name: 'Dolly + calhas', specs: { stand: 'camera' } }, { category: 'stand', brand: 'DJI', name: 'Ronin 2', specs: { stand: 'camera' } }, { category: 'stand', brand: '', name: 'Easyrig', specs: { stand: 'camera' } },
+  { category: 'grip', brand: '', name: 'Apple boxes (set)', specs: {} }, { category: 'grip', brand: '', name: 'Sacos de areia', specs: {} }, { category: 'grip', brand: '', name: 'Slider 1 m', specs: {} },
   { category: 'power', brand: 'Honda', name: 'Gerador EU22i', specs: { capacity_w: 2200 } }, { category: 'power', brand: 'Honda', name: 'Gerador EU70is', specs: { capacity_w: 7000 } },
   { category: 'power', brand: '', name: 'Extensão 16A 25 m', specs: {} }, { category: 'power', brand: '', name: 'Quadro de distribuição', specs: {} }, { category: 'power', brand: 'EcoFlow', name: 'Delta 2 Max', specs: { capacity_w: 2400, battery: true } },
   { category: 'filter', brand: 'Tiffen', name: 'Black Pro-Mist 1/4', specs: {} }, { category: 'filter', brand: '', name: 'ND variável', specs: {} },
@@ -89,6 +96,7 @@ export function specLine(g) {
   if (g.category === 'camera') return [s.format, s.sensor_w ? `sensor ${s.sensor_w} mm` : ''].filter(Boolean).join(' · ');
   if (g.category === 'lens') return [s.zoom ? `${s.zoom[0]}–${s.zoom[1]} mm` : (s.focals || []).join(', ') + ((s.focals || []).length ? ' mm' : ''), s.tstop, s.squeeze ? `anamórfica ${s.squeeze}x` : ''].filter(Boolean).join(' · ');
   if (g.category === 'modifier') return [(MOD_KINDS.find((m) => m[0] === s.mod) || [])[1], s.size_m ? `${s.size_m} m` : '', s.fabric].filter(Boolean).join(' · ');
+  if (g.category === 'stand') return [s.stand === 'camera' ? 'Para câmara' : s.stand === 'light' ? 'Para luz / frames' : '', s.max_h ? `até ${s.max_h} m` : ''].filter(Boolean).join(' · ');
   if (g.category === 'power') return [s.capacity_w ? `${s.capacity_w} W disponíveis` : '', s.battery ? 'bateria' : ''].filter(Boolean).join(' · ');
   return '';
 }
@@ -163,6 +171,7 @@ export function editGearModal(g, { onDone, onDelete } = {}) {
   if (g.category === 'lens') specs = `<div class="grid3">${num('focals', 'Focais do set (mm, separadas por vírgula)', (s.focals || []).join(', '))}${num('zoom', 'Ou zoom (ex: 24-70)', s.zoom ? s.zoom.join('-') : '')}${num('tstop', 'Abertura', s.tstop)}${num('squeeze', 'Anamórfica (squeeze, ex: 2)', s.squeeze)}</div>`;
   if (g.category === 'modifier') specs = `<div class="grid3"><div class="field"><label>Tipo</label><select name="mod">${MOD_KINDS.map(([k, l]) => `<option value="${k}" ${k === s.mod ? 'selected' : ''}>${l}</option>`).join('')}</select></div>${num('size_m', 'Tamanho (m)', s.size_m)}
       <div class="field"><label>Tela</label><select name="fabric">${FABRICS.map((t) => `<option ${t === (s.fabric || '') ? 'selected' : ''} value="${esc(t)}">${t || '—'}</option>`).join('')}</select></div></div>`;
+  if (g.category === 'stand') specs = `<div class="grid2"><div class="field"><label>Para</label><select name="stand"><option value="light" ${s.stand !== 'camera' ? 'selected' : ''}>Luz / frames / bandeiras</option><option value="camera" ${s.stand === 'camera' ? 'selected' : ''}>Câmara</option></select></div>${num('max_h', 'Altura máxima (m)', s.max_h)}</div>`;
   if (g.category === 'power') specs = `<div class="grid2">${num('capacity_w', 'Potência disponível (W)', s.capacity_w)}<label class="check"><input type="checkbox" name="battery" ${s.battery ? 'checked' : ''}> Bateria / estação</label></div><p class="muted small">Geradores e baterias com potência entram na conta de consumo dos mapas de luz.</p>`;
   const m = modal(`<h2>${esc(gearName(g) || 'Equipamento')}</h2>
     <form class="stack" data-f>
@@ -181,6 +190,7 @@ export function editGearModal(g, { onDone, onDelete } = {}) {
     if (g.category === 'camera') Object.assign(ns, { format: v.format, sensor_w: n(v.sensor_w) });
     if (g.category === 'lens') { const z = String(v.zoom || '').split(/[-–]/).map(n).filter(Boolean); Object.assign(ns, { focals: String(v.focals || '').split(/[,;\s]+/).map(n).filter(Boolean), zoom: z.length === 2 ? z : null, tstop: v.tstop, squeeze: n(v.squeeze) }); if (!ns.zoom) delete ns.zoom; if (!ns.squeeze) delete ns.squeeze; }
     if (g.category === 'modifier') Object.assign(ns, { mod: v.mod, size_m: n(v.size_m), fabric: v.fabric });
+    if (g.category === 'stand') Object.assign(ns, { stand: v.stand, max_h: n(v.max_h) });
     if (g.category === 'power') Object.assign(ns, { capacity_w: n(v.capacity_w), battery: !!v.battery });
     const patch = { name: v.name.trim(), brand: v.brand.trim(), category: v.category, qty: Math.max(0, Math.round(n(v.qty) ?? 1)), price_day: n(v.price_day), supplier: v.supplier.trim(), notes: v.notes.trim(), specs: ns, updated_at: new Date().toISOString() };
     const { data, error } = await sb.from('gear').update(patch).eq('id', g.id).select().single();
