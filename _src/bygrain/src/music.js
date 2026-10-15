@@ -149,13 +149,14 @@ async function musicPage(main, p, f, sub, base, cleanup) {
   const music = { ...(p.music || {}) };
   const saveNow = async () => { const { error } = await sb.from('projects').update({ music }).eq('id', p.id); if (error) { toast(error.message); return false; } p.music = { ...music }; return true; };
   const saveMusic = debounce(async () => { const { error } = await sb.from('projects').update({ music }).eq('id', p.id); if (error) toast(error.message); else p.music = { ...music }; }, 500);
-  const shotUrls = await signedUrls(f.shots.map((x) => x.image_path).filter(Boolean));
+  const shotUrls = await signedUrls([...f.shots.map((x) => x.image_path), ...f.scenes.flatMap((x) => (x.refs || []).map((r) => r.path))].filter(Boolean));
   let view = (() => { try { return localStorage.getItem('bg-seg-view') || 'grid'; } catch { return 'grid'; } })();
   // secções em colunas, como no Milanote: nome, descrição e as imagens dos planos
   const gridHtml = (L) => `<div class="seg-cols">${L.items.map((x) => { const sh = f.shots.filter((y) => y.scene_id === x.s.id); return `<a class="seg-col" href="${base}/seguimento/${x.s.id}" style="--sc:${x.col}">
       <button type="button" class="icon-btn sm sc-del" data-delsec="${x.s.id}" aria-label="Apagar a secção ${esc(x.s.heading || '')}" title="Apagar secção">${ICON.trash}</button>
       <span class="sc-h"><strong>${esc(x.s.heading || 'Sem nome')}</strong><small>${x.a != null ? `${fmtT(x.a)}${x.b != null ? '–' + fmtT(x.b) : ''} · ` : ''}${sh.length} ${sh.length === 1 ? 'plano' : 'planos'}</small></span>
       ${x.s.notes ? `<span class="sc-desc"><b>Descrição:</b>${x.s.notes.split('\n').filter((l) => l.trim()).map((l) => `<span>${esc(l)}</span>`).join('')}</span>` : '<span class="sc-desc empty">Sem descrição. Abre para escrever a ideia desta secção.</span>'}
+      ${(x.s.refs || []).filter((r) => shotUrls[r.path]).map((r) => `<img src="${esc(shotUrls[r.path])}" alt="Referência" loading="lazy">`).join('')}
       ${sh.filter((y) => shotUrls[y.image_path]).map((y) => `<img src="${esc(shotUrls[y.image_path])}" alt="${esc(y.code)}" loading="lazy">`).join('')}
     </a>`; }).join('')}</div>`;
   const draw = () => {
@@ -241,6 +242,7 @@ async function section(main, p, f, sid, base, cleanup) {
   const L = layout(f.scenes, p.music?.duration); const me = L.items[idx];
   const shots = f.shots.filter((x) => x.scene_id === s.id);
   const urls = await signedUrls(shots.map((x) => x.image_path));
+  const refUrls = await signedUrls((s.refs || []).map((r) => r.path).filter(Boolean));
   const isExtra = (c) => !!c.info?.extra;
   const chips = (ids, kind) => (ids || []).map((id) => { const e = (kind === 'place' ? f.locations : f.characters).find((x) => x.id === id); return e ? `<span class="chip"><a href="${base}/${kind === 'place' ? 'decors' : 'elenco'}/${e.id}">${esc(e.name)}</a><button type="button" class="chip-x" data-rm="${kind}" data-id="${id}" aria-label="Tirar ${esc(e.name)}">${ICON.close}</button></span>` : ''; }).join('');
   const adder = (kind, label) => {
@@ -261,15 +263,57 @@ async function section(main, p, f, sid, base, cleanup) {
       <form class="row wrap-gap seg-split" data-split><span class="small muted">Partir esta secção em</span><input class="mini-in num" name="at" placeholder="${me.a != null ? fmtT(me.a + 15) : '0:15'}" aria-label="Momento onde partir"><input name="name" placeholder="Nome da nova secção" list="dl-parts" aria-label="Nome da nova secção"><button class="btn ghost">Partir</button></form>
       <datalist id="dl-parts">${PARTS.map((x) => `<option value="${x}">`).join('')}</datalist>
     </section>
+    <section class="panel"><h2 class="h3">Descrição</h2><textarea data-notes rows="4" placeholder="O que acontece nesta parte da música: performance, narrativa, ritmo da montagem…">${esc(s.notes || '')}</textarea></section>
+    <section class="panel sec-refs" data-refs>
+      <div class="row between"><h2 class="h3">Referências</h2><div class="row"><span class="muted small paste-hint">arrasta, cola com Ctrl+V ou</span><button type="button" class="btn ghost" data-addref>${ICON.image} Juntar imagens</button></div></div>
+      ${(s.refs || []).length ? `<div class="ref-imgs">${s.refs.map((r, i) => `<figure><button type="button" class="ref-open" data-refopen="${i}" aria-label="Ver em grande"><img src="${esc(refUrls[r.path] || '')}" alt=""></button><button type="button" class="icon-btn sm" data-refrm="${i}" aria-label="Tirar imagem">${ICON.close}</button></figure>`).join('')}</div>` : '<p class="muted small sec-refs-empty">Imagens de referência para esta parte do clipe: luz, cor, enquadramentos, guarda-roupa…</p>'}
+    </section>
     <section><div class="row between"><h2 class="h3">Planos</h2><span class="muted small">${shots.length} ${shots.length === 1 ? 'plano' : 'planos'}</span></div>
       <div class="shots" data-shots>${shots.map((x) => shotCard(x, urls[x.image_path])).join('')}<button type="button" class="shot-add" data-addshot>${ICON.plus}<span>Plano</span></button></div></section>
     <section class="panel"><h2 class="h3">Tarefas desta secção</h2><div data-tasks></div></section>
-    <section class="panel"><h2 class="h3">Descrição</h2><textarea data-notes rows="4" placeholder="O que acontece nesta parte da música: performance, narrativa, ritmo da montagem…">${esc(s.notes || '')}</textarea></section>
     <div class="row end"><button type="button" class="btn ghost danger-text" data-del>${ICON.trash} Apagar secção</button></div>`;
   const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: 'scene', id: s.id } }); cleanup(() => t.destroy());
   const saveNotes = debounce((v) => sb.from('scenes').update({ notes: v }).eq('id', s.id));
   main.querySelector('[data-notes]').addEventListener('input', (e) => saveNotes(e.target.value));
   bindShots(main, p, f, s, shots, urls, base);
+  // referências da secção: imagens (botão, arrastar ou colar com o rato por cima do painel)
+  const refsBox = main.querySelector('[data-refs]');
+  const addRefs = async (files) => {
+    const imgs = [...files].filter((x) => x.type.startsWith('image/')); if (!imgs.length) return;
+    toast(imgs.length > 1 ? `A enviar ${imgs.length} imagens…` : 'A enviar a imagem…');
+    const add = [];
+    for (const file of imgs) { try { const up = await uploadImage(p.id, 'refs', file); add.push({ kind: 'image', path: up.path }); } catch (er) { toast(er.message || String(er)); } }
+    s.refs = [...(s.refs || []), ...add];
+    const { error } = await sb.from('scenes').update({ refs: s.refs }).eq('id', s.id); if (error) return toast(error.message);
+    redraw();
+  };
+  refsBox.querySelector('[data-addref]').addEventListener('click', () => { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = true; inp.onchange = () => addRefs(inp.files); inp.click(); });
+  refsBox.addEventListener('dragover', (e) => { e.preventDefault(); refsBox.classList.add('drop'); });
+  refsBox.addEventListener('dragleave', () => refsBox.classList.remove('drop'));
+  refsBox.addEventListener('drop', (e) => { e.preventDefault(); refsBox.classList.remove('drop'); addRefs(e.dataTransfer.files); });
+  let overRefs = false;
+  refsBox.addEventListener('pointerenter', () => (overRefs = true)); refsBox.addEventListener('pointerleave', () => (overRefs = false));
+  const onPaste = (e) => {
+    if (!document.body.contains(refsBox)) { document.removeEventListener('paste', onPaste, true); return; }
+    if (!overRefs || e.target.closest?.('input, textarea')) return;
+    const files = [...(e.clipboardData?.files || [])]; if (!files.some((x) => x.type.startsWith('image/'))) return;
+    e.preventDefault(); e.stopPropagation(); addRefs(files);
+  };
+  document.addEventListener('paste', onPaste, true);
+  cleanup(() => document.removeEventListener('paste', onPaste, true));
+  refsBox.querySelectorAll('[data-refrm]').forEach((b) => b.addEventListener('click', async () => {
+    if (!(await confirmBox('Tirar esta imagem das referências?', 'Tirar'))) return;
+    const r = s.refs[+b.dataset.refrm]; s.refs = s.refs.filter((x) => x !== r);
+    await sb.from('scenes').update({ refs: s.refs }).eq('id', s.id); if (r?.path) sb.storage.from('files').remove([r.path]); redraw();
+  }));
+  refsBox.querySelectorAll('[data-refopen]').forEach((b) => b.addEventListener('click', () => {
+    const imgs = (s.refs || []).map((r) => refUrls[r.path]).filter(Boolean); let i = +b.dataset.refopen;
+    const m = modal('<div class="ref-view"><img alt=""><div class="row between"><button type="button" class="icon-btn" data-p aria-label="Anterior">' + ICON.back + '</button><span class="muted small" data-n></span><button type="button" class="icon-btn" data-nx aria-label="Seguinte">' + ICON.chev + '</button></div></div>', { wide: true });
+    const show = () => { m.el.querySelector('img').src = imgs[i]; m.el.querySelector('[data-n]').textContent = `${i + 1} de ${imgs.length}`; };
+    m.el.querySelector('[data-p]').onclick = () => { i = (i - 1 + imgs.length) % imgs.length; show(); };
+    m.el.querySelector('[data-nx]').onclick = () => { i = (i + 1) % imgs.length; show(); };
+    show();
+  }));
   const field = { place: 'location_ids', actor: 'character_ids', extra: 'extra_ids' };
   const redraw = () => section(main, p, f, sid, base, cleanup);
   const setIds = async (kind, ids) => { s[field[kind]] = ids; const { error } = await sb.from('scenes').update({ [field[kind]]: ids }).eq('id', s.id); if (error) toast(error.message); if (ids.length) await ensureModules(p, [kind === 'place' ? 'decors' : 'elenco']); redraw(); };
