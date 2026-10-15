@@ -29,7 +29,7 @@ export function mountTaskCenter(root, { projectId = null } = {}) {
     let q = sb.from('tasks').select('*').order('created_at');
     if (projectId) q = q.eq('project_id', projectId);
     const [{ data: tasks, error }, people, { data: projects }] = await Promise.all([
-      q, loadPeople(), sb.from('projects').select('id, name, departments, is_central, kind, status').order('name'),
+      q, loadPeople(), sb.from('projects').select('id, name, departments, is_central, kind, status').is('deleted_at', null).order('name'),
     ]);
     if (st.dead) return;
     if (error) { root.innerHTML = `<p class="muted">${esc(error.message)}</p>`; return; }

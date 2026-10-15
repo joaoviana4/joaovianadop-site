@@ -138,7 +138,7 @@ async function homePage() {
         <div class="row between wrap-gap">
           <h2 id="h-proj" class="h2">${staff ? 'Projetos' : 'Os teus projetos'}</h2>
           <div class="seg dark" role="tablist" aria-label="Estado dos projetos">
-            ${[['active', 'Em curso'], ['done', 'Finalizados'], ['archived', 'Arquivo']].map(([k, v]) => `<button type="button" role="tab" aria-selected="${homeState.tab === k}" data-tab="${k}">${v}</button>`).join('')}
+            ${[['active', 'Em curso'], ['done', 'Finalizados'], ['archived', 'Arquivo'], ...(staff ? [['trash', 'Reciclagem']] : [])].map(([k, v]) => `<button type="button" role="tab" aria-selected="${homeState.tab === k}" data-tab="${k}">${v}</button>`).join('')}
           </div>
         </div>
         <div class="proj-tools">
@@ -176,7 +176,7 @@ async function homePage() {
   const mineSet = new Set([...(myMem || []).map((m) => m.project_id), ...(tasks || []).filter((t) => t.assignee_id === state.user.id).map((t) => t.project_id)]);
   const norm = (x) => (x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const sorters = { recent: (a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''), az: (a, b) => a.name.localeCompare(b.name, 'pt'), due: (a, b) => (a.ends_on || '9999').localeCompare(b.ends_on || '9999') || a.name.localeCompare(b.name, 'pt') };
-  const pick = () => (projects || []).filter((p) => p.status === homeState.tab && (!homeState.mine || mineSet.has(p.id)) && (!homeState.q || norm(`${p.name} ${p.client}`).includes(norm(homeState.q)))).sort(sorters[homeState.sort]);
+  const pick = () => (projects || []).filter((p) => (homeState.tab === 'trash' ? !!p.deleted_at : !p.deleted_at && p.status === homeState.tab) && (!homeState.mine || mineSet.has(p.id)) && (!homeState.q || norm(`${p.name} ${p.client}`).includes(norm(homeState.q)))).sort(sorters[homeState.sort]);
   let list = pick();
   const open = (pid) => (tasks || []).filter((t) => t.project_id === pid && t.status !== 'done').length;
   const covers = await signedUrls((projects || []).map((p) => p.cover_path));
@@ -185,7 +185,36 @@ async function homePage() {
   if (hero) hero.textContent = staff ? `Tens ${mineOpen.length} ${mineOpen.length === 1 ? 'tarefa aberta' : 'tarefas abertas'} em ${new Set(mineOpen.map((t) => t.project_id)).size} projetos.` : `Tens acesso a ${(projects || []).length} ${projects?.length === 1 ? 'projeto' : 'projetos'}.`;
 
   const grid = app.querySelector('[data-grid]');
-  const drawGrid = () => { list = pick(); grid.innerHTML = list.length ? list.map((p) => {
+  const people = staff ? await loadPeople() : [];
+  const drawTrash = () => {
+    const DAY = 86400000;
+    grid.innerHTML = list.length ? list.map((p) => {
+      const left = Math.max(0, Math.ceil((new Date(p.deleted_at).getTime() + 10 * DAY - Date.now()) / DAY));
+      const who = people.find((x) => x.id === p.deleted_by);
+      return `<article class="proj-card trash-card">
+        <div class="proj-cover" style="background:${coverColor(p.id)}"><div class="grain-layer soft" aria-hidden="true"></div><span class="tag dark">${esc(KINDS[p.kind] || p.kind)}</span><span class="trash-left">${left === 0 ? 'Apaga-se hoje' : `Apaga-se em ${left} ${left === 1 ? 'dia' : 'dias'}`}</span></div>
+        <div class="proj-body">
+          <div><div class="proj-name">${esc(p.name)}</div><div class="muted small">${esc(p.client || '—')} · apagado a ${fmtDate(p.deleted_at)}${who ? ` por ${esc(who.display_name)}` : ''}</div></div>
+          <div class="row wrap-gap"><button type="button" class="btn primary" data-restore="${p.id}">${ICON.refresh} Recuperar</button>${isAdmin() ? `<button type="button" class="btn ghost danger-text" data-purge="${p.id}">${ICON.trash} Apagar já</button>` : ''}</div>
+        </div></article>`;
+    }).join('') : '<p class="empty-note">A reciclagem está vazia. Os projetos apagados ficam aqui 10 dias antes de desaparecerem de vez.</p>';
+    grid.querySelectorAll('[data-restore]').forEach((b) => b.addEventListener('click', async () => {
+      const p = list.find((x) => x.id === b.dataset.restore);
+      const { error } = await sb.from('projects').update({ deleted_at: null, deleted_by: null }).eq('id', p.id);
+      if (error) return toast(error.message);
+      toast(`"${p.name}" voltou para os projetos.`); p.deleted_at = null; drawGrid();
+    }));
+    grid.querySelectorAll('[data-purge]').forEach((b) => b.addEventListener('click', async () => {
+      const p = list.find((x) => x.id === b.dataset.purge);
+      if (!(await confirmBox(`Apagar "${p.name}" de vez, com todos os boards, tarefas e ficheiros? Isto não dá para desfazer.`, 'Apagar de vez'))) return;
+      toast('A apagar os ficheiros…');
+      await purgeFiles(p.id);
+      const { error } = await sb.from('projects').delete().eq('id', p.id);
+      if (error) return toast(error.message);
+      projects.splice(projects.indexOf(p), 1); toast('Apagado de vez.'); drawGrid();
+    }));
+  };
+  const drawGrid = () => { list = pick(); if (homeState.tab === 'trash') return drawTrash(); grid.innerHTML = list.length ? list.map((p) => {
     const ph = phaseOf(p); const n = open(p.id);
     return `<article class="proj-card">
       <a href="#/p/${p.id}" class="proj-link" aria-label="Abrir ${esc(p.name)}"></a>
@@ -213,6 +242,17 @@ async function homePage() {
     const top = mineOpen.sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999')).slice(0, 6);
     mineEl.innerHTML = top.length ? top.map((t) => { const d = dueInfo(t.due, t.status); return `<li><a href="#/p/${t.project_id}"><span><strong>${esc(t.title)}</strong><small>${esc(pmap.get(t.project_id) || 'Central de Produção')}</small></span><span class="due due-${d.tone}">${esc(d.label)}</span></a></li>`; }).join('') : '<li class="muted">Sem tarefas abertas.</li>';
   }
+}
+
+// todos os ficheiros de um projeto (fotos, música, guiões…), pasta a pasta
+async function purgeFiles(pid) {
+  const all = [];
+  const walk = async (prefix, depth = 0) => {
+    const { data } = await sb.storage.from('files').list(prefix, { limit: 1000 });
+    for (const it of data || []) { const path = `${prefix}/${it.name}`; if (it.id) all.push(path); else if (depth < 4) await walk(path, depth + 1); }
+  };
+  await walk(pid);
+  for (let i = 0; i < all.length; i += 100) await sb.storage.from('files').remove(all.slice(i, i + 100));
 }
 
 function coverColor(id) {
@@ -287,10 +327,11 @@ function bindDetails(root, p, after) {
   });
   form.querySelector('[data-nocover]')?.addEventListener('click', async () => { await sb.from('projects').update({ cover_path: null }).eq('id', p.id); p.cover_path = null; toast('Capa tirada.'); after && after(); });
   form.querySelector('[data-delp]')?.addEventListener('click', async () => {
-    if (!(await confirmBox(`Apagar "${p.name}" com o board, as tarefas e os ficheiros? Não dá para desfazer.`, 'Apagar'))) return;
-    const { error } = await sb.from('projects').delete().eq('id', p.id);
+    if (!(await confirmBox(`Apagar "${p.name}"? Vai para a reciclagem e só é apagado de vez daqui a 10 dias. Até lá, qualquer pessoa da equipa o pode recuperar.`, 'Mandar para a reciclagem'))) return;
+    const { error } = await sb.rpc('trash_project', { p: p.id });
     if (error) return toast(error.message);
-    toast('Projeto apagado.'); go('#/');
+    document.querySelector('#modal')?.replaceChildren();
+    toast('Foi para a reciclagem. Podes recuperá-lo durante 10 dias, no separador "Reciclagem".'); homeState.tab = 'active'; go('#/'); if (location.hash === '#/' || !location.hash) homePage();
   });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -371,7 +412,7 @@ const toolHref = (p, b) => `${projBase(p)}/${(b.kind || 'board') === 'board' ? '
 
 async function loadProject(id) {
   const { data: p } = await sb.from('projects').select(PROJECT_COLS).eq('id', id).maybeSingle();
-  if (!p) return null;
+  if (!p || p.deleted_at) return null;
   // o orçamento só chega a quem tem acesso (a base de dados devolve vazio aos outros)
   const [{ data: fin }, { data: grant }, { count: nScripts }] = await Promise.all([
     sb.from('project_budgets').select('value, budget, updated_at').eq('project_id', id).maybeSingle(),
@@ -639,7 +680,7 @@ const MESES_L = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'ju
 async function centralOverview(box) {
   box.innerHTML = '<p class="muted">A carregar os projetos…</p>';
   const [{ data: projects }, { data: members }, { data: fins }, { data: tasks }, people] = await Promise.all([
-    sb.from('projects').select(PROJECT_COLS).eq('is_central', false),
+    sb.from('projects').select(PROJECT_COLS).eq('is_central', false).is('deleted_at', null),
     sb.from('project_members').select('project_id, user_id'),
     sb.from('project_budgets').select('project_id, value'),
     sb.from('tasks').select('project_id, assignee_id, status'),

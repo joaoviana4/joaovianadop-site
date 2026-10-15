@@ -52,7 +52,7 @@ export function mountTasks(root, { projectId = null, mine = false, compact = fal
     if (entity) q = q.eq('entity_id', entity.id);
     const [{ data: tasks, error }, people, { data: projects }] = await Promise.all([
       q, loadPeople(),
-      projectId ? sb.from('projects').select('id, name, departments, is_central').eq('id', projectId) : sb.from('projects').select('id, name, departments, is_central, status'),
+      projectId ? sb.from('projects').select('id, name, departments, is_central').eq('id', projectId) : sb.from('projects').select('id, name, departments, is_central, status').is('deleted_at', null),
     ]);
     if (st.dead) return;
     if (error) { root.innerHTML = `<p class="muted">${esc(error.message)}</p>`; return; }

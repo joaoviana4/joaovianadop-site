@@ -24,7 +24,7 @@ export async function financePage(main, sub) {
   const [{ data: accounts }, { data: recurring }, { data: projects }] = await Promise.all([
     sb.from('fin_accounts').select('*').order('position'),
     sb.from('fin_recurring').select('*').order('day_of_month'),
-    sb.from('projects').select('id, name').eq('is_central', false).order('name'),
+    sb.from('projects').select('id, name').eq('is_central', false).is('deleted_at', null).order('name'),
   ]);
   const ctx = { accounts: accounts || [], recurring: recurring || [], projects: projects || [], reload: () => financePage(main) };
   if (st.tab === 'movimentos') return movements(box, ctx);

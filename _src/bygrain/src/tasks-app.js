@@ -61,7 +61,7 @@ function shell() {
 async function load() {
   const [{ data: tasks, error }, { data: projects }, people] = await Promise.all([
     sb.from('tasks').select('*').eq('assignee_id', state.user.id),
-    sb.from('projects').select('id, name, departments, is_central'),
+    sb.from('projects').select('id, name, departments, is_central').is('deleted_at', null),
     loadPeople(),
   ]);
   if (error) return toast(error.message);

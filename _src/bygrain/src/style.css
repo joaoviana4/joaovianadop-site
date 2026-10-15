@@ -1148,3 +1148,6 @@ body.fs-lock { overflow: hidden; }
 .pick-it img { width: 64px; height: 36px; object-fit: cover; border-radius: 4px; flex: 0 0 auto; background: #000; }
 .pick-it span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .pick-it small { color: var(--muted); font-size: 12px; }
+.trash-card .proj-cover { filter: grayscale(.85); opacity: .75; }
+.trash-left { position: absolute; right: 12px; bottom: 12px; padding: 4px 10px; border-radius: 999px; background: rgba(12, 12, 18, .8); font-size: 12px; font-weight: 600; color: var(--soon); }
+.trash-card .proj-body { gap: 14px; }
