@@ -26,6 +26,22 @@ export function newCallsheet(p, n = 1) {
   };
 }
 
+// ---------- cores da folha exportada ----------
+// moldura, caixas de destaque (amarelo), caixas secundárias (cinzento), fundo das caixas e linhas. O texto ajusta-se sozinho.
+export const PALETTE_KEYS = [['frame', 'Moldura'], ['hi', 'Destaque'], ['lo', 'Secundária'], ['box', 'Caixas'], ['ln', 'Linhas']];
+const PRESETS = [
+  ['Clássico', { frame: '#C8382D', hi: '#FFE599', lo: '#D9D9D9', box: '#FFFFFF', ln: '#000000' }],
+  ['Limpo', { frame: '#FFFFFF', hi: '#F2F2F2', lo: '#F2F2F2', box: '#FFFFFF', ln: '#BFBFBF' }],
+  ['byGrain', { frame: '#1E2AD4', hi: '#F4F1E8', lo: '#DCDDF7', box: '#FFFFFF', ln: '#0B0B14' }],
+  ['Noite', { frame: '#0B0B14', hi: '#E3B341', lo: '#3A3A46', box: '#FFFFFF', ln: '#0B0B14' }],
+  ['Verde', { frame: '#2F6B4F', hi: '#D9EAD3', lo: '#E6E6E6', box: '#FFFFFF', ln: '#1F3D2E' }],
+  ['Rosa', { frame: '#F06BD0', hi: '#FFE1F4', lo: '#EDEDED', box: '#FFFFFF', ln: '#333333' }],
+];
+const lum = (hex) => { const h = String(hex || '#000').replace('#', ''); const n = h.length === 3 ? h.split('').map((c) => c + c).join('') : h; const [r, g, b] = [0, 2, 4].map((i) => parseInt(n.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+export const inkOn = (hex) => (lum(hex) > 0.35 ? '#000000' : '#FFFFFF');
+const paletteOf = (d) => ({ ...PRESETS[0][1], ...(d.palette || {}), frame: d.accent || d.palette?.frame || PRESETS[0][1].frame });
+const paletteVars = (pal) => `--acc:${pal.frame};--hi:${pal.hi};--hi-t:${inkOn(pal.hi)};--lo:${pal.lo};--lo-t:${inkOn(pal.lo)};--box:${pal.box};--box-t:${inkOn(pal.box)};--ln:${pal.ln}`;
+
 const get = (o, path) => path.split('.').reduce((a, k) => (a == null ? a : a[k]), o);
 const set = (o, path, v) => { const ks = path.split('.'); const last = ks.pop(); const t = ks.reduce((a, k) => a[k], o); t[last] = v; };
 const fmtDay = (iso) => { if (!iso) return ''; const d = new Date(iso + 'T00:00:00'); const s = d.toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); return s.charAt(0).toUpperCase() + s.slice(1).replace(',', ' |'); };
@@ -37,7 +53,7 @@ function sheetHtml(d, edit) {
   const link = (path, label) => { const u = get(d, path); return edit ? f(path, 'link do Google Maps') : (u ? `<a href="${esc(u)}">${esc(label || u)}</a>` : ''); };
   const x = (attr) => (edit ? `<button type="button" class="cs-x" ${attr} aria-label="Tirar">×</button>` : '');
   const add = (attr, label) => (edit ? `<button type="button" class="cs-add" ${attr}>+ ${label}</button>` : '');
-  return `<div class="cs-frame" style="--acc:${esc(d.accent || '#C8382D')}"><div class="cs">
+  return `<div class="cs-frame" style="${esc(paletteVars(paletteOf(d)))}"><div class="cs">
     <div class="cs-title">${f('title', 'NOME DO PROJETO', 'b')}</div>
     <div class="cs-day"><span>${edit ? `<input type="date" class="cs-in" data-p="date" value="${esc(d.date || '')}">` : esc(fmtDay(d.date))}</span><span class="b">DIA ${f('day', '1', 'cs-num')} DE ${f('days', '3', 'cs-num')}</span></div>
     <div class="cs-top">
@@ -203,7 +219,7 @@ export function callsheetTool(main, p, tool) {
       const c = d.cols.find((y) => y.id === b.dataset.rmcol); if (!(await confirmBox(`Tirar a coluna "${c.label}"?`, 'Tirar'))) return; d.cols = d.cols.filter((y) => y !== c); save(); draw();
     }));
     main.querySelector('[data-pick]').addEventListener('click', () => pickShots(p, d, () => { save(); draw(); }, used()));
-    main.querySelector('[data-export]').addEventListener('click', () => exportDialog(all, cur));
+    main.querySelector('[data-export]').addEventListener('click', () => exportDialog(all, cur, () => { save(); draw(); }));
     main.querySelector('[data-import]').addEventListener('click', () => importXlsx(d, (nd) => { all.sheets[cur] = nd; d = nd; save(); draw(); }));
   };
   draw();
@@ -336,53 +352,77 @@ async function importXlsx(d, done) {
   inp.click();
 }
 
-function printSheet(list, model = 'classic') {
+function printSheet(list) {
   const d = list[0];
   const css = [...document.styleSheets].map((s) => { try { return [...s.cssRules].map((r) => r.cssText).filter((t) => t.includes('.cs')).join('\n'); } catch { return ''; } }).join('\n');
   const html = `<!doctype html><html lang="pt"><head><meta charset="utf-8"><title>${esc(d.title)} — Folha de serviço ${list.length > 1 ? 'todos os dias' : 'dia ' + esc(d.day)}</title><style>
     @page { size: A4 portrait; margin: 8mm; } * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     body { margin: 0; font: 9px/1.3 Arial, Helvetica, sans-serif; color: #000; } ${css}
     .cs-frame { padding: 16px !important; } a { color: #1155cc; }
-  </style></head><body>${list.map((x, i) => `<div class="m-${model}" style="${i ? 'break-before: page;' : ''}">${sheetHtml(x, false)}</div>`).join('')}</body></html>`;
+  </style></head><body>${list.map((x, i) => `<div style="${i ? 'break-before: page;' : ''}">${sheetHtml(x, false)}</div>`).join('')}</body></html>`;
   const fr = document.createElement('iframe'); fr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
   document.body.append(fr); const doc = fr.contentWindow.document; doc.open(); doc.write(html); doc.close();
   setTimeout(() => { fr.contentWindow.focus(); fr.contentWindow.print(); setTimeout(() => fr.remove(), 60000); }, 300);
 }
 
 // ---------- exportar: PDF ou Excel, no modelo clássico ou limpo ----------
-const MODELS = [['classic', 'Clássico', 'Moldura de cor e caixas amarelas, como a folha d’A Forma e o Silêncio'], ['clean', 'Limpo', 'Preto e branco, sem fundos: poupa tinta']];
-function exportDialog(all, cur) {
+function exportDialog(all, cur, changed) {
   let pref = {}; try { pref = JSON.parse(localStorage.getItem('bg-cs-export') || '{}'); } catch { /* nada */ }
-  const fmt = pref.fmt || 'pdf', model = pref.model || 'classic';
+  const fmt = pref.fmt || 'pdf';
   const d = all.sheets[cur];
+  const pal = paletteOf(d);
   const radio = (name, val, on, title, sub) => `<label class="cs-opt"><input type="radio" name="${name}" value="${val}" ${on ? 'checked' : ''}><span><b>${title}</b>${sub ? `<small>${sub}</small>` : ''}</span></label>`;
+  const same = (a, b) => PALETTE_KEYS.every(([k]) => String(a[k]).toLowerCase() === String(b[k]).toLowerCase());
+  const chip = ([name, p]) => `<button type="button" class="cs-pre ${same(p, pal) ? 'on' : ''}" data-pre="${esc(name)}" title="${esc(name)}"><span class="cs-pre-sw" style="--f:${p.frame};--h:${p.hi};--l:${p.lo};--b:${p.box};--n:${p.ln}"><i></i><i></i><i></i></span><span>${esc(name)}</span></button>`;
   const m = modal(`<h2>Exportar folha de serviço</h2>
     <form class="stack" data-f>
       <fieldset class="cs-opts"><legend>Formato</legend>${radio('fmt', 'pdf', fmt === 'pdf', 'PDF', 'Para enviar e imprimir')}${radio('fmt', 'xlsx', fmt === 'xlsx', 'Excel (.xlsx)', 'Para editar no Excel ou Google Sheets')}</fieldset>
-      <fieldset class="cs-opts"><legend>Modelo</legend>${MODELS.map(([k, t, sub]) => radio('model', k, model === k, t, sub)).join('')}</fieldset>
+      <div class="cs-colors">
+        <div class="stack">
+          <span class="cs-leg">Cores</span>
+          <div class="cs-pres">${PRESETS.map(chip).join('')}</div>
+          <div class="cs-cols">${PALETTE_KEYS.map(([k, l]) => `<label class="cs-col"><input type="color" name="c-${k}" value="${esc(pal[k])}"><span>${l}</span></label>`).join('')}</div>
+          <small class="muted">As cores ficam guardadas nesta folha de serviço (todos os dias). O texto passa a branco ou preto sozinho para se ler bem.</small>
+        </div>
+        <div class="cs-prev" aria-hidden="true"><div class="cs-prev-in">${sheetHtml(d, false)}</div></div>
+      </div>
       ${all.sheets.length > 1 ? `<fieldset class="cs-opts"><legend>Dias</legend>${radio('days', 'one', true, `Só o dia ${esc(d.day || cur + 1)}`)}${radio('days', 'all', false, `Todos os dias (${all.sheets.length})`, 'No PDF, um dia por página; no Excel, uma folha por dia')}</fieldset>` : ''}
       <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Exportar</button></div>
-    </form>`);
-  m.el.querySelector('[data-f]').addEventListener('submit', async (e) => {
+    </form>`, { wide: true });
+  const f = m.el.querySelector('[data-f]');
+  const read = () => Object.fromEntries(PALETTE_KEYS.map(([k]) => [k, f.elements[`c-${k}`].value]));
+  const paint = () => {
+    const cur2 = read();
+    m.el.querySelector('.cs-prev .cs-frame').setAttribute('style', paletteVars(cur2));
+    m.el.querySelectorAll('[data-pre]').forEach((b) => b.classList.toggle('on', same(PRESETS.find(([n]) => n === b.dataset.pre)[1], cur2)));
+  };
+  f.querySelectorAll('input[type=color]').forEach((i) => i.addEventListener('input', paint));
+  m.el.querySelectorAll('[data-pre]').forEach((b) => b.addEventListener('click', () => { const p = PRESETS.find(([n]) => n === b.dataset.pre)[1]; PALETTE_KEYS.forEach(([k]) => (f.elements[`c-${k}`].value = p[k])); paint(); }));
+  f.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const v = Object.fromEntries(new FormData(e.target));
-    try { localStorage.setItem('bg-cs-export', JSON.stringify({ fmt: v.fmt, model: v.model })); } catch { /* nada */ }
+    const v = Object.fromEntries(new FormData(f));
+    const np = read();
+    // guarda as cores em todos os dias desta folha
+    all.sheets.forEach((sh) => { sh.palette = { ...np }; sh.accent = np.frame; });
+    changed && changed();
+    try { localStorage.setItem('bg-cs-export', JSON.stringify({ fmt: v.fmt })); } catch { /* nada */ }
     const list = v.days === 'all' ? all.sheets : [d];
     m.close();
-    if (v.fmt === 'xlsx') await exportXlsx(list, v.model); else printSheet(list, v.model);
+    if (v.fmt === 'xlsx') await exportXlsx(list); else printSheet(list);
   });
 }
 
-async function exportXlsx(list, model) {
+async function exportXlsx(list) {
   toast('A preparar o Excel…');
   const ExcelJS = (await import('exceljs')).default;
   const wb = new ExcelJS.Workbook(); wb.creator = 'byGrain Studio';
-  const clean = model === 'clean';
   const argb = (hex) => 'FF' + String(hex || '#C8382D').replace('#', '').toUpperCase();
-  const YEL = clean ? 'FFF2F2F2' : 'FFFFE599', GRY = clean ? 'FFF2F2F2' : 'FFD9D9D9';
-  const line = clean ? { style: 'thin', color: { argb: 'FFBFBFBF' } } : { style: 'thin', color: { argb: 'FF000000' } };
-  const border = { top: line, left: line, bottom: line, right: line };
   list.forEach((d, si) => {
+    const pal = paletteOf(d);
+    const YEL = argb(pal.hi), GRY = argb(pal.lo), BOX = argb(pal.box);
+    const ink = (a) => argb(inkOn('#' + a.slice(2)));
+    const line = { style: 'thin', color: { argb: argb(pal.ln) } };
+    const border = { top: line, left: line, bottom: line, right: line };
     const name = `Dia ${d.day || si + 1}`.replace(/[\\/?*[\]:]/g, '').slice(0, 31);
     const ws = wb.addWorksheet(wb.worksheets.some((w) => w.name === name) ? `${name} (${si + 1})` : name, { properties: { tabColor: { argb: argb(d.accent) } }, pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.3, right: 0.3, top: 0.3, bottom: 0.3, header: 0, footer: 0 } } });
     const N = Math.max(d.cols.length, 8, Math.min(d.depts.length, 12));
@@ -393,13 +433,13 @@ async function exportXlsx(list, model) {
     let r = 1;
     const cell = (row, col, value, o = {}) => {
       const c = ws.getCell(row + 1, col + 1); c.value = value ?? '';
-      c.font = { name: 'Arial', size: o.size || 9, bold: !!o.bold, color: o.color ? { argb: o.color } : undefined, underline: o.link ? true : undefined };
+      c.font = { name: 'Arial', size: o.size || 9, bold: !!o.bold, color: { argb: o.color || ink(o.fill || BOX) }, underline: o.link ? true : undefined };
       c.alignment = { vertical: 'middle', horizontal: o.left ? 'left' : 'center', wrapText: true };
-      if (o.fill) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: o.fill } };
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: o.fill || BOX } };
       if (o.border !== false) c.border = border;
       return c;
     };
-    const span = (row, c1, c2, value, o) => { if (c2 > c1) ws.mergeCells(row + 1, c1 + 1, row + 1, c2 + 1); const c = cell(row, c1, value, o); for (let k = c1 + 1; k <= c2; k++) { ws.getCell(row + 1, k + 1).border = border; if (o?.fill) ws.getCell(row + 1, k + 1).fill = c.fill; } return c; };
+    const span = (row, c1, c2, value, o) => { if (c2 > c1) ws.mergeCells(row + 1, c1 + 1, row + 1, c2 + 1); const c = cell(row, c1, value, o); for (let k = c1 + 1; k <= c2; k++) { ws.getCell(row + 1, k + 1).border = border; ws.getCell(row + 1, k + 1).fill = c.fill; } return c; };
     const height = (row, h) => { ws.getRow(row + 1).height = h; };
     const link = (url, text) => (url && /^https?:/.test(url) ? { text: text || url, hyperlink: url } : (text || url || ''));
     // título e dia
@@ -410,7 +450,7 @@ async function exportXlsx(list, model) {
     d.contacts.forEach((c, i) => { span(top + i, 1, Math.max(1, Math.floor(H / 2)), c.role, { bold: true, fill: YEL, left: true }); span(top + i, Math.floor(H / 2) + 1, H, c.value, { left: true }); });
     let rr = top;
     span(rr, H + 2, N, `CALL: ${d.call || ''} H - ${d.place || ''}`, { bold: true, size: 12, fill: YEL }); height(rr, 26); rr++;
-    span(rr, H + 2, N, link(d.address, d.address ? `MORADA: ${d.address}` : 'MORADA:'), { bold: false, color: d.address ? 'FF1155CC' : undefined, link: !!d.address }); rr += 2;
+    span(rr, H + 2, N, link(d.address, d.address ? `MORADA: ${d.address}` : 'MORADA:'), { bold: false, color: d.address && inkOn(pal.box) === '#000000' ? 'FF1155CC' : undefined, link: !!d.address }); rr += 2;
     span(rr, H + 2, N, 'METEOROLOGIA', { bold: true, fill: YEL }); rr++;
     span(rr, H + 2, N, [d.weather?.text, [d.weather?.min, d.weather?.max].filter(Boolean).join(' / ')].filter(Boolean).join(' · ')); rr++;
     r = Math.max(top + d.contacts.length, rr) + 1;
@@ -419,9 +459,9 @@ async function exportXlsx(list, model) {
     span(lr, 1, H, 'NOTAS DE PRODUÇÃO', { bold: true, fill: YEL }); lr++;
     span(lr, 1, H, d.notes || '', { bold: true }); height(lr, Math.max(18, 12 * String(d.notes || '').split('\n').length)); lr += 2;
     span(lr, 1, H, 'HOSPITAL MAIS PRÓXIMO', { bold: true, fill: GRY }); lr++;
-    span(lr, 1, H, link(d.hospital?.url, [d.hospital?.name, d.hospital?.url].filter(Boolean).join(' ')), { color: d.hospital?.url ? 'FF1155CC' : undefined }); lr += 2;
+    span(lr, 1, H, link(d.hospital?.url, [d.hospital?.name, d.hospital?.url].filter(Boolean).join(' ')), { color: d.hospital?.url && inkOn(pal.box) === '#000000' ? 'FF1155CC' : undefined }); lr += 2;
     span(lr, 1, H, 'ESTACIONAMENTO MAIS PRÓXIMO', { bold: true, fill: GRY }); lr++;
-    span(lr, 1, H, link(d.parking?.url, [d.parking?.name, d.parking?.url].filter(Boolean).join(' ')), { color: d.parking?.url ? 'FF1155CC' : undefined }); lr++;
+    span(lr, 1, H, link(d.parking?.url, [d.parking?.name, d.parking?.url].filter(Boolean).join(' ')), { color: d.parking?.url && inkOn(pal.box) === '#000000' ? 'FF1155CC' : undefined }); lr++;
     const tc = H + 2 + Math.floor((N - H - 2) / 2);
     d.times.forEach((t, i) => { span(mid + i, H + 2, tc, `${t.label}:`, { bold: true, fill: YEL }); span(mid + i, tc + 1, N, t.value, { bold: true }); });
     r = Math.max(lr, mid + d.times.length) + 1;
@@ -450,10 +490,8 @@ async function exportXlsx(list, model) {
     });
     r++;
     span(r, 1, N, d.footer, { bold: true, fill: YEL }); height(r, 30);
-    if (!clean) {
-      for (let y = 1; y <= r + 2; y++) for (let x = 1; x <= N + 2; x++) { const c = ws.getCell(y, x); if (!c.border && !c.isMerged) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(d.accent) } }; }
-      height(r + 1, 10);
-    }
+    for (let y = 1; y <= r + 2; y++) for (let x = 1; x <= N + 2; x++) { const c = ws.getCell(y, x); if (!c.border && !c.isMerged) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(pal.frame) } }; }
+    height(r + 1, 10);
     ws.pageSetup.printArea = `A1:${ws.getColumn(N + 2).letter}${r + 2}`;
     ws.views = [{ showGridLines: false }];
   });
