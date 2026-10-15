@@ -91,7 +91,7 @@ export async function mediaPanel(slots, p, music, saveNow) {
   box.innerHTML = `
       <section class="panel mv-previs">
         <div class="row between"><h2 class="h3">Pre-vis</h2>${music.previs_url ? `<button type="button" class="link-btn small" data-pv-edit>Mudar link</button>` : ''}</div>
-        ${pv ? `<div class="yt"><iframe src="https://www.youtube-nocookie.com/embed/${pv}?rel=0" title="Pre-vis" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`
+        ${pv ? `<div class="yt"><iframe src="https://www.youtube-nocookie.com/embed/${pv}?rel=0" title="Pre-vis" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div><a class="small yt-out" href="${esc(music.previs_url)}" target="_blank" rel="noopener noreferrer">${ICON.open} Abrir no YouTube</a>`
           : `<form class="mv-form" data-pv-form><input type="url" name="u" placeholder="Link do YouTube do pre-vis" value="${esc(music.previs_url || '')}" aria-label="Link do pre-vis no YouTube"><button class="btn primary">Guardar</button></form>${music.previs_url ? '<p class="small late-txt2">Este link não parece ser do YouTube.</p>' : '<p class="muted small">Cola um link do YouTube (pode ser não listado). Toca aqui mesmo.</p>'}`}
       </section>
       <section class="panel mv-song">

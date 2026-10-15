@@ -54,6 +54,23 @@ export function lockPage(key, root, { reopen } = {}) {
   document.body.append(banner);
   let mode = 'pending'; let idleT; let wasViewer = false; let lastHolder = null;
   const since = Date.now();
+  // modo só de leitura "suave": vídeos, música e links continuam a funcionar; só o que muda dados fica parado
+  let locked = false;
+  const allowed = (t) => !!t.closest?.('a[href], .yt, iframe, audio, video, .lock-banner, [data-lock-ok]');
+  const guard = (e) => {
+    if (!locked || allowed(e.target)) return;
+    if (e.type === 'keydown' && !['Tab', 'Escape'].includes(e.key) && !e.key.startsWith('Arrow') && !e.key.startsWith('Page') && e.key !== 'Home' && e.key !== 'End' && !e.target.matches?.('input, textarea, select, [contenteditable]')) return;
+    if (e.type === 'keydown' && (e.key === 'Tab' || e.key.startsWith('Arrow') || e.key.startsWith('Page'))) return;
+    if (e.type === 'pointerdown' && !e.target.closest?.('button, input, textarea, select, label, [contenteditable], [draggable=true], [data-img], [role=button]')) return;
+    if (e.type === 'click' && !e.target.closest?.('button, input, select, label, [data-img], [role=button]')) return;
+    e.preventDefault(); e.stopPropagation();
+    if (e.type === 'click' || e.type === 'pointerdown') { banner.classList.remove('nudge'); void banner.offsetWidth; banner.classList.add('nudge'); }
+  };
+  ['beforeinput', 'keydown', 'click', 'change', 'paste', 'drop', 'dragstart', 'pointerdown'].forEach((ev) => root.addEventListener(ev, guard, true));
+  const setLocked = (on) => { locked = on; root.classList.toggle('is-locked', on); };
+  // carregar dentro de um vídeo do YouTube conta como atividade (o clique fica dentro do vídeo)
+  const onBlur = () => setTimeout(() => { if (document.activeElement?.tagName === 'IFRAME' && root.contains(document.activeElement)) bump(); }, 0);
+  window.addEventListener('blur', onBlur);
   update({ page: key, holds: key, since });
 
   const holderOf = (list) => {
@@ -65,16 +82,16 @@ export function lockPage(key, root, { reopen } = {}) {
     const h = holderOf(list);
     if (h && h.tab !== TAB) {
       mode = 'viewer'; wasViewer = true; lastHolder = h;
-      root.inert = true; root.classList.add('is-locked');
+      setLocked(true);
       banner.hidden = false;
       banner.innerHTML = `<span class="avatar sm" style="--c:${esc(h.color)}">${esc(initials(h.name))}</span><span><strong>${esc(whoLabel(h))} está a editar isto.</strong> Para não se apagarem um ao outro, aqui ficas só a ver. Quando sair, podes editar.</span>`;
     } else if (room.me.holds === key) {
-      root.inert = false; root.classList.remove('is-locked');
+      setLocked(false);
       if (wasViewer && mode === 'viewer') {
         // quem estava a editar saiu: recarregar para trazer o que mudou
         banner.hidden = false;
         banner.innerHTML = `${ICON.refresh}<span><strong>${esc(lastHolder ? whoLabel(lastHolder) : 'A outra pessoa')} saiu.</strong> Atualiza para veres as alterações e editares.</span><button type="button" class="btn primary" data-reload>Atualizar e editar</button>`;
-        root.inert = true;
+        setLocked(true);
         banner.querySelector('[data-reload]').onclick = () => reopen && reopen();
         mode = 'stale';
       } else if (mode !== 'stale') { mode = 'editor'; banner.hidden = true; }
@@ -90,7 +107,7 @@ export function lockPage(key, root, { reopen } = {}) {
     idleT = setTimeout(() => {
       if (mode !== 'editor') return;
       mode = 'idle'; update({ holds: null });
-      root.inert = true;
+      setLocked(true);
       banner.hidden = false;
       banner.innerHTML = `${ICON.lock}<span><strong>Pausado por estares parado.</strong> Assim outra pessoa pode editar.</span><button type="button" class="btn primary" data-resume>Continuar a editar</button>`;
       banner.querySelector('[data-resume]').onclick = () => reopen && reopen();
@@ -100,7 +117,7 @@ export function lockPage(key, root, { reopen } = {}) {
   bump();
   return {
     destroy() {
-      off(); clearTimeout(idleT); banner.remove(); root.inert = false;
+      off(); clearTimeout(idleT); banner.remove(); setLocked(false); ['beforeinput', 'keydown', 'click', 'change', 'paste', 'drop', 'dragstart', 'pointerdown'].forEach((ev) => root.removeEventListener(ev, guard, true)); window.removeEventListener('blur', onBlur);
       if (room?.me.holds === key || room?.me.page === key) update({ holds: null, page: null, since: null });
     },
   };

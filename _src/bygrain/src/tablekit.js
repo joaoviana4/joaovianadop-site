@@ -50,6 +50,7 @@ export function tableShortcuts(table, { rowBelow, rowAbove, section, colRight, c
   const onKey = (e) => {
     if (!document.body.contains(table)) { document.removeEventListener('keydown', onKey); return; }
     if (!e.altKey || !['ArrowDown', 'ArrowUp', 'ArrowRight', 'ArrowLeft'].includes(e.key)) return;
+    if (table.closest('.is-locked')) return;
     const f = document.activeElement;
     const row = hRow || (table.contains(f) ? f.closest('[data-row]')?.dataset.row : null);
     const col = hCol || (table.contains(f) ? f.closest('[data-colid]')?.dataset.colid : null);
@@ -90,6 +91,7 @@ export function bindUndoKeys(root, h) {
   const onKey = (e) => {
     if (!document.body.contains(root)) { document.removeEventListener('keydown', onKey); return; }
     if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    if (root.closest('.is-locked')) return;
     const k = e.key.toLowerCase(); const redo = (k === 'z' && e.shiftKey) || k === 'y'; const undo = k === 'z' && !e.shiftKey;
     if (!undo && !redo) return;
     if (document.querySelector('#modal .modal')) return;

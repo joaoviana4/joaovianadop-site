@@ -1236,3 +1236,9 @@ kbd { display: inline-block; padding: 0 5px; border-radius: 4px; border: 1px sol
 .sb-secdel { margin-left: auto; opacity: 0; transition: opacity .12s; }
 .sb-sec:hover .sb-secdel, .sb-secdel:focus-visible { opacity: 1; }
 @media (hover: none) { .sb-secdel { opacity: 1; } }
+.is-locked { opacity: 1; }
+.is-locked input, .is-locked textarea, .is-locked select, .is-locked button:not(.lock-banner button), .is-locked [contenteditable] { cursor: not-allowed; }
+.is-locked input, .is-locked textarea, .is-locked select { opacity: .7; }
+.lock-banner.nudge { animation: lockNudge .35s ease; }
+@keyframes lockNudge { 0%, 100% { transform: translateX(-50%); } 25% { transform: translateX(calc(-50% - 6px)); } 75% { transform: translateX(calc(-50% + 6px)); } }
+.yt-out { align-self: flex-start; color: var(--muted); }

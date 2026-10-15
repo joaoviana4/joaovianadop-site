@@ -173,6 +173,7 @@ export async function shotlistPage(main, p, base) {
   const onKey = (e) => {
     if (!document.body.contains(main.querySelector('table.sl') || main)) { document.removeEventListener('keydown', onKey); return; }
     if (!main.querySelector('table.sl')) return;
+    if (main.closest('.is-locked')) return;
     if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
     const k = e.key.toLowerCase(); const undo = k === 'z' && !e.shiftKey; const redo = (k === 'z' && e.shiftKey) || k === 'y';
     if (!undo && !redo) return;
