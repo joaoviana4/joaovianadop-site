@@ -47,6 +47,7 @@ export async function tableTemplate(p, tpl) {
 
 // ---------- tabela ----------
 import { exportPdf } from './pdf.js';
+import { colorField, readColor, bindColorField, colorPop, tableShortcuts, rowStyle, colStyle } from './tablekit.js';
 
 export function tableTool(main, p, tool) {
   const data = { columns: [], rows: [], ...(tool.data || {}) };
@@ -62,9 +63,13 @@ export function tableTool(main, p, tool) {
     return `<input data-c="${c.id}" value="${esc(v)}" aria-label="${esc(c.name)}">`;
   }
   function draw() {
-    main.querySelector('[data-tbl]').innerHTML = `<table class="table sheet"><thead><tr>${data.columns.map((c) => `<th><button type="button" class="th-btn" data-col="${c.id}">${esc(c.name)}</button></th>`).join('')}<th class="th-add"><button type="button" class="icon-btn sm" data-addcol aria-label="Juntar coluna">${ICON.plus}</button></th></tr></thead>
-      <tbody>${data.rows.map((r) => `<tr data-row="${r.id}">${data.columns.map((c) => `<td class="t-${c.type}">${cell(r, c)}</td>`).join('')}<td><button type="button" class="icon-btn sm" data-rmrow aria-label="Apagar linha">${ICON.close}</button></td></tr>`).join('')}</tbody></table>
-      <button type="button" class="link-btn" data-addrow>${ICON.plus} Linha</button>`;
+    main.querySelector('[data-tbl]').innerHTML = `<table class="table sheet"><thead><tr>${data.columns.map((c) => `<th data-colid="${c.id}" class="${c.color ? 'has-cc' : ''}"${colStyle(c)}><button type="button" class="th-btn" data-col="${c.id}">${esc(c.name)}</button></th>`).join('')}<th class="th-add"><button type="button" class="icon-btn sm" data-addcol aria-label="Juntar coluna">${ICON.plus}</button></th></tr></thead>
+      <tbody>${data.rows.map((r) => `<tr data-row="${r.id}" class="${r.color ? 'has-rc' : ''}"${rowStyle(r)}>${data.columns.map((c, i) => `<td class="t-${c.type} ${c.color ? 'has-cc' : ''} ${i === 0 ? 'rd-cell' : ''}" data-colid="${c.id}"${colStyle(c)}>${i === 0 ? '<button type="button" class="row-dot" data-rowcolor title="Cor da linha" aria-label="Cor da linha"></button>' : ''}${cell(r, c)}</td>`).join('')}<td><button type="button" class="icon-btn sm" data-rmrow aria-label="Apagar linha">${ICON.close}</button></td></tr>`).join('')}</tbody></table>
+      <div class="row wrap-gap"><button type="button" class="link-btn" data-addrow>${ICON.plus} Linha</button><span class="muted small"><kbd>Alt</kbd>+<kbd>↓</kbd> linha e <kbd>Alt</kbd>+<kbd>→</kbd> coluna onde está o rato · cor da linha no ponto à esquerda · cor da coluna clicando no nome</span></div>`;
+    const at = (id) => { const i = data.rows.findIndex((x) => x.id === id); return i < 0 ? data.rows.length - 1 : i; };
+    const insRow = (i) => { const r = { id: uid(), cells: {} }; data.rows.splice(i, 0, r); draw(); save(); main.querySelector(`[data-row="${r.id}"] [data-c]`)?.focus(); };
+    const insCol = (id, side) => { const i = data.columns.findIndex((c) => c.id === id); const c = { id: uid(), name: 'Nova coluna', type: 'text' }; data.columns.splice(i < 0 ? data.columns.length : i + side, 0, c); draw(); save(); colForm(c, true); };
+    tableShortcuts(main.querySelector('table.sheet'), { rowBelow: (id) => insRow(at(id) + 1), rowAbove: (id) => insRow(Math.max(0, at(id))), colRight: (id) => insCol(id, 1), colLeft: (id) => insCol(id, 0) });
   }
   main.innerHTML = `<div class="row end"><button type="button" class="btn ghost" data-pdf>${ICON.open} Exportar PDF</button></div><div class="tbl-wrap" data-tbl></div>`;
   draw();
@@ -88,19 +93,25 @@ export function tableTool(main, p, tool) {
     next.querySelectorAll('[data-c]')[idx]?.focus();
   });
   main.addEventListener('click', (e) => {
+    const dot = e.target.closest('[data-rowcolor]');
+    if (dot) { const r = data.rows.find((x) => x.id === dot.closest('[data-row]').dataset.row); colorPop(dot, r.color, (c) => { if (c) r.color = c; else delete r.color; draw(); save(); }); return; }
     if (e.target.closest('[data-addrow]')) { data.rows.push({ id: uid(), cells: {} }); draw(); save(); main.querySelector('tbody tr:last-child [data-c]')?.focus(); return; }
     if (e.target.closest('[data-rmrow]')) { const id = e.target.closest('[data-row]').dataset.row; data.rows = data.rows.filter((r) => r.id !== id); draw(); save(); return; }
     if (e.target.closest('[data-addcol]')) return colForm(null);
     const th = e.target.closest('[data-col]'); if (th) colForm(data.columns.find((c) => c.id === th.dataset.col));
   });
-  function colForm(c) {
+  function colForm(c, justAdded = false) {
     const isNew = !c; c = c || { id: uid(), name: '', type: 'text' };
     const m = modal(`<h2>${isNew ? 'Nova coluna' : 'Coluna'}</h2><form class="stack">
       <div class="field"><label for="cn">Nome</label><input id="cn" value="${esc(c.name)}" required></div>
       <div class="field"><label for="ct">Tipo</label><select id="ct">${[['text', 'Texto'], ['number', 'Número'], ['date', 'Data'], ['check', 'Visto']].map(([k, v]) => `<option value="${k}" ${c.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+      ${colorField(c.color)}
       <div class="row between">${isNew ? '<span></span>' : `<button type="button" class="btn ghost danger-text" data-del>${ICON.trash} Apagar coluna</button>`}<div class="row"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Guardar</button></div></div></form>`);
+    bindColorField(m.el);
+    if (justAdded) m.el.querySelector('#cn').select();
     m.el.querySelector('form').addEventListener('submit', (e) => {
       e.preventDefault(); c.name = m.el.querySelector('#cn').value.trim() || 'Coluna'; c.type = m.el.querySelector('#ct').value;
+      const col = readColor(m.el); if (col) c.color = col; else delete c.color;
       if (isNew) data.columns.push(c); m.close(); draw(); save();
     });
     m.el.querySelector('[data-del]')?.addEventListener('click', async () => {

@@ -1,5 +1,6 @@
 import { sb, esc, toast, modal, confirmBox, ICON } from './lib.js';
 import { exportPdf } from './pdf.js';
+import { colorField, readColor, bindColorField, colorPop, tableShortcuts, rowStyle, colStyle } from './tablekit.js';
 
 // Orçamento do projeto, como no Studio: tabela com secções, colunas de texto, valor (€) e número,
 // subtotais por secção, comparação com o orçamento geral, modelos por tipo de projeto, importar e exportar Excel.
@@ -146,13 +147,13 @@ export async function budgetPage(main, p) {
         ${undo ? `<button type="button" class="link-btn" data-undo>Desfazer: ${esc(undo.label)}</button>` : ''}
       </div>
       <div class="panel table-wrap btable"><table class="table budget">
-        <thead><tr>${b.cols.map((c) => `<th class="${c.type !== 'text' ? 'num' : ''}"><button type="button" class="th-btn" data-col="${c.id}">${esc(c.name)}${c.id === b.main ? ' ●' : ''}</button></th>`).join('')}<th class="bact"><button type="button" class="icon-btn sm" data-addcol aria-label="Juntar coluna">${ICON.plus}</button></th></tr></thead>
+        <thead><tr>${b.cols.map((c) => `<th class="${c.type !== 'text' ? 'num' : ''} ${c.color ? 'has-cc' : ''}" data-colid="${c.id}"${colStyle(c)}><button type="button" class="th-btn" data-col="${c.id}">${esc(c.name)}${c.id === b.main ? ' ●' : ''}</button></th>`).join('')}<th class="bact"><button type="button" class="icon-btn sm" data-addcol aria-label="Juntar coluna">${ICON.plus}</button></th></tr></thead>
         <tbody>${b.rows.map((r) => r.kind === 'section'
-          ? `<tr class="bsec" data-row="${r.id}"><td colspan="${Math.max(1, b.cols.findIndex((c) => c.type !== 'text'))}"><input class="sec-in" data-sec value="${esc(r.title)}" aria-label="Nome da secção"></td>${b.cols.slice(Math.max(1, b.cols.findIndex((c) => c.type !== 'text'))).map((c) => `<td class="num">${c.type === 'text' ? '' : `<b data-ssum="${r.id}:${c.id}">${fmt(c, sec[r.id]?.[c.id] || 0)}</b>`}</td>`).join('')}<td class="bact"><button type="button" class="icon-btn sm" data-rm aria-label="Apagar secção">${ICON.close}</button></td></tr>`
-          : `<tr data-row="${r.id}">${b.cols.map((c) => `<td class="${c.type !== 'text' ? 'num' : ''}">${cellInput(r, c)}</td>`).join('')}<td class="bact"><button type="button" class="icon-btn sm" data-rm aria-label="Apagar linha">${ICON.close}</button></td></tr>`).join('')}</tbody>
+          ? `<tr class="bsec ${r.color ? 'has-rc' : ''}" data-row="${r.id}"${rowStyle(r)}><td colspan="${Math.max(1, b.cols.findIndex((c) => c.type !== 'text'))}" class="rd-cell"><button type="button" class="row-dot" data-rowcolor title="Cor da secção" aria-label="Cor da secção"></button><input class="sec-in" data-sec value="${esc(r.title)}" aria-label="Nome da secção"></td>${b.cols.slice(Math.max(1, b.cols.findIndex((c) => c.type !== 'text'))).map((c) => `<td class="num">${c.type === 'text' ? '' : `<b data-ssum="${r.id}:${c.id}">${fmt(c, sec[r.id]?.[c.id] || 0)}</b>`}</td>`).join('')}<td class="bact"><button type="button" class="icon-btn sm" data-rm aria-label="Apagar secção">${ICON.close}</button></td></tr>`
+          : `<tr data-row="${r.id}" class="${r.color ? 'has-rc' : ''}"${rowStyle(r)}>${b.cols.map((c, i) => `<td class="${c.type !== 'text' ? 'num' : ''} ${c.color ? 'has-cc' : ''} ${i === 0 ? 'rd-cell' : ''}" data-colid="${c.id}"${colStyle(c)}>${i === 0 ? '<button type="button" class="row-dot" data-rowcolor title="Cor da linha" aria-label="Cor da linha"></button>' : ''}${cellInput(r, c)}</td>`).join('')}<td class="bact"><button type="button" class="icon-btn sm" data-rm aria-label="Apagar linha">${ICON.close}</button></td></tr>`).join('')}</tbody>
         <tfoot><tr>${b.cols.map((c, i) => `<td class="num">${i === 0 ? '<strong>Total</strong>' : c.type === 'text' ? '' : `<strong data-tsum="${c.id}">${fmt(c, tot[c.id] || 0)}</strong>`}</td>`).join('')}<td></td></tr></tfoot>
       </table></div>
-      <div class="row wrap-gap"><button type="button" class="btn ghost" data-addrow>${ICON.plus} Linha</button><button type="button" class="btn ghost" data-addsec>${ICON.plus} Secção</button><span class="muted small">${nItems} ${nItems === 1 ? 'linha' : 'linhas'} · os nomes e o tipo das colunas mudam-se clicando neles · ● é a coluna que conta para o total</span></div>`;
+      <div class="row wrap-gap"><button type="button" class="btn ghost" data-addrow>${ICON.plus} Linha</button><button type="button" class="btn ghost" data-addsec>${ICON.plus} Secção</button><span class="muted small">${nItems} ${nItems === 1 ? 'linha' : 'linhas'} · clica no nome de uma coluna para mudar nome, tipo e cor · ● conta para o total · <kbd>Alt</kbd>+<kbd>↓</kbd> linha, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>↓</kbd> secção, <kbd>Alt</kbd>+<kbd>→</kbd> coluna (onde está o rato) · cor da linha no ponto à esquerda</span></div>`;
     bind();
   }
 
@@ -183,7 +184,7 @@ export async function budgetPage(main, p) {
     main.querySelector('[data-pdf]').addEventListener('click', () => {
       const { tot, sec } = sums(b); const groups = []; let cur = { title: null, rows: [] };
       b.rows.forEach((r) => {
-        if (r.kind === 'section') { if (cur.title !== null || cur.rows.length) groups.push(cur); cur = { title: r.title, color: '#1E2AD4', right: b.main && sec[r.id]?.[b.main] != null ? fmt(b.cols.find((c) => c.id === b.main), sec[r.id][b.main]) : '', rows: [] }; return; }
+        if (r.kind === 'section') { if (cur.title !== null || cur.rows.length) groups.push(cur); cur = { title: r.title, color: r.color || '#1E2AD4', right: b.main && sec[r.id]?.[b.main] != null ? fmt(b.cols.find((c) => c.id === b.main), sec[r.id][b.main]) : '', rows: [] }; return; }
         cur.rows.push(b.cols.map((c) => (c.type === 'text' ? r.cells?.[c.id] ?? '' : fmt(c, num(r.cells?.[c.id])))));
       });
       groups.push(cur);
@@ -212,6 +213,8 @@ export async function budgetPage(main, p) {
       next?.querySelectorAll('[data-cell]')[Math.max(0, idx)]?.focus();
     });
     tbody.addEventListener('click', (e) => {
+      const dot = e.target.closest('[data-rowcolor]');
+      if (dot) { const r = b.rows.find((x) => x.id === dot.closest('[data-row]').dataset.row); colorPop(dot, r.color, (c) => { if (c) r.color = c; else delete r.color; save(); draw(); }); return; }
       if (!e.target.closest('[data-rm]')) return;
       const id = e.target.closest('[data-row]').dataset.row; const r = b.rows.find((x) => x.id === id);
       snapshot(r.kind === 'section' ? 'apagar secção' : 'apagar linha'); b.rows = b.rows.filter((x) => x.id !== id); save(); draw();
@@ -219,17 +222,30 @@ export async function budgetPage(main, p) {
     main.querySelector('[data-addrow]').addEventListener('click', () => { b.rows.push({ id: uid(), kind: 'item', cells: {} }); save(); draw(); main.querySelector('tbody tr:last-child [data-cell]')?.focus(); });
     main.querySelector('[data-addsec]').addEventListener('click', () => { b.rows.push({ id: uid(), kind: 'section', title: 'Nova secção' }); save(); draw(); const s = main.querySelector('tbody tr:last-child [data-sec]'); s?.focus(); s?.select(); });
     main.querySelector('[data-addcol]').addEventListener('click', () => colForm(null));
+    const at = (id) => { const i = b.rows.findIndex((x) => x.id === id); return i < 0 ? b.rows.length - 1 : i; };
+    const insertRow = (i, row) => { b.rows.splice(i, 0, row); save(); draw(); const el = main.querySelector(`[data-row="${row.id}"] ${row.kind === 'section' ? '[data-sec]' : '[data-cell]'}`); el?.focus(); if (row.kind === 'section') el?.select(); };
+    const insertCol = (id, side) => { const i = b.cols.findIndex((c) => c.id === id); const c = { id: uid(), name: 'Nova coluna', type: 'text' }; b.cols.splice(i < 0 ? b.cols.length : i + side, 0, c); save(); draw(); colForm(c, true); };
+    tableShortcuts(main.querySelector('table.budget'), {
+      rowBelow: (id) => insertRow(at(id) + 1, { id: uid(), kind: 'item', cells: {} }),
+      rowAbove: (id) => insertRow(Math.max(0, at(id)), { id: uid(), kind: 'item', cells: {} }),
+      section: (id) => insertRow(at(id) + 1, { id: uid(), kind: 'section', title: 'Nova secção' }),
+      colRight: (id) => insertCol(id, 1), colLeft: (id) => insertCol(id, 0),
+    });
     main.querySelectorAll('[data-col]').forEach((x) => x.addEventListener('click', () => colForm(b.cols.find((c) => c.id === x.dataset.col))));
   }
 
-  function colForm(c) {
+  function colForm(c, justAdded = false) {
     const isNew = !c; c = c || { id: uid(), name: '', type: 'money' };
     const m = modal(`<h2>${isNew ? 'Nova coluna' : 'Coluna'}</h2><form class="stack">
       <div class="field"><label for="cn">Nome</label><input id="cn" value="${esc(c.name)}" required></div>
       <div class="field"><label for="ct">Tipo</label><select id="ct">${TYPES.map(([k, v]) => `<option value="${k}" ${c.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+      ${colorField(c.color)}
       <div class="row between">${isNew || b.cols.length < 2 ? '<span></span>' : `<button type="button" class="btn ghost danger-text" data-del>${ICON.trash} Apagar coluna</button>`}<div class="row"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Guardar</button></div></div></form>`);
+    bindColorField(m.el);
+    if (justAdded) { const n = m.el.querySelector('#cn'); n.select(); }
     m.el.querySelector('form').addEventListener('submit', (e) => {
       e.preventDefault(); c.name = m.el.querySelector('#cn').value.trim() || 'Coluna'; c.type = m.el.querySelector('#ct').value;
+      const col = readColor(m.el); if (col) c.color = col; else delete c.color;
       if (isNew) b.cols.push(c);
       if (!b.main || !b.cols.some((x) => x.id === b.main && x.type !== 'text')) b.main = b.cols.find((x) => x.type === 'money')?.id || b.cols.find((x) => x.type !== 'text')?.id || null;
       m.close(); save(); draw();

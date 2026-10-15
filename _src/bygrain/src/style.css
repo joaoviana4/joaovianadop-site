@@ -1151,3 +1151,27 @@ body.fs-lock { overflow: hidden; }
 .trash-card .proj-cover { filter: grayscale(.85); opacity: .75; }
 .trash-left { position: absolute; right: 12px; bottom: 12px; padding: 4px 10px; border-radius: 999px; background: rgba(12, 12, 18, .8); font-size: 12px; font-weight: 600; color: var(--soon); }
 .trash-card .proj-body { gap: 14px; }
+
+/* tabelas: cores de colunas e linhas, atalhos */
+th.has-cc { background: color-mix(in srgb, var(--cc) 30%, transparent) !important; box-shadow: inset 0 3px 0 var(--cc); }
+th.has-cc .th-btn { color: var(--text); }
+td.has-cc { background: color-mix(in srgb, var(--cc) 9%, transparent); }
+tr.has-rc > td { background: color-mix(in srgb, var(--rc) 20%, transparent) !important; }
+tr.bsec.has-rc > td { background: color-mix(in srgb, var(--rc) 55%, transparent) !important; }
+td.rd-cell { position: relative; }
+.row-dot { position: absolute; left: -2px; top: 50%; transform: translate(-50%, -50%); width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line2); background: var(--rc, var(--panel2)); cursor: pointer; opacity: 0; transition: opacity .12s; padding: 0; z-index: 2; }
+tr:hover .row-dot, .row-dot:focus-visible, tr.has-rc .row-dot { opacity: 1; }
+tr.has-rc .row-dot { border-color: rgba(255, 255, 255, .7); }
+.btable, .tbl-wrap { padding-left: 14px; }
+kbd { display: inline-block; padding: 0 5px; border-radius: 4px; border: 1px solid var(--line2); background: var(--panel2); font: 600 11px/1.6 var(--sans); }
+.tk-sw { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tk-sw label { cursor: pointer; display: inline-flex; }
+.tk-sw input[type=radio] { position: absolute; opacity: 0; pointer-events: none; }
+.tk-sw label > span, .tk-pop button { width: 26px; height: 26px; border-radius: 50%; background: var(--c); border: 2px solid transparent; display: inline-block; }
+.tk-sw label > span.none, .tk-pop button.none { background: linear-gradient(135deg, transparent 45%, var(--late) 46%, var(--late) 54%, transparent 55%), var(--panel2); border-color: var(--line2); }
+.tk-sw input:checked + span, .tk-pop button.on { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--cream); }
+.tk-sw input:focus-visible + span { outline: 2px solid var(--cream); outline-offset: 3px; }
+.tk-custom { position: relative; width: 26px; height: 26px; border-radius: 50%; border: 1px dashed var(--line2); display: inline-flex !important; align-items: center; justify-content: center; color: var(--muted); overflow: hidden; }
+.tk-custom input { position: absolute; inset: -6px; width: 40px; height: 40px; opacity: 0; cursor: pointer; }
+.tk-pop { position: absolute; z-index: 400; display: flex; flex-wrap: wrap; gap: 6px; width: 190px; padding: 10px; border-radius: 12px; background: #22222c; border: 1px solid var(--line2); box-shadow: 0 12px 30px rgba(0, 0, 0, .5); }
+.tk-pop button { cursor: pointer; padding: 0; }
