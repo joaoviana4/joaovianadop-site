@@ -1765,3 +1765,10 @@ tr:hover > td > .cst-x, tr:hover > td > .cst-mv, tr:hover .cst-colh .cst-x, .cst
 @media (max-width: 760px) { .bsum-grid { grid-template-columns: 1fr; } }
 .btotal-in { width: 100%; } .btotal-in .bfee { margin-left: auto; align-items: flex-end; } .btotal-in .bfee > .label { text-align: right; }
 .bbar-w { margin-top: 14px; } .bstate { align-items: flex-start; } .bstate .bchip { align-self: flex-start; }
+.m-push { display: flex; gap: 12px; margin: 14px 16px 0; padding: 14px; border-radius: 14px; background: rgba(30,42,212,.18); border: 1px solid rgba(91,124,255,.35); }
+.m-push-ic { flex: none; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--blue); color: #fff; }
+.m-push-ic svg { width: 18px; height: 18px; }
+.m-push b { display: block; margin-bottom: 2px; }
+.m-push p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; color: rgba(244,241,232,.8); }
+.m-push .row { gap: 14px; align-items: center; }
+.btn.sm { padding: 8px 14px; min-height: 0; font-size: 14px; }

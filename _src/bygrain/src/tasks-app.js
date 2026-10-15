@@ -1,5 +1,5 @@
 import './style.css';
-import { sb, state, esc, $, loadProfile, toast, ICON, LOGO, dueInfo, daysUntil, fmtDate, initials, registerSW, STATUS, BASE } from './lib.js';
+import { sb, state, esc, $, loadProfile, toast, ICON, LOGO, dueInfo, daysUntil, fmtDate, initials, registerSW, STATUS, BASE, pushState, enablePush, disablePush, isIOS } from './lib.js';
 import { renderAuth } from './auth.js';
 import { loadPeople, deptOf, editTask } from './tasks.js';
 
@@ -46,16 +46,36 @@ function shell() {
       </div>
       <div class="m-sum" data-sum>&nbsp;</div>
     </header>
+    <div data-push></div>
     <main class="m-body" data-body><p class="muted">A carregar…</p></main>
   </div>`;
+  drawPush();
   app.querySelector('[data-refresh]').addEventListener('click', () => { load(); toast('Atualizado.'); });
   app.querySelector('[data-me]').addEventListener('click', async () => {
     const { modal } = await import('./lib.js');
     const m = modal(`<div class="acct-card"><span class="avatar lg" style="--c:${esc(p.color)}">${esc(initials(p.display_name))}</span><div><strong>${esc(p.display_name)}</strong><div class="muted small">${esc(p.username ? '@' + p.username : p.email)}</div></div></div>
-      <div class="menu-list"><a href="${BASE}">${ICON.board} Abrir o Studio</a><button type="button" data-out>${ICON.logout} Sair</button></div>
+      <div class="menu-list"><button type="button" data-pushtog>${ICON.bell || '🔔'} <span data-pushlbl>Avisos de novas tarefas…</span></button><a href="${BASE}">${ICON.board} Abrir o Studio</a><button type="button" data-out>${ICON.logout} Sair</button></div>
       <div class="row end"><button class="btn ghost" data-close>Fechar</button></div>`);
-    m.el.querySelector('[data-out]').addEventListener('click', async () => { m.close(); await sb.auth.signOut(); });
+    m.el.querySelector('[data-out]').addEventListener('click', async () => { m.close(); await disablePush().catch(() => {}); await sb.auth.signOut(); });
+    const lbl = m.el.querySelector('[data-pushlbl]'); const ps = await pushState();
+    lbl.textContent = ps === 'on' ? 'Desligar avisos de novas tarefas' : 'Ligar avisos de novas tarefas';
+    m.el.querySelector('[data-pushtog]').addEventListener('click', async () => {
+      try { if ((await pushState()) === 'on') { await disablePush(); toast('Avisos desligados neste telemóvel.'); } else { await enablePush(); toast('Avisos ligados. Vais ser avisado quando te derem uma tarefa.'); } } catch (err) { toast(err.message); }
+      m.close(); drawPush();
+    });
   });
+}
+
+// cartão no topo para ligar os avisos (só aparece enquanto não estão ligados)
+async function drawPush() {
+  const el = app.querySelector('[data-push]'); if (!el) return;
+  const ps = await pushState();
+  let dismissed = false; try { dismissed = localStorage.getItem('bg-push-hide') === '1'; } catch {}
+  if (ps === 'on' || ps === 'unsupported' || dismissed) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="m-push"><span class="m-push-ic">${ICON.bell || '🔔'}</span><div><b>Avisos de novas tarefas</b><p>${ps === 'install' ? 'No iPhone, primeiro adiciona esta app ao ecrã principal: <b>Partilhar → Adicionar ao ecrã principal</b>. Depois abre-a pelo ícone e liga os avisos aqui.' : ps === 'denied' ? 'Os avisos estão bloqueados. Liga-os nas definições do telemóvel para esta app.' : 'Recebe um aviso no telemóvel sempre que alguém te atribui uma tarefa.'}</p>
+    <div class="row">${ps === 'off' ? '<button type="button" class="btn primary sm" data-pon>Ligar avisos</button>' : ''}<button type="button" class="link-btn" data-phide>Agora não</button></div></div></div>`;
+  el.querySelector('[data-pon]')?.addEventListener('click', async () => { try { await enablePush(); toast('Avisos ligados.'); } catch (err) { toast(err.message); } drawPush(); });
+  el.querySelector('[data-phide]').addEventListener('click', () => { try { localStorage.setItem('bg-push-hide', '1'); } catch {} drawPush(); });
 }
 
 async function load() {
@@ -65,6 +85,9 @@ async function load() {
     loadPeople(),
   ]);
   if (error) return toast(error.message);
+  const before = new Set(st.tasks.map((t) => t.id));
+  if (st.loaded) (tasks || []).filter((t) => !before.has(t.id) && t.status !== 'done').forEach((t) => toast(`Nova tarefa: ${t.title}`));
+  st.loaded = true;
   st.tasks = tasks || []; st.projects = new Map((projects || []).map((p) => [p.id, p])); st.people = people;
   draw();
 }
