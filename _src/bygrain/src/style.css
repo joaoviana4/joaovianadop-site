@@ -1726,3 +1726,21 @@ tr:hover > td > .cst-x, tr:hover > td > .cst-mv, tr:hover .cst-colh .cst-x, .cst
 .co-lead { line-height: 1.35; white-space: nowrap; }
 .pm-budget .appr { font-style: normal; font-size: 11px; color: #6FD3A2; margin-left: 6px; letter-spacing: .02em; }
 .bappr { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.crew-g { margin-top: 18px; }
+.crew-h { display: flex; align-items: center; gap: 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; margin: 0 0 6px; }
+.crew-h i { width: 8px; height: 8px; border-radius: 99px; background: rgba(244,241,232,.35); }
+.crew { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.crew-row { display: grid; grid-template-columns: auto minmax(0, 1.2fr) minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 14px; }
+.crew-row + .crew-row { border-top: 1px solid var(--line); }
+.crew-n { display: flex; flex-direction: column; min-width: 0; } .crew-n small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crew-d { display: flex; flex-wrap: wrap; gap: 4px; }
+.crew-a { display: flex; gap: 12px; }
+.dchip { font-size: 11px; padding: 2px 8px; border-radius: 99px; background: color-mix(in srgb, var(--dc) 22%, transparent); color: color-mix(in srgb, var(--dc) 70%, #fff); border: 1px solid color-mix(in srgb, var(--dc) 45%, transparent); }
+.dpick { display: flex; flex-wrap: wrap; gap: 8px; border: 0; padding: 0; margin: 0; }
+.dpick legend { font-size: 13px; color: rgba(244,241,232,.75); margin-bottom: 8px; padding: 0; }
+.dpick label { cursor: pointer; } .dpick input { position: absolute; opacity: 0; pointer-events: none; }
+.dpick span { display: inline-block; padding: 6px 12px; border-radius: 99px; border: 1px solid var(--line2); font-size: 13px; }
+.dpick input:checked + span { background: color-mix(in srgb, var(--dc) 30%, transparent); border-color: var(--dc); color: #fff; }
+.dpick input:focus-visible + span { outline: 2px solid var(--blue); outline-offset: 2px; }
+@media (max-width: 640px) { .crew-row { grid-template-columns: auto 1fr auto; } .crew-d { grid-column: 2 / -1; } }
+[data-crew] { margin-bottom: 28px; }

@@ -407,7 +407,7 @@ function projectDetailsModal(p, after) {
 // ---------- equipa do projeto e convites ----------
 async function projectTeam(root, p) {
   const [{ data: members }, people, { data: invites }] = await Promise.all([
-    sb.from('project_members').select('user_id, added_at').eq('project_id', p.id),
+    sb.from('project_members').select('user_id, added_at, depts, job').eq('project_id', p.id),
     loadPeople(),
     isStaff() ? sb.from('invites').select('id, email, created_at, expires_at, used_at').eq('project_id', p.id).order('created_at', { ascending: false }) : Promise.resolve({ data: [] }),
   ]);
@@ -417,11 +417,8 @@ async function projectTeam(root, p) {
   const istate = (i) => (i.used_at ? `Usado a ${fmtDate(i.used_at)}` : new Date(i.expires_at) < new Date() ? 'Expirou' : `Válido até ${fmtDate(i.expires_at)}`);
   root.innerHTML = `
     <section class="stack">
-      <h3 class="h3">${p.is_central ? 'Equipa da Grain' : 'Atribuídos ao projeto'}</h3>
-      <p class="muted small">${p.is_central ? 'Todos os membros e administradores têm acesso à Central.' : 'Quem trabalha neste projeto. Todos os membros da Grain continuam a ter acesso.'}</p>
-      ${(() => { const assigned = p.is_central ? staff : staff.filter((x) => (members || []).some((m) => m.user_id === x.id)); const free = staff.filter((x) => !assigned.includes(x));
-        return `<ul class="people">${assigned.map((x) => `<li><span class="avatar sm" style="--c:${esc(x.color)}">${esc(initials(x.display_name))}</span><span>${esc(x.display_name)}</span><span class="muted small">${esc(ROLES[x.role])}</span>${!p.is_central && isStaff() ? `<button type="button" class="link-btn danger-text" data-rmguest="${x.id}">Tirar</button>` : ''}</li>`).join('') || '<li class="muted small">Ainda ninguém atribuído.</li>'}</ul>
-        ${!p.is_central && isStaff() && free.length ? `<label class="sel"><span class="vh">Atribuir pessoa</span><select data-assign><option value="">+ Atribuir pessoa da Grain</option>${free.map((x) => `<option value="${x.id}">${esc(x.display_name)}</option>`).join('')}</select></label>` : ''}`; })()}
+      ${p.is_central ? `<h3 class="h3">Equipa da Grain</h3><p class="muted small">Todos os membros e administradores têm acesso à Central.</p>` : ''}
+      ${p.is_central ? `<ul class="people">${staff.map((x) => `<li><span class="avatar sm" style="--c:${esc(x.color)}">${esc(initials(x.display_name))}</span><span>${esc(x.display_name)}</span><span class="muted small">${esc(ROLES[x.role])}</span></li>`).join('')}</ul>` : '<div data-crew></div>'}
     </section>
     ${p.canBudget ? `<section class="stack">
       <h3 class="h3">${ICON.lock} Quem vê o orçamento</h3>
@@ -440,6 +437,7 @@ async function projectTeam(root, p) {
       ${inv.length ? `<ul class="invites">${inv.map((i) => `<li><span>${esc(i.email)}</span><span class="muted small">${istate(i)}</span>${!i.used_at ? `<button type="button" class="icon-btn" data-rminv="${i.id}" aria-label="Anular convite">${ICON.trash}</button>` : ''}</li>`).join('')}</ul>` : ''}
     </section>` : ''}`}`;
   const acc = root.querySelector('[data-budgetacc]'); if (acc) budgetAccessPanel(acc, p);
+  const crewEl = root.querySelector('[data-crew]'); if (crewEl) crewPanel(crewEl, p, people, members || [], () => projectTeam(root, p));
   root.querySelector('[data-invite]')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = e.target.email.value.trim();
@@ -455,8 +453,63 @@ async function projectTeam(root, p) {
     if (!(await confirmBox('Tirar esta pessoa do projeto?', 'Tirar'))) return;
     await sb.from('project_members').delete().eq('project_id', p.id).eq('user_id', b.dataset.rmguest); projectTeam(root, p);
   }));
-  root.querySelector('[data-assign]')?.addEventListener('change', async (e) => { if (!e.target.value) return; const { error } = await sb.from('project_members').insert({ project_id: p.id, user_id: e.target.value }); if (error) toast(error.message); projectTeam(root, p); });
   root.querySelectorAll('[data-rminv]').forEach((b) => b.addEventListener('click', async () => { await sb.from('invites').delete().eq('id', b.dataset.rminv); projectTeam(root, p); }));
+}
+
+// ---------- equipa do projeto por departamento ----------
+// Pessoas da Grain (project_members) e pessoas sem conta (project_crew), cada uma com função e departamentos.
+async function crewPanel(el, p, people, members, reload) {
+  const { data: crewRows } = await sb.from('project_crew').select('*').eq('project_id', p.id).order('created_at');
+  const depts = p.departments || [];
+  const byId = new Map(people.map((x) => [x.id, x]));
+  const list = [
+    ...members.filter((m) => byId.has(m.user_id) && byId.get(m.user_id).role !== 'guest').map((m) => { const x = byId.get(m.user_id); return { t: 'm', id: m.user_id, name: x.display_name, color: x.color, job: m.job || '', depts: m.depts || [], sub: ROLES[x.role] }; }),
+    ...(crewRows || []).map((c) => ({ t: 'c', id: c.id, name: c.name, color: '#5A5A66', job: c.job || '', depts: c.depts || [], sub: [c.email, c.phone].filter(Boolean).join(' · ') || 'sem conta no studio', email: c.email, phone: c.phone })),
+  ];
+  const canEdit = isStaff();
+  const dchip = (id) => { const d = depts.find((x) => x.id === id); return d ? `<span class="dchip" style="--dc:${esc(d.color)}">${esc(d.name)}</span>` : ''; };
+  const row = (x) => `<li class="crew-row"><span class="avatar sm" style="--c:${esc(x.color)}">${esc(initials(x.name))}</span>
+    <span class="crew-n"><b>${esc(x.name)}</b><small class="muted">${esc(x.job || x.sub || '')}${x.job && x.sub ? ` · ${esc(x.sub)}` : ''}</small></span>
+    <span class="crew-d">${x.depts.map(dchip).join('')}</span>
+    ${canEdit ? `<span class="crew-a"><button type="button" class="link-btn" data-cedit="${x.t}:${x.id}">Editar</button><button type="button" class="link-btn danger-text" data-crm="${x.t}:${x.id}">Tirar</button></span>` : ''}</li>`;
+  const groups = depts.map((d) => ({ d, xs: list.filter((x) => x.depts.includes(d.id)) })).filter((g) => g.xs.length);
+  const none = list.filter((x) => !x.depts.some((id) => depts.some((d) => d.id === id)));
+  el.innerHTML = `<div class="row between wrap-gap"><div><h3 class="h3">Equipa do projeto</h3><p class="muted small">Quem trabalha neste projeto, por departamento. Todos os membros da Grain continuam a ter acesso.</p></div>${canEdit ? `<button type="button" class="btn primary" data-cadd>${ICON.plus} Adicionar pessoa</button>` : ''}</div>
+    ${list.length ? `${groups.map((g) => `<div class="crew-g"><h4 class="crew-h"><i style="background:${esc(g.d.color)}"></i>${esc(g.d.name)} <span class="muted">${g.xs.length}</span></h4><ul class="crew">${g.xs.map(row).join('')}</ul></div>`).join('')}
+      ${none.length ? `<div class="crew-g"><h4 class="crew-h"><i></i>Sem departamento <span class="muted">${none.length}</span></h4><ul class="crew">${none.map(row).join('')}</ul></div>` : ''}`
+      : `<p class="empty-note">Ainda ninguém na equipa.${canEdit ? ' Usa “Adicionar pessoa”.' : ''}</p>`}`;
+  const form = (x) => {
+    const isNew = !x; const free = people.filter((y) => y.role !== 'guest' && !members.some((m) => m.user_id === y.id));
+    const m = modal(`<h2>${isNew ? 'Adicionar pessoa' : esc(x.name)}</h2><form class="stack" data-cf>
+      ${isNew ? `<div class="seg dark" role="tablist"><button type="button" role="tab" aria-selected="true" data-ct="m">Da Grain</button><button type="button" role="tab" aria-selected="false" data-ct="c">Sem conta</button></div>
+        <div class="field" data-for="m"><label for="cu">Pessoa</label><select id="cu" name="user_id">${free.length ? free.map((y) => `<option value="${y.id}">${esc(y.display_name)}</option>`).join('') : '<option value="">Toda a Grain já está no projeto</option>'}</select></div>
+        <div data-for="c" hidden class="grid2"><div class="field"><label for="cn2">Nome</label><input id="cn2" name="name"></div><div class="field"><label for="ce">Email</label><input id="ce" name="email" type="email"></div><div class="field"><label for="cp">Telefone</label><input id="cp" name="phone" inputmode="tel"></div></div>`
+        : x.t === 'c' ? `<div class="grid2"><div class="field"><label for="cn2">Nome</label><input id="cn2" name="name" value="${esc(x.name)}" required></div><div class="field"><label for="ce">Email</label><input id="ce" name="email" type="email" value="${esc(x.email || '')}"></div><div class="field"><label for="cp">Telefone</label><input id="cp" name="phone" value="${esc(x.phone || '')}"></div></div>` : ''}
+      <div class="field"><label for="cj">Função</label><input id="cj" name="job" value="${esc(x?.job || '')}" placeholder="Ex.: Gaffer, 1.º AC, Produtora" list="crew-jobs"></div>
+      <fieldset class="dpick"><legend>Departamentos</legend>${depts.length ? depts.map((d) => `<label><input type="checkbox" name="dept" value="${esc(d.id)}" ${x?.depts.includes(d.id) ? 'checked' : ''}><span style="--dc:${esc(d.color)}">${esc(d.name)}</span></label>`).join('') : '<p class="muted small">Este projeto ainda não tem departamentos (Detalhes → Departamentos e cores).</p>'}</fieldset>
+      <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">${isNew ? 'Adicionar' : 'Guardar'}</button></div></form>
+      <datalist id="crew-jobs">${['Realização', 'Produção', 'Direção de fotografia', '1.º assistente de câmara', '2.º assistente de câmara', 'Gaffer', 'Eletricista', 'Maquinista', 'Direção de arte', 'Adereços', 'Guarda-roupa', 'Cabelos e maquilhagem', 'Som direto', 'Montagem', 'Cor', 'Assistente de produção', 'Making of'].map((j) => `<option value="${j}">`).join('')}</datalist>`, { wide: true });
+    let tab = 'm';
+    m.el.querySelectorAll('[data-ct]').forEach((b) => b.addEventListener('click', () => { tab = b.dataset.ct; m.el.querySelectorAll('[data-ct]').forEach((y) => y.setAttribute('aria-selected', y === b)); m.el.querySelectorAll('[data-for]').forEach((y) => { y.hidden = y.dataset.for !== tab; }); }));
+    m.el.querySelector('[data-cf]').addEventListener('submit', async (e) => {
+      e.preventDefault(); const fd = new FormData(e.target); const dsel = fd.getAll('dept'); const job = (fd.get('job') || '').trim() || null;
+      let r;
+      if (isNew && tab === 'm') { if (!fd.get('user_id')) return toast('Escolhe uma pessoa.'); r = await sb.from('project_members').insert({ project_id: p.id, user_id: fd.get('user_id'), depts: dsel, job }); }
+      else if (isNew) { const name = (fd.get('name') || '').trim(); if (!name) return toast('Escreve o nome.'); r = await sb.from('project_crew').insert({ project_id: p.id, name, email: (fd.get('email') || '').trim() || null, phone: (fd.get('phone') || '').trim() || null, depts: dsel, job }); }
+      else if (x.t === 'm') r = await sb.from('project_members').update({ depts: dsel, job }).eq('project_id', p.id).eq('user_id', x.id);
+      else r = await sb.from('project_crew').update({ name: (fd.get('name') || '').trim() || x.name, email: (fd.get('email') || '').trim() || null, phone: (fd.get('phone') || '').trim() || null, depts: dsel, job }).eq('id', x.id);
+      if (r.error) return toast(r.error.message);
+      m.close(); toast(isNew ? 'Adicionado à equipa.' : 'Guardado.'); reload();
+    });
+  };
+  const find = (k) => { const [t, id] = k.split(':'); return list.find((x) => x.t === t && x.id === id); };
+  el.querySelector('[data-cadd]')?.addEventListener('click', () => form(null));
+  el.querySelectorAll('[data-cedit]').forEach((b) => b.addEventListener('click', () => form(find(b.dataset.cedit))));
+  el.querySelectorAll('[data-crm]').forEach((b) => b.addEventListener('click', async () => {
+    const x = find(b.dataset.crm); if (!(await confirmBox(`Tirar ${x.name} da equipa deste projeto?`, 'Tirar'))) return;
+    const r = x.t === 'm' ? await sb.from('project_members').delete().eq('project_id', p.id).eq('user_id', x.id) : await sb.from('project_crew').delete().eq('id', x.id);
+    if (r.error) return toast(r.error.message); reload();
+  }));
 }
 
 // ---------- projeto: página com ferramentas; os boards criam-se lá dentro ----------
