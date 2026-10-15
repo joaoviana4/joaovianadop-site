@@ -14,6 +14,7 @@ import { clipPage, CLIP_PAGES, mediaTool } from './music.js';
 import { mountSituation } from './overview.js';
 import { shotlistPage } from './shotlist.js';
 import { shotPage } from './shot.js';
+import { callsheetTool, newCallsheet } from './callsheet.js';
 import { clearFullscreen } from './layout.js';
 import { joinProject, leaveProject, lockPage, boardPresence, onPresence, whoLabel } from './presence.js';
 import { budgetWhoChip, budgetAccessPanel, globalPermsPanel } from './perms.js';
@@ -501,7 +502,7 @@ function newBoard(p, groupId = '', kind = 'board') {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(form));
-    const data = f.kind === 'table' ? await tableTemplate(p, f.tpl) : f.kind === 'lightmap' ? newLightmapData() : {};
+    const data = f.kind === 'table' ? await tableTemplate(p, f.tpl) : f.kind === 'lightmap' ? newLightmapData() : f.kind === 'callsheet' ? newCallsheet(p, p._boards.filter((b) => b.kind === 'callsheet').length + 1) : {};
     const { data: row, error } = await sb.from('boards').insert({ project_id: p.id, title: f.title.trim(), group_id: f.group_id || null, position: p._boards.length, kind: f.kind, data }).select().single();
     if (error) return toast(error.message);
     m.close(); go(toolHref(p, row));
@@ -534,6 +535,7 @@ async function toolPage(projectId, toolId) {
   if (tool.kind === 'timeline') timelineTool(box, p, tool);
   if (tool.kind === 'budget') budgetTool(box, p, tool);
   if (tool.kind === 'media') mediaTool(box, p, tool);
+  if (tool.kind === 'callsheet') callsheetTool(box, p, tool);
   if (tool.kind === 'lightmap') {
     const { data: chars } = p.kind === 'ficcao' ? await sb.from('characters').select('name').eq('project_id', p.id).order('position') : { data: [] };
     const lm = lightmapTool(box, p, tool, { characters: (chars || []).map((c) => c.name) });
