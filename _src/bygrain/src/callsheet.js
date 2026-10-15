@@ -13,7 +13,7 @@ const COLS = [['cena', 'Cena'], ['efeito', 'Efeito'], ['crono', 'Crono'], ['acto
 
 export function newCallsheet(p, n = 1) {
   return {
-    title: (p.name || '').toUpperCase(), date: '', day: n, days: '', accent: '#C8382D',
+    title: (p.name || '').toUpperCase(), date: '', day: String(n), days: '1', accent: '#C8382D',
     contacts: [['Diretora Produção', ''], ['Ass. Produção', ''], ['1ª Ass. Realização', ''], ['2ª Ass. Realização', '']].map(([role, v]) => ({ id: uid(), role, value: v })),
     call: '08:00', place: '', address: '', weather: { text: '', min: '', max: '' },
     notes: '', hospital: { name: '', url: '' }, parking: { name: '', url: '' },
@@ -64,9 +64,78 @@ function sheetHtml(d, edit) {
   </div></div>`;
 }
 
+// ---------- vista do studio (para trabalhar) ----------
+// Os mesmos dados, num aspeto do studio. O modelo clássico (moldura vermelha) fica para o PDF e o Excel.
+function studioHtml(d) {
+  const f = (path, ph = '', cls = '') => `<input class="cst-in ${cls}" data-p="${path}" value="${esc(get(d, path) ?? '')}" placeholder="${esc(ph)}" aria-label="${esc(ph || path)}">`;
+  const ta = (path, ph = '', rows = 2) => `<textarea class="cst-in" data-p="${path}" rows="${rows}" placeholder="${esc(ph)}" aria-label="${esc(ph)}">${esc(get(d, path) ?? '')}</textarea>`;
+  const x = (attr) => `<button type="button" class="cst-x" ${attr} aria-label="Tirar" title="Tirar">×</button>`;
+  const add = (attr, label) => `<button type="button" class="cst-add" ${attr}>${ICON.plus}<span>${label}</span></button>`;
+  const go = (url) => (url && /^https?:/.test(url) ? `<a class="cst-go" href="${esc(url)}" target="_blank" rel="noopener" title="Abrir">${ICON.open}</a>` : '');
+  const shots = d.rows.filter((r) => r.kind === 'shot').length;
+  return `<div class="cst" style="--acc:${esc(d.accent || '#C8382D')}">
+    <header class="cst-hero">
+      <div class="cst-hl">
+        <div class="cst-kick">Dia ${f('day', '1', 'cst-n')} de ${f('days', '1', 'cst-n')}</div>
+        ${f('title', 'Nome do projeto', 'cst-title')}
+        <label class="cst-date">${ICON.calendar}<span data-prettydate>${esc(fmtDay(d.date) || 'Escolher a data')}</span><input type="date" data-p="date" value="${esc(d.date || '')}" aria-label="Data" onclick="try{this.showPicker()}catch(e){}"></label>
+      </div>
+      <div class="cst-call">
+        <span class="cst-lab">Call</span>
+        ${f('call', '08:00', 'cst-big')}
+        ${f('place', 'Local / décor', 'cst-place')}
+        <div class="cst-addr">${f('address', 'Morada ou link do Google Maps')}${go(d.address)}</div>
+      </div>
+    </header>
+
+    <div class="cst-grid">
+      <section class="cst-card"><h3>Contactos</h3>
+        <div class="cst-list">${d.contacts.map((c, i) => `<div class="cst-li"><div class="cst-lic">${f(`contacts.${i}.role`, 'Função', 'cst-role')}${f(`contacts.${i}.value`, 'Nome - telefone', 'cst-val')}</div>${x(`data-rm="contacts:${c.id}"`)}</div>`).join('')}</div>
+        ${add('data-addc', 'Contacto')}</section>
+      <section class="cst-card"><h3>Horários</h3>
+        <div class="cst-times">${d.times.map((t, i) => `<div class="cst-time">${f(`times.${i}.label`, 'Hora')}${f(`times.${i}.value`, '00:00', 'cst-tv')}${x(`data-rm="times:${t.id}"`)}</div>`).join('')}</div>
+        ${add('data-addt', 'Hora')}
+        <h3 class="cst-sub">Meteorologia</h3>
+        <div class="cst-weather">${f('weather.text', 'ex: Nublado')}<span class="cst-temp min">${f('weather.min', 'mín.', 'cst-n')}</span><span class="cst-temp max">${f('weather.max', 'máx.', 'cst-n')}</span></div>
+      </section>
+      <section class="cst-card"><h3>Notas de produção</h3>
+        ${ta('notes', 'ex: Base de produção - Bar do Teatro', 3)}
+        <h3 class="cst-sub">Hospital mais próximo</h3>
+        <div class="cst-place2">${f('hospital.name', 'Nome')}<div class="cst-addr">${f('hospital.url', 'link do Google Maps')}${go(d.hospital?.url)}</div></div>
+        <h3 class="cst-sub">Estacionamento mais próximo</h3>
+        <div class="cst-place2">${f('parking.name', 'Nome')}<div class="cst-addr">${f('parking.url', 'link do Google Maps')}${go(d.parking?.url)}</div></div>
+      </section>
+    </div>
+
+    <section class="cst-card"><h3>Calls por departamento</h3>
+      <div class="cst-depts">${d.depts.map((t, i) => `<div class="cst-dept">${f(`depts.${i}.name`, 'Departamento')}${f(`depts.${i}.time`, '08:00', 'cst-tv')}${x(`data-rm="depts:${t.id}"`)}</div>`).join('')}${add('data-addd', 'Departamento')}</div>
+    </section>
+
+    <section class="cst-card"><div class="cst-h">${f('castTitle', 'Elenco', 'cst-h3')}<span class="muted small">${d.cast.length} ${d.cast.length === 1 ? 'pessoa' : 'pessoas'}</span></div>
+      ${d.cast.length ? `<div class="cst-tw"><table class="cst-t"><thead><tr><th>Nome</th><th>Personagem</th><th>Cena</th><th>Call</th><th>Saída</th><th>Obs.</th><th></th></tr></thead><tbody>
+        ${d.cast.map((c, i) => `<tr>${['name', 'role', 'scene', 'call', 'out', 'obs'].map((k) => `<td>${f(`cast.${i}.${k}`, '')}</td>`).join('')}<td class="cst-ctl">${x(`data-rm="cast:${c.id}"`)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted small">Ao juntar planos da shotlist, o elenco das secções entra aqui sozinho.</p>'}
+      ${add('data-addcast', 'Pessoa')}
+    </section>
+
+    <section class="cst-card"><div class="cst-h"><h3>Planos do dia</h3><span class="muted small">${shots} ${shots === 1 ? 'plano' : 'planos'}</span>
+        <span class="cst-acts"><button type="button" class="btn primary sm" data-pick>${ICON.plus} Planos da shotlist</button></span></div>
+      <div class="cst-tw"><table class="cst-t cst-shots"><thead><tr><th class="cst-num">#</th>${d.cols.map((c, i) => `<th><span class="cst-colh"><input class="cst-in" data-p="cols.${i}.label" value="${esc(c.label)}" aria-label="Nome da coluna">${x(`data-rmcol="${c.id}"`)}</span></th>`).join('')}<th class="cst-ctl"><button type="button" class="cst-x plus" data-addcol title="Juntar coluna" aria-label="Juntar coluna">+</button></th></tr></thead>
+        <tbody>${(() => { let n = 0; return d.rows.map((r, i) => {
+          const ctl = `<td class="cst-ctl">${r.kind === 'band' ? `<button type="button" class="cst-mv" data-tone="${r.id}" title="Mudar cor da faixa">◐</button>` : ''}<button type="button" class="cst-mv" data-mv="${r.id}:-1" aria-label="Subir">↑</button><button type="button" class="cst-mv" data-mv="${r.id}:1" aria-label="Descer">↓</button>${x(`data-rm="rows:${r.id}"`)}</td>`;
+          if (r.kind === 'band') return `<tr class="cst-band ${r.tone || 'grey'}" data-row="${r.id}"><td colspan="${d.cols.length + 1}">${f(`rows.${i}.text`, 'ex: ALMOÇO 13:00 - 14:00')}</td>${ctl}</tr>`;
+          n += 1;
+          return `<tr data-row="${r.id}"><td class="cst-num"><span>${esc(r.num ?? n)}</span></td>${d.cols.map((c) => `<td class="${/resumo|t[eé]cnico|descri|a[cç][aã]o/i.test(c.label) ? 'wide' : ''}"><textarea class="cst-in" rows="1" data-p="rows.${i}.cells.${c.id}" aria-label="${esc(c.label)}">${esc(r.cells?.[c.id] ?? '')}</textarea></td>`).join('')}${ctl}</tr>`;
+        }).join(''); })()}</tbody></table></div>
+      <div class="row wrap-gap">${add('data-addrow', 'Linha')}${add('data-addband', 'Faixa (almoço, slider in…)')}</div>
+    </section>
+
+    <footer class="cst-foot">${f('footer', 'WRAP', 'cst-footin')}</footer>
+  </div>`;
+}
+
 // Uma ferramenta guarda todos os dias de rodagem: { sheets: [folha do dia 1, dia 2, …] }.
 // (as folhas antigas, de um só dia, passam a ser o dia 1)
-const wrap = (data, p) => (data?.sheets?.length ? data : { sheets: [data?.rows ? data : newCallsheet(p, 1)] });
+const wrap = (data, p) => { const w = data?.sheets?.length ? data : { sheets: [data?.rows ? data : newCallsheet(p, 1)] }; w.sheets.forEach((sh, i) => { if (!sh.day) sh.day = String(i + 1); if (!sh.days) sh.days = String(w.sheets.length); }); return w; };
 const shortDay = (iso) => { if (!iso) return ''; const d = new Date(iso + 'T00:00:00'); return d.toLocaleDateString('pt-PT', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, ''); };
 
 export function callsheetTool(main, p, tool) {
@@ -98,14 +167,15 @@ export function callsheetTool(main, p, tool) {
         ${all.sheets.length > 1 ? `<button type="button" class="btn ghost danger-text" data-rmday title="Apagar este dia">${ICON.trash}</button>` : ''}
       </div>
       <div class="row between wrap-gap cs-bar">
-        <div class="row wrap-gap"><label class="cs-acc" title="Cor da moldura"><input type="color" data-acc value="${esc(d.accent || '#C8382D')}"><span>Cor</span></label>
+        <div class="row wrap-gap"><label class="cs-acc" title="Cor de destaque"><input type="color" data-acc value="${esc(d.accent || '#C8382D')}"><span>Cor</span></label>
           <button type="button" class="btn ghost" data-import>${ICON.open} Importar do Excel</button></div>
-        <div class="row wrap-gap">${all.sheets.length > 1 ? `<button type="button" class="btn ghost" data-pdfall>${ICON.open} PDF de todos os dias</button>` : ''}<button type="button" class="btn primary" data-pdf>${ICON.open} Exportar PDF do dia ${esc(d.day || cur + 1)}</button></div></div>
-      <div class="cs-wrap">${sheetHtml(d, true)}</div>`;
+        <button type="button" class="btn primary" data-export>${ICON.open} Exportar</button></div>
+      ${studioHtml(d)}`;
     const auto = (t) => { if (t.tagName === 'TEXTAREA') { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; } };
-    main.querySelectorAll('.cs textarea').forEach(auto);
-    main.querySelectorAll('[data-p]').forEach((el) => el.addEventListener('input', () => { set(d, el.dataset.p, el.value); auto(el); save(); if (['date', 'day'].includes(el.dataset.p)) { const t = main.querySelector(`[data-day="${cur}"]`); if (t) t.innerHTML = `<b>Dia ${esc(d.day || cur + 1)}</b>${d.date ? `<small>${esc(shortDay(d.date))}</small>` : ''}<small class="muted">${d.rows.filter((r) => r.kind === 'shot').length} pl.</small>`; } }));
-    main.querySelector('[data-acc]').addEventListener('input', (e) => { d.accent = e.target.value; main.querySelector('.cs-frame').style.setProperty('--acc', d.accent); save(); });
+    main.querySelectorAll('.cst textarea').forEach(auto);
+    main.querySelectorAll('[data-p]').forEach((el) => el.addEventListener('input', () => { set(d, el.dataset.p, el.value); auto(el); save(); if (el.dataset.p === 'date') { const pd = main.querySelector('[data-prettydate]'); if (pd) pd.textContent = fmtDay(d.date) || 'Escolher a data'; }
+      if (['date', 'day'].includes(el.dataset.p)) { const t = main.querySelector(`[data-day="${cur}"]`); if (t) t.innerHTML = `<b>Dia ${esc(d.day || cur + 1)}</b>${d.date ? `<small>${esc(shortDay(d.date))}</small>` : ''}<small class="muted">${d.rows.filter((r) => r.kind === 'shot').length} pl.</small>`; } }));
+    main.querySelector('[data-acc]').addEventListener('input', (e) => { d.accent = e.target.value; main.querySelector('.cst').style.setProperty('--acc', d.accent); save(); });
     main.querySelectorAll('[data-day]').forEach((b) => b.addEventListener('click', () => go(Number(b.dataset.day))));
     main.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => go(cur + Number(b.dataset.go))));
     main.querySelector('[data-addday]').addEventListener('click', () => addDay(false));
@@ -133,8 +203,7 @@ export function callsheetTool(main, p, tool) {
       const c = d.cols.find((y) => y.id === b.dataset.rmcol); if (!(await confirmBox(`Tirar a coluna "${c.label}"?`, 'Tirar'))) return; d.cols = d.cols.filter((y) => y !== c); save(); draw();
     }));
     main.querySelector('[data-pick]').addEventListener('click', () => pickShots(p, d, () => { save(); draw(); }, used()));
-    main.querySelector('[data-pdf]').addEventListener('click', () => printSheet([d]));
-    main.querySelector('[data-pdfall]')?.addEventListener('click', () => printSheet(all.sheets));
+    main.querySelector('[data-export]').addEventListener('click', () => exportDialog(all, cur));
     main.querySelector('[data-import]').addEventListener('click', () => importXlsx(d, (nd) => { all.sheets[cur] = nd; d = nd; save(); draw(); }));
   };
   draw();
@@ -267,15 +336,132 @@ async function importXlsx(d, done) {
   inp.click();
 }
 
-function printSheet(list) {
+function printSheet(list, model = 'classic') {
   const d = list[0];
   const css = [...document.styleSheets].map((s) => { try { return [...s.cssRules].map((r) => r.cssText).filter((t) => t.includes('.cs')).join('\n'); } catch { return ''; } }).join('\n');
   const html = `<!doctype html><html lang="pt"><head><meta charset="utf-8"><title>${esc(d.title)} — Folha de serviço ${list.length > 1 ? 'todos os dias' : 'dia ' + esc(d.day)}</title><style>
     @page { size: A4 portrait; margin: 8mm; } * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     body { margin: 0; font: 9px/1.3 Arial, Helvetica, sans-serif; color: #000; } ${css}
     .cs-frame { padding: 16px !important; } a { color: #1155cc; }
-  </style></head><body>${list.map((x, i) => `<div style="${i ? 'break-before: page;' : ''}">${sheetHtml(x, false)}</div>`).join('')}</body></html>`;
+  </style></head><body>${list.map((x, i) => `<div class="m-${model}" style="${i ? 'break-before: page;' : ''}">${sheetHtml(x, false)}</div>`).join('')}</body></html>`;
   const fr = document.createElement('iframe'); fr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
   document.body.append(fr); const doc = fr.contentWindow.document; doc.open(); doc.write(html); doc.close();
   setTimeout(() => { fr.contentWindow.focus(); fr.contentWindow.print(); setTimeout(() => fr.remove(), 60000); }, 300);
+}
+
+// ---------- exportar: PDF ou Excel, no modelo clássico ou limpo ----------
+const MODELS = [['classic', 'Clássico', 'Moldura de cor e caixas amarelas, como a folha d’A Forma e o Silêncio'], ['clean', 'Limpo', 'Preto e branco, sem fundos: poupa tinta']];
+function exportDialog(all, cur) {
+  let pref = {}; try { pref = JSON.parse(localStorage.getItem('bg-cs-export') || '{}'); } catch { /* nada */ }
+  const fmt = pref.fmt || 'pdf', model = pref.model || 'classic';
+  const d = all.sheets[cur];
+  const radio = (name, val, on, title, sub) => `<label class="cs-opt"><input type="radio" name="${name}" value="${val}" ${on ? 'checked' : ''}><span><b>${title}</b>${sub ? `<small>${sub}</small>` : ''}</span></label>`;
+  const m = modal(`<h2>Exportar folha de serviço</h2>
+    <form class="stack" data-f>
+      <fieldset class="cs-opts"><legend>Formato</legend>${radio('fmt', 'pdf', fmt === 'pdf', 'PDF', 'Para enviar e imprimir')}${radio('fmt', 'xlsx', fmt === 'xlsx', 'Excel (.xlsx)', 'Para editar no Excel ou Google Sheets')}</fieldset>
+      <fieldset class="cs-opts"><legend>Modelo</legend>${MODELS.map(([k, t, sub]) => radio('model', k, model === k, t, sub)).join('')}</fieldset>
+      ${all.sheets.length > 1 ? `<fieldset class="cs-opts"><legend>Dias</legend>${radio('days', 'one', true, `Só o dia ${esc(d.day || cur + 1)}`)}${radio('days', 'all', false, `Todos os dias (${all.sheets.length})`, 'No PDF, um dia por página; no Excel, uma folha por dia')}</fieldset>` : ''}
+      <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Exportar</button></div>
+    </form>`);
+  m.el.querySelector('[data-f]').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const v = Object.fromEntries(new FormData(e.target));
+    try { localStorage.setItem('bg-cs-export', JSON.stringify({ fmt: v.fmt, model: v.model })); } catch { /* nada */ }
+    const list = v.days === 'all' ? all.sheets : [d];
+    m.close();
+    if (v.fmt === 'xlsx') await exportXlsx(list, v.model); else printSheet(list, v.model);
+  });
+}
+
+async function exportXlsx(list, model) {
+  toast('A preparar o Excel…');
+  const ExcelJS = (await import('exceljs')).default;
+  const wb = new ExcelJS.Workbook(); wb.creator = 'byGrain Studio';
+  const clean = model === 'clean';
+  const argb = (hex) => 'FF' + String(hex || '#C8382D').replace('#', '').toUpperCase();
+  const YEL = clean ? 'FFF2F2F2' : 'FFFFE599', GRY = clean ? 'FFF2F2F2' : 'FFD9D9D9';
+  const line = clean ? { style: 'thin', color: { argb: 'FFBFBFBF' } } : { style: 'thin', color: { argb: 'FF000000' } };
+  const border = { top: line, left: line, bottom: line, right: line };
+  list.forEach((d, si) => {
+    const name = `Dia ${d.day || si + 1}`.replace(/[\\/?*[\]:]/g, '').slice(0, 31);
+    const ws = wb.addWorksheet(wb.worksheets.some((w) => w.name === name) ? `${name} (${si + 1})` : name, { properties: { tabColor: { argb: argb(d.accent) } }, pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.3, right: 0.3, top: 0.3, bottom: 0.3, header: 0, footer: 0 } } });
+    const N = Math.max(d.cols.length, 8, Math.min(d.depts.length, 12));
+    // a moldura: uma coluna e uma linha de cada lado, pintadas com a cor da folha (no modelo clássico)
+    ws.columns = [{ width: 2.5 }, ...Array.from({ length: N }, (_, i) => ({ width: d.cols[i] && /resumo|t[eé]cnico|cam/i.test(d.cols[i].label) ? 26 : 13 })), { width: 2.5 }];
+    ws.getRow(1).height = 10;
+    const H = Math.floor(N / 2);
+    let r = 1;
+    const cell = (row, col, value, o = {}) => {
+      const c = ws.getCell(row + 1, col + 1); c.value = value ?? '';
+      c.font = { name: 'Arial', size: o.size || 9, bold: !!o.bold, color: o.color ? { argb: o.color } : undefined, underline: o.link ? true : undefined };
+      c.alignment = { vertical: 'middle', horizontal: o.left ? 'left' : 'center', wrapText: true };
+      if (o.fill) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: o.fill } };
+      if (o.border !== false) c.border = border;
+      return c;
+    };
+    const span = (row, c1, c2, value, o) => { if (c2 > c1) ws.mergeCells(row + 1, c1 + 1, row + 1, c2 + 1); const c = cell(row, c1, value, o); for (let k = c1 + 1; k <= c2; k++) { ws.getCell(row + 1, k + 1).border = border; if (o?.fill) ws.getCell(row + 1, k + 1).fill = c.fill; } return c; };
+    const height = (row, h) => { ws.getRow(row + 1).height = h; };
+    const link = (url, text) => (url && /^https?:/.test(url) ? { text: text || url, hyperlink: url } : (text || url || ''));
+    // título e dia
+    span(r, 1, N, d.title, { bold: true, size: 12 }); height(r, 22); r++;
+    span(r, 1, N - 2, fmtDay(d.date), { left: true, bold: true }); span(r, N - 1, N, `DIA ${d.day || si + 1} DE ${d.days || list.length}`, { bold: true }); r += 2;
+    // contactos (esquerda) | call, morada e meteorologia (direita)
+    const top = r;
+    d.contacts.forEach((c, i) => { span(top + i, 1, Math.max(1, Math.floor(H / 2)), c.role, { bold: true, fill: YEL, left: true }); span(top + i, Math.floor(H / 2) + 1, H, c.value, { left: true }); });
+    let rr = top;
+    span(rr, H + 2, N, `CALL: ${d.call || ''} H - ${d.place || ''}`, { bold: true, size: 12, fill: YEL }); height(rr, 26); rr++;
+    span(rr, H + 2, N, link(d.address, d.address ? `MORADA: ${d.address}` : 'MORADA:'), { bold: false, color: d.address ? 'FF1155CC' : undefined, link: !!d.address }); rr += 2;
+    span(rr, H + 2, N, 'METEOROLOGIA', { bold: true, fill: YEL }); rr++;
+    span(rr, H + 2, N, [d.weather?.text, [d.weather?.min, d.weather?.max].filter(Boolean).join(' / ')].filter(Boolean).join(' · ')); rr++;
+    r = Math.max(top + d.contacts.length, rr) + 1;
+    // notas, hospital, estacionamento (esquerda) | horários (direita)
+    const mid = r; let lr = mid;
+    span(lr, 1, H, 'NOTAS DE PRODUÇÃO', { bold: true, fill: YEL }); lr++;
+    span(lr, 1, H, d.notes || '', { bold: true }); height(lr, Math.max(18, 12 * String(d.notes || '').split('\n').length)); lr += 2;
+    span(lr, 1, H, 'HOSPITAL MAIS PRÓXIMO', { bold: true, fill: GRY }); lr++;
+    span(lr, 1, H, link(d.hospital?.url, [d.hospital?.name, d.hospital?.url].filter(Boolean).join(' ')), { color: d.hospital?.url ? 'FF1155CC' : undefined }); lr += 2;
+    span(lr, 1, H, 'ESTACIONAMENTO MAIS PRÓXIMO', { bold: true, fill: GRY }); lr++;
+    span(lr, 1, H, link(d.parking?.url, [d.parking?.name, d.parking?.url].filter(Boolean).join(' ')), { color: d.parking?.url ? 'FF1155CC' : undefined }); lr++;
+    const tc = H + 2 + Math.floor((N - H - 2) / 2);
+    d.times.forEach((t, i) => { span(mid + i, H + 2, tc, `${t.label}:`, { bold: true, fill: YEL }); span(mid + i, tc + 1, N, t.value, { bold: true }); });
+    r = Math.max(lr, mid + d.times.length) + 1;
+    // calls por departamento
+    if (d.depts.length) {
+      d.depts.slice(0, N).forEach((t, i) => { cell(r, i + 1, String(t.name || '').toUpperCase(), { bold: true, fill: YEL, size: 8 }); cell(r + 1, i + 1, t.time); });
+      r += 3;
+    }
+    // elenco
+    const castH = [d.castTitle || 'ELENCO', 'PERSONAGEM', 'CENA', 'CALL', 'SAÍDA', 'OBS.'];
+    const cw = Math.max(1, Math.floor(N / 6));
+    const ccol = (k) => [1 + k * cw, k === 5 ? N : k * cw + cw];
+    castH.forEach((h, k) => span(r, ...ccol(k), String(h).toUpperCase(), { bold: true, fill: YEL }));
+    r++;
+    d.cast.forEach((c) => { ['name', 'role', 'scene', 'call', 'out', 'obs'].forEach((k, j) => span(r, ...ccol(j), c[k] || '')); r++; });
+    r++;
+    // planos
+    // a última coluna estica até à largura toda
+    const sc = (i) => [i + 1, i === d.cols.length - 1 ? N : i + 1];
+    d.cols.forEach((c, i) => span(r, ...sc(i), String(c.label || '').toUpperCase(), { bold: true, fill: GRY, size: 8 }));
+    height(r, 18); r++;
+    d.rows.forEach((row) => {
+      if (row.kind === 'band') span(r, 1, N, row.text, { bold: true, fill: row.tone === 'yellow' ? YEL : GRY, left: row.tone !== 'yellow' });
+      else d.cols.forEach((c, i) => span(r, ...sc(i), row.cells?.[c.id] ?? ''));
+      r++;
+    });
+    r++;
+    span(r, 1, N, d.footer, { bold: true, fill: YEL }); height(r, 30);
+    if (!clean) {
+      for (let y = 1; y <= r + 2; y++) for (let x = 1; x <= N + 2; x++) { const c = ws.getCell(y, x); if (!c.border && !c.isMerged) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(d.accent) } }; }
+      height(r + 1, 10);
+    }
+    ws.pageSetup.printArea = `A1:${ws.getColumn(N + 2).letter}${r + 2}`;
+    ws.views = [{ showGridLines: false }];
+  });
+  const buf = await wb.xlsx.writeBuffer();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  const d0 = list[0];
+  a.download = `${(d0.title || 'Folha de servico').replace(/[\\/:*?"<>|]/g, '')} - FS ${list.length > 1 ? 'todos os dias' : 'D' + (d0.day || 1)}.xlsx`;
+  document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  toast('Excel exportado.');
 }
