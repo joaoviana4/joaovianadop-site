@@ -313,7 +313,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
 
   async function create(kind, at, data = {}, size) {
     const r = stage.getBoundingClientRect();
-    const c = at || toWorld(r.left + r.width / 2, r.top + r.height / 2);
+    const c = at || dropAt || toWorld(r.left + r.width / 2, r.top + r.height / 2); dropAt = null;
     const [w, h] = size || SIZE[kind] || [260, 160];
     const row = { board_id: boardId, kind, x: Math.round(c.x - w / 2), y: Math.round(c.y - h / 2), w, h, z: maxZ() + 1, data };
     const { data: ins, error } = await sb.from('board_items').insert(row).select().single();
@@ -357,7 +357,10 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     m.el.querySelector('[data-mlist] [data-close]').addEventListener('click', () => m.close());
   }
 
+  // ponto onde a ferramenta foi largada (arrastar da barra); fica à espera do primeiro cartão criado
+  let dropAt = null;
   async function add(kind, opts = {}) {
+    dropAt = opts.at || null;
     if (kind === 'image') return pickImages();
     if (kind === 'board') {
       const { data: b, error } = await sb.from('boards').insert({ project_id: projectId, parent_id: boardId, title: 'Novo board' }).select().single();
@@ -401,6 +404,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     inp.click();
   }
   async function addImages(files, at) {
+    at = at || dropAt; dropAt = null;
     const imgs = files.filter((f) => f.type.startsWith('image/'));
     if (!imgs.length) return;
     toast(imgs.length > 1 ? `A enviar ${imgs.length} imagens…` : 'A enviar a imagem…', 6000);
@@ -703,6 +707,8 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
 
   return {
     add, fit, zoomBy, setZoom, colors: COLORS, undo, redo,
+    // coordenadas no board para um ponto do ecrã, ou null se estiver fora do board
+    worldAt: (cx, cy) => { const r = stage.getBoundingClientRect(); return cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom ? toWorld(cx, cy) : null; },
     setColor: (c, delay) => setBg(c, delay),
     get zoom() { return st.view.k; },
     destroy() {

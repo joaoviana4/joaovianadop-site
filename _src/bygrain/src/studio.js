@@ -1028,7 +1028,33 @@ async function boardView(projectId, boardId) {
   });
   onCleanup(() => board.destroy());
 
-  app.querySelectorAll('[data-tool]').forEach((x) => x.addEventListener('click', () => board.add(x.dataset.tool)));
+  // ferramentas: clicar junta no centro; arrastar para o board junta onde se largar
+  app.querySelectorAll('[data-tool]').forEach((x) => {
+    let drag = null;
+    x.addEventListener('click', (e) => { if (x._dragged) { x._dragged = false; e.preventDefault(); return; } board.add(x.dataset.tool); });
+    x.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      drag = { sx: e.clientX, sy: e.clientY, on: false, ghost: null };
+      const move = (ev) => {
+        if (!drag) return;
+        if (!drag.on && Math.hypot(ev.clientX - drag.sx, ev.clientY - drag.sy) < 6) return;
+        if (!drag.on) { drag.on = true; drag.ghost = document.createElement('div'); drag.ghost.className = `tool-ghost tg-${x.dataset.tool}`; drag.ghost.innerHTML = x.innerHTML; document.body.append(drag.ghost); document.body.classList.add('tool-dragging'); }
+        drag.ghost.style.transform = `translate(${ev.clientX}px, ${ev.clientY}px)`;
+        drag.ghost.classList.toggle('out', !board.worldAt(ev.clientX, ev.clientY) || !!ev.target.closest?.('.pv-tools, .fmt-bar, .pv-zoom'));
+      };
+      const up = (ev) => {
+        window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+        if (!drag) return; const d = drag; drag = null;
+        if (!d.on) return;
+        d.ghost.remove(); document.body.classList.remove('tool-dragging'); x._dragged = true; setTimeout(() => { x._dragged = false; }, 0);
+        const overUi = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.pv-tools, .fmt-bar, .pv-zoom, .pv-colorpop');
+        const at = !overUi && ev.type === 'pointerup' ? board.worldAt(ev.clientX, ev.clientY) : null;
+        if (at) board.add(x.dataset.tool, { at });
+      };
+      window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+    });
+    x.addEventListener('dragstart', (e) => e.preventDefault());
+  });
   app.querySelector('[data-undo]').addEventListener('click', () => board.undo());
   app.querySelector('[data-redo]').addEventListener('click', () => board.redo());
   app.querySelector('[data-z=in]').addEventListener('click', () => board.zoomBy(1.2));
