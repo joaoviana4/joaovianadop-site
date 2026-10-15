@@ -139,6 +139,7 @@ async function applyScript(p, f, r) {
   });
   if (ins.length) { const { error } = await sb.from('scenes').insert(ins); if (error) throw error; }
   if (ups.length) { const { error } = await sb.from('scenes').upsert(ups); if (error) throw error; }
+  p._hasScript = true;
   await ensureModules(p, ['cenas', ...(r.characters.length ? ['elenco'] : []), ...(r.locations.length ? ['decors'] : [])]);
 }
 
@@ -289,7 +290,7 @@ export function bindShots(main, p, f, s, shots, urls, base) {
 
 // plano em grande, com ‹ › pelos planos do projeto inteiro
 export async function shotViewer(f, start, base) {
-  const all = f.scenes.flatMap((sc) => f.shots.filter((x) => x.scene_id === sc.id));
+  const all = [...f.scenes.flatMap((sc) => f.shots.filter((x) => x.scene_id === sc.id)), ...f.shots.filter((x) => !x.scene_id)].filter((x) => x.image_path);
   let i = Math.max(0, all.findIndex((x) => x.id === start.id));
   const m = modal('<div data-v></div>', { wide: true });
   m.el.classList.add('viewer');
@@ -302,11 +303,11 @@ export async function shotViewer(f, start, base) {
       <div class="viewer-img">${u ? `<img src="${esc(u)}" alt="">` : '<p class="muted">Sem storyboard.</p>'}</div>
       <div class="chips">${[sh.framing, sh.movement, sh.lens].filter(Boolean).map((x) => `<span class="chip">${esc(x)}</span>`).join('')}</div>
       ${sh.description ? `<p>${esc(sh.description)}</p>` : ''}
-      <a class="link-btn" href="${base}/${f.unitPath || 'cenas'}/${sc?.id}">${f.unitPath === 'seguimento' ? 'Abrir a secção' : 'Abrir a cena'}</a>`;
+      ${sc ? `<a class="link-btn" href="${base}/${f.unitPath || 'cenas'}/${sc.id}">${f.unitPath === 'seguimento' ? 'Abrir a secção' : 'Abrir a cena'}</a>` : ''}`;
     m.el.querySelector('[data-p]').onclick = () => { if (i) { i--; draw(); } };
     m.el.querySelector('[data-n]').onclick = () => { if (i < all.length - 1) { i++; draw(); } };
     m.el.querySelector('[data-close]').onclick = m.close;
-    m.el.querySelector('a').onclick = () => m.close();
+    const a = m.el.querySelector('a.link-btn'); if (a) a.onclick = () => m.close();
   };
   const onKey = (e) => { if (e.key === 'ArrowLeft' && i) { i--; draw(); } if (e.key === 'ArrowRight' && i < all.length - 1) { i++; draw(); } };
   document.addEventListener('keydown', onKey);

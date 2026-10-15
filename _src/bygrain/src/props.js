@@ -181,6 +181,14 @@ export async function propsPage(main, p, sub, base, cleanup) {
       if (ASK.has(data.status) && data.price == null) askCost(p, f, data, draw);
       toast(`"${name}" juntado.`);
     });
+    main.querySelectorAll('[data-delprop]').forEach((b) => b.addEventListener('click', async (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const x = f.props.find((y) => y.id === b.dataset.delprop); if (!x) return;
+      if (!(await confirmBox(`Apagar "${x.name}"? Sai da lista e não volta numa nova análise do guião.`, 'Apagar adereço'))) return;
+      const { error } = await sb.from('props').update({ removed: true }).eq('id', x.id);
+      if (error) return toast(error.message);
+      x.removed = true; draw(); toast(`"${x.name}" apagado.`);
+    }));
     main.querySelectorAll('[data-price]').forEach((inp) => {
       const x = f.props.find((y) => y.id === inp.dataset.price);
       const save = debounce((v) => sb.from('props').update({ price: v }).eq('id', x.id).then(({ error }) => error && toast(error.message)), 600);
@@ -200,13 +208,14 @@ function row(x, f, base) {
     <a href="${base}/aderecos/${x.id}" class="prop-main"><strong>${esc(x.name)}</strong><span class="small muted">${[x.category, x.quantity > 1 ? `${x.quantity} un.` : '', x.supplier, scenes.length ? `Cenas ${scenes.join(', ')}` : ''].filter(Boolean).map(esc).join(' · ')}</span></a>
     <span class="prop-price">${x.bundle_id ? `<span class="small muted">${pr}</span>` : `<input type="number" step="0.01" min="0" inputmode="decimal" data-price="${x.id}" value="${esc(x.price ?? '')}" placeholder="—" aria-label="Valor de ${esc(x.name)}"><i>€</i>`}</span>
     <label class="sel"><span class="vh">Estado de ${esc(x.name)}</span><select data-status="${x.id}">${PROP_STATUS.map(([k, l]) => `<option value="${k}" ${x.status === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    <button type="button" class="icon-btn sm" data-delprop="${x.id}" aria-label="Apagar ${esc(x.name)}" title="Apagar adereço">${ICON.trash}</button>
   </li>`;
 }
 function tile(x, f, base, urls) {
   const [, l, c] = statusOf(x.status);
   const img = urls[(x.refs || []).find((r) => r.kind === 'image')?.path];
   const pr = priceLabel(x, f); const n = (x.refs || []).filter((r) => r.kind === 'image').length;
-  return `<a class="prop-tile" href="${base}/aderecos/${x.id}" style="--c:${c}">
+  return `<a class="prop-tile" href="${base}/aderecos/${x.id}" style="--c:${c}"><button type="button" class="icon-btn sm pt-del" data-delprop="${x.id}" aria-label="Apagar ${esc(x.name)}" title="Apagar adereço">${ICON.trash}</button>
     <span class="pt-img">${img ? `<img src="${esc(img)}" alt="" loading="lazy">` : `<span class="pt-empty">${ICON.prop}</span>`}<span class="pt-st"><i></i>${l}</span>${n > 1 ? `<span class="pt-n">${n} fotos</span>` : ''}</span>
     <span class="pt-name">${esc(x.name)}</span>
     <span class="pt-meta">${[x.category, pr].filter(Boolean).join(' · ') || '&nbsp;'}</span>
@@ -246,7 +255,7 @@ async function propPage(main, p, f, id, base, cleanup) {
   const chips = (ids, list, key) => `<div class="chips">${(ids || []).map((i) => { const e = list.find((y) => y.id === i); return e ? `<span class="chip">${esc(e.name)}<button type="button" class="chip-x" data-rm="${key}:${i}" aria-label="Tirar ${esc(e.name)}">${ICON.close}</button></span>` : ''; }).join('')}
     <label class="sel chip-add"><span class="vh">Juntar</span><select data-addrel="${key}"><option value="">+ Juntar</option>${list.filter((e) => !(ids || []).includes(e.id)).map((e) => `<option value="${e.id}">${esc(e.name)}</option>`).join('')}</select></label></div>`;
   main.innerHTML = `<a href="${base}/aderecos" class="link-btn">${ICON.back} Adereços</a>
-    <header class="ent-h"><h1 class="h1">${esc(x.name)}</h1><button type="button" class="icon-btn" data-delprop aria-label="Tirar adereço">${ICON.trash}</button></header>
+    <header class="ent-h"><h1 class="h1">${esc(x.name)}</h1><button type="button" class="btn ghost danger-text" data-delprop>${ICON.trash} Apagar adereço</button></header>
     <div class="pm-grid"><div class="pm-boards stack">
       <section class="panel stack"><div class="grid2">
         <div class="field"><label for="pty">Tipo</label><select id="pty" data-k="type"><option value="acao" ${x.type === 'acao' ? 'selected' : ''}>De ação</option><option value="cenario" ${x.type === 'cenario' ? 'selected' : ''}>De cenário</option></select></div>
@@ -302,7 +311,7 @@ async function propPage(main, p, f, id, base, cleanup) {
   main.querySelectorAll('[data-rmimg]').forEach((b) => b.addEventListener('click', () => { const r = imgs[+b.dataset.rmimg]; x.refs = x.refs.filter((y) => y !== r); saveRefs(); }));
   main.querySelectorAll('[data-rmlink]').forEach((b) => b.addEventListener('click', () => { const r = links[+b.dataset.rmlink]; x.refs = x.refs.filter((y) => y !== r); saveRefs(); }));
   main.querySelector('[data-delprop]').addEventListener('click', async () => {
-    if (!(await confirmBox(`Tirar "${x.name}"? Não volta numa nova análise.`, 'Tirar'))) return;
+    if (!(await confirmBox(`Apagar "${x.name}"? Sai da lista e não volta numa nova análise do guião.`, 'Apagar adereço'))) return;
     await sb.from('props').update({ removed: true }).eq('id', x.id); location.hash = `${base}/aderecos`;
   });
   const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: 'prop', id: x.id } }); cleanup(() => t.destroy());

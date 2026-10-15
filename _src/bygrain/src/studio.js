@@ -12,6 +12,8 @@ import { budgetPage, budgetTool } from './budget.js';
 import { mountTaskCenter } from './taskcenter.js';
 import { clipPage, CLIP_PAGES, mediaTool } from './music.js';
 import { mountSituation } from './overview.js';
+import { shotlistPage } from './shotlist.js';
+import { clearFullscreen } from './layout.js';
 import { budgetWhoChip, budgetAccessPanel, globalPermsPanel } from './perms.js';
 import { MODULES, TEMPLATES, modulesOf, hasMod, scriptMode, modLabel, modPath, modulesModal, autoModules } from './modules.js';
 import { FICTION_PAGES, FICTION_DEPTS, fictionPage, fictionStats } from './fiction.js';
@@ -19,7 +21,7 @@ import { FICTION_PAGES, FICTION_DEPTS, fictionPage, fictionStats } from './ficti
 const app = $('#app');
 let cleanup = [];
 const onCleanup = (fn) => cleanup.push(fn);
-function teardown() { cleanup.forEach((f) => { try { f(); } catch { /* nada */ } }); cleanup = []; }
+function teardown() { clearFullscreen(); cleanup.forEach((f) => { try { f(); } catch { /* nada */ } }); cleanup = []; }
 
 registerSW();
 // a roda do rato não muda valores sem querer nos campos numéricos
@@ -369,10 +371,12 @@ async function loadProject(id) {
   const { data: p } = await sb.from('projects').select(PROJECT_COLS).eq('id', id).maybeSingle();
   if (!p) return null;
   // o orçamento só chega a quem tem acesso (a base de dados devolve vazio aos outros)
-  const [{ data: fin }, { data: grant }] = await Promise.all([
+  const [{ data: fin }, { data: grant }, { count: nScripts }] = await Promise.all([
     sb.from('project_budgets').select('value, budget, updated_at').eq('project_id', id).maybeSingle(),
     sb.from('budget_access').select('user_id').eq('project_id', id).eq('user_id', state.user.id).maybeSingle(),
+    sb.from('scripts').select('id', { count: 'exact', head: true }).eq('project_id', id),
   ]);
+  p._hasScript = (nScripts || 0) > 0;
   p.canBudget = !p.is_central && (hasPerm('budget') || !!grant);
   p.value = p.canBudget ? fin?.value ?? null : null;
   p.budget = p.canBudget ? fin?.budget ?? null : null;
@@ -522,6 +526,7 @@ async function projectPage(projectId, page, sub) {
   if (page === 'geral') return projectOverview(main, p);
   if (page === 'financas' && p.is_central && hasPerm('finance')) return financePage(main, sub);
   if (page === 'orcamento' && p.canBudget) { main.innerHTML = `<div class="row between wrap-gap"><div><h1 class="h1 pm-title">Orçamento</h1><p class="muted">Soma tudo o que está na tabela e compara com o orçamento geral do projeto.</p></div><div data-who></div></div><div class="budget-wrap" data-b></div>`; budgetWhoChip(main.querySelector('[data-who]'), p); return budgetPage(main.querySelector('[data-b]'), p); }
+  if (page === 'shotlist') return shotlistPage(main, p, projBase(p));
   {
     const scr = scriptMode(p);
     if (['guiao', 'cenas', 'planificacao'].includes(page) || (scr && ['personagens', 'elenco', 'decors', 'storyboard'].includes(page))) return fictionPage(main, p, page === 'elenco' ? 'personagens' : page, sub, projBase(p), onCleanup);

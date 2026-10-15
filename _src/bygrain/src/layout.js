@@ -107,3 +107,25 @@ export function mountLayout(root, { project, key, blocks, title = 'página' }) {
   render();
   return { render };
 }
+
+// ecrã inteiro para um bloco (grelha de secções, shotlist…): ocupa a janela toda. Esc ou "Sair" para voltar.
+// Fica ligado mesmo quando o bloco se redesenha (ex.: ao juntar um plano), por isso é por chave.
+const fsOn = new Set();
+let fsKeyHandler = null;
+export function fullscreenButton(el, key, label = 'Ecrã inteiro') {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'btn ghost fs-btn';
+  const apply = () => {
+    const on = fsOn.has(key);
+    el.classList.toggle('fs-on', on); document.body.classList.toggle('fs-lock', fsOn.size > 0);
+    b.classList.toggle('fs-float', on);
+    b.innerHTML = `${on ? ICON.close : ICON.fit}<span>${on ? 'Sair do ecrã inteiro' : label}</span>`;
+  };
+  b.addEventListener('click', () => { if (fsOn.has(key)) fsOn.delete(key); else fsOn.add(key); apply(); });
+  if (fsKeyHandler) document.removeEventListener('keydown', fsKeyHandler);
+  fsKeyHandler = (e) => { if (e.key === 'Escape' && fsOn.has(key) && !document.querySelector('#modal .modal')) { fsOn.delete(key); apply(); } };
+  document.addEventListener('keydown', fsKeyHandler);
+  apply();
+  return b;
+}
+export function clearFullscreen() { fsOn.clear(); document.body.classList.remove('fs-lock'); }

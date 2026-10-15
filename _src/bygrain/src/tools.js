@@ -46,6 +46,8 @@ export async function tableTemplate(p, tpl) {
 }
 
 // ---------- tabela ----------
+import { exportPdf } from './pdf.js';
+
 export function tableTool(main, p, tool) {
   const data = { columns: [], rows: [], ...(tool.data || {}) };
   const save = debounce(async () => {
@@ -64,8 +66,13 @@ export function tableTool(main, p, tool) {
       <tbody>${data.rows.map((r) => `<tr data-row="${r.id}">${data.columns.map((c) => `<td class="t-${c.type}">${cell(r, c)}</td>`).join('')}<td><button type="button" class="icon-btn sm" data-rmrow aria-label="Apagar linha">${ICON.close}</button></td></tr>`).join('')}</tbody></table>
       <button type="button" class="link-btn" data-addrow>${ICON.plus} Linha</button>`;
   }
-  main.innerHTML = `<div class="tbl-wrap" data-tbl></div>`;
+  main.innerHTML = `<div class="row end"><button type="button" class="btn ghost" data-pdf>${ICON.open} Exportar PDF</button></div><div class="tbl-wrap" data-tbl></div>`;
   draw();
+  main.querySelector('[data-pdf]').addEventListener('click', () => exportPdf({
+    title: tool.title, subtitle: p.name, landscape: data.columns.length > 5,
+    columns: data.columns.map((c) => ({ label: c.name, align: c.type === 'number' ? 'right' : c.type === 'check' ? 'center' : undefined })),
+    groups: [{ title: null, rows: data.rows.map((r) => data.columns.map((c) => { const v = r.cells?.[c.id]; return c.type === 'check' ? (v ? '✓' : '') : c.type === 'date' && v ? new Date(v + 'T00:00:00').toLocaleDateString('pt-PT') : v ?? ''; })) }],
+  }));
   main.addEventListener('input', (e) => {
     const inp = e.target.closest('[data-c]'); if (!inp) return;
     const r = data.rows.find((x) => x.id === inp.closest('[data-row]').dataset.row);

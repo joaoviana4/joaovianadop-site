@@ -1,4 +1,5 @@
 import { sb, esc, toast, modal, confirmBox, ICON } from './lib.js';
+import { exportPdf } from './pdf.js';
 
 // Orçamento do projeto, como no Studio: tabela com secções, colunas de texto, valor (€) e número,
 // subtotais por secção, comparação com o orçamento geral, modelos por tipo de projeto, importar e exportar Excel.
@@ -140,6 +141,7 @@ export async function budgetPage(main, p) {
         <label class="sel"><span class="vh">Modelo</span><select data-tpl><option value="">Aplicar modelo…</option>${TPL_NAMES.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label>
         <button type="button" class="btn ghost" data-import>${ICON.open} Importar Excel ou CSV</button>
         <button type="button" class="btn ghost" data-export>${ICON.copy} Exportar para Excel</button>
+        <button type="button" class="btn ghost" data-pdf>${ICON.open} Exportar PDF</button>
         ${p._store ? '' : `<button type="button" class="btn ghost" data-hist>${ICON.refresh} Versões anteriores</button>`}
         ${undo ? `<button type="button" class="link-btn" data-undo>Desfazer: ${esc(undo.label)}</button>` : ''}
       </div>
@@ -178,6 +180,21 @@ export async function budgetPage(main, p) {
     main.querySelector('[data-import]').addEventListener('click', pickImport);
     main.querySelector('[data-export]').addEventListener('click', () => exportXlsx(b, total, p.name));
     main.querySelector('[data-hist]')?.addEventListener('click', history);
+    main.querySelector('[data-pdf]').addEventListener('click', () => {
+      const { tot, sec } = sums(b); const groups = []; let cur = { title: null, rows: [] };
+      b.rows.forEach((r) => {
+        if (r.kind === 'section') { if (cur.title !== null || cur.rows.length) groups.push(cur); cur = { title: r.title, color: '#1E2AD4', right: b.main && sec[r.id]?.[b.main] != null ? fmt(b.cols.find((c) => c.id === b.main), sec[r.id][b.main]) : '', rows: [] }; return; }
+        cur.rows.push(b.cols.map((c) => (c.type === 'text' ? r.cells?.[c.id] ?? '' : fmt(c, num(r.cells?.[c.id])))));
+      });
+      groups.push(cur);
+      const mainCol = b.cols.find((c) => c.id === b.main); const t = (b.main && tot[b.main]) || 0;
+      exportPdf({
+        title: `Orçamento — ${p.name}`, subtitle: new Date().toLocaleDateString('pt-PT'),
+        columns: b.cols.map((c) => ({ label: c.name, align: c.type === 'text' ? undefined : 'right' })),
+        groups: groups.filter((g) => g.title !== null || g.rows.length),
+        footer: [['Total da tabela', mainCol ? fmt(mainCol, t) : ''], ...(total != null ? [[p._capLabel || 'Orçamento geral', eur.format(total)], [total - t < 0 ? 'Passa' : 'Sobram', eur.format(Math.abs(total - t))]] : [])],
+      });
+    });
     const tbody = main.querySelector('tbody');
     tbody.addEventListener('input', (e) => {
       const tr = e.target.closest('[data-row]'); const r = b.rows.find((x) => x.id === tr.dataset.row);
