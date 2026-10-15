@@ -456,7 +456,7 @@ async function storyboard(main, p, f, base) {
       <div class="sb-tools">${moveOpts(y)}<button type="button" class="icon-btn sm" data-delshot="${y.id}" title="Apagar plano" aria-label="Apagar plano">${ICON.trash}</button></div>
     </div>`;
   const sec = (sid, title, color, shots, href, sub) => `<section class="sb-sec" style="--sc:${color}" data-drop="${sid}">
-      <div class="sb-h"><i class="seg-dot"></i>${href ? `<a href="${href}"><strong>${esc(title)}</strong></a>` : `<strong>${esc(title)}</strong>`}${sub ? `<span class="muted small">${esc(sub)}</span>` : ''}<span class="muted small">· ${shots.length} ${shots.length === 1 ? 'plano' : 'planos'}</span></div>
+      <div class="sb-h"><i class="seg-dot"></i>${href ? `<a href="${href}"><strong>${esc(title)}</strong></a>` : `<strong>${esc(title)}</strong>`}${sub ? `<span class="muted small">${esc(sub)}</span>` : ''}<span class="muted small">· ${shots.length} ${shots.length === 1 ? 'plano' : 'planos'}</span>${sid ? `<button type="button" class="icon-btn sm sb-secdel" data-delsec="${sid}" title="Apagar secção" aria-label="Apagar a secção ${esc(title)}">${ICON.trash}</button>` : ''}</div>
       ${shots.length ? `<div class="sb-grid">${shots.map(card).join('')}</div>` : `<p class="sb-empty muted small">Arrasta planos para aqui${href ? ` ou <a href="${href}">junta-os na secção</a>` : ''}.</p>`}
     </section>`;
   const loose = f.shots.filter((y) => !y.scene_id || !f.scenes.some((s2) => s2.id === y.scene_id));
@@ -486,6 +486,10 @@ async function storyboard(main, p, f, base) {
     z.addEventListener('drop', (e) => { const id = e.dataTransfer.getData('text/x-shot'); z.classList.remove('drop'); if (!id) return; e.preventDefault(); const to = z.dataset.drop || null; const sh = f.shots.find((x) => x.id === id); if ((sh?.scene_id || null) !== to) moveTo(id, to); });
   });
   main.querySelectorAll('[data-move]').forEach((sel) => sel.addEventListener('change', () => { if (!sel.value) return; moveTo(sel.dataset.move, sel.value === '__none' ? null : sel.value); }));
+  main.querySelectorAll('[data-delsec]').forEach((b) => b.addEventListener('click', async () => {
+    const sc = f.scenes.find((x) => x.id === b.dataset.delsec);
+    if (sc && (await deleteSection(sc, f))) redraw();
+  }));
   main.querySelectorAll('[data-delshot]').forEach((b) => b.addEventListener('click', async () => {
     const sh = f.shots.find((x) => x.id === b.dataset.delshot);
     if (!(await confirmBox(`Apagar o plano "${sh.code || sh.description || 'sem nome'}"? Sai também da shotlist e da secção.`, 'Apagar plano'))) return;
