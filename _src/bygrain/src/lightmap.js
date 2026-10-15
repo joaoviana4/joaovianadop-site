@@ -128,8 +128,8 @@ export function lightmapTool(main, p, tool, opts = {}) {
       const gid = `lg-${tool.id}-${it.id}`;
       defs.push(`<radialGradient id="${gid}" cx="0" cy="0" r="${R}" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="${L.color}" stop-opacity="${0.15 + 0.4 * L.level}"/><stop offset="0.6" stop-color="${L.color}" stop-opacity="${0.06 + 0.15 * L.level}"/><stop offset="1" stop-color="${L.color}" stop-opacity="0"/></radialGradient>`);
       const a = rad(Math.min(L.beam, 359) / 2);
-      const beam = L.beam >= 300 ? `<circle r="${R * 0.75}" fill="url(#${gid})"/>`
-        : `<path d="M0 0 L${R * Math.cos(-a)} ${R * Math.sin(-a)} A${R} ${R} 0 ${L.beam > 180 ? 1 : 0} 1 ${R * Math.cos(a)} ${R * Math.sin(a)} Z" fill="url(#${gid})" stroke="${L.color}" stroke-opacity="0.35" stroke-width="0.015"/>`;
+      const beam = L.beam >= 300 ? `<circle r="${R * 0.75}" fill="url(#${gid})" pointer-events="none"/>`
+        : `<path d="M0 0 L${R * Math.cos(-a)} ${R * Math.sin(-a)} A${R} ${R} 0 ${L.beam > 180 ? 1 : 0} 1 ${R * Math.cos(a)} ${R * Math.sin(a)} Z" fill="url(#${gid})" stroke="${L.color}" stroke-opacity="0.35" stroke-width="0.015" pointer-events="none"/>`;
       const t = L.s.type || it.type || '';
       let body;
       const stroke = off ? '#FF6B5E' : '#0B0B14';
@@ -145,15 +145,15 @@ export function lightmapTool(main, p, tool, opts = {}) {
       if (mk === 'grid') modSvg = `<path d="M0.62 ${-ms / 2} V${ms / 2}" stroke="#0B0B14" stroke-width="0.06"/><path d="M0.25 -0.14 L0.62 ${-ms / 2} L0.62 ${ms / 2} L0.25 0.14 Z" fill="#F4F1E8" fill-opacity="0.75"/>`;
       if (mk === 'fresnel') modSvg = '<rect x="0.26" y="-0.17" width="0.07" height="0.34" fill="#86B6FF" stroke="#0B0B14" stroke-width="0.015"/>';
       const tag = `${lab}${it.intensity != null ? ` · ${Math.round(+it.intensity)}%` : ''}`;
-      return `${wrap(`${beam}${modSvg}${body}`)}${T(it.x, it.y - 0.5, 0.26, tag)}${st.view.k > 55 && L.g ? T(it.x, it.y + 0.62, 0.17, `${L.g.name}${L.k ? ` · ${L.k}K` : ''}`, { op: 0.75, w: 500 }) : ''}${off ? T(it.x, it.y + 0.62, 0.17, 'fora da lista', { fill: '#FF6B5E' }) : ''}`;
+      return `${wrap(`${beam}<circle r="0.42" fill="#000" fill-opacity="0"/>${modSvg}${body}`)}${T(it.x, it.y - 0.5, 0.26, tag)}${st.view.k > 55 && L.g ? T(it.x, it.y + 0.62, 0.17, `${L.g.name}${L.k ? ` · ${L.k}K` : ''}`, { op: 0.75, w: 500 }) : ''}${off ? T(it.x, it.y + 0.62, 0.17, 'fora da lista', { fill: '#FF6B5E' }) : ''}`;
     }
     if (it.kind === 'camera') {
       const cam = G(it.gear_id); const lens = G(it.lens_id);
       const sw = cam?.specs?.sensor_w || SENSORS[it.sensor] || 24.89; const sq = lens?.specs?.squeeze || 1;
       const half = Math.atan((sw * sq) / (2 * (+it.focal || 35))); const Lr = 5;
-      return `${wrap(`<path d="M0 0 L${Lr * Math.cos(-half)} ${Lr * Math.sin(-half)} M0 0 L${Lr * Math.cos(half)} ${Lr * Math.sin(half)}" stroke="#F4F1E8" stroke-width="0.025" stroke-dasharray="0.12 0.08" fill="none"/>
-        <path d="M0 0 L${Lr * Math.cos(-half)} ${Lr * Math.sin(-half)} L${Lr * Math.cos(half)} ${Lr * Math.sin(half)} Z" fill="#F4F1E8" fill-opacity="0.05"/>
-        <rect x="-0.44" y="-0.19" width="0.44" height="0.38" rx="0.05" fill="#1E2AD4" stroke="${cam ? '#F4F1E8' : '#FF6B5E'}" stroke-width="0.03"/><path d="M0 -0.1 L0.2 -0.19 L0.2 0.19 L0 0.1 Z" fill="#1E2AD4" stroke="#F4F1E8" stroke-width="0.03"/>`)}
+      return `${wrap(`<path d="M0 0 L${Lr * Math.cos(-half)} ${Lr * Math.sin(-half)} M0 0 L${Lr * Math.cos(half)} ${Lr * Math.sin(half)}" stroke="#F4F1E8" stroke-width="0.025" stroke-dasharray="0.12 0.08" fill="none" pointer-events="none"/>
+        <path d="M0 0 L${Lr * Math.cos(-half)} ${Lr * Math.sin(-half)} L${Lr * Math.cos(half)} ${Lr * Math.sin(half)} Z" fill="#F4F1E8" fill-opacity="0.05" pointer-events="none"/>
+        <circle cx="-0.1" r="0.42" fill="#000" fill-opacity="0"/><rect x="-0.44" y="-0.19" width="0.44" height="0.38" rx="0.05" fill="#1E2AD4" stroke="${cam ? '#F4F1E8' : '#FF6B5E'}" stroke-width="0.03"/><path d="M0 -0.1 L0.2 -0.19 L0.2 0.19 L0 0.1 Z" fill="#1E2AD4" stroke="#F4F1E8" stroke-width="0.03"/>`)}
         ${T(it.x, it.y - 0.45, 0.27, `${lab} · ${it.focal || '?'}mm${sq > 1 ? ' ana' : ''}`, { w: 700 })}${st.view.k > 55 && cam ? T(it.x, it.y + 0.55, 0.17, cam.name, { op: 0.75, w: 500 }) : ''}`;
     }
     if (it.kind === 'mod') {
@@ -169,9 +169,9 @@ export function lightmapTool(main, p, tool, opts = {}) {
     }
     if (it.kind === 'natural') {
       const col = kColor(+it.cct || 5600); const lev = clamp(inten(it), 0, 100) / 100;
-      if (it.type === 'sol') return `${wrap(`<circle r="0.32" fill="${col}"/><g stroke="${col}" stroke-width="0.04">${[0, 1, 2, 3, 4, 5, 6, 7].map((i) => `<line x1="${0.42 * Math.cos(i * Math.PI / 4)}" y1="${0.42 * Math.sin(i * Math.PI / 4)}" x2="${0.58 * Math.cos(i * Math.PI / 4)}" y2="${0.58 * Math.sin(i * Math.PI / 4)}"/>`).join('')}</g>${[-0.6, 0, 0.6].map((y) => `<path d="M0.8 ${y} H3.4 M3.15 ${y - 0.16} L3.4 ${y} L3.15 ${y + 0.16}" stroke="${col}" stroke-opacity="${0.35 + 0.5 * lev}" stroke-width="0.05" fill="none"/>`).join('')}`)}${T(it.x, it.y - 0.75, 0.24, `${lab} · Sol`)}`;
+      if (it.type === 'sol') return `${wrap(`<circle r="0.32" fill="${col}"/><g stroke="${col}" stroke-width="0.04">${[0, 1, 2, 3, 4, 5, 6, 7].map((i) => `<line x1="${0.42 * Math.cos(i * Math.PI / 4)}" y1="${0.42 * Math.sin(i * Math.PI / 4)}" x2="${0.58 * Math.cos(i * Math.PI / 4)}" y2="${0.58 * Math.sin(i * Math.PI / 4)}"/>`).join('')}</g>${[-0.6, 0, 0.6].map((y) => `<path d="M0.8 ${y} H3.4 M3.15 ${y - 0.16} L3.4 ${y} L3.15 ${y + 0.16}" stroke="${col}" stroke-opacity="${0.35 + 0.5 * lev}" stroke-width="0.05" fill="none" pointer-events="none"/>`).join('')}`)}${T(it.x, it.y - 0.75, 0.24, `${lab} · Sol`)}`;
       const w = it.type === 'janela' ? 1.4 : 2.5;
-      return `${wrap(`<rect x="0" y="${-w / 2}" width="${3.5}" height="${w}" fill="${col}" fill-opacity="${0.06 + 0.16 * lev}"/><rect x="-0.08" y="${-w / 2}" width="0.16" height="${w}" fill="${col}" fill-opacity="0.9"/>`)}${T(it.x, it.y - w / 2 - 0.15, 0.22, `${lab} · ${NATURAL[it.type] || ''}`)}`;
+      return `${wrap(`<rect x="0" y="${-w / 2}" width="${3.5}" height="${w}" fill="${col}" fill-opacity="${0.06 + 0.16 * lev}" pointer-events="none"/><rect x="-0.25" y="${-w / 2}" width="0.5" height="${w}" fill="#000" fill-opacity="0"/><rect x="-0.08" y="${-w / 2}" width="0.16" height="${w}" fill="${col}" fill-opacity="0.9"/>`)}${T(it.x, it.y - w / 2 - 0.15, 0.22, `${lab} · ${NATURAL[it.type] || ''}`)}`;
     }
     if (it.kind === 'person') {
       return `${wrap(`<circle r="0.26" fill="#E5579B" stroke="#0B0B14" stroke-width="0.03"/><path d="M0.18 -0.1 L0.34 0 L0.18 0.1" fill="#E5579B"/>`)}${T(it.x, it.y + 0.55, 0.24, it.name || 'Pessoa', { w: 500 })}`;
