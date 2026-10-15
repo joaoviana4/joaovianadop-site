@@ -7,6 +7,7 @@ import { mountTasks, loadPeople } from './tasks.js';
 import { financePage } from './finance.js';
 import { TOOL_KINDS, tableTool, timelineTool, tableTemplate } from './tools.js';
 import { lightmapTool, newLightmapData } from './lightmap.js';
+import { gearPage } from './gear.js';
 import { propsPage } from './props.js';
 import { budgetPage, budgetTool } from './budget.js';
 import { mountTaskCenter } from './taskcenter.js';
@@ -537,8 +538,8 @@ async function toolPage(projectId, toolId) {
   if (tool.kind === 'media') mediaTool(box, p, tool);
   if (tool.kind === 'callsheet') callsheetTool(box, p, tool);
   if (tool.kind === 'lightmap') {
-    const { data: chars } = p.kind === 'ficcao' ? await sb.from('characters').select('name').eq('project_id', p.id).order('position') : { data: [] };
-    const lm = lightmapTool(box, p, tool, { characters: (chars || []).map((c) => c.name) });
+    const { data: chars } = await sb.from('characters').select('name, actor').eq('project_id', p.id).order('position');
+    const lm = lightmapTool(box, p, tool, { characters: (chars || []).map((c) => c.name), base: projBase(p) });
     onCleanup(() => lm.destroy());
   }
 }
@@ -584,7 +585,7 @@ async function projectPage(projectId, page, sub) {
   const titles = { tarefas: 'Tarefas', equipa: p.is_central ? 'Equipa' : 'Equipa e convites', detalhes: 'Detalhes' };
   joinProject(p.id);
   // páginas de trabalho: só uma janela edita de cada vez (as outras ficam só a ver)
-  if (['orcamento', 'seguimento', 'decors', 'elenco', 'personagens', 'aderecos', 'cenas', 'guiao', 'planificacao', 'detalhes', 'shotlist', 'storyboard', 'financas', 'plano'].includes(page)) {
+  if (['orcamento', 'seguimento', 'decors', 'elenco', 'personagens', 'aderecos', 'cenas', 'guiao', 'planificacao', 'detalhes', 'shotlist', 'storyboard', 'financas', 'plano', 'equipamento'].includes(page)) {
     const lk = lockPage(`${p.id}:${page}:${sub || ''}`, main, { reopen: () => route() });
     onCleanup(() => lk.destroy());
   }
@@ -592,6 +593,7 @@ async function projectPage(projectId, page, sub) {
   if (page === 'financas' && p.is_central && hasPerm('finance')) return financePage(main, sub);
   if (page === 'orcamento' && p.canBudget) { main.innerHTML = `<div class="row between wrap-gap"><div><h1 class="h1 pm-title">Orçamento</h1><p class="muted">Soma tudo o que está na tabela e compara com o orçamento geral do projeto.</p></div><div data-who></div></div><div class="budget-wrap" data-b></div>`; budgetWhoChip(main.querySelector('[data-who]'), p); return budgetPage(main.querySelector('[data-b]'), p); }
   if (page === 'shotlist') return shotlistPage(main, p, projBase(p));
+  if (page === 'equipamento' && !p.is_central) return gearPage(main, p, projBase(p));
   if (page === 'plano' && sub) return shotPage(main, p, sub, projBase(p), onCleanup);
   {
     const scr = scriptMode(p);

@@ -15,20 +15,21 @@ export const MODULES = {
   storyboard: { label: 'Storyboard', icon: 'image', desc: 'Todos os planos do projeto, por ordem.' },
   shotlist: { label: 'Shotlist', icon: 'list', desc: 'Todos os planos numa tabela rápida, em grupos coloridos, com notas de direção e técnicas. Exporta para PDF.' },
   planificacao: { label: 'Planificação', icon: 'board', desc: 'Lista de planos para a rodagem.' },
+  equipamento: { label: 'Equipamento', icon: 'camera', desc: 'Câmaras, objetivas, luzes, frames, maquinaria e elétrico do projeto, com especificações, quantidades e rental. Os mapas de luz usam esta lista.' },
   aderecos: { label: 'Adereços', icon: 'prop', desc: 'Lista e grelha de adereços com fotos, estado, custo, fornecedor e pacotes de aluguer.' },
   tarefas: { label: 'Tarefas', icon: 'task', desc: 'Tarefas do projeto, por pessoa e departamento.' },
 };
 // ordem no menu
-export const ORDER = ['orcamento', 'seguimento', 'guiao', 'cenas', 'elenco', 'decors', 'storyboard', 'shotlist', 'planificacao', 'aderecos', 'tarefas'];
+export const ORDER = ['orcamento', 'seguimento', 'guiao', 'cenas', 'elenco', 'decors', 'storyboard', 'shotlist', 'planificacao', 'equipamento', 'aderecos', 'tarefas'];
 // o seguimento e as cenas usam a mesma lista de secções/cenas: um projeto usa um ou outro
 const SCRIPT = ['guiao', 'cenas', 'planificacao'];
 
 export const TEMPLATES = {
-  videoclipe: ['orcamento', 'seguimento', 'elenco', 'decors', 'storyboard', 'shotlist', 'aderecos', 'tarefas'],
-  ficcao: ['orcamento', 'guiao', 'cenas', 'elenco', 'decors', 'storyboard', 'planificacao', 'aderecos', 'tarefas'],
-  campanha: ['orcamento', 'seguimento', 'elenco', 'decors', 'storyboard', 'shotlist', 'aderecos', 'tarefas'],
-  branded: ['orcamento', 'seguimento', 'decors', 'shotlist', 'aderecos', 'tarefas'],
-  documentario: ['orcamento', 'elenco', 'decors', 'tarefas'],
+  videoclipe: ['orcamento', 'seguimento', 'elenco', 'decors', 'storyboard', 'shotlist', 'equipamento', 'aderecos', 'tarefas'],
+  ficcao: ['orcamento', 'guiao', 'cenas', 'elenco', 'decors', 'storyboard', 'planificacao', 'equipamento', 'aderecos', 'tarefas'],
+  campanha: ['orcamento', 'seguimento', 'elenco', 'decors', 'storyboard', 'shotlist', 'equipamento', 'aderecos', 'tarefas'],
+  branded: ['orcamento', 'seguimento', 'decors', 'shotlist', 'equipamento', 'aderecos', 'tarefas'],
+  documentario: ['orcamento', 'elenco', 'decors', 'equipamento', 'tarefas'],
   default: ['orcamento', 'tarefas'],
 };
 
@@ -70,9 +71,9 @@ export async function ensureModules(p, keys, { user = true, quiet = false } = {}
 export async function autoModules(p) {
   if (p.is_central) return;
   const c = async (t, extra) => { let q = sb.from(t).select('id', { count: 'exact', head: true }).eq('project_id', p.id); if (extra) q = extra(q); const { count } = await q; return count || 0; };
-  const [loc, ch, sh, pr, sc] = await Promise.all([c('locations'), c('characters'), c('shots'), c('props', (q) => q.eq('removed', false)), c('scenes')]);
+  const [loc, ch, sh, pr, sc, ge] = await Promise.all([c('locations'), c('characters'), c('shots'), c('props', (q) => q.eq('removed', false)), c('scenes'), c('gear')]);
   const want = [];
-  if (loc) want.push('decors'); if (ch) want.push('elenco'); if (sh) want.push('storyboard', ...(scriptMode(p) ? [] : ['shotlist'])); if (pr) want.push('aderecos');
+  if (loc) want.push('decors'); if (ch) want.push('elenco'); if (sh) want.push('storyboard', ...(scriptMode(p) ? [] : ['shotlist'])); if (pr) want.push('aderecos'); if (ge) want.push('equipamento');
   if (sc && !hasMod(p, 'seguimento') && !hasMod(p, 'cenas')) want.push(scriptMode(p) ? 'cenas' : 'seguimento');
   if (want.length) await ensureModules(p, want, { user: false });
 }
