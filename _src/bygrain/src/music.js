@@ -39,7 +39,7 @@ export function layout(scenes, duration) {
   const out = t.map((x, i) => {
     const nxt = t.filter((y) => y.a != null && x.a != null && y.a > x.a).sort((p, q) => p.a - q.a)[0];
     const b = x.b != null ? x.b : nxt ? nxt.a : total;
-    return { ...x, b, col: SEG_COLORS[i % SEG_COLORS.length], style: scaled && b > x.a ? `left:${(x.a / total * 100).toFixed(2)}%;width:${((b - x.a) / total * 100).toFixed(2)}%` : '' };
+    return { ...x, b, col: x.s.color || SEG_COLORS[i % SEG_COLORS.length], style: scaled && b > x.a ? `left:${(x.a / total * 100).toFixed(2)}%;width:${((b - x.a) / total * 100).toFixed(2)}%` : '' };
   });
   return { items: out, total, scaled: scaled && out.every((x) => x.style) };
 }
@@ -157,7 +157,7 @@ async function musicPage(main, p, f, sub, base, cleanup) {
       <a class="sc-h" href="${href}"><strong>${esc(x.s.heading || 'Sem nome')}</strong><small>${x.a != null ? `${fmtT(x.a)}${x.b != null ? '–' + fmtT(x.b) : ''} · ` : ''}${sh.length} ${sh.length === 1 ? 'plano' : 'planos'}</small></a>
       ${x.s.notes ? `<a class="sc-desc" href="${href}"><b>Descrição:</b>${x.s.notes.split('\n').filter((l) => l.trim()).map((l) => `<span>${esc(l)}</span>`).join('')}</a>` : `<a class="sc-desc empty" href="${href}">Sem descrição. Abre para escrever a ideia desta secção.</a>`}
       ${(x.s.refs || []).filter((r) => shotUrls[r.path]).map((r) => `<a href="${href}" class="sc-img" title="Referência"><img src="${esc(shotUrls[r.path])}" alt="Referência" loading="lazy"></a>`).join('')}
-      ${sh.map((y) => `<a href="${base}/plano/${y.id}" class="sc-img sc-shot" title="${esc(y.description || y.code || 'Plano')}">${shotUrls[y.image_path] ? `<img src="${esc(shotUrls[y.image_path])}" alt="${esc(y.code)}" loading="lazy">` : `<span>${esc(y.code || y.description || 'Plano')}</span>`}</a>`).join('')}
+      ${sh.map((y) => `<span class="sc-wrap"><a href="${base}/plano/${y.id}" class="sc-img sc-shot" title="${esc(y.description || y.code || 'Plano')}">${shotUrls[y.image_path] ? `<img src="${esc(shotUrls[y.image_path])}" alt="${esc(y.code)}" loading="lazy">` : `<span>${esc(y.code || y.description || 'Plano')}</span>`}</a><button type="button" class="icon-btn sm sc-shotdel" data-delshot="${y.id}" title="Apagar plano" aria-label="Apagar plano">${ICON.trash}</button></span>`).join('')}
     </div>`; }).join('')}</div>`;
   const draw = () => {
     const L = layout(f.scenes, music.duration);
@@ -201,6 +201,12 @@ async function musicPage(main, p, f, sub, base, cleanup) {
       { id: 'track', label: 'Barra das secções', pos: 'full' }, { id: 'table', label: 'Secções (grelha ou lista)', pos: 'full' }, { id: 'add', label: 'Nova secção', pos: 'full' },
     ] });
     const tb = main.querySelector('[data-blk="table"]'); const vb = tb?.querySelector('.seg-viewbar'); if (vb) vb.prepend(fullscreenButton(tb, 'seg-' + p.id));
+    main.querySelectorAll('[data-delshot]').forEach((b) => b.addEventListener('click', async (e) => {
+      e.preventDefault(); const sh = f.shots.find((x) => x.id === b.dataset.delshot); if (!sh) return;
+      if (!(await confirmBox(`Apagar o plano "${sh.code || sh.description || 'sem nome'}"?`, 'Apagar plano'))) return;
+      const { error } = await sb.from('shots').delete().eq('id', sh.id); if (error) return toast(error.message);
+      f.shots.splice(f.shots.indexOf(sh), 1); draw();
+    }));
     main.querySelectorAll('[data-delsec]').forEach((b) => b.addEventListener('click', async (e) => { e.preventDefault(); e.stopPropagation(); const sc = f.scenes.find((x) => x.id === b.dataset.delsec); if (sc && (await deleteSection(sc, f))) draw(); }));
     main.querySelectorAll('[data-segview]').forEach((b) => b.addEventListener('click', () => { view = b.dataset.segview; try { localStorage.setItem('bg-seg-view', view); } catch { /* sem armazenamento */ } draw(); }));
     main.querySelector('[data-dur]').addEventListener('input', (e) => { music.duration = e.target.value.trim(); saveMusic(); });
@@ -444,28 +450,53 @@ async function entityPage(main, p, f, kind, id, base, cleanup) {
 async function storyboard(main, p, f, base) {
   const urls = await signedUrls(f.shots.map((x) => x.image_path).filter(Boolean));
   const L = layout(f.scenes, p.music?.duration);
-  const card = (y) => `<a class="sb-shot" href="${base}/plano/${y.id}" data-shot="${y.id}"><span class="sb-img">${urls[y.image_path] ? `<img src="${esc(urls[y.image_path])}" alt="" loading="lazy">` : `${ICON.image}<small>Juntar imagem</small>`}</span><span class="sb-cap">${y.code ? `<b>${esc(y.code)}</b>` : ''}${esc([y.framing, y.movement, y.direction_notes].filter(Boolean).join(' · '))}</span>${y.description ? `<span class="sb-desc">${esc(y.description)}</span>` : ''}</a>`;
-  const sec = (title, color, shots, href, sub) => `<section class="sb-sec" style="--sc:${color}">
+  const moveOpts = (y) => `<select class="sb-move" data-move="${y.id}" aria-label="Mover para outra secção" title="Mover para outra secção"><option value="">Mover para…</option>${f.scenes.filter((s2) => s2.id !== y.scene_id).map((s2) => `<option value="${s2.id}">${esc(s2.heading || 'Sem nome')}</option>`).join('')}${y.scene_id ? '<option value="__none">Sem secção</option>' : ''}</select>`;
+  const card = (y) => `<div class="sb-card" draggable="true" data-shot="${y.id}">
+      <a class="sb-shot" href="${base}/plano/${y.id}" draggable="false"><span class="sb-img">${urls[y.image_path] ? `<img src="${esc(urls[y.image_path])}" alt="" loading="lazy" draggable="false">` : `${ICON.image}<small>Sem imagem</small>`}</span><span class="sb-cap">${y.code ? `<b>${esc(y.code)}</b>` : ''}${esc([y.framing, y.movement, y.direction_notes].filter(Boolean).join(' · '))}</span>${y.description ? `<span class="sb-desc">${esc(y.description)}</span>` : ''}</a>
+      <div class="sb-tools">${moveOpts(y)}<button type="button" class="icon-btn sm" data-delshot="${y.id}" title="Apagar plano" aria-label="Apagar plano">${ICON.trash}</button></div>
+    </div>`;
+  const sec = (sid, title, color, shots, href, sub) => `<section class="sb-sec" style="--sc:${color}" data-drop="${sid}">
       <div class="sb-h"><i class="seg-dot"></i>${href ? `<a href="${href}"><strong>${esc(title)}</strong></a>` : `<strong>${esc(title)}</strong>`}${sub ? `<span class="muted small">${esc(sub)}</span>` : ''}<span class="muted small">· ${shots.length} ${shots.length === 1 ? 'plano' : 'planos'}</span></div>
-      ${shots.length ? `<div class="sb-grid">${shots.map(card).join('')}</div>` : (href ? `<a class="link-btn small" href="${href}">${ICON.plus} Juntar planos</a>` : '')}
+      ${shots.length ? `<div class="sb-grid">${shots.map(card).join('')}</div>` : `<p class="sb-empty muted small">Arrasta planos para aqui${href ? ` ou <a href="${href}">junta-os na secção</a>` : ''}.</p>`}
     </section>`;
-  const loose = f.shots.filter((y) => !y.scene_id);
-  const groups = [...f.groups.map((g) => ({ g, shots: loose.filter((y) => y.group_id === g.id) })), { g: null, shots: loose.filter((y) => !y.group_id || !f.groups.some((g) => g.id === y.group_id)) }].filter((x) => x.shots.length);
-  main.innerHTML = `<div class="row between wrap-gap"><div><h1 class="h1 pm-title">Storyboard</h1><p class="muted">Todos os planos, pela ordem da música e depois pelos grupos da shotlist. Carrega num plano para o abrir. Para juntar uma imagem, cola com Ctrl+V com o rato por cima do plano.</p></div><span class="muted small">${f.shots.length} ${f.shots.length === 1 ? 'plano' : 'planos'}</span></div>
+  const loose = f.shots.filter((y) => !y.scene_id || !f.scenes.some((s2) => s2.id === y.scene_id));
+  const byPos = (a, b) => (a.position || 0) - (b.position || 0);
+  main.innerHTML = `<div class="row between wrap-gap"><div><h1 class="h1 pm-title">Storyboard</h1><p class="muted">Todos os planos, pela ordem da música. Carrega num plano para o abrir; arrasta-o para outra secção para o mudar. Para juntar uma imagem, cola com Ctrl+V com o rato por cima do plano.</p></div><span class="muted small">${f.shots.length} ${f.shots.length === 1 ? 'plano' : 'planos'}</span></div>
     ${f.scenes.length ? trackHtml(f.scenes, p.music?.duration, { base, f, compact: true }) : ''}
-    ${L.items.map((x) => sec(x.s.heading || 'Sem nome', x.col, f.shots.filter((y) => y.scene_id === x.s.id), `${base}/seguimento/${x.s.id}`, x.a != null ? fmtT(x.a) + (x.b != null ? '–' + fmtT(x.b) : '') : '')).join('')}
-    ${groups.length ? `<h2 class="h3 sb-gtitle">Da shotlist, ainda sem secção</h2>${groups.map(({ g, shots }) => sec(g ? g.name || 'Grupo sem nome' : 'Sem grupo', g?.color || '#8A8A99', shots, null, g?.note || '')).join('')}` : ''}
+    ${L.items.map((x) => sec(x.s.id, x.s.heading || 'Sem nome', x.col, f.shots.filter((y) => y.scene_id === x.s.id).sort(byPos), `${base}/seguimento/${x.s.id}`, x.a != null ? fmtT(x.a) + (x.b != null ? '–' + fmtT(x.b) : '') : '')).join('')}
+    ${loose.length ? sec('', 'Sem secção', '#8A8A99', loose.sort(byPos), null, 'da shotlist, ainda por arrumar') : ''}
     ${!f.scenes.length && !f.shots.length ? `<div class="empty-box"><p>Ainda não há planos.</p><p class="muted small">Junta-os numa secção do seguimento ou na shotlist.</p><a class="btn primary" href="${base}/seguimento">Abrir o seguimento</a></div>` : ''}`;
-  let hover = null;
-  const setImg = async (sh, file) => {
-    try { toast('A enviar a imagem…'); const up = await uploadImage(p.id, 'storyboard', file); const { error } = await sb.from('shots').update({ image_path: up.path, updated_at: new Date().toISOString() }).eq('id', sh.id); if (error) return toast(error.message); sh.image_path = up.path; storyboard(main, p, f, base); } catch (e) { toast(e.message || String(e)); }
+  const redraw = () => storyboard(main, p, f, base);
+  const moveTo = async (id, to) => {
+    const sh = f.shots.find((x) => x.id === id); if (!sh) return;
+    const pos = Math.max(0, ...f.shots.filter((y) => (y.scene_id || null) === to).map((y) => y.position || 0)) + 1;
+    const { error } = await sb.from('shots').update({ scene_id: to, position: pos, updated_at: new Date().toISOString() }).eq('id', id);
+    if (error) return toast(error.message);
+    sh.scene_id = to; sh.position = pos; toast(to ? `Movido para "${f.scenes.find((s2) => s2.id === to)?.heading || 'secção'}".` : 'Movido para "Sem secção".'); redraw();
   };
-  main.querySelectorAll('[data-shot]').forEach((b) => {
-    b.addEventListener('pointerenter', () => (hover = b.dataset.shot));
-
+  let hover = null;
+  main.querySelectorAll('.sb-card').forEach((c) => {
+    c.addEventListener('pointerenter', () => (hover = c.dataset.shot));
+    c.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/x-shot', c.dataset.shot); e.dataTransfer.effectAllowed = 'move'; c.classList.add('dragging'); });
+    c.addEventListener('dragend', () => c.classList.remove('dragging'));
   });
+  main.querySelectorAll('[data-drop]').forEach((z) => {
+    z.addEventListener('dragover', (e) => { if (![...e.dataTransfer.types].includes('text/x-shot')) return; e.preventDefault(); z.classList.add('drop'); });
+    z.addEventListener('dragleave', (e) => { if (!z.contains(e.relatedTarget)) z.classList.remove('drop'); });
+    z.addEventListener('drop', (e) => { const id = e.dataTransfer.getData('text/x-shot'); z.classList.remove('drop'); if (!id) return; e.preventDefault(); const to = z.dataset.drop || null; const sh = f.shots.find((x) => x.id === id); if ((sh?.scene_id || null) !== to) moveTo(id, to); });
+  });
+  main.querySelectorAll('[data-move]').forEach((sel) => sel.addEventListener('change', () => { if (!sel.value) return; moveTo(sel.dataset.move, sel.value === '__none' ? null : sel.value); }));
+  main.querySelectorAll('[data-delshot]').forEach((b) => b.addEventListener('click', async () => {
+    const sh = f.shots.find((x) => x.id === b.dataset.delshot);
+    if (!(await confirmBox(`Apagar o plano "${sh.code || sh.description || 'sem nome'}"? Sai também da shotlist e da secção.`, 'Apagar plano'))) return;
+    const { error } = await sb.from('shots').delete().eq('id', sh.id); if (error) return toast(error.message);
+    f.shots.splice(f.shots.indexOf(sh), 1); toast('Plano apagado.'); redraw();
+  }));
+  const setImg = async (sh, file) => {
+    try { toast('A enviar a imagem…'); const up = await uploadImage(p.id, 'storyboard', file); const { error } = await sb.from('shots').update({ image_path: up.path, updated_at: new Date().toISOString() }).eq('id', sh.id); if (error) return toast(error.message); sh.image_path = up.path; redraw(); } catch (e) { toast(e.message || String(e)); }
+  };
   const onPaste = (e) => {
-    if (!document.body.contains(main.querySelector('.sb-shot'))) { document.removeEventListener('paste', onPaste); return; }
+    if (!document.body.contains(main.querySelector('.sb-card'))) { document.removeEventListener('paste', onPaste); return; }
     const file = [...(e.clipboardData?.files || [])].find((x) => x.type.startsWith('image/')); if (!file || !hover) return;
     e.preventDefault(); setImg(f.shots.find((x) => x.id === hover), file);
   };

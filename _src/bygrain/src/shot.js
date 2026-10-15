@@ -21,7 +21,7 @@ export async function shotPage(main, p, id, base, cleanup) {
   const x = (shots || []).find((s) => s.id === id);
   if (!x) { main.innerHTML = `<p class="empty-note">Este plano já não existe.</p><a href="${base}/storyboard">Voltar ao storyboard</a>`; return; }
   // mesma ordem do storyboard: por secção/cena, depois pelos grupos da shotlist
-  const order = [...(scenes || []).flatMap((sc) => shots.filter((s) => s.scene_id === sc.id)), ...(groups || []).flatMap((g) => shots.filter((s) => !s.scene_id && s.group_id === g.id)), ...shots.filter((s) => !s.scene_id && !(groups || []).some((g) => g.id === s.group_id))];
+  const order = [...(scenes || []).flatMap((sc) => shots.filter((s) => s.scene_id === sc.id)), ...shots.filter((s) => !s.scene_id)];
   const i = order.indexOf(x); const prev = order[i - 1], next = order[i + 1];
   const scene = (scenes || []).find((s) => s.id === x.scene_id);
   const group = (groups || []).find((g) => g.id === x.group_id);
@@ -32,13 +32,12 @@ export async function shotPage(main, p, id, base, cleanup) {
   main.innerHTML = `
     <nav class="row between wrap-gap"><span class="row wrap-gap"><a href="${base}/storyboard" class="link-btn">${ICON.back} Storyboard</a>${scene ? `<a href="${base}/${unit}/${scene.id}" class="link-btn">${esc(scene.heading || 'Secção')}</a>` : ''}<a href="${base}/shotlist" class="link-btn">Shotlist</a></span>
       <span class="row">${prev ? `<a class="btn ghost" href="${base}/plano/${prev.id}" aria-label="Plano anterior">${ICON.back}</a>` : ''}<span class="muted small">${i + 1} de ${order.length}</span>${next ? `<a class="btn ghost" href="${base}/plano/${next.id}" aria-label="Plano seguinte">${ICON.chev}</a>` : ''}</span></nav>
-    <header class="shot-head">${group ? `<span class="tag" style="background:${esc(group.color)};color:#fff">${esc(group.name || 'Grupo')}</span>` : ''}<input class="title-in" data-f="code" value="${esc(x.code || '')}" placeholder="Código (ex: 3A)" aria-label="Código do plano"></header>
+    <header class="shot-head"><input class="title-in" data-f="code" value="${esc(x.code || '')}" placeholder="Código (ex: 3A)" aria-label="Código do plano"></header>
     <div class="shot-layout">
       <section class="shot-big" data-img tabindex="0" role="button" aria-label="${img ? 'Mudar a imagem' : 'Juntar imagem'}">${img ? `<img src="${esc(img)}" alt="${esc(title)}">` : `<span>${ICON.image}<strong>Juntar imagem</strong><small>clica, arrasta ou cola com Ctrl+V</small></span>`}</section>
       <section class="panel stack shot-fields">
         <div class="grid2">
-          <div class="field"><label for="ss">${script ? 'Cena' : 'Secção'}</label><select id="ss" data-f="scene_id"><option value="">—</option>${(scenes || []).map((s) => `<option value="${s.id}" ${s.id === x.scene_id ? 'selected' : ''}>${esc(s.heading || 'Secção ' + s.number)}</option>`).join('')}</select></div>
-          <div class="field"><label for="sg">Grupo da shotlist</label><select id="sg" data-f="group_id"><option value="">—</option>${(groups || []).map((g) => `<option value="${g.id}" ${g.id === x.group_id ? 'selected' : ''}>${esc(g.name || 'Grupo sem nome')}</option>`).join('')}</select></div>
+          <div class="field" style="grid-column:1/-1"><label for="ss">${script ? 'Cena' : 'Secção'}</label><select id="ss" data-f="scene_id"><option value="">—</option>${(scenes || []).map((s) => `<option value="${s.id}" ${s.id === x.scene_id ? 'selected' : ''}>${esc(s.heading || 'Secção ' + s.number)}</option>`).join('')}</select></div>
         </div>
         ${FIELDS.map(([k, l, r]) => `<div class="field"><label for="f-${k}">${l}</label><textarea id="f-${k}" data-f="${k}" rows="${r}">${esc(x[k] || '')}</textarea></div>`).join('')}
         <div class="grid3">${SMALL.map(([k, l]) => `<div class="field"><label for="f-${k}">${l}</label><input id="f-${k}" data-f="${k}" value="${esc(x[k] || '')}"></div>`).join('')}</div>
