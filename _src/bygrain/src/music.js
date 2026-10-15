@@ -1,4 +1,4 @@
-import { sb, esc, toast, confirmBox, modal, ICON, signedUrls } from './lib.js';
+import { sb, esc, toast, confirmBox, modal, ICON, signedUrls, signedUrl } from './lib.js';
 import { shotCard, bindShots, shotViewer } from './fiction.js';
 import { mountTasks } from './tasks.js';
 
@@ -66,14 +66,83 @@ export async function clipPage(main, p, page, sub, base, cleanup) {
   return musicPage(main, p, f, sub, base, cleanup);
 }
 
+// YouTube: tira o id de qualquer formato de link (watch, youtu.be, shorts, embed)
+export function ytId(url) {
+  const m = String(url || '').match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/))([\w-]{11})/);
+  return m ? m[1] : null;
+}
+const normUrl = (u) => { u = String(u || '').trim(); return u && !/^https?:\/\//i.test(u) ? 'https://' + u : u; };
+
+// música (ficheiro ou link), pre-vis (YouTube, toca aqui) e referências (links, abrem no YouTube)
+async function mediaPanel(box, p, music, saveNow) {
+  const audioUrl = music.audio_path ? await signedUrl(music.audio_path) : null;
+  const pv = ytId(music.previs_url);
+  const refs = music.refs || [];
+  box.innerHTML = `
+    <div class="mv-grid">
+      <section class="panel mv-previs">
+        <div class="row between"><h2 class="h3">Pre-vis</h2>${music.previs_url ? `<button type="button" class="link-btn small" data-pv-edit>Mudar link</button>` : ''}</div>
+        ${pv ? `<div class="yt"><iframe src="https://www.youtube-nocookie.com/embed/${pv}?rel=0" title="Pre-vis" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`
+          : `<form class="mv-form" data-pv-form><input type="url" name="u" placeholder="Link do YouTube do pre-vis" value="${esc(music.previs_url || '')}" aria-label="Link do pre-vis no YouTube"><button class="btn primary">Guardar</button></form>${music.previs_url ? '<p class="small late-txt2">Este link não parece ser do YouTube.</p>' : '<p class="muted small">Cola um link do YouTube (pode ser não listado). Toca aqui mesmo.</p>'}`}
+      </section>
+      <section class="panel mv-song">
+        <h2 class="h3">${ICON.music} A música</h2>
+        ${audioUrl ? `<p class="mv-file"><strong>${esc(music.audio_name || 'Música')}</strong></p><audio controls preload="metadata" src="${esc(audioUrl)}"></audio>
+            <div class="row wrap-gap"><button type="button" class="btn ghost" data-audio>${ICON.refresh} Trocar ficheiro</button><button type="button" class="link-btn danger-text small" data-audio-rm>Tirar</button></div>`
+          : `<button type="button" class="mv-drop" data-audio>${ICON.plus}<span><strong>Carregar a música</strong><small>MP3, WAV ou M4A · até 25 MB</small></span></button>`}
+        <form class="mv-form" data-song-form><input type="url" name="u" placeholder="ou link (Spotify, YouTube, Drive…)" value="${esc(music.song_url || '')}" aria-label="Link da música"><button class="btn ghost">Guardar</button></form>
+        ${music.song_url ? `<a class="small" href="${esc(music.song_url)}" target="_blank" rel="noopener noreferrer">${ICON.open} Abrir o link da música</a>` : ''}
+      </section>
+    </div>
+    <section class="panel mv-refs">
+      <div class="row between"><h2 class="h3">Referências</h2><span class="muted small">abrem no YouTube</span></div>
+      ${refs.length ? `<div class="ref-grid">${refs.map((r, i) => { const id = ytId(r.url); return `<div class="ref-card"><a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer"><span class="ref-thumb">${id ? `<img src="https://i.ytimg.com/vi/${id}/hqdefault.jpg" alt="" loading="lazy" onerror="this.remove()">` : ICON.link}<i>${ICON.open}</i></span><span class="ref-t">${esc(r.title || (id ? 'Vídeo do YouTube' : r.url))}</span></a><button type="button" class="icon-btn sm" data-ref-rm="${i}" aria-label="Tirar referência">${ICON.close}</button></div>`; }).join('')}</div>` : ''}
+      <form class="mv-form ref-add" data-ref-form><input type="url" name="u" placeholder="Link do YouTube" required aria-label="Link da referência"><input name="t" placeholder="Nota (opcional): o que interessa aqui" aria-label="Nota da referência"><button class="btn primary">${ICON.plus} Juntar</button></form>
+    </section>`;
+  const redraw = () => mediaPanel(box, p, music, saveNow);
+  const set = async (patch) => { Object.assign(music, patch); if (await saveNow()) redraw(); };
+  box.querySelector('[data-pv-form]')?.addEventListener('submit', (e) => { e.preventDefault(); set({ previs_url: normUrl(e.target.u.value) || null }); });
+  box.querySelector('[data-pv-edit]')?.addEventListener('click', () => {
+    const m = modal(`<h2>Link do pre-vis</h2><form class="stack"><div class="field"><label for="pvu">Link do YouTube</label><input id="pvu" type="url" value="${esc(music.previs_url || '')}"></div><div class="row between"><button type="button" class="btn ghost danger-text" data-clear>Tirar o pre-vis</button><div class="row"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Guardar</button></div></div></form>`);
+    m.el.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); m.close(); set({ previs_url: normUrl(m.el.querySelector('#pvu').value) || null }); });
+    m.el.querySelector('[data-clear]').addEventListener('click', () => { m.close(); set({ previs_url: null }); });
+  });
+  box.querySelector('[data-song-form]').addEventListener('submit', (e) => { e.preventDefault(); set({ song_url: normUrl(e.target.u.value) || null }); });
+  box.querySelectorAll('[data-audio]').forEach((b) => b.addEventListener('click', () => {
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'audio/*,.mp3,.wav,.m4a,.aac';
+    inp.onchange = async () => {
+      const file = inp.files[0]; if (!file) return;
+      if (file.size > 25 * 1024 * 1024) return toast('O ficheiro passa dos 25 MB. Exporta em MP3.');
+      toast('A enviar a música…');
+      const ext = (file.name.split('.').pop() || 'mp3').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const path = `${p.id}/music/${Date.now()}.${ext}`;
+      const { error } = await sb.storage.from('files').upload(path, file, { contentType: file.type || 'audio/mpeg' });
+      if (error) return toast(error.message);
+      const old = music.audio_path;
+      await set({ audio_path: path, audio_name: file.name });
+      if (old) sb.storage.from('files').remove([old]);
+      toast('Música carregada.');
+    };
+    inp.click();
+  }));
+  box.querySelector('[data-audio-rm]')?.addEventListener('click', async () => {
+    if (!(await confirmBox('Tirar o ficheiro da música?', 'Tirar'))) return;
+    const old = music.audio_path; await set({ audio_path: null, audio_name: null }); if (old) sb.storage.from('files').remove([old]);
+  });
+  box.querySelector('[data-ref-form]').addEventListener('submit', (e) => { e.preventDefault(); const u = normUrl(e.target.u.value); if (!u) return; set({ refs: [...refs, { url: u, title: e.target.t.value.trim() }] }); });
+  box.querySelectorAll('[data-ref-rm]').forEach((b) => b.addEventListener('click', () => set({ refs: refs.filter((_, i) => i !== +b.dataset.refRm) })));
+}
+
 async function musicPage(main, p, f, sub, base, cleanup) {
   if (sub) return section(main, p, f, sub, base, cleanup);
   const music = { ...(p.music || {}) };
+  const saveNow = async () => { const { error } = await sb.from('projects').update({ music }).eq('id', p.id); if (error) { toast(error.message); return false; } p.music = { ...music }; return true; };
   const saveMusic = debounce(async () => { const { error } = await sb.from('projects').update({ music }).eq('id', p.id); if (error) toast(error.message); else p.music = { ...music }; }, 500);
   const draw = () => {
     const L = layout(f.scenes, music.duration);
     main.innerHTML = `
       <div class="row between wrap-gap"><div><h1 class="h1 pm-title">Seguimento</h1><p class="muted">Parte o clipe em secções da música. Cada secção funciona como uma cena: décors, atores, figurantes, planos e tarefas.</p></div></div>
+      <div class="mv" data-media></div>
       <section class="panel seg">
         <div class="seg-head"><strong>${esc(music.title || p.name)}</strong>
           <label class="seg-dur"><span class="muted small">Duração</span><input class="mini-in num" data-dur value="${esc(music.duration || '')}" placeholder="3:45" aria-label="Duração da música"></label>
@@ -101,6 +170,7 @@ async function musicPage(main, p, f, sub, base, cleanup) {
         <button class="btn primary">${ICON.plus} Juntar</button>
       </form>
       <datalist id="dl-parts">${PARTS.map((x) => `<option value="${x}">`).join('')}</datalist>`;
+    mediaPanel(main.querySelector('[data-media]'), p, music, saveNow);
     main.querySelector('[data-dur]').addEventListener('input', (e) => { music.duration = e.target.value.trim(); saveMusic(); });
     main.querySelector('[data-dur]').addEventListener('change', draw);
     main.querySelector('[data-bpm]').addEventListener('input', (e) => { music.bpm = e.target.value.trim(); saveMusic(); });
