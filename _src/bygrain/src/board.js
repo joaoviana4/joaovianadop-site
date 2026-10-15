@@ -74,6 +74,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   bar.addEventListener('input', (e) => { if (e.target.matches('[data-bgc]')) setBg(e.target.value, 400); });
   function setBg(c, delay = 0) {
     const it = items.get(st.sel); if (!it) return;
+    mark(it, 'bg');
     it.data = { ...(it.data || {}), bg: c || undefined }; if (!c) delete it.data.bg;
     cardEl(it); save(it, ['data'], delay); if (!delay) placeBar();
   }
@@ -83,30 +84,34 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   const fbar = document.createElement('div');
   fbar.className = 'fmt-bar'; fbar.hidden = true; fbar.setAttribute('role', 'toolbar'); fbar.setAttribute('aria-label', 'Formatar texto');
   fbar.innerHTML = `
-    <label class="fmt-sel" title="Letra"><span class="vh">Letra</span><select data-font>${FONTS.map(([v, l]) => `<option value="${esc(v)}" style="${v ? `font-family:'${v}'` : ''}">${esc(l)}</option>`).join('')}</select></label>
-    <label class="fmt-sel" title="Tamanho"><span class="vh">Tamanho</span><select data-size>${SIZES.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></label>
-    <span class="fmt-sep"></span>
+    <span class="fmt-col"><button type="button" data-pop="font" title="Letra" aria-label="Letra" aria-expanded="false"><span class="fmt-aa">Aa</span></button>
+      <span class="fmt-pop fmt-list" data-popbox="font" hidden>${FONTS.map(([v, l]) => `<button type="button" data-font="${esc(v)}" style="${v ? `font-family:'${v}'` : ''}">${esc(l)}</button>`).join('')}</span></span>
+    <span class="fmt-col"><button type="button" data-pop="size" title="Tamanho" aria-label="Tamanho" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V5h10v2M9 5v14M7 19h4M14 12v-1h6v1M17 11v8M15.5 19h3"/></svg></button>
+      <span class="fmt-pop fmt-list" data-popbox="size" hidden>${SIZES.map(([v, l, k]) => `<button type="button" data-size="${v}" style="font-size:${Math.round(13 * k)}px">${l}</button>`).join('')}</span></span>
+    <hr>
     <button type="button" data-cmd="bold" title="Negrito (Ctrl+B)" aria-label="Negrito"><b>B</b></button>
     <button type="button" data-cmd="italic" title="Itálico (Ctrl+I)" aria-label="Itálico"><i>I</i></button>
     <button type="button" data-cmd="underline" title="Sublinhado (Ctrl+U)" aria-label="Sublinhado"><u>U</u></button>
-    <span class="fmt-col"><button type="button" data-colbtn title="Cor do texto" aria-label="Cor do texto" aria-expanded="false"><span class="fmt-a">A</span><i data-colbar></i></button>
-      <span class="fmt-pop" data-colpop hidden>${TEXT_COLORS.map((c) => `<button type="button" data-tc="${c}" class="${c ? '' : 'none'}" style="${c ? `background:${c}` : ''}" aria-label="${c || 'Predefinida'}"></button>`).join('')}<label class="cb-custom" title="Outra cor"><input type="color" data-tcc value="#C8382D" aria-label="Outra cor"><span>+</span></label></span></span>
-    <span class="fmt-sep"></span>
-    ${[['left', 'Alinhar à esquerda', '<path d="M4 6h16M4 10h10M4 14h16M4 18h10"/>'], ['center', 'Centrar', '<path d="M4 6h16M7 10h10M4 14h16M7 18h10"/>'], ['right', 'Alinhar à direita', '<path d="M4 6h16M10 10h10M4 14h16M10 18h10"/>']].map(([a, l, d]) => `<button type="button" data-align="${a}" title="${l}" aria-label="${l}"><svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg></button>`).join('')}
-    <span class="fmt-sep"></span>
+    <span class="fmt-col"><button type="button" data-pop="color" data-colbtn title="Cor do texto" aria-label="Cor do texto" aria-expanded="false"><span class="fmt-a">A</span><i data-colbar></i></button>
+      <span class="fmt-pop fmt-colors" data-popbox="color" data-colpop hidden>${TEXT_COLORS.map((c) => `<button type="button" data-tc="${c}" class="${c ? '' : 'none'}" style="${c ? `background:${c}` : ''}" aria-label="${c || 'Predefinida'}"></button>`).join('')}<label class="cb-custom" title="Outra cor"><input type="color" data-tcc value="#C8382D" aria-label="Outra cor"><span>+</span></label></span></span>
+    <hr>
+    ${[['left', 'Alinhar à esquerda', '<path d="M4 6h16M4 10h10M4 14h16M4 18h10"/>'], ['center', 'Centrar', '<path d="M4 6h16M7 10h10M4 14h16M7 18h10"/>'], ['right', 'Alinhar à direita', '<path d="M4 6h16M10 10h10M4 14h16M10 18h10"/>']].map(([al, l, d]) => `<button type="button" data-align="${al}" title="${l}" aria-label="${l}"><svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg></button>`).join('')}
+    <hr>
     <button type="button" data-clear title="Tirar a formatação" aria-label="Tirar a formatação"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h12M12 5l-3 14M4 20l16-16"/></svg></button>`;
   root.appendChild(fbar);
   fbar.addEventListener('pointerdown', (e) => { e.stopPropagation(); if (!e.target.closest('select, input')) e.preventDefault(); });
+  const closePops = (except) => fbar.querySelectorAll('[data-popbox]').forEach((p) => { if (p.dataset.popbox !== except) { p.hidden = true; fbar.querySelector(`[data-pop="${p.dataset.popbox}"]`)?.setAttribute('aria-expanded', 'false'); } });
+  fbar.querySelectorAll('[data-pop]').forEach((b) => b.addEventListener('click', () => { const box = fbar.querySelector(`[data-popbox="${b.dataset.pop}"]`); closePops(b.dataset.pop); box.hidden = !box.hidden; b.setAttribute('aria-expanded', String(!box.hidden)); }));
   const fmtTarget = () => { const it = st.sel && items.get(st.sel); return it && ['note', 'title', 'list'].includes(it.kind) ? it : null; };
   const selInEdit = () => { const ed = st.editing; if (!ed) return false; const s2 = getSelection(); return s2.rangeCount && !s2.isCollapsed && ed.el.contains(s2.anchorNode); };
   function updateFmt() {
     if (!fmtReady) return;
     const it = fmtTarget();
     fbar.hidden = !it;
-    if (!it) { fbar.querySelector('[data-colpop]').hidden = true; return; }
+    if (!it) { closePops(); return; }
     const f = it.data?.fmt || {};
-    fbar.querySelector('[data-font]').value = f.font || '';
-    fbar.querySelector('[data-size]').value = f.size || 'm';
+    fbar.querySelectorAll('[data-font]').forEach((b) => b.classList.toggle('on', (f.font || '') === b.dataset.font));
+    fbar.querySelectorAll('[data-size]').forEach((b) => b.classList.toggle('on', (f.size || 'm') === b.dataset.size));
     fbar.querySelectorAll('[data-align]').forEach((b) => b.classList.toggle('on', (f.align || 'left') === b.dataset.align));
     const rich = st.editing && ['note', 'title'].includes(it.kind);
     fbar.querySelectorAll('[data-cmd]').forEach((b) => { const k = { bold: 'b', italic: 'i', underline: 'u' }[b.dataset.cmd]; b.classList.toggle('on', rich && selInEdit() ? document.queryCommandState(b.dataset.cmd) : !!f[k]); });
@@ -117,6 +122,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   fmtReady = true;
   const setFmt = (patch) => {
     const it = fmtTarget(); if (!it) return;
+    if (!(st.editing && st.editing.id === it.id)) mark(it, 'fmt-' + Object.keys(patch).join());
     const fmt = { ...(it.data?.fmt || {}), ...patch }; Object.keys(fmt).forEach((k) => { if (fmt[k] === '' || fmt[k] == null || fmt[k] === false) delete fmt[k]; });
     it.data = { ...(it.data || {}), fmt }; if (!Object.keys(fmt).length) delete it.data.fmt;
     if (st.editing && st.editing.id === it.id) {
@@ -132,7 +138,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     const k = { bold: 'b', italic: 'i', underline: 'u' }[b.dataset.cmd]; setFmt({ [k]: !(it.data?.fmt || {})[k] });
   }));
   const colPop = fbar.querySelector('[data-colpop]'); const colBtn = fbar.querySelector('[data-colbtn]');
-  colBtn.addEventListener('click', () => { colPop.hidden = !colPop.hidden; colBtn.setAttribute('aria-expanded', String(!colPop.hidden)); });
+
   let savedRange = null;
   colBtn.addEventListener('pointerdown', () => { const s2 = getSelection(); savedRange = selInEdit() ? s2.getRangeAt(0).cloneRange() : null; });
   const applyColor = (c) => {
@@ -141,16 +147,17 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
       const s2 = getSelection(); s2.removeAllRanges(); s2.addRange(savedRange);
       document.execCommand('styleWithCSS', false, true); document.execCommand('foreColor', false, c || 'inherit'); document.execCommand('styleWithCSS', false, false);
     } else setFmt({ color: c });
-    colPop.hidden = true; updateFmt();
+    closePops(); updateFmt();
   };
   colPop.querySelectorAll('[data-tc]').forEach((b) => b.addEventListener('click', () => applyColor(b.dataset.tc)));
   colPop.querySelector('[data-tcc]').addEventListener('change', (e) => applyColor(e.target.value));
   fbar.querySelectorAll('[data-align]').forEach((b) => b.addEventListener('click', () => setFmt({ align: b.dataset.align === 'left' ? '' : b.dataset.align })));
-  fbar.querySelector('[data-font]').addEventListener('change', (e) => setFmt({ font: e.target.value }));
-  fbar.querySelector('[data-size]').addEventListener('change', (e) => setFmt({ size: e.target.value === 'm' ? '' : e.target.value }));
+  fbar.querySelectorAll('[data-font]').forEach((b) => b.addEventListener('click', () => { setFmt({ font: b.dataset.font }); closePops(); }));
+  fbar.querySelectorAll('[data-size]').forEach((b) => b.addEventListener('click', () => { setFmt({ size: b.dataset.size === 'm' ? '' : b.dataset.size }); closePops(); }));
   fbar.querySelector('[data-clear]').addEventListener('click', () => {
     const it = fmtTarget(); if (!it) return;
     if (st.editing && st.editing.id === it.id) { const el = st.editing.el; el.innerText = el.innerText; }
+    if (!(st.editing && st.editing.id === it.id)) mark(it);
     const d = { ...(it.data || {}) }; delete d.fmt; delete d.html; it.data = d;
     if (!(st.editing && st.editing.id === it.id)) cardEl(it); else { const box = it.kind === 'list' ? st.editing.el.closest('.list-fmt') : st.editing.el; box?.removeAttribute('style'); }
     save(it, ['data']); updateFmt();
@@ -257,6 +264,52 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   }
   const maxZ = () => Math.max(0, ...[...items.values()].map((i) => i.z));
 
+  // ---------- desfazer / refazer (Ctrl+Z, Ctrl+Shift+Z ou Ctrl+Y) ----------
+  // Cada operação guarda o "antes": mover, redimensionar, escrever, cor, formatação, criar e apagar cartões.
+  const undoStack = []; const redoStack = [];
+  const snap = (it) => JSON.parse(JSON.stringify({ x: it.x, y: it.y, w: it.w, h: it.h, z: it.z, data: it.data || {} }));
+  const rowOf = (it) => ({ id: it.id, board_id: it.board_id || boardId, project_id: it.project_id, kind: it.kind, x: it.x, y: it.y, w: it.w, h: it.h, z: it.z, data: JSON.parse(JSON.stringify(it.data || {})) });
+  const pending = new Map(); // ficheiros que só se apagam se ninguém desfizer
+  function record(op) { undoStack.push(op); if (undoStack.length > 80) undoStack.shift(); redoStack.length = 0; }
+  let lastMark = { id: null, at: 0, kind: '' };
+  // chamar ANTES de mudar um cartão; mudanças seguidas do mesmo tipo (ex.: arrastar a cor) contam como uma
+  function mark(it, kind = 'edit') {
+    if (!it) return;
+    const now = Date.now();
+    if (lastMark.id === it.id && lastMark.kind === kind && now - lastMark.at < 900 && kind !== 'edit') { lastMark.at = now; return; }
+    lastMark = { id: it.id, at: now, kind };
+    record({ t: 'upd', id: it.id, before: snap(it) });
+  }
+  async function applyOp(op, dir) {
+    if (op.t === 'upd') {
+      const it = items.get(op.id); if (!it) return null;
+      const now = snap(it); Object.assign(it, JSON.parse(JSON.stringify(op.before)));
+      cardEl(it); save(it, ['x', 'y', 'w', 'h', 'z', 'data']);
+      return { ...op, before: now };
+    }
+    const insert = (op.t === 'add') === (dir === 'redo');
+    if (insert) {
+      const row = op.row;
+      const { error } = await sb.from('board_items').insert(row);
+      if (error && !/duplicate/i.test(error.message)) { toast(error.message); return null; }
+      pending.delete(row.id); items.set(row.id, { ...row }); cardEl(items.get(row.id)); select(row.id);
+    } else {
+      const it = items.get(op.row.id); if (!it) return op;
+      items.delete(it.id); world.querySelector(`[data-id="${it.id}"]`)?.remove(); if (st.sel === it.id) { st.sel = null; placeBar(); }
+      await sb.from('board_items').delete().eq('id', it.id);
+    }
+    return op;
+  }
+  async function undo() {
+    if (st.editing) commitEdit();
+    const op = undoStack.pop(); if (!op) return toast('Nada para desfazer.');
+    const back = await applyOp(op, 'undo'); if (back) redoStack.push(back);
+  }
+  async function redo() {
+    const op = redoStack.pop(); if (!op) return toast('Nada para refazer.');
+    const back = await applyOp(op, 'redo'); if (back) undoStack.push(back);
+  }
+
   async function create(kind, at, data = {}, size) {
     const r = stage.getBoundingClientRect();
     const c = at || toWorld(r.left + r.width / 2, r.top + r.height / 2);
@@ -265,6 +318,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     const { data: ins, error } = await sb.from('board_items').insert(row).select().single();
     if (error) { toast('Não foi possível criar: ' + error.message); return null; }
     items.set(ins.id, ins); cardEl(ins); select(ins.id);
+    record({ t: 'add', row: rowOf(ins) });
     return ins;
   }
 
@@ -366,7 +420,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   // ---------- editar texto ----------
   function startEdit(id, el) {
     if (!el) return;
-    st.editing = { id, el }; bar.hidden = true;
+    st.editing = { id, el, before: items.get(id) ? snap(items.get(id)) : null }; bar.hidden = true;
     const rich = el.dataset.field === 'text' && ['note', 'title'].includes(items.get(id)?.kind);
     if (rich) el.contentEditable = 'true';
     else { el.contentEditable = 'plaintext-only'; if (el.contentEditable !== 'plaintext-only') el.contentEditable = 'true'; }
@@ -381,6 +435,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     const ed = st.editing; if (!ed) return;
     st.editing = null; ed.el.contentEditable = 'false'; setTimeout(placeBar);
     const it = items.get(ed.id); if (!it) return;
+    if (ed.before) { const b = JSON.stringify(ed.before.data); queueMicrotask(() => { if (JSON.stringify(it.data || {}) !== b) record({ t: 'upd', id: it.id, before: ed.before }); }); }
     const text = ed.el.innerText.replace(/\n$/, '');
     const f = ed.el.dataset.field;
     const d = { ...(it.data || {}) };
@@ -397,6 +452,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
 
   // ---------- botões dentro dos cartões ----------
   async function onUi(btn, it) {
+    if (!['link', 'media', 'play', 'openboard'].includes(btn.dataset.ui)) mark(it, 'ui-' + btn.dataset.ui);
     const d = { ...(it.data || {}) }; const i = +btn.dataset.i;
     switch (btn.dataset.ui) {
       case 'toggle': d.items = d.items.map((x, j) => (j === i ? { ...x, done: !x.done } : x)); break;
@@ -460,7 +516,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
       select(it.id);
       if (it.z < maxZ()) { it.z = maxZ() + 1; card.style.zIndex = it.z; save(it, ['z']); }
       const rs = e.target.closest('[data-rs]');
-      st.drag = { mode: rs ? 'resize' : 'move', id: it.id, sx: e.clientX, sy: e.clientY, ox: it.x, oy: it.y, ow: it.w, oh: it.h, moved: false };
+      st.drag = { before: snap(it), mode: rs ? 'resize' : 'move', id: it.id, sx: e.clientX, sy: e.clientY, ox: it.x, oy: it.y, ow: it.w, oh: it.h, moved: false };
     }
     e.preventDefault();
   });
@@ -495,7 +551,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     const g = st.drag; st.drag = null; stage.classList.remove('panning');
     if (!g || g.mode === 'pan') return;
     const it = items.get(g.id); if (!it) return;
-    if (g.moved) save(it, g.mode === 'move' ? ['x', 'y'] : ['w', 'h']);
+    if (g.moved) { record({ t: 'upd', id: it.id, before: g.before }); save(it, g.mode === 'move' ? ['x', 'y'] : ['w', 'h']); }
   };
   window.addEventListener('pointerup', end);
   window.addEventListener('pointercancel', end);
@@ -519,7 +575,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
 
   function editCaption(it) {
     const m = modal(`<h2>Legenda da imagem</h2><form class="stack"><div class="field"><label for="cap">Legenda</label><input id="cap" value="${esc(it.data?.caption || '')}"></div><div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Guardar</button></div></form>`);
-    m.el.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); it.data = { ...it.data, caption: m.el.querySelector('#cap').value.trim() }; save(it, ['data']); cardEl(it); m.close(); });
+    m.el.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); mark(it); it.data = { ...it.data, caption: m.el.querySelector('#cap').value.trim() }; save(it, ['data']); cardEl(it); m.close(); });
   }
 
   stage.addEventListener('wheel', (e) => {
@@ -553,6 +609,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     if (st.editing && e.key === 'Enter' && st.editing.el.dataset.field !== 'text' && !e.shiftKey) { e.preventDefault(); commitEdit(); return; }
     if (typing) return;
     const mod = e.ctrlKey || e.metaKey;
+    if (mod && !e.altKey && (e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'y')) { e.preventDefault(); if (e.key.toLowerCase() === 'y' || e.shiftKey) redo(); else undo(); return; }
     if (mod && (e.key === '=' || e.key === '+')) { e.preventDefault(); zoomBy(1.2); }
     else if (mod && e.key === '-') { e.preventDefault(); zoomBy(1 / 1.2); }
     else if (mod && e.key === '0') { e.preventDefault(); fit(); }
@@ -573,22 +630,28 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   document.addEventListener('keydown', onKey);
 
   async function remove(it) {
+    if (it.kind !== 'board') record({ t: 'del', row: rowOf(it) });
     items.delete(it.id); world.querySelector(`[data-id="${it.id}"]`)?.remove(); st.sel = null; placeBar();
     const { error } = await sb.from('board_items').delete().eq('id', it.id);
     if (error) return toast(error.message);
     if (it.kind === 'board' && it.data?.board_id) await sb.from('boards').delete().eq('id', it.data.board_id);
-    if (it.kind === 'image' && it.data?.path) await sb.storage.from('files').remove([it.data.path]);
-    if (it.kind === 'audio' && it.data?.path && !it.data.shared) {
-      // só apaga o ficheiro se mais nada no projeto o usar
-      const [{ count }, { data: pr }, { data: tools }] = await Promise.all([
-        sb.from('board_items').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('kind', 'audio').eq('data->>path', it.data.path),
-        sb.from('projects').select('music').eq('id', projectId).maybeSingle(),
-        sb.from('boards').select('data').eq('project_id', projectId).eq('kind', 'media'),
-      ]);
-      const used = (count || 0) > 0 || pr?.music?.audio_path === it.data.path || (tools || []).some((t) => t.data?.audio_path === it.data.path);
-      if (!used) await sb.storage.from('files').remove([it.data.path]);
-    }
+    // imagens e áudio: o ficheiro só é apagado ao sair do board, para o Ctrl+Z poder trazer o cartão de volta
+    if ((it.kind === 'image' || it.kind === 'audio') && it.data?.path) { pending.set(it.id, it); toast('Apagado. Ctrl+Z para desfazer.'); return; }
     toast('Apagado.');
+  }
+
+  // apaga o ficheiro de uma imagem/áudio que saiu do board (se mais nada no projeto o usar)
+  async function cleanupFiles(it) {
+    const path = it.data?.path; if (!path) return;
+    if (it.kind === 'image') { const { count } = await sb.from('board_items').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('data->>path', path); if (!count) await sb.storage.from('files').remove([path]); return; }
+    if (it.kind !== 'audio' || it.data.shared) return;
+    const [{ count }, { data: pr }, { data: tools }] = await Promise.all([
+      sb.from('board_items').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('kind', 'audio').eq('data->>path', path),
+      sb.from('projects').select('music').eq('id', projectId).maybeSingle(),
+      sb.from('boards').select('data').eq('project_id', projectId).eq('kind', 'media'),
+    ]);
+    const used = (count || 0) > 0 || pr?.music?.audio_path === path || (tools || []).some((t) => t.data?.audio_path === path);
+    if (!used) await sb.storage.from('files').remove([path]);
   }
 
   // ---------- tempo real ----------
@@ -638,11 +701,12 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   });
 
   return {
-    add, fit, zoomBy, setZoom, colors: COLORS,
+    add, fit, zoomBy, setZoom, colors: COLORS, undo, redo,
     setColor: (c, delay) => setBg(c, delay),
     get zoom() { return st.view.k; },
     destroy() {
-      st.dead = true; commitEdit(); offLocks && offLocks(); presence?.setCard(null);
+      st.dead = true; commitEdit();
+      pending.forEach((it) => cleanupFiles(it)); pending.clear(); offLocks && offLocks(); presence?.setCard(null);
       document.removeEventListener('keydown', onKey); document.removeEventListener('paste', onPaste); document.removeEventListener('selectionchange', onSelChange);
       window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end);
       sb.removeChannel(ch);

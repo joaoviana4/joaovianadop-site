@@ -868,6 +868,8 @@ async function boardView(projectId, boardId) {
     </div>
     <div class="pv-colorpop" data-cpop hidden role="dialog" aria-label="Cor do cartão"></div>
     <div class="pv-zoom">
+      <button type="button" data-undo aria-label="Desfazer" title="Desfazer (Ctrl+Z)">↶</button>
+      <button type="button" data-redo aria-label="Refazer" title="Refazer (Ctrl+Shift+Z)">↷</button>
       <button type="button" data-z="out" aria-label="Afastar">${ICON.minus}</button>
       <button type="button" data-z="reset" class="pct" aria-label="Voltar a 100%">100%</button>
       <button type="button" data-z="in" aria-label="Aproximar">${ICON.plus}</button>
@@ -907,6 +909,8 @@ async function boardView(projectId, boardId) {
   onCleanup(() => board.destroy());
 
   app.querySelectorAll('[data-tool]').forEach((x) => x.addEventListener('click', () => board.add(x.dataset.tool)));
+  app.querySelector('[data-undo]').addEventListener('click', () => board.undo());
+  app.querySelector('[data-redo]').addEventListener('click', () => board.redo());
   app.querySelector('[data-z=in]').addEventListener('click', () => board.zoomBy(1.2));
   app.querySelector('[data-z=out]').addEventListener('click', () => board.zoomBy(1 / 1.2));
   app.querySelector('[data-z=reset]').addEventListener('click', () => board.setZoom(1));

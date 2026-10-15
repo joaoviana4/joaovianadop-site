@@ -1674,3 +1674,15 @@ tr:hover > td > .cst-x, tr:hover > td > .cst-mv, tr:hover .cst-colh .cst-x, .cst
 .list-fmt { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .list-fmt .checklist { flex: 1; }
 @media (max-width: 760px) { .fmt-bar { top: auto; bottom: 70px; max-width: calc(100vw - 24px); overflow-x: auto; } }
+/* barra de texto vertical, ao lado da barra de ferramentas do board */
+.fmt-bar { top: 50% !important; left: auto !important; right: 96px; transform: translateY(-50%) !important; flex-direction: column; padding: 6px; gap: 2px; border-radius: 14px; }
+.fmt-bar hr { width: 70%; border: 0; border-top: 1px solid var(--line); margin: 3px auto; }
+.fmt-bar button { width: 40px; height: 38px; }
+.fmt-aa { font-family: var(--serif); font-size: 19px; }
+.fmt-pop { top: 0 !important; left: auto !important; right: 48px; transform: none !important; }
+.fmt-list { display: flex !important; flex-direction: column; gap: 2px; padding: 6px; min-width: 190px; max-height: 60vh; overflow: auto; }
+.fmt-list[hidden] { display: none !important; }
+.fmt-list button { width: 100%; height: auto; min-height: 34px; padding: 6px 10px; text-align: left; display: block; font-size: 15px; white-space: nowrap; }
+.fmt-colors { grid-template-columns: repeat(4, 26px); }
+@media (max-width: 760px) { .fmt-bar { right: 88px; top: auto !important; bottom: 70px; transform: none !important; max-height: 60vh; overflow-y: auto; } }
+.fmt-list button { border: 0 !important; border-radius: 8px !important; background: none; } .fmt-list button:hover { background: rgba(244,241,232,.08); } .fmt-list button.on { background: rgba(244,241,232,.16); }
