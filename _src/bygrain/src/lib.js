@@ -176,6 +176,33 @@ export function registerSW() {
   if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
     navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE }).catch(() => {});
   }
+  watchVersion();
+}
+
+// avisa quando há uma versão nova do site publicada (uma janela aberta fica com a versão antiga até recarregar)
+function watchVersion() {
+  const mine = [...document.querySelectorAll('script[type=module][src]')].map((x) => new URL(x.src, location.href).pathname).sort().join('|');
+  if (!mine) return;
+  let shown = false;
+  const check = async () => {
+    if (shown || document.visibilityState !== 'visible') return;
+    try {
+      const html = await (await fetch(location.pathname.replace(/[^/]*$/, '') + 'index.html', { cache: 'no-store' })).text();
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const live = [...doc.querySelectorAll('script[type=module][src]')].map((x) => new URL(x.getAttribute('src'), location.href).pathname).sort().join('|');
+      if (live && live !== mine) {
+        shown = true;
+        const bar = document.createElement('div');
+        bar.className = 'new-version'; bar.setAttribute('role', 'status');
+        bar.innerHTML = '<span>Há uma versão nova do studio.</span><button type="button" class="btn primary sm">Atualizar</button><button type="button" class="new-x" aria-label="Fechar">×</button>';
+        bar.querySelector('.btn').onclick = () => location.reload();
+        bar.querySelector('.new-x').onclick = () => bar.remove();
+        document.body.append(bar);
+      }
+    } catch { /* sem ligação */ }
+  };
+  setInterval(check, 120000);
+  document.addEventListener('visibilitychange', check);
 }
 
 export const ICON = {
