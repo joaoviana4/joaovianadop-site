@@ -3,6 +3,7 @@ import { loadPeople } from './tasks.js';
 import { PROP_STATUS } from './props.js';
 import { trackHtml, musicStats } from './music.js';
 import { mountLayout } from './layout.js';
+import { hasMod } from './modules.js';
 
 // "Ponto de situação" do projeto: o que falta fazer e por quem, adereços em falta,
 // questões de produção por decidir, departamentos e cronograma. Sem valores (esses ficam no Orçamento).
@@ -39,7 +40,7 @@ function timelineHtml(p, phases) {
 
 export async function mountSituation(box, p, base, { onChange } = {}) {
   box.innerHTML = '<p class="muted">A preparar o ponto de situação…</p>';
-  const isMusic = p.kind === 'videoclipe';
+  const isMusic = hasMod(p, 'seguimento'); const withProps = hasMod(p, 'aderecos');
   const [{ data: tasks }, { data: props }, { data: questions }, people, { data: tl }, ms] = await Promise.all([
     sb.from('tasks').select('*').eq('project_id', p.id),
     sb.from('props').select('id, name, status, removed').eq('project_id', p.id),
@@ -70,7 +71,7 @@ export async function mountSituation(box, p, base, { onChange } = {}) {
     box.innerHTML = `<div data-lay>
       <div data-blk="kpis"><div class="ov-kpis">
         <a class="ov-kpi ${late.length ? 'warn' : ''}" href="${base}/tarefas"><span class="k-ic">${ICON.task}</span><strong>${open.length}</strong><span>${open.length === 1 ? 'tarefa por fazer' : 'tarefas por fazer'}</span>${late.length ? `<em>${plural(late.length, 'atrasada', 'atrasadas')}</em>` : all.length ? `<em class="ok">${all.length - open.length} de ${all.length} feitas</em>` : ''}</a>
-        <a class="ov-kpi ${missing.length ? 'warn' : ''}" href="${base}/aderecos"><span class="k-ic">${ICON.prop}</span><strong>${missing.length}</strong><span>${missing.length === 1 ? 'adereço em falta' : 'adereços em falta'}</span>${P.length ? `<em class="${missing.length ? '' : 'ok'}">${P.length - missing.length} de ${P.length} prontos</em>` : '<em>sem lista ainda</em>'}</a>
+        ${withProps ? `<a class="ov-kpi ${missing.length ? 'warn' : ''}" href="${base}/aderecos"><span class="k-ic">${ICON.prop}</span><strong>${missing.length}</strong><span>${missing.length === 1 ? 'adereço em falta' : 'adereços em falta'}</span>${P.length ? `<em class="${missing.length ? '' : 'ok'}">${P.length - missing.length} de ${P.length} prontos</em>` : '<em>sem lista ainda</em>'}</a>` : ''}
         <a class="ov-kpi ${qOpen.length ? 'warn' : ''}" href="#ov-q" data-jump><span class="k-ic">${ICON.question}</span><strong>${qOpen.length}</strong><span>${qOpen.length === 1 ? 'questão por decidir' : 'questões por decidir'}</span>${qDone.length ? `<em class="ok">${plural(qDone.length, 'resolvida', 'resolvidas')}</em>` : ''}</a>
         <div class="ov-kpi ${mile.late ? 'warn' : ''}"><span class="k-ic">${ICON.calendar || ICON.clock || ICON.task}</span><strong>${esc(mile.big)}</strong><span>${esc(mile.label)}</span></div>
         ${ms ? `<a class="ov-kpi" href="${base}/seguimento"><span class="k-ic">${ICON.music}</span><strong>${ms.scenes.length}</strong><span>${ms.scenes.length === 1 ? 'secção no seguimento' : 'secções no seguimento'}</span><em>${plural(ms.shots, 'plano', 'planos')}</em></a>` : ''}
@@ -110,12 +111,12 @@ export async function mountSituation(box, p, base, { onChange } = {}) {
             ${st.showResolved ? `<ul class="ov-qs done">${qDone.map((q) => `<li data-q="${q.id}"><button type="button" class="q-check on" data-qact="reopen" aria-label="Reabrir">${ICON.done || '✓'}</button><span class="q-main"><span class="q-text">${esc(q.text)}</span>${q.answer ? `<span class="q-ans">${esc(q.answer)}</span>` : ''}<span class="muted small">Resolvida a ${fmtDate(q.resolved_at)}</span></span></li>`).join('')}</ul>` : ''}` : ''}
         </section></div>
 
-        <div data-blk="props"><section class="panel ov-props">
+        ${withProps ? `<div data-blk="props"><section class="panel ov-props">
           <div class="row between"><h2 class="h3">Adereços em falta</h2><a class="small" href="${base}/aderecos">Todos os adereços</a></div>
           ${P.length ? `<div class="bar ok"><i style="width:${Math.round(((P.length - missing.length) / P.length) * 100)}%"></i></div>
             ${missing.length ? `<ul class="ov-pl">${missing.slice(0, 8).map((x) => { const s = PROP_STATUS.find((y) => y[0] === x.status) || PROP_STATUS[0]; return `<li><a href="${base}/aderecos/${x.id}"><span>${esc(x.name)}</span><span class="pstat" style="--c:${s[2]}">${esc(s[1])}</span></a></li>`; }).join('')}${missing.length > 8 ? `<li class="muted small">e mais ${missing.length - 8}…</li>` : ''}</ul>` : '<p class="muted small">Está tudo pronto.</p>'}`
           : `<p class="muted small">Ainda não há adereços.</p><a class="btn ghost" href="${base}/aderecos">${ICON.plus} Juntar adereços</a>`}
-        </section></div>
+        </section></div>` : ''}
       </div>`;
     mountLayout(box.querySelector('[data-lay]'), { project: p, key: 'overview', title: 'vista geral', blocks: [
       { id: 'kpis', label: 'Números do projeto', pos: 'full' }, { id: 'music', label: 'Seguimento', pos: 'full' },

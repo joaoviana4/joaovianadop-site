@@ -13,6 +13,7 @@ import { mountTaskCenter } from './taskcenter.js';
 import { clipPage, CLIP_PAGES, mediaTool } from './music.js';
 import { mountSituation } from './overview.js';
 import { budgetWhoChip, budgetAccessPanel, globalPermsPanel } from './perms.js';
+import { MODULES, TEMPLATES, modulesOf, hasMod, scriptMode, modLabel, modPath, modulesModal, autoModules } from './modules.js';
 import { FICTION_PAGES, FICTION_DEPTS, fictionPage, fictionStats } from './fiction.js';
 
 const app = $('#app');
@@ -223,13 +224,20 @@ function newProject() {
       <div class="field"><label for="pc">Artista ou marca</label><input id="pc" name="client"></div>
       <div class="field"><label for="pk">Tipo</label><select id="pk" name="kind">${Object.entries(KINDS).filter(([k]) => k !== 'central').map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
       <div class="grid2"><div class="field"><label for="ps">Começa</label><input id="ps" name="starts_on" type="date"></div><div class="field"><label for="pe">Entrega</label><input id="pe" name="ends_on" type="date"></div></div>
+      <fieldset class="start-choice"><legend>Começar com</legend>
+        <label class="sc-opt"><input type="radio" name="start" value="tpl" checked><span><strong>Modelo de <span data-kname></span></strong><small data-tplpages></small></span></label>
+        <label class="sc-opt"><input type="radio" name="start" value="zero"><span><strong>Do zero</strong><small>Só Visão geral, Equipa e Detalhes. As outras páginas juntas-as depois com o + ao lado do nome do projeto, ou aparecem sozinhas quando houver dados para elas.</small></span></label>
+      </fieldset>
       ${hasPerm('budget') ? `<div class="field"><label for="pv">Orçamento (€, opcional)</label><input id="pv" name="value" type="number" step="0.01" min="0" inputmode="decimal"><span class="muted small">${ICON.lock} Só quem tem acesso ao orçamento vê este valor.</span></div>` : ''}
       <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Criar</button></div>
     </form>`);
+  const syncTpl = () => { const k = m.el.querySelector('#pk').value; m.el.querySelector('[data-kname]').textContent = (KINDS[k] || k).toLowerCase(); m.el.querySelector('[data-tplpages]').textContent = (TEMPLATES[k] || TEMPLATES.default).map((x) => (x === 'elenco' && k === 'ficcao' ? MODULES.elenco.scriptLabel : MODULES[x].label)).join(' · '); };
+  m.el.querySelector('#pk').addEventListener('change', syncTpl); syncTpl();
   m.el.querySelector('form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target));
-    const { data, error } = await sb.from('projects').insert({ name: f.name.trim(), client: f.client.trim(), kind: f.kind, starts_on: f.starts_on || null, ends_on: f.ends_on || null, ...(f.kind === 'ficcao' ? { departments: FICTION_DEPTS } : {}) }).select(PROJECT_COLS).single();
+    const modules = { list: f.start === 'zero' ? [] : [...(TEMPLATES[f.kind] || TEMPLATES.default)], removed: [] };
+    const { data, error } = await sb.from('projects').insert({ name: f.name.trim(), client: f.client.trim(), kind: f.kind, starts_on: f.starts_on || null, ends_on: f.ends_on || null, modules, ...(f.kind === 'ficcao' ? { departments: FICTION_DEPTS } : {}) }).select(PROJECT_COLS).single();
     if (error) return toast(error.message);
     await sb.from('project_members').insert({ project_id: data.id, user_id: state.user.id });
     if (f.value) await sb.from('project_budgets').upsert({ project_id: data.id, value: Number(f.value) });
@@ -390,9 +398,11 @@ function boardGroups(p) {
 
 function projectNav(p, active) {
   const base = projBase(p);
-  const pages = [['geral', 'Visão geral', ICON.home], ...(p.is_central && hasPerm('finance') ? [['financas', 'Finanças', ICON.money]] : []), ...(p.canBudget ? [['orcamento', 'Orçamento', ICON.money]] : []), ...(p.kind === 'ficcao' ? FICTION_PAGES : p.kind === 'videoclipe' ? CLIP_PAGES : p.is_central ? [] : [['aderecos', 'Adereços', ICON.prop]]), ['tarefas', 'Tarefas', ICON.task], ['equipa', p.is_central ? 'Equipa' : 'Equipa e convites', ICON.team], ...(isStaff() ? [['detalhes', 'Detalhes', ICON.info]] : [])];
+  navState.p = p; navState.active = active;
+  const mods = p.is_central ? [['tarefas', 'Tarefas', ICON.task]] : modulesOf(p).filter((k) => k !== 'orcamento' || p.canBudget).map((k) => [modPath(p, k), modLabel(p, k), ICON[MODULES[k].icon]]);
+  const pages = [['geral', 'Visão geral', ICON.home], ...(p.is_central && hasPerm('finance') ? [['financas', 'Finanças', ICON.money]] : []), ...mods, ['equipa', p.is_central ? 'Equipa' : 'Equipa e convites', ICON.team], ...(isStaff() ? [['detalhes', 'Detalhes', ICON.info]] : [])];
   return `
-    <div class="pn-h"><strong>${esc(p.name)}</strong>${p.client ? `<span class="muted small">${esc(p.client)}</span>` : ''}</div>
+    <div class="pn-h"><div><strong>${esc(p.name)}</strong>${p.client ? `<span class="muted small">${esc(p.client)}</span>` : ''}</div>${!p.is_central && isStaff() ? `<button type="button" class="icon-btn sm pn-mods" data-mods title="Páginas do projeto" aria-label="Juntar ou tirar páginas">${ICON.plus}</button>` : ''}</div>
     ${pages.map(([k, l, ic]) => `<a class="side-a" href="${base}${k === 'geral' ? '' : '/' + k}" ${active === k ? 'aria-current="page"' : ''}>${ic}<span>${l}</span></a>`).join('')}
     <div class="pn-sec"><span>Ferramentas</span><button type="button" class="icon-btn sm" data-newboard="" aria-label="Nova ferramenta">${ICON.plus}</button></div>
     ${boardGroups(p).map((g) => `<div class="pn-group" style="--g:${esc(g.color)}">
@@ -400,12 +410,19 @@ function projectNav(p, active) {
       ${g.boards.map((b) => `<a class="side-a sub" href="${toolHref(p, b)}" ${active === b.id ? 'aria-current="page"' : ''}>${(TOOL_KINDS[b.kind] || TOOL_KINDS.board).icon}<span>${esc(b.title)}</span></a>`).join('')}
     </div>`).join('')}`;
 }
+const navState = { p: null, active: null };
+// quando as páginas mudam (à mão ou sozinhas), o menu atualiza-se logo
+window.addEventListener('bg-modules', () => {
+  const nav = document.querySelector('.proj-nav'); if (!nav || !navState.p) return;
+  nav.innerHTML = projectNav(navState.p, navState.active); bindProjectNav(nav, navState.p);
+});
 function bindProjectNav(root, p) {
+  root.querySelector('[data-mods]')?.addEventListener('click', () => modulesModal(p));
   root.querySelectorAll('[data-newboard]').forEach((b) => b.addEventListener('click', () => newBoard(p, b.dataset.newboard)));
 }
 
 function newBoard(p, groupId = '', kind = 'board') {
-  const fic = p.kind === 'ficcao';
+  const fic = scriptMode(p);
   const tpls = [['blank', 'Em branco'], ['deliverables', 'Entregas (peças, formatos, plataformas)'], ['props', fic ? 'Adereços por cena' : 'Adereços'], ...(fic ? [['cast', 'Elenco']] : [])];
   const m = modal(`<h2>Nova ferramenta</h2>
     <form class="stack">
@@ -493,6 +510,7 @@ async function projectPage(projectId, page, sub) {
   const p = await loadProject(projectId);
   if (!p) return notFound();
   if (page === 'detalhes' && !isStaff()) page = 'geral';
+  if (page !== 'geral') setTimeout(() => autoModules(p), 0);
   app.innerHTML = `<div class="page">${header(p.is_central ? 'central' : '')}
     <div class="proj-layout">
       <nav class="proj-nav" aria-label="Projeto">${projectNav(p, page)}</nav>
@@ -504,10 +522,13 @@ async function projectPage(projectId, page, sub) {
   if (page === 'geral') return projectOverview(main, p);
   if (page === 'financas' && p.is_central && hasPerm('finance')) return financePage(main, sub);
   if (page === 'orcamento' && p.canBudget) { main.innerHTML = `<div class="row between wrap-gap"><div><h1 class="h1 pm-title">Orçamento</h1><p class="muted">Soma tudo o que está na tabela e compara com o orçamento geral do projeto.</p></div><div data-who></div></div><div class="budget-wrap" data-b></div>`; budgetWhoChip(main.querySelector('[data-who]'), p); return budgetPage(main.querySelector('[data-b]'), p); }
-  if (p.kind === 'videoclipe' && CLIP_PAGES.some(([k]) => k === page) && page !== 'aderecos') return clipPage(main, p, page, sub, projBase(p), onCleanup);
+  {
+    const scr = scriptMode(p);
+    if (['guiao', 'cenas', 'planificacao'].includes(page) || (scr && ['personagens', 'elenco', 'decors', 'storyboard'].includes(page))) return fictionPage(main, p, page === 'elenco' ? 'personagens' : page, sub, projBase(p), onCleanup);
+    if (['seguimento', 'decors', 'elenco', 'personagens', 'storyboard'].includes(page)) return clipPage(main, p, page === 'personagens' ? 'elenco' : page, sub, projBase(p), onCleanup);
+  }
   if (['orcamento', 'financas'].includes(page)) { main.innerHTML = `<div class="empty-box"><p>${ICON.lock} Não tens acesso a esta parte.</p><p class="muted small">Pede a um administrador.</p></div>`; return; }
   if (page === 'aderecos' && !p.is_central) return propsPage(main, p, sub, projBase(p), onCleanup);
-  if (p.kind === 'ficcao' && FICTION_PAGES.some(([k]) => k === page)) return fictionPage(main, p, page, sub, projBase(p), onCleanup);
   main.innerHTML = `<h1 class="h1 pm-title">${esc(titles[page] || '')}</h1><div class="panel" data-body></div>`;
   const body = main.querySelector('[data-body]');
   if (page === 'tarefas') { body.classList.remove('panel'); body.classList.add('tc'); const t = mountTaskCenter(body, { projectId: p.id }); onCleanup(() => t.destroy()); }
@@ -528,7 +549,7 @@ async function projectOverview(main, p) {
     loadPeople(),
   ]);
   const cover = p.cover_path ? (await signedUrls([p.cover_path]))[p.cover_path] : null;
-  const fs = p.kind === 'ficcao' ? await fictionStats(p) : null;
+  const fs = hasMod(p, 'cenas') ? await fictionStats(p) : null;
   const imgPaths = (items || []).filter((i) => i.kind === 'image').map((i) => i.data?.path);
   const thumbs = await signedUrls(imgPaths.slice(0, 40));
   const ph = phaseOf(p);
@@ -544,7 +565,7 @@ async function projectOverview(main, p) {
         <span class="tag dark">${esc(KINDS[p.kind] || p.kind)}</span>
         <h1 class="pm-name">${esc(p.name)}</h1>
         <p class="pm-sub">${[p.client, p.starts_on && p.ends_on ? `${fmtDate(p.starts_on)} – ${fmtDate(p.ends_on)}` : ''].filter(Boolean).map(esc).join(' · ')}</p>
-        ${p.canBudget ? (() => { const used = budgetUsed(p); const over = p.value != null && used > p.value; return `<button type="button" class="pm-budget ${over ? 'over' : ''}" data-budget title="Só quem tem acesso ao orçamento vê isto"><span>${ICON.lock} Orçamento</span>${p.value != null ? `<strong>${eur.format(p.value)}</strong>${used ? `<small>${eur.format(used)} na tabela${over ? ` · ${eur.format(used - p.value)} acima` : ''}</small>` : ''}` : '<strong class="muted-w">Definir</strong>'}</button>`; })() : ''}
+        ${p.canBudget && hasMod(p, 'orcamento') ? (() => { const used = budgetUsed(p); const over = p.value != null && used > p.value; return `<button type="button" class="pm-budget ${over ? 'over' : ''}" data-budget title="Só quem tem acesso ao orçamento vê isto"><span>${ICON.lock} Orçamento</span>${p.value != null ? `<strong>${eur.format(p.value)}</strong>${used ? `<small>${eur.format(used)} na tabela${over ? ` · ${eur.format(used - p.value)} acima` : ''}</small>` : ''}` : '<strong class="muted-w">Definir</strong>'}</button>`; })() : ''}
         ${ph.label ? `<div class="pm-phase"><div class="row between small"><span>${esc(ph.label)}</span><span>${Math.round(ph.pct * 100)}%</span></div><div class="bar light"><i style="width:${Math.round(ph.pct * 100)}%"></i></div></div>` : ''}
       </div>
     </section>
@@ -581,7 +602,7 @@ async function projectOverview(main, p) {
     });
   });
   main.querySelectorAll('[data-bopt]').forEach((btn) => btn.addEventListener('click', () => boardOptions(p, p._boards.find((x) => x.id === btn.dataset.bopt), () => projectPage(p.id, 'geral'))));
-  if (!p.is_central) mountSituation(main.querySelector('[data-situation]'), p, base);
+  if (!p.is_central) { mountSituation(main.querySelector('[data-situation]'), p, base); autoModules(p); }
   if (p.is_central) { const box = document.createElement('div'); box.className = 'co'; main.querySelector('.pm-head').after(box); centralOverview(box); }
 }
 

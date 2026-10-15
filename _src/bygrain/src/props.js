@@ -1,5 +1,6 @@
 import { sb, esc, toast, modal, confirmBox, ICON, signedUrls, uploadImage } from './lib.js';
 import { mountTasks } from './tasks.js';
+import { scriptMode } from './modules.js';
 
 // Adereços (departamento de Arte), como no Studio: de ação e de cenário, estados com cores,
 // página própria com cenas, interações, continuidade e referências. Análise do guião no Claude (grátis) ou rápida.
@@ -120,7 +121,7 @@ export async function propsPage(main, p, sub, base, cleanup) {
   main.innerHTML = '<p class="muted">A carregar…</p>';
   const f = await load(p.id);
   if (sub) return propPage(main, p, f, sub, base, cleanup);
-  const hasScenes = f.scenes.length > 0; const clip = p.kind === 'videoclipe'; f.clip = clip;
+  const hasScenes = f.scenes.length > 0; const clip = !scriptMode(p); f.clip = clip;
   if (!hasScenes && st.sort === 'scene') st.sort = 'name';
   const urls = await signedUrls(f.props.map((x) => (x.refs || []).find((r) => r.kind === 'image')?.path).filter(Boolean));
   const draw = () => {
@@ -263,8 +264,8 @@ async function propPage(main, p, f, id, base, cleanup) {
         ${!imgs.length && !links.length ? '<p class="muted small">Imagens e links para produtos.</p>' : ''}</section>
       <section class="panel"><h2 class="h3">Tarefas</h2><div data-tasks></div></section>
     </div><aside class="pm-side stack">
-      ${f.scenes.length ? `<section class="panel"><h2 class="h3">${p.kind === 'videoclipe' ? 'Secções' : 'Cenas'} (${scenes.length})</h2>${scenes.map((s) => `<a class="scene-ex" href="${base}/${p.kind === 'videoclipe' ? 'seguimento' : 'cenas'}/${s.id}"><span class="scene-n sm">${esc(s.number)}</span><span><span class="small">${esc(s.heading)}</span>${excerpt(s) ? `<span class="small muted mono">${esc(excerpt(s))}</span>` : ''}</span></a>`).join('')}${chips(x.scene_ids, f.scenes.map((s) => ({ id: s.id, name: p.kind === 'videoclipe' ? s.heading : `Cena ${s.number}` })), 'scene_ids')}</section>` : ''}
-      ${f.characters.length ? `<section class="panel"><h2 class="h3">${p.kind === 'videoclipe' ? 'Atores e figurantes' : 'Personagens'}</h2>${chips(x.character_ids, f.characters, 'character_ids')}</section>` : ''}
+      ${f.scenes.length ? `<section class="panel"><h2 class="h3">${!scriptMode(p) ? 'Secções' : 'Cenas'} (${scenes.length})</h2>${scenes.map((s) => `<a class="scene-ex" href="${base}/${!scriptMode(p) ? 'seguimento' : 'cenas'}/${s.id}"><span class="scene-n sm">${esc(s.number)}</span><span><span class="small">${esc(s.heading)}</span>${excerpt(s) ? `<span class="small muted mono">${esc(excerpt(s))}</span>` : ''}</span></a>`).join('')}${chips(x.scene_ids, f.scenes.map((s) => ({ id: s.id, name: !scriptMode(p) ? s.heading : `Cena ${s.number}` })), 'scene_ids')}</section>` : ''}
+      ${f.characters.length ? `<section class="panel"><h2 class="h3">${!scriptMode(p) ? 'Atores e figurantes' : 'Personagens'}</h2>${chips(x.character_ids, f.characters, 'character_ids')}</section>` : ''}
       ${f.locations.length ? `<section class="panel"><h2 class="h3">Décors</h2>${chips(x.location_ids, f.locations, 'location_ids')}</section>` : ''}
     </aside></div>`;
   const savers = {};

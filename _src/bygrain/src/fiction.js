@@ -3,6 +3,7 @@ import { parseScript, fileToText, eighthsLabel } from './script.js';
 import { mountTasks } from './tasks.js';
 import { propsPage } from './props.js';
 import { newLightmapData } from './lightmap.js';
+import { ensureModules } from './modules.js';
 
 // Modelo de ficção, igual ao do Studio: guião → cenas, personagens e décors → planos e storyboard.
 
@@ -138,6 +139,7 @@ async function applyScript(p, f, r) {
   });
   if (ins.length) { const { error } = await sb.from('scenes').insert(ins); if (error) throw error; }
   if (ups.length) { const { error } = await sb.from('scenes').upsert(ups); if (error) throw error; }
+  await ensureModules(p, ['cenas', ...(r.characters.length ? ['elenco'] : []), ...(r.locations.length ? ['decors'] : [])]);
 }
 
 // ---------- Cenas ----------
@@ -227,7 +229,7 @@ export function bindShots(main, p, f, s, shots, urls, base) {
     if (e.target.closest('[data-addshot]')) {
       const { data, error } = await sb.from('shots').insert({ project_id: p.id, scene_id: s.id, code: nextCode(s, shots), position: shots.length }).select().single();
       if (error) return toast(error.message);
-      shots.push(data); f.shots.push(data);
+      shots.push(data); f.shots.push(data); ensureModules(p, ['storyboard']);
       wrap.querySelector('[data-addshot]').insertAdjacentHTML('beforebegin', shotCard(data, null));
       return;
     }

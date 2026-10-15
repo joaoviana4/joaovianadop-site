@@ -2,6 +2,7 @@ import { sb, esc, toast, confirmBox, modal, ICON, signedUrls, signedUrl } from '
 import { shotCard, bindShots, shotViewer } from './fiction.js';
 import { mountTasks } from './tasks.js';
 import { mountLayout } from './layout.js';
+import { ensureModules } from './modules.js';
 
 // Videoclipes: a música partida em secções (intro, versos, refrões, ponte…), como no Studio.
 // Cada secção é uma linha de "scenes" com tempos; décors = locations, pessoas = characters (figurantes têm info.extra).
@@ -252,7 +253,7 @@ async function section(main, p, f, sid, base, cleanup) {
   bindShots(main, p, f, s, shots, urls, base);
   const field = { place: 'location_ids', actor: 'character_ids', extra: 'extra_ids' };
   const redraw = () => section(main, p, f, sid, base, cleanup);
-  const setIds = async (kind, ids) => { s[field[kind]] = ids; const { error } = await sb.from('scenes').update({ [field[kind]]: ids }).eq('id', s.id); if (error) toast(error.message); redraw(); };
+  const setIds = async (kind, ids) => { s[field[kind]] = ids; const { error } = await sb.from('scenes').update({ [field[kind]]: ids }).eq('id', s.id); if (error) toast(error.message); if (ids.length) await ensureModules(p, [kind === 'place' ? 'decors' : 'elenco']); redraw(); };
   main.querySelectorAll('[data-addent]').forEach((sel) => sel.addEventListener('change', async () => {
     const kind = sel.dataset.addent; let id = sel.value; if (!id) return;
     if (id === '__new') {
