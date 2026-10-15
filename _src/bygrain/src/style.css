@@ -899,3 +899,9 @@ a.ov-kpi:hover { border-color: var(--line2); }
 .ov-qadd input { grid-column: 1 / -1; }
 .ov-qadd select { width: 100%; }
 .ov-qadd:not(:has(select + select)) { grid-template-columns: minmax(0, 1fr) auto; }
+.bconflict { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 14px 16px; border-radius: 12px; background: rgba(255, 107, 94, .12); border: 1px solid rgba(255, 107, 94, .5); }
+.bconflict span { flex: 1 1 300px; color: var(--muted); font-size: 14px; }
+.bconflict strong { flex-basis: 100%; }
+.bhist { list-style: none; margin: 0; padding: 0; max-height: 50vh; overflow: auto; }
+.bhist li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.bhist li > span { display: flex; flex-direction: column; }

@@ -57,11 +57,46 @@ export async function budgetPage(main, p) {
   let total = p.value != null ? Number(p.value) : null;
   let undo = null;
   let saveT;
+  // Guardar com proteção: só grava se ninguém (outra janela, outra pessoa) mudou o orçamento entretanto.
+  // Cada versão anterior fica guardada na base de dados (project_budget_history).
+  let blocked = false;
+  async function write(patch) {
+    if (blocked) return false;
+    const now = new Date().toISOString();
+    let res;
+    if (p._budgetAt) res = await sb.from('project_budgets').update({ ...patch, updated_at: now }).eq('project_id', p.id).eq('updated_at', p._budgetAt).select('updated_at');
+    else res = await sb.from('project_budgets').insert({ project_id: p.id, ...patch, updated_at: now }).select('updated_at');
+    if (res.error && !/duplicate/i.test(res.error.message)) { toast('Não foi possível guardar: ' + res.error.message); return false; }
+    if (res.error || !res.data?.length) { blocked = true; conflict(); return false; }
+    p._budgetAt = res.data[0].updated_at; return true;
+  }
+  function conflict() {
+    clearTimeout(saveT);
+    const bar = document.createElement('div'); bar.className = 'bconflict';
+    bar.innerHTML = `<strong>Este orçamento foi mudado noutra janela ou por outra pessoa.</strong><span>Para não apagar esse trabalho, esta janela deixou de guardar. Recarrega para veres a versão mais recente.</span><button type="button" class="btn primary">Recarregar</button>`;
+    bar.querySelector('button').onclick = () => location.reload();
+    main.prepend(bar);
+  }
   const save = (delay = 600) => {
     clearTimeout(saveT);
-    saveT = setTimeout(async () => { const { error } = await sb.from('project_budgets').upsert({ project_id: p.id, budget: b, updated_at: new Date().toISOString() }); if (error) toast('Não foi possível guardar: ' + error.message); else p.budget = b; }, delay);
+    saveT = setTimeout(async () => { if (await write({ budget: b })) p.budget = b; }, delay);
   };
-  const saveTotal = async () => { const { error } = await sb.from('project_budgets').upsert({ project_id: p.id, value: total, updated_at: new Date().toISOString() }); if (error) toast(error.message); else p.value = total; };
+  const saveTotal = async () => { if (await write({ value: total })) p.value = total; };
+  async function history() {
+    const { data, error } = await sb.from('project_budget_history').select('id, value, budget, saved_at').eq('project_id', p.id).order('saved_at', { ascending: false }).limit(30);
+    if (error) return toast(error.message);
+    const tot = (x) => { const bb = x.budget; if (!bb?.rows || !bb.main) return 0; return bb.rows.filter((r) => r.kind === 'item').reduce((a, r) => a + (Number(r.cells?.[bb.main]) || 0), 0); };
+    const m = modal(`<h2>Versões anteriores</h2><p class="muted small">Cada vez que o orçamento muda, a versão anterior fica guardada aqui.</p>
+      ${data.length ? `<ul class="bhist">${data.map((x) => `<li><span><strong>${new Date(x.saved_at).toLocaleString('pt-PT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</strong><span class="muted small">${(x.budget?.rows || []).filter((r) => r.kind === 'item').length} linhas · tabela ${eur.format(tot(x))}${x.value != null ? ` · geral ${eur.format(x.value)}` : ''}</span></span><button type="button" class="btn ghost" data-restore="${x.id}">Repor</button></li>`).join('')}</ul>` : '<p class="muted">Ainda não há versões anteriores.</p>'}
+      <div class="row end"><button type="button" class="btn ghost" data-close>Fechar</button></div>`);
+    m.el.querySelectorAll('[data-restore]').forEach((btn) => btn.addEventListener('click', async () => {
+      const x = data.find((y) => String(y.id) === btn.dataset.restore);
+      if (!(await confirmBox('Repor esta versão? A atual também fica guardada nas versões anteriores.', 'Repor'))) return;
+      const prevB = b, prevT = total;
+      b = x.budget ? JSON.parse(JSON.stringify(x.budget)) : null; total = x.value != null ? Number(x.value) : null;
+      if (await write({ budget: b, value: total })) { p.budget = b; p.value = total; m.close(); draw(); toast('Versão reposta.'); } else { b = prevB; total = prevT; }
+    }));
+  }
 
   function summary() {
     const { tot } = sums(b); const t = (b.main && tot[b.main]) || 0;
@@ -104,6 +139,7 @@ export async function budgetPage(main, p) {
         <label class="sel"><span class="vh">Modelo</span><select data-tpl><option value="">Aplicar modelo…</option>${TPL_NAMES.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label>
         <button type="button" class="btn ghost" data-import>${ICON.open} Importar Excel ou CSV</button>
         <button type="button" class="btn ghost" data-export>${ICON.copy} Exportar para Excel</button>
+        <button type="button" class="btn ghost" data-hist>${ICON.refresh} Versões anteriores</button>
         ${undo ? `<button type="button" class="link-btn" data-undo>Desfazer: ${esc(undo.label)}</button>` : ''}
       </div>
       <div class="panel table-wrap btable"><table class="table budget">
@@ -140,6 +176,7 @@ export async function budgetPage(main, p) {
     main.querySelector('[data-undo]')?.addEventListener('click', () => { b = undo.data; undo = null; save(0); draw(); toast('Desfeito.'); });
     main.querySelector('[data-import]').addEventListener('click', pickImport);
     main.querySelector('[data-export]').addEventListener('click', () => exportXlsx(b, total, p.name));
+    main.querySelector('[data-hist]').addEventListener('click', history);
     const tbody = main.querySelector('tbody');
     tbody.addEventListener('input', (e) => {
       const tr = e.target.closest('[data-row]'); const r = b.rows.find((x) => x.id === tr.dataset.row);

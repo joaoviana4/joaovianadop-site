@@ -285,7 +285,7 @@ function bindDetails(root, p, after) {
     if (!p.is_central) Object.assign(patch, { name: f.name.trim(), client: f.client.trim(), kind: f.kind, status: f.status, starts_on: f.starts_on || null, ends_on: f.ends_on || null });
     const { data, error } = await sb.from('projects').update(patch).eq('id', p.id).select(PROJECT_COLS).single();
     if (error) return toast(error.message);
-    if (p.canBudget && 'value' in f) { const v = f.value === '' ? null : Number(f.value); const r = await sb.from('project_budgets').upsert({ project_id: p.id, value: v, updated_at: new Date().toISOString() }); if (r.error) return toast(r.error.message); data.value = v; }
+    if (p.canBudget && 'value' in f) { const v = f.value === '' ? null : Number(f.value); const r = await sb.from('project_budgets').upsert({ project_id: p.id, value: v, updated_at: new Date().toISOString() }, { onConflict: 'project_id' }).select('updated_at'); if (r.error) return toast(r.error.message); data.value = v; p._budgetAt = r.data?.[0]?.updated_at || p._budgetAt; }
     Object.assign(p, data); toast('Guardado.'); after && after(data);
   });
 }
@@ -360,12 +360,13 @@ async function loadProject(id) {
   if (!p) return null;
   // o orçamento só chega a quem tem acesso (a base de dados devolve vazio aos outros)
   const [{ data: fin }, { data: grant }] = await Promise.all([
-    sb.from('project_budgets').select('value, budget').eq('project_id', id).maybeSingle(),
+    sb.from('project_budgets').select('value, budget, updated_at').eq('project_id', id).maybeSingle(),
     sb.from('budget_access').select('user_id').eq('project_id', id).eq('user_id', state.user.id).maybeSingle(),
   ]);
   p.canBudget = !p.is_central && (hasPerm('budget') || !!grant);
   p.value = p.canBudget ? fin?.value ?? null : null;
   p.budget = p.canBudget ? fin?.budget ?? null : null;
+  p._budgetAt = p.canBudget ? fin?.updated_at ?? null : null;
   const { data: boards } = await sb.from('boards').select('id, parent_id, title, group_id, position, created_at, kind').eq('project_id', id).order('position').order('created_at');
   p._boards = boards || [];
   return p;
