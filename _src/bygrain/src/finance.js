@@ -1,4 +1,5 @@
 import { sb, esc, toast, modal, confirmBox, ICON, todayISO } from './lib.js';
+import { summaryTab, earningsTab, peopleTab } from './finsummary.js';
 
 // Finanças da Grain (Central de Produção, só membros): movimentos do mês, contas e despesas mensais fixas.
 
@@ -7,7 +8,7 @@ const money = (n) => eur.format(Number(n) || 0);
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 const CATS = ['Cliente', 'Produção', 'Equipamento', 'Aluguer de material', 'Software e subscrições', 'Renda e estúdio', 'Transportes', 'Alimentação', 'Equipa e freelancers', 'Impostos e contabilidade', 'Marketing', 'Outros'];
 const KINDS = { banco: 'Banco', caixa: 'Caixa', cartao: 'Cartão', outra: 'Outra' };
-const st = { tab: 'movimentos', ym: todayISO().slice(0, 7) };
+const st = { tab: 'resumo', ym: todayISO().slice(0, 7), year: todayISO().slice(0, 4) };
 
 const ymLabel = (ym) => { const [y, m] = ym.split('-'); return `${MESES[+m - 1]} ${y}`; };
 const shiftYm = (ym, d) => { const [y, m] = ym.split('-').map(Number); const dt = new Date(y, m - 1 + d, 1); return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`; };
@@ -15,12 +16,15 @@ const lastDay = (ym) => { const [y, m] = ym.split('-').map(Number); return new D
 const dmy = (iso) => { const [, m, d] = iso.split('-'); return `${+d} ${MESES[+m - 1].slice(0, 3)}`; };
 
 export async function financePage(main, sub) {
-  if (['movimentos', 'contas', 'despesas'].includes(sub)) st.tab = sub;
+  if (['resumo', 'ganhos', 'pessoas', 'movimentos', 'contas', 'despesas'].includes(sub)) st.tab = sub;
   main.innerHTML = `<div class="row between wrap-gap"><h1 class="h1 pm-title">Finanças</h1>
-    <div class="seg dark" role="tablist">${[['movimentos', 'Movimentos'], ['contas', 'Contas'], ['despesas', 'Despesas mensais']].map(([k, l]) => `<button type="button" role="tab" aria-selected="${st.tab === k}" data-t="${k}">${l}</button>`).join('')}</div></div>
+    <div class="seg dark" role="tablist">${[['resumo', 'Resumo'], ['ganhos', 'Ganhos'], ['pessoas', 'Pessoas'], ['movimentos', 'Movimentos'], ['contas', 'Contas'], ['despesas', 'Custos fixos']].map(([k, l]) => `<button type="button" role="tab" aria-selected="${st.tab === k}" data-t="${k}">${l}</button>`).join('')}</div></div>
     <div class="fin" data-fin><p class="muted">A carregar…</p></div>`;
   main.querySelectorAll('[data-t]').forEach((b) => b.addEventListener('click', () => { st.tab = b.dataset.t; financePage(main); }));
   const box = main.querySelector('[data-fin]');
+  if (st.tab === 'resumo') return summaryTab(box, st);
+  if (st.tab === 'ganhos') return earningsTab(box, st);
+  if (st.tab === 'pessoas') return peopleTab(box, st);
   const [{ data: accounts }, { data: recurring }, { data: projects }] = await Promise.all([
     sb.from('fin_accounts').select('*').order('position'),
     sb.from('fin_recurring').select('*').order('day_of_month'),
