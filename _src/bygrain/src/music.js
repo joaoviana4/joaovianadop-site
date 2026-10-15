@@ -75,7 +75,7 @@ export function ytId(url) {
 const normUrl = (u) => { u = String(u || '').trim(); return u && !/^https?:\/\//i.test(u) ? 'https://' + u : u; };
 
 // música (ficheiro ou link), pre-vis (YouTube, toca aqui) e referências (links, abrem no YouTube)
-async function mediaPanel(slots, p, music, saveNow) {
+export async function mediaPanel(slots, p, music, saveNow) {
   const audioUrl = music.audio_path ? await signedUrl(music.audio_path) : null;
   const pv = ytId(music.previs_url);
   const refs = music.refs || [];
@@ -382,4 +382,15 @@ async function storyboard(main, p, f, base) {
     const sh = f.shots.find((x) => x.id === b.dataset.shot);
     if (sh.image_path) shotViewer(f, sh, base); else location.hash = `${base}/seguimento/${sh.scene_id}`;
   }));
+}
+
+// Música, pre-vis e referências como ferramenta (para qualquer projeto ou departamento)
+export function mediaTool(box, p, tool) {
+  const music = { ...(tool.data || {}) };
+  const saveNow = async () => { const { error } = await sb.from('boards').update({ data: music, updated_at: new Date().toISOString() }).eq('id', tool.id); if (error) { toast(error.message); return false; } tool.data = { ...music }; return true; };
+  box.innerHTML = `<div data-lay><div data-blk="previs"><div data-slot="previs"></div></div><div data-blk="song"><div data-slot="song"></div></div><div data-blk="refs"><div data-slot="refs"></div></div></div>`;
+  mediaPanel({ previs: box.querySelector('[data-slot=previs]'), song: box.querySelector('[data-slot=song]'), refs: box.querySelector('[data-slot=refs]') }, p, music, saveNow);
+  mountLayout(box.querySelector('[data-lay]'), { project: p, key: 'tool-' + tool.id, title: 'ferramenta', blocks: [
+    { id: 'previs', label: 'Pre-vis', pos: 'left' }, { id: 'song', label: 'A música', pos: 'right' }, { id: 'refs', label: 'Referências', pos: 'full' },
+  ] });
 }

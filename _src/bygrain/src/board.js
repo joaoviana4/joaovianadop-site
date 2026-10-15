@@ -1,10 +1,11 @@
 import { sb, esc, signedUrls, uploadImage, toast, modal, confirmBox, ICON } from './lib.js';
+import { ytId } from './music.js';
 
 // Board infinito à maneira do Milanote: cada cartão é uma linha própria na base de dados,
 // por isso duas pessoas podem trabalhar no mesmo board sem se apagarem uma à outra.
 
-const MIN = { note: [140, 80], title: [160, 50], image: [80, 60], palette: [180, 110], list: [180, 120], board: [56, 56], link: [180, 80] };
-const SIZE = { note: [280, 180], title: [520, 72], palette: [320, 150], list: [280, 220], board: [96, 96], link: [300, 110] };
+const MIN = { note: [140, 80], title: [160, 50], image: [80, 60], palette: [180, 110], list: [180, 120], board: [56, 56], link: [180, 80], video: [240, 170], audio: [220, 110] };
+const SIZE = { note: [280, 180], title: [520, 72], palette: [320, 150], list: [280, 220], board: [96, 96], link: [300, 110], video: [480, 316], audio: [340, 128] };
 
 export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom, onSelect }) {
   const items = new Map();
@@ -81,7 +82,13 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
         <button type="button" class="add-item" data-ui="additem">${ICON.plus} Item</button>`;
       case 'board': { const cov = urls[d.cover] || covers[d.board_id];
         return `<div class="bcov" ${cov ? `style="background-image:url('${esc(cov)}')"` : ''}>${cov ? '' : ICON.board}</div><div class="txt bname" data-field="title">${esc(d.title || 'Board')}</div><button type="button" class="cov-btn" data-ui="cover" title="Mudar a capa" aria-label="Mudar a capa">${ICON.image}</button>`; }
+      case 'video': { const id = ytId(d.url); const playing = st.playing === it.id;
+        return `<div class="vid-h"><span class="txt card-h" data-field="title">${esc(d.title || 'Pre-vis')}</span><a class="open-link sm" data-ui="link" href="${esc(d.url || '#')}" target="_blank" rel="noopener noreferrer" title="Abrir no YouTube">${ICON.open}</a></div>
+          <div class="vid" data-ui="media">${!id ? '<p class="muted small">Link do YouTube inválido.</p>' : playing ? `<iframe src="https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0" title="${esc(d.title || 'Vídeo')}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>` : `<button type="button" class="vid-play" data-ui="play" aria-label="Ver o vídeo"><img src="https://i.ytimg.com/vi/${id}/hqdefault.jpg" alt="" draggable="false" onerror="this.remove()"><span>▶</span></button>`}</div>`; }
+      case 'audio': return `<div class="txt card-h" data-field="title">${esc(d.title || d.name || 'Música')}</div><div data-ui="media" class="aud">${urls[d.path] ? `<audio controls preload="metadata" src="${esc(urls[d.path])}"></audio>` : '<span class="muted small">A carregar…</span>'}</div>`;
       case 'link': { let host = ''; try { host = new URL(d.url).hostname.replace(/^www\./, ''); } catch { /* url inválido */ }
+        const yid = ytId(d.url);
+        if (yid) return `<a class="yt-ref" data-ui="link" href="${esc(d.url)}" target="_blank" rel="noopener noreferrer"><img src="https://i.ytimg.com/vi/${yid}/hqdefault.jpg" alt="" draggable="false" onerror="this.remove()"><i>${ICON.open}</i></a><div class="txt card-h" data-field="title">${esc(d.title || 'Referência')}</div>`;
         return `<div class="txt card-h" data-field="title">${esc(d.title || host || 'Ligação')}</div><div class="link-host">${esc(host)}</div><a class="open-link" data-ui="link" href="${esc(d.url || '#')}" target="_blank" rel="noopener noreferrer">Abrir ${ICON.open}</a>`; }
       default: return '';
     }
@@ -140,9 +147,29 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
       if (error) return toast(error.message);
       return create('board', null, { board_id: b.id, title: 'Novo board' });
     }
+    if (kind === 'video') {
+      const m = modal(`<h2>Pre-vis ou vídeo</h2><p class="muted small">Toca dentro do board.</p><form class="stack"><div class="field"><label for="vurl">Link do YouTube</label><input id="vurl" type="url" placeholder="https://youtu.be/…" required></div><div class="field"><label for="vtit">Nome</label><input id="vtit" value="Pre-vis"></div><div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Juntar</button></div></form>`);
+      m.el.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); let u = m.el.querySelector('#vurl').value.trim(); if (!/^https?:\/\//.test(u)) u = 'https://' + u; if (!ytId(u)) return toast('Esse link não parece ser do YouTube.'); create('video', null, { url: u, title: m.el.querySelector('#vtit').value.trim() }); m.close(); });
+      return;
+    }
+    if (kind === 'audio') {
+      const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'audio/*,.mp3,.wav,.m4a,.aac';
+      inp.onchange = async () => {
+        const file = inp.files[0]; if (!file) return;
+        if (file.size > 25 * 1024 * 1024) return toast('O ficheiro passa dos 25 MB. Exporta em MP3.');
+        toast('A enviar a música…');
+        const ext = (file.name.split('.').pop() || 'mp3').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const path = `${projectId}/audio/${Date.now()}.${ext}`;
+        const { error } = await sb.storage.from('files').upload(path, file, { contentType: file.type || 'audio/mpeg' });
+        if (error) return toast(error.message);
+        urls = { ...urls, ...(await signedUrls([path])) };
+        create('audio', null, { path, name: file.name, title: file.name.replace(/\.[^.]+$/, '') });
+      };
+      inp.click(); return;
+    }
     if (kind === 'link') {
       const m = modal(`<h2>Juntar ligação</h2><form class="stack"><div class="field"><label for="lurl">Endereço</label><input id="lurl" type="url" placeholder="https://" required></div><div class="field"><label for="ltit">Nome (opcional)</label><input id="ltit"></div><div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Juntar</button></div></form>`);
-      m.el.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); let u = m.el.querySelector('#lurl').value.trim(); if (!u) return; if (!/^https?:\/\//.test(u)) u = 'https://' + u; create('link', null, { url: u, title: m.el.querySelector('#ltit').value.trim() }); m.close(); });
+      m.el.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); let u = m.el.querySelector('#lurl').value.trim(); if (!u) return; if (!/^https?:\/\//.test(u)) u = 'https://' + u; create('link', null, { url: u, title: m.el.querySelector('#ltit').value.trim() }, ytId(u) ? [300, 230] : undefined); m.close(); });
       return;
     }
     const defaults = { note: { text: '' }, title: { text: 'Título' }, palette: { title: 'Paleta', colors: ['#1E2AD4', '#F4F1E8', '#0C0C12'] }, list: { title: 'Lista', items: [{ text: 'Primeiro item', done: false }] } };
@@ -231,7 +258,8 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
         };
         inp.click(); return;
       }
-      case 'link': return;
+      case 'link': case 'media': return;
+      case 'play': st.playing = it.id; cardEl(it); return;
       default: return;
     }
     it.data = d; save(it, ['data']); cardEl(it);
@@ -335,7 +363,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     const files = [...(e.clipboardData?.files || [])];
     if (files.length) { e.preventDefault(); addImages(files); return; }
     const t = e.clipboardData?.getData('text/plain')?.trim();
-    if (t && /^https?:\/\/\S+$/.test(t)) { e.preventDefault(); create('link', null, { url: t, title: '' }); }
+    if (t && /^https?:\/\/\S+$/.test(t)) { e.preventDefault(); create('link', null, { url: t, title: '' }, ytId(t) ? [300, 230] : undefined); }
     else if (t) { e.preventDefault(); create('note', null, { text: t }); }
   };
   document.addEventListener('paste', onPaste);
@@ -375,7 +403,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     const { error } = await sb.from('board_items').delete().eq('id', it.id);
     if (error) return toast(error.message);
     if (it.kind === 'board' && it.data?.board_id) await sb.from('boards').delete().eq('id', it.data.board_id);
-    if (it.kind === 'image' && it.data?.path) await sb.storage.from('files').remove([it.data.path]);
+    if ((it.kind === 'image' || it.kind === 'audio') && it.data?.path) await sb.storage.from('files').remove([it.data.path]);
     toast('Apagado.');
   }
 
@@ -383,7 +411,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   const ch = sb.channel('board-' + boardId)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'board_items', filter: `board_id=eq.${boardId}` }, async ({ new: row }) => {
       if (items.has(row.id)) return;
-      if (row.kind === 'image' && row.data?.path) urls = { ...urls, ...(await signedUrls([row.data.path])) };
+      if ((row.kind === 'image' || row.kind === 'audio') && row.data?.path) urls = { ...urls, ...(await signedUrls([row.data.path])) };
       items.set(row.id, row); cardEl(row);
     })
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'board_items', filter: `board_id=eq.${boardId}` }, ({ new: row }) => {
@@ -406,7 +434,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     const childIds = data.filter((r) => r.kind === 'board' && r.data?.board_id).map((r) => r.data.board_id);
     let firstImgs = [];
     if (childIds.length) { const { data: imgs } = await sb.from('board_items').select('board_id, data, z').in('board_id', childIds).eq('kind', 'image').order('z'); firstImgs = imgs || []; }
-    urls = await signedUrls([...data.filter((r) => r.kind === 'image').map((r) => r.data?.path), ...data.filter((r) => r.kind === 'board').map((r) => r.data?.cover), ...firstImgs.map((i) => i.data?.path)]);
+    urls = await signedUrls([...data.filter((r) => r.kind === 'image' || r.kind === 'audio').map((r) => r.data?.path), ...data.filter((r) => r.kind === 'board').map((r) => r.data?.cover), ...firstImgs.map((i) => i.data?.path)]);
     firstImgs.forEach((i) => { if (!covers[i.board_id] && urls[i.data?.path]) covers[i.board_id] = urls[i.data.path]; });
     renderAll();
     let saved = null; try { saved = JSON.parse(localStorage.getItem(viewKey) || 'null'); } catch { /* nada */ }

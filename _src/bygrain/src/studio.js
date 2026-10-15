@@ -8,9 +8,9 @@ import { financePage } from './finance.js';
 import { TOOL_KINDS, tableTool, timelineTool, tableTemplate } from './tools.js';
 import { lightmapTool, newLightmapData } from './lightmap.js';
 import { propsPage } from './props.js';
-import { budgetPage } from './budget.js';
+import { budgetPage, budgetTool } from './budget.js';
 import { mountTaskCenter } from './taskcenter.js';
-import { clipPage, CLIP_PAGES } from './music.js';
+import { clipPage, CLIP_PAGES, mediaTool } from './music.js';
 import { mountSituation } from './overview.js';
 import { budgetWhoChip, budgetAccessPanel, globalPermsPanel } from './perms.js';
 import { FICTION_PAGES, FICTION_DEPTS, fictionPage, fictionStats } from './fiction.js';
@@ -452,6 +452,8 @@ async function toolPage(projectId, toolId) {
   const box = app.querySelector('[data-tool]');
   if (tool.kind === 'table') tableTool(box, p, tool);
   if (tool.kind === 'timeline') timelineTool(box, p, tool);
+  if (tool.kind === 'budget') budgetTool(box, p, tool);
+  if (tool.kind === 'media') mediaTool(box, p, tool);
   if (tool.kind === 'lightmap') {
     const { data: chars } = p.kind === 'ficcao' ? await sb.from('characters').select('name').eq('project_id', p.id).order('position') : { data: [] };
     const lm = lightmapTool(box, p, tool, { characters: (chars || []).map((c) => c.name) });
@@ -637,7 +639,7 @@ async function boardView(projectId, boardId) {
   const chain = []; let b = cur; while (b) { chain.unshift(b); b = boards.find((x) => x.id === b.parent_id); }
   const topId = chain[0].id;
 
-  const tools = [['note', 'Nota', ICON.note], ['image', 'Imagem', ICON.image], ['palette', 'Paleta', ICON.palette], ['list', 'Lista', ICON.list], ['board', 'Board', ICON.board], ['title', 'Título', ICON.title], ['link', 'Ligação', ICON.link]];
+  const tools = [['note', 'Nota', ICON.note], ['image', 'Imagem', ICON.image], ['palette', 'Paleta', ICON.palette], ['list', 'Lista', ICON.list], ['board', 'Board', ICON.board], ['title', 'Título', ICON.title], ['link', 'Ligação', ICON.link], ['video', 'Pre-vis / vídeo', ICON.camera], ['audio', 'Música', ICON.music]];
   document.body.classList.add('is-board');
   onCleanup(() => document.body.classList.remove('is-board'));
 

@@ -1021,3 +1021,21 @@ a.ov-kpi:hover { border-color: var(--line2); }
 .lay-dragging { opacity: .4; }
 .drop-before { box-shadow: 0 -3px 0 var(--blue); }
 .drop-after { box-shadow: 0 3px 0 var(--blue); }
+
+/* ---------- board: vídeo, música, referência do YouTube ---------- */
+.card.k-video, .card.k-audio { display: flex; flex-direction: column; gap: 8px; padding: 10px; }
+.vid-h { display: flex; align-items: center; gap: 8px; }
+.vid-h .card-h { flex: 1; min-width: 0; }
+.open-link.sm { padding: 4px; }
+.vid { flex: 1; min-height: 0; border-radius: 8px; overflow: hidden; background: #000; position: relative; }
+.vid iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.vid-play { position: absolute; inset: 0; border: 0; padding: 0; background: #000; cursor: pointer; }
+.vid-play img { width: 100%; height: 100%; object-fit: cover; opacity: .85; }
+.vid-play span { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 56px; height: 56px; border-radius: 50%; background: rgba(12, 12, 18, .75); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 20px; padding-left: 4px; }
+.vid-play:hover span { background: var(--blue); }
+.aud audio { width: 100%; }
+.card.k-link:has(.yt-ref) { padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.yt-ref { position: relative; display: block; flex: 1; min-height: 0; border-radius: 6px; overflow: hidden; background: #000; }
+.yt-ref img { width: 100%; height: 100%; object-fit: cover; }
+.yt-ref i { position: absolute; right: 6px; bottom: 6px; width: 24px; height: 24px; border-radius: 50%; background: rgba(12, 12, 18, .75); display: flex; align-items: center; justify-content: center; color: #fff; }
+.yt-ref i svg { width: 13px; height: 13px; }

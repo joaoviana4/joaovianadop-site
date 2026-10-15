@@ -62,6 +62,7 @@ export async function budgetPage(main, p) {
   let blocked = false;
   async function write(patch) {
     if (blocked) return false;
+    if (p._store) { const ok = await p._store(patch); if (ok === 'conflict') { blocked = true; conflict(); return false; } return ok; }
     const now = new Date().toISOString();
     let res;
     if (p._budgetAt) res = await sb.from('project_budgets').update({ ...patch, updated_at: now }).eq('project_id', p.id).eq('updated_at', p._budgetAt).select('updated_at');
@@ -102,7 +103,7 @@ export async function budgetPage(main, p) {
     const { tot } = sums(b); const t = (b.main && tot[b.main]) || 0;
     const has = total != null && total > 0; const ratio = has ? t / total : 0; const diff = has ? total - t : 0;
     const stt = !has ? 'none' : diff < 0 ? 'over' : ratio >= 0.9 ? 'near' : 'ok';
-    const label = { none: 'Sem orçamento geral definido', over: 'Fora do orçamento', near: 'Dentro, mas perto do limite', ok: 'Dentro do orçamento' }[stt];
+    const label = { none: p._capLabel ? 'Sem limite definido' : 'Sem orçamento geral definido', over: 'Fora do orçamento', near: 'Dentro, mas perto do limite', ok: 'Dentro do orçamento' }[stt];
     return `<div class="bsum-grid"><div><span class="fl">Total da tabela</span><strong class="bbig">${eur.format(t)}</strong></div>
       ${has ? `<div><span class="fl">${diff < 0 ? 'Passa' : 'Sobram'}</span><strong class="bbig bst-${stt}">${eur.format(Math.abs(diff))}</strong></div>` : ''}
       <div class="bstate"><span class="bchip bst-${stt}">${label}</span></div></div>
@@ -130,7 +131,7 @@ export async function budgetPage(main, p) {
     main.innerHTML = `
       <section class="panel bsum">
         <div class="btotal-in">
-          <label class="field"><span class="label">Orçamento geral do projeto</span><span class="money-in"><input class="num" data-total inputmode="decimal" value="${total != null ? esc(fmtIn({ type: 'money' }, total)) : ''}" placeholder="Ex.: 8000" autocomplete="off"><i>€</i></span></label>
+          <label class="field"><span class="label">${esc(p._capLabel || 'Orçamento geral do projeto')}</span><span class="money-in"><input class="num" data-total inputmode="decimal" value="${total != null ? esc(fmtIn({ type: 'money' }, total)) : ''}" placeholder="Ex.: 8000" autocomplete="off"><i>€</i></span></label>
           ${moneyCols.length > 1 ? `<label class="field"><span class="label">Compara com a coluna</span><select data-main>${moneyCols.map((c) => `<option value="${c.id}" ${c.id === b.main ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>` : ''}
         </div>
         <div data-sum>${summary()}</div>
@@ -139,7 +140,7 @@ export async function budgetPage(main, p) {
         <label class="sel"><span class="vh">Modelo</span><select data-tpl><option value="">Aplicar modelo…</option>${TPL_NAMES.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label>
         <button type="button" class="btn ghost" data-import>${ICON.open} Importar Excel ou CSV</button>
         <button type="button" class="btn ghost" data-export>${ICON.copy} Exportar para Excel</button>
-        <button type="button" class="btn ghost" data-hist>${ICON.refresh} Versões anteriores</button>
+        ${p._store ? '' : `<button type="button" class="btn ghost" data-hist>${ICON.refresh} Versões anteriores</button>`}
         ${undo ? `<button type="button" class="link-btn" data-undo>Desfazer: ${esc(undo.label)}</button>` : ''}
       </div>
       <div class="panel table-wrap btable"><table class="table budget">
@@ -176,7 +177,7 @@ export async function budgetPage(main, p) {
     main.querySelector('[data-undo]')?.addEventListener('click', () => { b = undo.data; undo = null; save(0); draw(); toast('Desfeito.'); });
     main.querySelector('[data-import]').addEventListener('click', pickImport);
     main.querySelector('[data-export]').addEventListener('click', () => exportXlsx(b, total, p.name));
-    main.querySelector('[data-hist]').addEventListener('click', history);
+    main.querySelector('[data-hist]')?.addEventListener('click', history);
     const tbody = main.querySelector('tbody');
     tbody.addEventListener('input', (e) => {
       const tr = e.target.closest('[data-row]'); const r = b.rows.find((x) => x.id === tr.dataset.row);
@@ -346,4 +347,27 @@ async function exportXlsx(b, total, name) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
   a.download = `${(name || 'Projeto').replace(/[\\/:*?"<>|]+/g, ' ').trim()} - orcamento.xlsx`; document.body.appendChild(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
+// Orçamento como ferramenta: um orçamento próprio para um departamento (ex.: Arte), guardado na ferramenta.
+// Fica visível para quem tem acesso ao projeto; o orçamento geral continua protegido à parte.
+export function budgetTool(box, p, tool) {
+  let at = tool.updated_at || null;
+  const q = {
+    id: p.id, name: `${p.name} — ${tool.title}`, kind: tool.data?.tpl || 'simple',
+    budget: tool.data?.budget || null, value: tool.data?.value ?? null,
+    _capLabel: `Limite para ${tool.title}`,
+    _store: async (patch) => {
+      const data = { ...(tool.data || {}), ...patch };
+      const now = new Date().toISOString();
+      let qb = sb.from('boards').update({ data, updated_at: now }).eq('id', tool.id);
+      if (at) qb = qb.eq('updated_at', at);
+      const { data: rows, error } = await qb.select('updated_at');
+      if (error) { toast('Não foi possível guardar: ' + error.message); return false; }
+      if (!rows?.length) return 'conflict';
+      at = rows[0].updated_at; tool.data = data; return true;
+    },
+  };
+  box.innerHTML = '<div class="budget-wrap" data-b></div>';
+  return budgetPage(box.querySelector('[data-b]'), q);
 }
