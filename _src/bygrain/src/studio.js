@@ -4,22 +4,22 @@ import { loadHidden, hideProject, unhideProject } from './lib.js';
 import { sb, state, esc, $, loadProfile, isStaff, isAdmin, toast, modal, confirmBox, ICON, LOGO, KINDS, ROLES, phaseOf, greeting, initials, signedUrls, uploadImage, callFn, authPw, MIN_PW, fmtDate, dueInfo, registerSW, BASE, PROJECT_COLS, hasPerm } from './lib.js';
 import { renderAuth } from './auth.js';
 import { mountBoard } from './board.js';
-import { mountTasks, loadPeople } from './tasks.js';
-import { financePage } from './finance.js';
+import { mountTasks, loadPeople, clearPeopleCache } from './tasks.js';
 import { TOOL_KINDS, tableTool, timelineTool, tableTemplate } from './tools.js';
-import { lightmapTool, newLightmapData } from './lightmap.js';
-import { gearPage } from './gear.js';
 import { isFolder, loadChildren, rollup, childrenSection, budgetChildrenPanel } from './folders.js';
-import { propsPage } from './props.js';
-import { budgetPage, budgetTool } from './budget.js';
 import { mountTaskCenter } from './taskcenter.js';
 import { clipPage, CLIP_PAGES, mediaTool } from './music.js';
 import { mountSituation } from './overview.js';
-import { shotlistPage } from './shotlist.js';
-import { shotPage } from './shot.js';
-import { callsheetTool, newCallsheet } from './callsheet.js';
-import { transportTool, newTransport } from './transport.js';
 import { clearFullscreen } from './layout.js';
+import { newLightmapData } from './lmdata.js';
+// páginas pesadas só carregam quando são abertas (o site arranca mais depressa)
+const lazy = {
+  finance: () => import('./finance.js'), lightmap: () => import('./lightmap.js'), gear: () => import('./gear.js'),
+  props: () => import('./props.js'), budget: () => import('./budget.js'), shotlist: () => import('./shotlist.js'),
+  shot: () => import('./shot.js'), callsheet: () => import('./callsheet.js'), transport: () => import('./transport.js'),
+};
+// pré-carrega em segundo plano depois de o site abrir, para a primeira abertura também ser rápida
+setTimeout(() => { const idle = window.requestIdleCallback || ((f) => setTimeout(f, 1500)); idle(() => Object.values(lazy).forEach((f) => f().catch(() => {}))); }, 4000);
 import { joinProject, leaveProject, lockPage, boardPresence, onPresence, whoLabel } from './presence.js';
 import { budgetWhoChip, budgetAccessPanel, globalPermsPanel } from './perms.js';
 import { MODULES, TEMPLATES, modulesOf, hasMod, scriptMode, modLabel, modPath, modulesModal, autoModules, ensureModules } from './modules.js';
@@ -114,7 +114,7 @@ function accountMenu() {
   m.el.querySelector('[data-a=name]').addEventListener('click', () => {
     m.close();
     const n = modal(`<h2>O teu nome</h2><form class="stack"><div class="field"><label for="dn">Nome</label><input id="dn" value="${esc(p.display_name)}" required></div><div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Guardar</button></div></form>`);
-    n.el.querySelector('form').addEventListener('submit', async (e) => { e.preventDefault(); const v = n.el.querySelector('#dn').value.trim(); if (!v) return; await sb.from('profiles').update({ display_name: v }).eq('id', p.id); p.display_name = v; n.close(); route(); });
+    n.el.querySelector('form').addEventListener('submit', async (e) => { e.preventDefault(); const v = n.el.querySelector('#dn').value.trim(); if (!v) return; await sb.from('profiles').update({ display_name: v }).eq('id', p.id); clearPeopleCache(); p.display_name = v; n.close(); route(); });
   });
 }
 function changePassword() {
@@ -525,21 +525,22 @@ const projBase = (p) => (p.is_central ? '#/central' : `#/p/${p.id}`);
 const toolHref = (p, b) => `${projBase(p)}/${(b.kind || 'board') === 'board' ? 'b' : 'f'}/${b.id}`;
 
 async function loadProject(id) {
-  const { data: p } = await sb.from('projects').select(PROJECT_COLS).eq('id', id).maybeSingle();
-  if (!p || p.deleted_at) return null;
-  // o orçamento só chega a quem tem acesso (a base de dados devolve vazio aos outros)
-  const [{ data: fin }, { data: grant }, { count: nScripts }] = await Promise.all([
+  // tudo de uma vez (antes eram 4 idas à base de dados, uma atrás da outra)
+  const [{ data: p }, { data: fin }, { data: grant }, { count: nScripts }, { data: boards }] = await Promise.all([
+    sb.from('projects').select(PROJECT_COLS).eq('id', id).maybeSingle(),
+    // o orçamento só chega a quem tem acesso (a base de dados devolve vazio aos outros)
     sb.from('project_budgets').select('value, budget, updated_at, approved_at').eq('project_id', id).maybeSingle(),
     sb.from('budget_access').select('user_id').eq('project_id', id).eq('user_id', state.user.id).maybeSingle(),
     sb.from('scripts').select('id', { count: 'exact', head: true }).eq('project_id', id),
+    sb.from('boards').select('id, parent_id, title, group_id, position, created_at, kind').eq('project_id', id).order('position').order('created_at'),
   ]);
+  if (!p || p.deleted_at) return null;
   p._hasScript = (nScripts || 0) > 0;
   p.canBudget = !p.is_central && (hasPerm('budget') || !!grant);
   p.value = p.canBudget ? fin?.value ?? null : null;
   p.budget = p.canBudget ? fin?.budget ?? null : null;
   p._budgetAt = p.canBudget ? fin?.updated_at ?? null : null;
   p._approvedAt = p.canBudget ? fin?.approved_at ?? null : null;
-  const { data: boards } = await sb.from('boards').select('id, parent_id, title, group_id, position, created_at, kind').eq('project_id', id).order('position').order('created_at');
   p._boards = boards || [];
   if (p.parent_id) { const { data: par } = await sb.from('projects').select('id, name, kind, deleted_at').eq('id', p.parent_id).maybeSingle(); p._parent = par && !par.deleted_at ? par : null; }
   return p;
@@ -651,7 +652,7 @@ function newBoard(p, groupId = '', kind = 'board') {
     if (f.kind === 'lightmap') f.group_id = await ensureDept(p, 'imagem');
     else if (f.group_id === 'imagem' && !deptOf(p, 'imagem')) f.group_id = await ensureDept(p, 'imagem');
     else if (f.group_id === 'arte' && !deptOf(p, 'arte')) f.group_id = await ensureDept(p, 'arte');
-    const data = f.kind === 'table' ? await tableTemplate(p, f.tpl) : f.kind === 'lightmap' ? newLightmapData() : f.kind === 'callsheet' ? { sheets: [newCallsheet(p, 1)] } : f.kind === 'transport' ? newTransport(p) : {};
+    const data = f.kind === 'table' ? await tableTemplate(p, f.tpl) : f.kind === 'lightmap' ? newLightmapData() : f.kind === 'callsheet' ? { sheets: [(await lazy.callsheet()).newCallsheet(p, 1)] } : f.kind === 'transport' ? (await lazy.transport()).newTransport(p) : {};
     const { data: row, error } = await sb.from('boards').insert({ project_id: p.id, title: f.title.trim(), group_id: f.group_id || null, position: p._boards.length, kind: f.kind, data }).select().single();
     if (error) return toast(error.message);
     m.close(); go(toolHref(p, row));
@@ -683,13 +684,13 @@ async function toolPage(projectId, toolId) {
   { const lk = lockPage(`${p.id}:f:${tool.id}`, app.querySelector('[data-main]'), { reopen: () => route() }); onCleanup(() => lk.destroy()); }
   if (tool.kind === 'table') tableTool(box, p, tool);
   if (tool.kind === 'timeline') timelineTool(box, p, tool);
-  if (tool.kind === 'budget') budgetTool(box, p, tool);
+  if (tool.kind === 'budget') (await lazy.budget()).budgetTool(box, p, tool);
   if (tool.kind === 'media') mediaTool(box, p, tool);
-  if (tool.kind === 'callsheet') callsheetTool(box, p, tool);
-  if (tool.kind === 'transport') transportTool(box, p, tool);
+  if (tool.kind === 'callsheet') (await lazy.callsheet()).callsheetTool(box, p, tool);
+  if (tool.kind === 'transport') (await lazy.transport()).transportTool(box, p, tool);
   if (tool.kind === 'lightmap') {
     const { data: chars } = await sb.from('characters').select('name, actor').eq('project_id', p.id).order('position');
-    const lm = lightmapTool(box, p, tool, { characters: (chars || []).map((c) => c.name), base: projBase(p) });
+    const lm = (await lazy.lightmap()).lightmapTool(box, p, tool, { characters: (chars || []).map((c) => c.name), base: projBase(p) });
     onCleanup(() => lm.destroy());
   }
 }
@@ -740,28 +741,28 @@ async function projectPage(projectId, page, sub) {
     onCleanup(() => lk.destroy());
   }
   if (page === 'geral') return projectOverview(main, p);
-  if (page === 'financas' && p.is_central && isStaff()) return financePage(main, sub);
+  if (page === 'financas' && p.is_central && isStaff()) return (await lazy.finance()).financePage(main, sub);
   if (page === 'orcamento' && p.canBudget) {
     const folder = isFolder(p);
     main.innerHTML = `<div class="row between wrap-gap"><div><h1 class="h1 pm-title"><input class="title-in" data-btitle value="${esc(p.budget?.title || 'Orçamento')}" aria-label="Nome do orçamento" title="Clica para mudar o nome" maxlength="80"></h1><p class="muted">${folder ? 'Orçamento geral da pasta: os custos próprios (tabela em baixo) mais o que está atribuído a cada projeto lá dentro.' : 'Soma tudo o que está na tabela e compara com o orçamento geral do projeto.'}</p></div><div data-who></div></div>${folder ? '<div data-kids></div>' : ''}<div class="budget-wrap" data-b></div>`;
     budgetWhoChip(main.querySelector('[data-who]'), p);
     if (folder) { const kids = await loadChildren(p); p._extra = { amount: budgetChildrenPanel(main.querySelector('[data-kids]'), p, kids), label: 'atribuídos aos projetos dentro' }; }
-    const done = budgetPage(main.querySelector('[data-b]'), p);
+    const done = (await lazy.budget()).budgetPage(main.querySelector('[data-b]'), p);
     const ti = main.querySelector('[data-btitle]');
     const commitT = () => { const v = ti.value.trim() || 'Orçamento'; ti.value = v; if (v !== (p.budget?.title || 'Orçamento')) p._renameBudget?.(v); };
     ti.addEventListener('change', commitT); ti.addEventListener('keydown', (e) => { if (e.key === 'Enter') ti.blur(); if (e.key === 'Escape') { ti.value = p.budget?.title || 'Orçamento'; ti.blur(); } });
     return done;
   }
-  if (page === 'shotlist') return shotlistPage(main, p, projBase(p));
-  if (page === 'equipamento' && !p.is_central) return gearPage(main, p, projBase(p));
-  if (page === 'plano' && sub) return shotPage(main, p, sub, projBase(p), onCleanup);
+  if (page === 'shotlist') return (await lazy.shotlist()).shotlistPage(main, p, projBase(p));
+  if (page === 'equipamento' && !p.is_central) return (await lazy.gear()).gearPage(main, p, projBase(p));
+  if (page === 'plano' && sub) return (await lazy.shot()).shotPage(main, p, sub, projBase(p), onCleanup);
   {
     const scr = scriptMode(p);
     if (['guiao', 'cenas', 'planificacao'].includes(page) || (scr && ['personagens', 'elenco', 'decors', 'storyboard'].includes(page))) return fictionPage(main, p, page === 'elenco' ? 'personagens' : page, sub, projBase(p), onCleanup);
     if (['seguimento', 'decors', 'elenco', 'personagens', 'storyboard'].includes(page)) return clipPage(main, p, page === 'personagens' ? 'elenco' : page, sub, projBase(p), onCleanup);
   }
   if (['orcamento', 'financas'].includes(page)) { main.innerHTML = `<div class="empty-box"><p>${ICON.lock} Não tens acesso a esta parte.</p><p class="muted small">Pede a um administrador.</p></div>`; return; }
-  if (page === 'aderecos' && !p.is_central) return propsPage(main, p, sub, projBase(p), onCleanup);
+  if (page === 'aderecos' && !p.is_central) return (await lazy.props()).propsPage(main, p, sub, projBase(p), onCleanup);
   main.innerHTML = `<h1 class="h1 pm-title">${esc(titles[page] || '')}</h1><div class="panel" data-body></div>`;
   const body = main.querySelector('[data-body]');
   if (page === 'tarefas') { body.classList.remove('panel'); body.classList.add('tc'); const t = mountTaskCenter(body, { projectId: p.id }); onCleanup(() => t.destroy()); }
@@ -946,7 +947,7 @@ async function lightmapView(p, tool) {
   joinProject(p.id);
   { const lk = lockPage(`${p.id}:f:${tool.id}`, stage, { reopen: () => route() }); onCleanup(() => lk.destroy()); }
   const { data: chars } = await sb.from('characters').select('name, actor').eq('project_id', p.id).order('position');
-  const lm = lightmapTool(stage, p, tool, { characters: (chars || []).map((c) => c.name), base, onOptions: () => boardOptions(p, tool, () => toolPage(p.id, tool.id)) });
+  const lm = (await lazy.lightmap()).lightmapTool(stage, p, tool, { characters: (chars || []).map((c) => c.name), base, onOptions: () => boardOptions(p, tool, () => toolPage(p.id, tool.id)) });
   onCleanup(() => lm.destroy());
   const side = app.querySelector('[data-sidebar]');
   let hideT;
@@ -1126,7 +1127,7 @@ async function teamPage() {
     <td><div class="row end"><button type="button" class="link-btn" data-pw="${u.id}">Palavra-passe</button>${u.id !== state.user.id ? `<button type="button" class="icon-btn" data-deluser="${u.id}" aria-label="Apagar a conta de ${esc(u.display_name)}">${ICON.trash}</button>` : ''}</div></td>
   </tr>`).join('');
   app.querySelectorAll('[data-role]').forEach((s) => s.addEventListener('change', async () => {
-    try { await callFn('admin-users', { action: 'update', user_id: s.dataset.role, role: s.value }); toast('Papel mudado.'); } catch (e) { toast(e.message); teamPage(); }
+    try { clearPeopleCache(); await callFn('admin-users', { action: 'update', user_id: s.dataset.role, role: s.value }); toast('Papel mudado.'); } catch (e) { toast(e.message); teamPage(); }
   }));
   app.querySelectorAll('[data-pw]').forEach((b) => b.addEventListener('click', () => {
     const u = people.find((x) => x.id === b.dataset.pw);
@@ -1134,13 +1135,13 @@ async function teamPage() {
     m.el.querySelector('form').addEventListener('submit', async (e) => {
       e.preventDefault(); const v = m.el.querySelector('#npw').value;
       if (v.length < MIN_PW) return toast(`Pelo menos ${MIN_PW} caracteres.`);
-      try { await callFn('admin-users', { action: 'update', user_id: u.id, password: authPw(v) }); m.close(); toast('Palavra-passe mudada.'); } catch (er) { toast(er.message); }
+      try { clearPeopleCache(); await callFn('admin-users', { action: 'update', user_id: u.id, password: authPw(v) }); m.close(); toast('Palavra-passe mudada.'); } catch (er) { toast(er.message); }
     });
   }));
   app.querySelectorAll('[data-deluser]').forEach((b) => b.addEventListener('click', async () => {
     const u = people.find((x) => x.id === b.dataset.deluser);
     if (!(await confirmBox(`Apagar a conta de ${u.display_name}?`, 'Apagar'))) return;
-    try { await callFn('admin-users', { action: 'delete', user_id: u.id }); toast('Conta apagada.'); teamPage(); } catch (e) { toast(e.message); }
+    try { clearPeopleCache(); await callFn('admin-users', { action: 'delete', user_id: u.id }); toast('Conta apagada.'); teamPage(); } catch (e) { toast(e.message); }
   }));
   const ist = (i) => (i.used_at ? `Usado a ${fmtDate(i.used_at)}` : new Date(i.expires_at) < new Date() ? 'Expirou' : `Válido até ${fmtDate(i.expires_at)}`);
   app.querySelector('[data-invites]').innerHTML = (invites || []).length
@@ -1164,6 +1165,6 @@ function newUser() {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target));
     if (f.password.length < MIN_PW) return toast(`Pelo menos ${MIN_PW} caracteres.`);
-    try { await callFn('admin-users', { action: 'create', ...f, password: authPw(f.password) }); m.close(); toast('Conta criada.'); teamPage(); } catch (er) { toast(er.message); }
+    try { clearPeopleCache(); await callFn('admin-users', { action: 'create', ...f, password: authPw(f.password) }); m.close(); toast('Conta criada.'); teamPage(); } catch (er) { toast(er.message); }
   });
 }

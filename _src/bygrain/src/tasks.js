@@ -6,10 +6,16 @@ import { sb, esc, state, dueInfo, fmtDate, STATUS, ICON, modal, confirmBox, toas
 const NEXT = { todo: 'doing', doing: 'done', done: 'todo' };
 const SICON = { todo: ICON.circle, doing: ICON.half, done: ICON.done };
 
-export async function loadPeople() {
-  const { data } = await sb.from('profiles').select('id, display_name, username, role, color').order('display_name');
-  return data || [];
+// a lista de pessoas muda pouco: guarda-se 2 minutos (e pedidos em simultâneo partilham o mesmo pedido)
+let peopleCache = null;
+export async function loadPeople(fresh = false) {
+  if (!fresh && peopleCache && Date.now() - peopleCache.t < 120000) return (await peopleCache.p).map((x) => ({ ...x }));
+  const p = sb.from('profiles').select('id, display_name, username, role, color').order('display_name').then(({ data }) => data || []);
+  peopleCache = { t: Date.now(), p };
+  p.catch(() => { peopleCache = null; });
+  return (await p).map((x) => ({ ...x }));
 }
+export const clearPeopleCache = () => { peopleCache = null; };
 
 export function deptOf(project, id) {
   return (project?.departments || []).find((d) => d.id === id) || null;

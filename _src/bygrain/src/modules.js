@@ -69,8 +69,11 @@ export async function ensureModules(p, keys, { user = true, quiet = false } = {}
 }
 
 // ao abrir o projeto: se já há dados de um tipo e a página não existe (nem foi tirada à mão), junta-a
+// verifica que páginas o projeto precisa (decors, elenco…) — no máximo uma vez a cada 3 minutos por projeto
+const autoSeen = new Map();
 export async function autoModules(p) {
   if (p.is_central) return;
+  const last = autoSeen.get(p.id); if (last && Date.now() - last < 180000) return; autoSeen.set(p.id, Date.now());
   const c = async (t, extra) => { let q = sb.from(t).select('id', { count: 'exact', head: true }).eq('project_id', p.id); if (extra) q = extra(q); const { count } = await q; return count || 0; };
   const [loc, ch, sh, pr, sc, ge] = await Promise.all([c('locations'), c('characters'), c('shots'), c('props', (q) => q.eq('removed', false)), c('scenes'), c('gear')]);
   const want = [];

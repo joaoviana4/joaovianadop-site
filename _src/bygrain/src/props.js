@@ -5,11 +5,8 @@ import { scriptMode } from './modules.js';
 // Adereços (departamento de Arte), como no Studio: de ação e de cenário, estados com cores,
 // página própria com cenas, interações, continuidade e referências. Análise do guião no Claude (grátis) ou rápida.
 
-export const PROP_STATUS = [
-  ['por_arranjar', 'Por arranjar', '#E5484D'], ['em_procura', 'Em procura', '#F08A24'], ['encomendado', 'Encomendado', '#E3B341'],
-  ['comprado', 'Comprado', '#3CC98A'], ['alugado', 'Alugado', '#2AA8A8'], ['emprestado', 'Emprestado', '#2AA8A8'],
-  ['construido', 'Construído pela arte', '#9B6CFF'], ['pronto', 'Pronto', '#1F7A4D'],
-];
+import { PROP_STATUS } from './propstatus.js';
+export { PROP_STATUS };
 const statusOf = (k) => PROP_STATUS.find((s) => s[0] === k) || PROP_STATUS[0];
 const st = { tab: 'acao', sort: 'scene', filter: '', q: '', view: (() => { try { return localStorage.getItem('bg-props-view') || 'list'; } catch { return 'list'; } })() };
 const debounce = (fn, ms = 600) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };

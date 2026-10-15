@@ -1,8 +1,7 @@
 import { sb, esc, toast, modal, confirmBox, ICON, signedUrl, signedUrls, uploadImage, fmtDate } from './lib.js';
 import { parseScript, fileToText, eighthsLabel } from './script.js';
 import { mountTasks } from './tasks.js';
-import { propsPage } from './props.js';
-import { newLightmapData } from './lightmap.js';
+import { newLightmapData } from './lmdata.js';
 import { ensureModules } from './modules.js';
 
 // Modelo de ficção, igual ao do Studio: guião → cenas, personagens e décors → planos e storyboard.
@@ -36,7 +35,7 @@ const sceneTitle = (s, f) => { const loc = f.locations.find((l) => l.id === s.lo
 const nameList = (ids, f) => (ids || []).map((id) => f.characters.find((c) => c.id === id)?.name).filter(Boolean);
 
 export async function fictionPage(main, p, page, sub, base, cleanup) {
-  if (page === 'aderecos') return propsPage(main, p, sub, base, cleanup);
+  if (page === 'aderecos') return (await import('./props.js')).propsPage(main, p, sub, base, cleanup);
   main.innerHTML = '<p class="muted">A carregar…</p>';
   const f = await load(p.id);
   const R = { guiao, cenas, personagens, decors, storyboard, planificacao };

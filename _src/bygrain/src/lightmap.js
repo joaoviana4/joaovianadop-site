@@ -36,12 +36,7 @@ function kColor(k) {
 const gelOf = (name) => GELS.find((g) => g[0] === (name || '')) || GELS[0];
 export const effK = (k, gel) => { const s = gelOf(gel)[2]; return s ? Math.round((1e6 / (1e6 / k + s)) / 50) * 50 : k; };
 
-export function newLightmapData({ cameraCode = '', people = [] } = {}) {
-  const items = [];
-  if (cameraCode) items.push({ id: uid(), kind: 'camera', x: 0, y: 3, rot: -90, code: cameraCode, focal: 35 });
-  people.slice(0, 4).forEach((n, i) => items.push({ id: uid(), kind: 'person', x: -0.8 + i * 0.8, y: 0, rot: 0, name: n }));
-  return { items };
-}
+export { newLightmapData } from './lmdata.js';
 
 export function lightmapTool(main, p, tool, opts = {}) {
   const { characters = [], base = '' } = opts;

@@ -1,6 +1,6 @@
 import { sb, esc, toast, modal, ICON, dueInfo, fmtDate, initials, daysUntil, todayISO, state } from './lib.js';
 import { loadPeople } from './tasks.js';
-import { PROP_STATUS } from './props.js';
+import { PROP_STATUS } from './propstatus.js';
 import { trackHtml, musicStats } from './music.js';
 import { mountLayout } from './layout.js';
 import { hasMod } from './modules.js';

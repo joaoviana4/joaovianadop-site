@@ -1,6 +1,6 @@
 import { sb, esc, toast, confirmBox, ICON, signedUrl, uploadImage } from './lib.js';
 import { mountTasks } from './tasks.js';
-import { newLightmapData } from './lightmap.js';
+import { newLightmapData } from './lmdata.js';
 
 // Página de um plano: imagem em grande, tudo o que se sabe dele, secção/cena e grupo da shotlist, tarefas.
 // Chega-se aqui a partir do storyboard, da grelha do seguimento, da shotlist e das secções.
