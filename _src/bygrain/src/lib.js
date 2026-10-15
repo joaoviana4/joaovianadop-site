@@ -132,8 +132,11 @@ export async function callFn(name, body) {
 
 // ---------- ficheiros ----------
 const urlCache = new Map();
+// imagens que já são links da web (ex.: projetos de demonstração) não passam pelo armazenamento
+const isWeb = (p) => /^https?:\/\//.test(p || '');
 export async function signedUrl(path) {
   if (!path) return null;
+  if (isWeb(path)) return path;
   const c = urlCache.get(path);
   if (c && c.exp > Date.now()) return c.url;
   const { data } = await sb.storage.from('files').createSignedUrl(path, 3600 * 6);
@@ -142,12 +145,12 @@ export async function signedUrl(path) {
   return data.signedUrl;
 }
 export async function signedUrls(paths) {
-  const need = [...new Set(paths.filter((p) => p && !(urlCache.get(p)?.exp > Date.now())))];
+  const need = [...new Set(paths.filter((p) => p && !isWeb(p) && !(urlCache.get(p)?.exp > Date.now())))];
   if (need.length) {
     const { data } = await sb.storage.from('files').createSignedUrls(need, 3600 * 6);
     (data || []).forEach((d) => d.signedUrl && urlCache.set(d.path, { url: d.signedUrl, exp: Date.now() + 3600 * 5 * 1000 }));
   }
-  return Object.fromEntries(paths.filter(Boolean).map((p) => [p, urlCache.get(p)?.url]));
+  return Object.fromEntries(paths.filter(Boolean).map((p) => [p, isWeb(p) ? p : urlCache.get(p)?.url]));
 }
 
 // Comprime imagens para WebP (máx. 2400 px) antes de enviar. Devolve {blob, w, h}.
