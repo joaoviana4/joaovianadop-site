@@ -1724,3 +1724,5 @@ tr:hover > td > .cst-x, tr:hover > td > .cst-mv, tr:hover .cst-colh .cst-x, .cst
 .lead-opt.on { border-color: var(--blue); background: rgba(30,42,212,.18); }
 .avatar.none { background: rgba(244,241,232,.1); color: rgba(244,241,232,.5); }
 .co-lead { line-height: 1.35; white-space: nowrap; }
+.pm-budget .appr { font-style: normal; font-size: 11px; color: #6FD3A2; margin-left: 6px; letter-spacing: .02em; }
+.bappr { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }

@@ -149,6 +149,9 @@ export async function budgetPage(main, p) {
           ${moneyCols.length > 1 ? `<label class="field"><span class="label">Compara com a coluna</span><select data-main>${moneyCols.map((c) => `<option value="${c.id}" ${c.id === b.main ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>` : ''}
         </div>
         <div data-sum>${summary()}</div>
+        ${hasFee && p.kind !== 'album' ? `<div class="bappr ${p._approvedAt ? 'on' : ''}">${p._approvedAt
+          ? `<span class="bchip bst-ok">✓ Orçamento aprovado</span><span class="muted small">a ${new Date(p._approvedAt).toLocaleDateString('pt-PT', { day: 'numeric', month: 'long' })} · conta nos ganhos e no resumo das Finanças</span><button type="button" class="link-btn" data-unapprove>Desfazer</button>`
+          : `<button type="button" class="btn primary" data-approve>✓ Orçamento aprovado</button><span class="muted small">Até aprovares, aparece nos ganhos como “Orçamento enviado” e não conta nos totais.</span>`}</div>` : ''}
       </section>
       <div class="btools">
         <label class="sel"><span class="vh">Modelo</span><select data-tpl><option value="">Aplicar modelo…</option>${TPL_NAMES.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label>
@@ -182,6 +185,13 @@ export async function budgetPage(main, p) {
     const totalIn = main.querySelector('[data-total]');
     totalIn.addEventListener('input', () => { total = num(totalIn.value); refreshSums(); clearTimeout(totalIn._t); totalIn._t = setTimeout(saveTotal, 600); });
     totalIn.addEventListener('blur', () => { if (total != null) totalIn.value = fmtIn({ type: 'money' }, total); });
+    const setAppr = async (on) => {
+      if (on && !(await confirmBox(`Marcar o orçamento de "${p.name}" como aprovado? Passa a contar nos ganhos e no resumo das Finanças como “Aceite”.`, 'Aprovar'))) return;
+      const v = on ? new Date().toISOString() : null;
+      if (await write({ approved_at: v, approved_by: on ? (await sb.auth.getUser()).data.user?.id || null : null })) { p._approvedAt = v; toast(on ? 'Orçamento aprovado. Já está nos ganhos.' : 'Aprovação desfeita.'); draw(); }
+    };
+    main.querySelector('[data-approve]')?.addEventListener('click', () => setAppr(true));
+    main.querySelector('[data-unapprove]')?.addEventListener('click', () => setAppr(false));
     const cn = main.querySelector('[data-capname]');
     cn.addEventListener('change', () => { const v = cn.value.trim(); snapshot('nome'); if (!v || v === (p._capLabel || 'Orçamento geral do projeto')) delete b.capName; else b.capName = v; cn.value = capName(); save(0); });
     cn.addEventListener('keydown', (e) => { if (e.key === 'Enter') cn.blur(); });

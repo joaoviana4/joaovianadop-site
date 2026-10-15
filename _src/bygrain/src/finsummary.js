@@ -1,4 +1,5 @@
 import { sb, esc, toast, modal, confirmBox, ICON, todayISO, hasPerm } from './lib.js';
+import { tableTotal, grainFee, feePct } from './folders.js';
 
 // Finanças: Resumo (com gráficos e saúde financeira), Ganhos por projeto e Ganhos por pessoa.
 // Ganhos (fin_earnings): uma linha por trabalho, ligada ou não a um projeto. Se seguir o orçamento,
@@ -28,8 +29,12 @@ export async function loadFin() {
     sb.from('profiles').select('id, display_name').order('display_name'),
   ]);
   const ids = [...new Set((projects || []).map((p) => p.id))];
-  const { data: bud } = ids.length ? await sb.from('project_budgets').select('project_id, value').in('project_id', ids) : { data: [] };
-  const bmap = new Map((bud || []).map((b) => [b.project_id, b.value != null ? Number(b.value) : null]));
+  const { data: bud } = ids.length ? await sb.from('project_budgets').select('project_id, value, budget, approved_at').in('project_id', ids) : { data: [] };
+  // ligado ao orçamento do projeto: o valor é o orçamento geral (ou, se não houver, a tabela + Grain fee);
+  // a agency fee, se não for escrita à mão, é a Grain fee do orçamento
+  const fullOf = (b) => (b.value != null ? Number(b.value) : b.budget?.rows ? tableTotal(b.budget) + grainFee(b.budget) : null);
+  const bmap = new Map((bud || []).map((b) => [b.project_id, fullOf(b)]));
+  const feeMap = new Map((bud || []).filter((b) => b.budget?.rows).map((b) => [b.project_id, { fee: grainFee(b.budget), pct: feePct(b.budget) }]));
   const movs = mov || [];
   const E = (earn || []).map((e) => {
     const gross = e.follow_budget && e.project_id && bmap.get(e.project_id) != null ? bmap.get(e.project_id) : Number(e.amount) || 0;
@@ -38,13 +43,14 @@ export async function loadFin() {
     const movCosts = e.project_id ? movs.filter((m) => m.direction === 'out' && m.project_id === e.project_id).reduce((a, m) => a + Number(m.amount), 0) : 0;
     const direct = (Number(e.costs) || 0) + movCosts;
     // agency fee = o que fica na Grain; retenção interna = agency fee + cortes da equipa
-    const fee = e.fee != null && e.fee !== '' ? Number(e.fee) : null;
+    const linkedFee = e.follow_budget && e.project_id ? feeMap.get(e.project_id) : null;
+    const fee = e.fee != null && e.fee !== '' ? Number(e.fee) : linkedFee ? linkedFee.fee : null;
     const keep = fee != null ? fee : gross - cutSum - direct;
-    return { ...e, gross, vat: gross * (Number(e.vat_rate) || 0) / 100, cuts, cutSum, direct, fee: fee || 0, keep, retained: keep + cutSum, fromBudget: e.follow_budget && e.project_id && bmap.get(e.project_id) != null };
+    return { ...e, feeRaw: e.fee, feeAuto: (e.fee == null || e.fee === '') && !!linkedFee, gross, vat: gross * (Number(e.vat_rate) || 0) / 100, cuts, cutSum, direct, fee: fee || 0, keep, retained: keep + cutSum, fromBudget: e.follow_budget && e.project_id && bmap.get(e.project_id) != null };
   });
   const fixedMonthly = (rec || []).filter((r) => r.active).reduce((a, r) => a + Number(r.amount), 0);
   const balance = (acc || []).reduce((a, x) => a + Number(x.opening_balance), 0) + movs.reduce((a, m) => a + (m.direction === 'in' ? 1 : -1) * Number(m.amount), 0);
-  return { E, movs, fixedMonthly, balance, projects: projects || [], people: people || [], bmap };
+  return { E, movs, fixedMonthly, balance, projects: projects || [], people: people || [], bmap, feeMap };
 }
 
 // ---------- gráficos (SVG simples, com dica ao passar o rato) ----------
@@ -211,7 +217,7 @@ export async function earningsTab(box, st) {
       const head = (mk) => `<tr class="earn-mh"><th>${MESL[+mk.slice(5, 7) - 1]}</th><th>Projeto</th><th>Project leader</th><th class="num">Agency fee</th><th class="num">Orçamento total</th>${ppl.map((n) => `<th class="num">${esc(n)} cut</th>`).join('')}<th>Estado</th><th>Pagamento</th></tr>`;
       const row = (e) => { const late = ['aceite', 'faturado'].includes(e.status) && e.due_date && e.due_date < todayISO(); return `<tr class="click-row ${['orcamento', 'perdido'].includes(e.status) ? 'off' : ''}" data-e="${e.id}" ${e.color ? `style="--rowc:${esc(e.color)}"` : ''}>
         <td></td><td><strong>${esc(e.title || '—')}</strong>${e.client || e.fromBudget ? `<div class="small muted">${esc(e.client || '')}${e.fromBudget ? ' · segue o orçamento' : ''}</div>` : ''}</td><td>${esc(e.leader || '')}</td>
-        <td class="num">${eur2.format(e.fee)}</td><td class="num">${eur2.format(e.gross)}</td>${ppl.map((n) => { const v = cutOf(e, n); return `<td class="num ${v ? '' : 'muted'}">${eur2.format(v)}</td>`; }).join('')}
+        <td class="num" ${e.feeAuto ? 'title="Grain fee do orçamento do projeto"' : ''}>${eur2.format(e.fee)}${e.feeAuto ? '<small class="muted"> GF</small>' : ''}</td><td class="num">${eur2.format(e.gross)}</td>${ppl.map((n) => { const v = cutOf(e, n); return `<td class="num ${v ? '' : 'muted'}">${eur2.format(v)}</td>`; }).join('')}
         <td><span class="est est-${EST[e.status][1]}">${EST[e.status][0]}</span></td>
         <td class="small ${late ? 'neg' : 'muted'}">${e.status === 'pago' ? `pago a ${esc(dd(e.paid_on))}` : e.due_date ? `${late ? 'atrasado · ' : ''}previsto ${esc(dd(e.due_date))}` : '—'}</td></tr>`; };
       const tot = real.reduce((a, e) => a + e.gross, 0), fee = T('fee'), team = T('cutSum');
@@ -255,7 +261,7 @@ function earningForm(F, e, after) {
       </div>
       <label class="check"><input type="checkbox" name="follow_budget" ${e.follow_budget ? 'checked' : ''}> Valor = orçamento geral do projeto (atualiza-se sozinho)</label>
       <div class="grid3">
-        <div class="field"><label>Agency fee (€)</label><input name="fee" inputmode="decimal" value="${esc(e.fee ?? '')}" placeholder="fica na Grain"></div>
+        <div class="field"><label>Agency fee (€)</label><input name="fee" inputmode="decimal" value="${esc(e.feeAuto ? '' : (isNew ? '' : e.feeRaw ?? ''))}" placeholder="${e.feeAuto ? `Grain fee: ${eur2.format(e.fee)}` : 'fica na Grain'}"></div>
         <div class="field" data-amountf><label>Orçamento total s/ IVA (€)</label><input name="amount" inputmode="decimal" value="${esc(e.amount ?? '')}"></div>
         <div class="field"><label>IVA (%)</label><input name="vat_rate" inputmode="decimal" value="${esc(e.vat_rate)}"></div>
         <div class="field"><label>Custos diretos (€)</label><input name="costs" inputmode="decimal" value="${esc(e.costs ?? '')}" placeholder="além dos movimentos do projeto"></div>
