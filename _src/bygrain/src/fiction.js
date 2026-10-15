@@ -170,11 +170,11 @@ function cenas(main, p, f, sub, base, cleanup) {
   });
 }
 
-export function shotCard(sh, url) {
+export function shotCard(sh, url, base) {
   return `<article class="shot" data-shot="${sh.id}">
     <div class="shot-img" data-img tabindex="0" role="button" aria-label="${url ? 'Ver o plano em grande' : 'Juntar imagem de storyboard'}">${url ? `<img src="${esc(url)}" alt="Storyboard ${esc(sh.code)}">` : `<span>${ICON.image}<small>Juntar storyboard</small><small class="muted">ou cola com Ctrl+V</small></span>`}</div>
     <div class="shot-f">
-      <div class="row between"><input class="shot-code" data-f="code" value="${esc(sh.code)}" aria-label="Código do plano"><button type="button" class="icon-btn sm" data-del aria-label="Apagar plano">${ICON.trash}</button></div>
+      <div class="row between"><input class="shot-code" data-f="code" value="${esc(sh.code)}" aria-label="Código do plano"><span class="row">${base ? `<a class="icon-btn sm" href="${base}/plano/${sh.id}" title="Abrir o plano" aria-label="Abrir o plano">${ICON.open}</a>` : ''}<button type="button" class="icon-btn sm" data-del aria-label="Apagar plano">${ICON.trash}</button></span></div>
       <label class="mini">Enquadramento<select data-f="framing">${FRAMINGS.map((x) => `<option ${x === sh.framing ? 'selected' : ''} value="${esc(x)}">${esc(x || '—')}</option>`).join('')}${sh.framing && !FRAMINGS.includes(sh.framing) ? `<option selected>${esc(sh.framing)}</option>` : ''}</select></label>
       <label class="mini">Movimento<select data-f="movement">${MOVES.map((x) => `<option ${x === sh.movement ? 'selected' : ''} value="${esc(x)}">${esc(x || '—')}</option>`).join('')}${sh.movement && !MOVES.includes(sh.movement) ? `<option selected>${esc(sh.movement)}</option>` : ''}</select></label>
       <label class="mini">Lente<input data-f="lens" value="${esc(sh.lens)}" placeholder="ex: 35mm"></label>
@@ -198,7 +198,7 @@ async function cena(main, p, f, sid, base, cleanup) {
       <div class="chips">${loc ? `<a class="chip" href="${base}/decors/${loc.id}">${ICON.home}${esc(loc.name)}</a>` : ''}${s.time_of_day ? `<span class="chip">${esc(s.time_of_day)}</span>` : ''}${s.eighths ? `<span class="chip">${eighthsLabel(s.eighths)} pág.</span>` : ''}
       ${(s.character_ids || []).map((id) => { const c = f.characters.find((x) => x.id === id); return c ? `<a class="chip" href="${base}/personagens/${c.id}">${esc(c.name)}</a>` : ''; }).join('')}</div></div></header>
     <section><div class="row between"><h2 class="h3">Planos</h2><span class="muted small">${shots.length} ${shots.length === 1 ? 'plano' : 'planos'}</span></div>
-      <div class="shots" data-shots>${shots.map((x) => shotCard(x, urls[x.image_path])).join('')}<button type="button" class="shot-add" data-addshot>${ICON.plus}<span>Plano</span></button></div></section>
+      <div class="shots" data-shots>${shots.map((x) => shotCard(x, urls[x.image_path], base)).join('')}<button type="button" class="shot-add" data-addshot>${ICON.plus}<span>Plano</span></button></div></section>
     <details class="panel"><summary class="h3">Texto da cena</summary><pre class="script-view">${esc(s.body || 'Sem texto.')}</pre></details>
     <section class="panel"><h2 class="h3">Tarefas da cena</h2><div data-tasks></div></section>
     <section class="panel"><h2 class="h3">Notas</h2><textarea data-notes rows="4" placeholder="Notas de realização, produção, continuidade…">${esc(s.notes)}</textarea></section>`;
@@ -231,7 +231,7 @@ export function bindShots(main, p, f, s, shots, urls, base) {
       const { data, error } = await sb.from('shots').insert({ project_id: p.id, scene_id: s.id, code: nextCode(s, shots), position: shots.length }).select().single();
       if (error) return toast(error.message);
       shots.push(data); f.shots.push(data); ensureModules(p, ['storyboard']);
-      wrap.querySelector('[data-addshot]').insertAdjacentHTML('beforebegin', shotCard(data, null));
+      wrap.querySelector('[data-addshot]').insertAdjacentHTML('beforebegin', shotCard(data, null, base));
       return;
     }
     const card = e.target.closest('[data-shot]'); if (!card) return;
@@ -426,12 +426,8 @@ async function storyboard(main, p, f, _sub, base) {
   const withShots = f.scenes.filter((s) => f.shots.some((x) => x.scene_id === s.id));
   main.innerHTML = `<h1 class="h1 pm-title">Storyboard</h1>
     ${withShots.length ? withShots.map((s) => `<section class="sb-scene"><a class="sb-h" href="${base}/cenas/${s.id}"><span class="scene-n sm">${esc(s.number)}</span>${esc(sceneTitle(s, f))}<span class="muted small">${esc(s.time_of_day)}</span></a>
-      <div class="sb-grid">${f.shots.filter((x) => x.scene_id === s.id).map((x) => `<button type="button" class="sb-shot" data-shot="${x.id}"><span class="sb-img">${urls[x.image_path] ? `<img src="${esc(urls[x.image_path])}" alt="">` : ICON.image}</span><span><strong>${esc(x.code)}</strong> <span class="muted small">${esc([x.framing, x.movement].filter(Boolean).join(' · '))}</span></span>${x.description ? `<span class="small sb-d">${esc(x.description)}</span>` : ''}</button>`).join('')}</div></section>`).join('')
+      <div class="sb-grid">${f.shots.filter((x) => x.scene_id === s.id).map((x) => `<a class="sb-shot" href="${base}/plano/${x.id}"><span class="sb-img">${urls[x.image_path] ? `<img src="${esc(urls[x.image_path])}" alt="">` : ICON.image}</span><span><strong>${esc(x.code)}</strong> <span class="muted small">${esc([x.framing, x.movement].filter(Boolean).join(' · '))}</span></span>${x.description ? `<span class="small sb-d">${esc(x.description)}</span>` : ''}</a>`).join('')}</div></section>`).join('')
     : `<p class="empty-note">Ainda não há planos. Cria-os dentro de cada cena.</p>${f.scenes.length ? `<a class="btn primary" href="${base}/cenas">Ir para as cenas</a>` : ''}`}`;
-  main.querySelectorAll('[data-shot]').forEach((b) => b.addEventListener('click', () => {
-    const sh = f.shots.find((x) => x.id === b.dataset.shot);
-    if (sh.image_path) shotViewer(f, sh, base); else location.hash = `${base}/cenas/${sh.scene_id}`;
-  }));
 }
 
 // ---------- Planificação ----------

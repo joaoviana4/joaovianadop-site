@@ -13,6 +13,7 @@ import { mountTaskCenter } from './taskcenter.js';
 import { clipPage, CLIP_PAGES, mediaTool } from './music.js';
 import { mountSituation } from './overview.js';
 import { shotlistPage } from './shotlist.js';
+import { shotPage } from './shot.js';
 import { clearFullscreen } from './layout.js';
 import { joinProject, leaveProject, lockPage, boardPresence, onPresence, whoLabel } from './presence.js';
 import { budgetWhoChip, budgetAccessPanel, globalPermsPanel } from './perms.js';
@@ -581,7 +582,7 @@ async function projectPage(projectId, page, sub) {
   const titles = { tarefas: 'Tarefas', equipa: p.is_central ? 'Equipa' : 'Equipa e convites', detalhes: 'Detalhes' };
   joinProject(p.id);
   // páginas de trabalho: só uma janela edita de cada vez (as outras ficam só a ver)
-  if (['orcamento', 'seguimento', 'decors', 'elenco', 'personagens', 'aderecos', 'cenas', 'guiao', 'planificacao', 'detalhes', 'shotlist', 'storyboard', 'financas'].includes(page)) {
+  if (['orcamento', 'seguimento', 'decors', 'elenco', 'personagens', 'aderecos', 'cenas', 'guiao', 'planificacao', 'detalhes', 'shotlist', 'storyboard', 'financas', 'plano'].includes(page)) {
     const lk = lockPage(`${p.id}:${page}:${sub || ''}`, main, { reopen: () => route() });
     onCleanup(() => lk.destroy());
   }
@@ -589,6 +590,7 @@ async function projectPage(projectId, page, sub) {
   if (page === 'financas' && p.is_central && hasPerm('finance')) return financePage(main, sub);
   if (page === 'orcamento' && p.canBudget) { main.innerHTML = `<div class="row between wrap-gap"><div><h1 class="h1 pm-title">Orçamento</h1><p class="muted">Soma tudo o que está na tabela e compara com o orçamento geral do projeto.</p></div><div data-who></div></div><div class="budget-wrap" data-b></div>`; budgetWhoChip(main.querySelector('[data-who]'), p); return budgetPage(main.querySelector('[data-b]'), p); }
   if (page === 'shotlist') return shotlistPage(main, p, projBase(p));
+  if (page === 'plano' && sub) return shotPage(main, p, sub, projBase(p), onCleanup);
   {
     const scr = scriptMode(p);
     if (['guiao', 'cenas', 'planificacao'].includes(page) || (scr && ['personagens', 'elenco', 'decors', 'storyboard'].includes(page))) return fictionPage(main, p, page === 'elenco' ? 'personagens' : page, sub, projBase(p), onCleanup);

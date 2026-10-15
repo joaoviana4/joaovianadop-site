@@ -50,7 +50,7 @@ export async function shotlistPage(main, p, base) {
             <button type="button" class="sl-gbtn" data-addshot title="Juntar plano">${ICON.plus}</button>
             ${gr ? `<button type="button" class="sl-gbtn" data-delgroup title="Apagar grupo">${ICON.trash}</button>` : ''}
           </div></td></tr>
-          ${shots.map((x) => `<tr data-s="${x.id}"><td class="sl-n">${++n}</td>${COLS.map(([k]) => k === 'scene_id'
+          ${shots.map((x) => `<tr data-s="${x.id}"><td class="sl-n"><a href="${base}/plano/${x.id}" title="Abrir o plano" aria-label="Abrir o plano ${n + 1}">${++n}</a></td>${COLS.map(([k]) => k === 'scene_id'
             ? `<td><select data-k="scene_id" aria-label="Secção"><option value="">—</option>${st.scenes.map((s2) => `<option value="${s2.id}" ${x.scene_id === s2.id ? 'selected' : ''}>${esc(s2.heading || 'Secção ' + s2.number)}</option>`).join('')}</select></td>`
             : `<td><textarea rows="1" data-k="${k}" aria-label="${k}">${esc(x[k] || '')}</textarea></td>`).join('')}
             <td><button type="button" class="sl-del" data-delshot title="Apagar plano" aria-label="Apagar plano">${ICON.trash}</button></td></tr>`).join('')}

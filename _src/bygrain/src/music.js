@@ -152,13 +152,13 @@ async function musicPage(main, p, f, sub, base, cleanup) {
   const shotUrls = await signedUrls([...f.shots.map((x) => x.image_path), ...f.scenes.flatMap((x) => (x.refs || []).map((r) => r.path))].filter(Boolean));
   let view = (() => { try { return localStorage.getItem('bg-seg-view') || 'grid'; } catch { return 'grid'; } })();
   // secções em colunas, como no Milanote: nome, descrição e as imagens dos planos
-  const gridHtml = (L) => `<div class="seg-cols">${L.items.map((x) => { const sh = f.shots.filter((y) => y.scene_id === x.s.id); return `<a class="seg-col" href="${base}/seguimento/${x.s.id}" style="--sc:${x.col}">
+  const gridHtml = (L) => `<div class="seg-cols">${L.items.map((x) => { const sh = f.shots.filter((y) => y.scene_id === x.s.id); const href = `${base}/seguimento/${x.s.id}`; return `<div class="seg-col" style="--sc:${x.col}">
       <button type="button" class="icon-btn sm sc-del" data-delsec="${x.s.id}" aria-label="Apagar a secção ${esc(x.s.heading || '')}" title="Apagar secção">${ICON.trash}</button>
-      <span class="sc-h"><strong>${esc(x.s.heading || 'Sem nome')}</strong><small>${x.a != null ? `${fmtT(x.a)}${x.b != null ? '–' + fmtT(x.b) : ''} · ` : ''}${sh.length} ${sh.length === 1 ? 'plano' : 'planos'}</small></span>
-      ${x.s.notes ? `<span class="sc-desc"><b>Descrição:</b>${x.s.notes.split('\n').filter((l) => l.trim()).map((l) => `<span>${esc(l)}</span>`).join('')}</span>` : '<span class="sc-desc empty">Sem descrição. Abre para escrever a ideia desta secção.</span>'}
-      ${(x.s.refs || []).filter((r) => shotUrls[r.path]).map((r) => `<img src="${esc(shotUrls[r.path])}" alt="Referência" loading="lazy">`).join('')}
-      ${sh.filter((y) => shotUrls[y.image_path]).map((y) => `<img src="${esc(shotUrls[y.image_path])}" alt="${esc(y.code)}" loading="lazy">`).join('')}
-    </a>`; }).join('')}</div>`;
+      <a class="sc-h" href="${href}"><strong>${esc(x.s.heading || 'Sem nome')}</strong><small>${x.a != null ? `${fmtT(x.a)}${x.b != null ? '–' + fmtT(x.b) : ''} · ` : ''}${sh.length} ${sh.length === 1 ? 'plano' : 'planos'}</small></a>
+      ${x.s.notes ? `<a class="sc-desc" href="${href}"><b>Descrição:</b>${x.s.notes.split('\n').filter((l) => l.trim()).map((l) => `<span>${esc(l)}</span>`).join('')}</a>` : `<a class="sc-desc empty" href="${href}">Sem descrição. Abre para escrever a ideia desta secção.</a>`}
+      ${(x.s.refs || []).filter((r) => shotUrls[r.path]).map((r) => `<a href="${href}" class="sc-img" title="Referência"><img src="${esc(shotUrls[r.path])}" alt="Referência" loading="lazy"></a>`).join('')}
+      ${sh.map((y) => `<a href="${base}/plano/${y.id}" class="sc-img sc-shot" title="${esc(y.description || y.code || 'Plano')}">${shotUrls[y.image_path] ? `<img src="${esc(shotUrls[y.image_path])}" alt="${esc(y.code)}" loading="lazy">` : `<span>${esc(y.code || y.description || 'Plano')}</span>`}</a>`).join('')}
+    </div>`; }).join('')}</div>`;
   const draw = () => {
     const L = layout(f.scenes, music.duration);
     main.innerHTML = `
@@ -269,7 +269,7 @@ async function section(main, p, f, sid, base, cleanup) {
       ${(s.refs || []).length ? `<div class="ref-imgs">${s.refs.map((r, i) => `<figure><button type="button" class="ref-open" data-refopen="${i}" aria-label="Ver em grande"><img src="${esc(refUrls[r.path] || '')}" alt=""></button><button type="button" class="icon-btn sm" data-refrm="${i}" aria-label="Tirar imagem">${ICON.close}</button></figure>`).join('')}</div>` : '<p class="muted small sec-refs-empty">Imagens de referência para esta parte do clipe: luz, cor, enquadramentos, guarda-roupa…</p>'}
     </section>
     <section><div class="row between"><h2 class="h3">Planos</h2><span class="muted small">${shots.length} ${shots.length === 1 ? 'plano' : 'planos'}</span></div>
-      <div class="shots" data-shots>${shots.map((x) => shotCard(x, urls[x.image_path])).join('')}<button type="button" class="shot-add" data-addshot>${ICON.plus}<span>Plano</span></button></div></section>
+      <div class="shots" data-shots>${shots.map((x) => shotCard(x, urls[x.image_path], base)).join('')}<button type="button" class="shot-add" data-addshot>${ICON.plus}<span>Plano</span></button></div></section>
     <section class="panel"><h2 class="h3">Tarefas desta secção</h2><div data-tasks></div></section>
     <div class="row end"><button type="button" class="btn ghost danger-text" data-del>${ICON.trash} Apagar secção</button></div>`;
   const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: 'scene', id: s.id } }); cleanup(() => t.destroy());
@@ -444,14 +444,14 @@ async function entityPage(main, p, f, kind, id, base, cleanup) {
 async function storyboard(main, p, f, base) {
   const urls = await signedUrls(f.shots.map((x) => x.image_path).filter(Boolean));
   const L = layout(f.scenes, p.music?.duration);
-  const card = (y) => `<button type="button" class="sb-shot" data-shot="${y.id}"><span class="sb-img">${urls[y.image_path] ? `<img src="${esc(urls[y.image_path])}" alt="" loading="lazy">` : `${ICON.image}<small>Juntar imagem</small>`}</span><span class="sb-cap">${y.code ? `<b>${esc(y.code)}</b>` : ''}${esc([y.framing, y.movement, y.direction_notes].filter(Boolean).join(' · '))}</span>${y.description ? `<span class="sb-desc">${esc(y.description)}</span>` : ''}</button>`;
+  const card = (y) => `<a class="sb-shot" href="${base}/plano/${y.id}" data-shot="${y.id}"><span class="sb-img">${urls[y.image_path] ? `<img src="${esc(urls[y.image_path])}" alt="" loading="lazy">` : `${ICON.image}<small>Juntar imagem</small>`}</span><span class="sb-cap">${y.code ? `<b>${esc(y.code)}</b>` : ''}${esc([y.framing, y.movement, y.direction_notes].filter(Boolean).join(' · '))}</span>${y.description ? `<span class="sb-desc">${esc(y.description)}</span>` : ''}</a>`;
   const sec = (title, color, shots, href, sub) => `<section class="sb-sec" style="--sc:${color}">
       <div class="sb-h"><i class="seg-dot"></i>${href ? `<a href="${href}"><strong>${esc(title)}</strong></a>` : `<strong>${esc(title)}</strong>`}${sub ? `<span class="muted small">${esc(sub)}</span>` : ''}<span class="muted small">· ${shots.length} ${shots.length === 1 ? 'plano' : 'planos'}</span></div>
       ${shots.length ? `<div class="sb-grid">${shots.map(card).join('')}</div>` : (href ? `<a class="link-btn small" href="${href}">${ICON.plus} Juntar planos</a>` : '')}
     </section>`;
   const loose = f.shots.filter((y) => !y.scene_id);
   const groups = [...f.groups.map((g) => ({ g, shots: loose.filter((y) => y.group_id === g.id) })), { g: null, shots: loose.filter((y) => !y.group_id || !f.groups.some((g) => g.id === y.group_id)) }].filter((x) => x.shots.length);
-  main.innerHTML = `<div class="row between wrap-gap"><div><h1 class="h1 pm-title">Storyboard</h1><p class="muted">Todos os planos, pela ordem da música e depois pelos grupos da shotlist. Carrega num plano sem imagem para lhe juntar uma (ou cola com Ctrl+V).</p></div><span class="muted small">${f.shots.length} ${f.shots.length === 1 ? 'plano' : 'planos'}</span></div>
+  main.innerHTML = `<div class="row between wrap-gap"><div><h1 class="h1 pm-title">Storyboard</h1><p class="muted">Todos os planos, pela ordem da música e depois pelos grupos da shotlist. Carrega num plano para o abrir. Para juntar uma imagem, cola com Ctrl+V com o rato por cima do plano.</p></div><span class="muted small">${f.shots.length} ${f.shots.length === 1 ? 'plano' : 'planos'}</span></div>
     ${f.scenes.length ? trackHtml(f.scenes, p.music?.duration, { base, f, compact: true }) : ''}
     ${L.items.map((x) => sec(x.s.heading || 'Sem nome', x.col, f.shots.filter((y) => y.scene_id === x.s.id), `${base}/seguimento/${x.s.id}`, x.a != null ? fmtT(x.a) + (x.b != null ? '–' + fmtT(x.b) : '') : '')).join('')}
     ${groups.length ? `<h2 class="h3 sb-gtitle">Da shotlist, ainda sem secção</h2>${groups.map(({ g, shots }) => sec(g ? g.name || 'Grupo sem nome' : 'Sem grupo', g?.color || '#8A8A99', shots, null, g?.note || '')).join('')}` : ''}
@@ -462,11 +462,7 @@ async function storyboard(main, p, f, base) {
   };
   main.querySelectorAll('[data-shot]').forEach((b) => {
     b.addEventListener('pointerenter', () => (hover = b.dataset.shot));
-    b.addEventListener('click', () => {
-      const sh = f.shots.find((x) => x.id === b.dataset.shot);
-      if (sh.image_path) return shotViewer(f, sh, base);
-      const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.onchange = () => inp.files[0] && setImg(sh, inp.files[0]); inp.click();
-    });
+
   });
   const onPaste = (e) => {
     if (!document.body.contains(main.querySelector('.sb-shot'))) { document.removeEventListener('paste', onPaste); return; }
