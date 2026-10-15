@@ -233,6 +233,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     const bg = it.data?.bg;
     el.classList.toggle('dark-bg', !!bg && isDark(bg) && it.kind !== 'title');
     el.classList.toggle('light-tile', it.kind === 'board' && !!bg && !isDark(bg));
+    el.classList.toggle('dflt', !bg && !['title', 'image', 'board', 'audio', 'video', 'line', 'arrow'].includes(it.kind));
     if (bg && it.kind === 'title') el.style.color = bg;
     else if (bg && it.kind === 'board') el.style.setProperty('--tile', bg);
     else if (bg) el.style.background = bg;

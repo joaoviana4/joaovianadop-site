@@ -1,4 +1,4 @@
-import { sb, esc, ICON, KINDS, PROJECT_COLS, signedUrls, phaseOf, modal, confirmBox, toast } from './lib.js';
+import { sb, esc, ICON, KINDS, PROJECT_COLS, signedUrls, phaseOf, modal, confirmBox, toast, isAdmin, hideProject, loadHidden } from './lib.js';
 
 // Projetos-pasta (ex.: um álbum): têm um orçamento geral e projetos lá dentro (ex.: os videoclipes),
 // cada um com o seu orçamento. O que cada projeto tem atribuído conta para o orçamento geral da pasta.
@@ -16,7 +16,8 @@ export const tableTotal = (b) => (!b?.rows || !b.main ? 0 : b.rows.filter((r) =>
 // projetos dentro da pasta, com o orçamento de cada um (só chega o de quem tem acesso)
 export async function loadChildren(p) {
   const { data: kids } = await sb.from('projects').select(PROJECT_COLS).eq('parent_id', p.id).is('deleted_at', null).order('starts_on', { ascending: true, nullsFirst: false }).order('name');
-  const list = kids || [];
+  const hidden = await loadHidden();
+  const list = (kids || []).filter((k) => !hidden.has(k.id));
   if (!list.length) return [];
   const [{ data: bud }, { data: tasks }] = await Promise.all([
     sb.from('project_budgets').select('project_id, value, budget').in('project_id', list.map((k) => k.id)),
@@ -53,7 +54,7 @@ export async function childrenSection(box, p, kids, { base, canBudget, onNew, ca
       ${total ? `<div class="fold-bar ${committed > total ? 'over' : committed > total * 0.9 ? 'near' : ''}"><i style="width:${Math.min(100, (committed / total) * 100)}%"></i></div>` : ''}
       ${R.hidden ? `<p class="muted small">${R.hidden} projeto${R.hidden > 1 ? 's' : ''} sem orçamento visível para ti.</p>` : ''}
     </div>` : ''}
-    ${kids.length ? `<div class="fold-grid">${kids.map((k) => { const ph = phaseOf(k); return `<div class="fold-cw">${canEdit ? `<span class="fold-act"><button type="button" class="icon-btn sm" data-ren="${k.id}" title="Mudar o nome" aria-label="Mudar o nome de ${esc(k.name)}">${ICON.edit || '✎'}</button><button type="button" class="icon-btn sm" data-del="${k.id}" title="Mandar para a reciclagem" aria-label="Apagar ${esc(k.name)}">${ICON.trash || ICON.close}</button></span>` : ''}<a class="fold-card" href="#/p/${k.id}">
+    ${kids.length ? `<div class="fold-grid">${kids.map((k) => { const ph = phaseOf(k); return `<div class="fold-cw">${`<span class="fold-act">${canEdit ? `<button type="button" class="icon-btn sm" data-ren="${k.id}" title="Mudar o nome" aria-label="Mudar o nome de ${esc(k.name)}">${ICON.edit}</button>` : ''}<button type="button" class="icon-btn sm" data-hide="${k.id}" title="Tirar da minha lista (os outros continuam a vê-lo)" aria-label="Tirar ${esc(k.name)} da minha lista">${ICON.hide}</button>${isAdmin() ? `<button type="button" class="icon-btn sm" data-del="${k.id}" title="Mandar para a reciclagem (para toda a gente)" aria-label="Apagar ${esc(k.name)}">${ICON.trash}</button>` : ''}</span>`}<a class="fold-card" href="#/p/${k.id}">
       <span class="fold-cover" style="${covers[k.cover_path] ? `background-image:url('${esc(covers[k.cover_path])}')` : ''}"><span class="tag dark">${esc(KINDS[k.kind] || k.kind)}</span></span>
       <span class="fold-b"><b>${esc(k.name)}</b><small>${esc(ph.label || 'Sem datas')} · ${k._open} tarefa${k._open === 1 ? '' : 's'} aberta${k._open === 1 ? '' : 's'}</small>
       ${canBudget && k._b ? `<small class="fold-money">${k._b.value != null ? eur.format(k._b.value) : 'sem valor'} · gasto ${eur.format(k._b.spent)}</small>` : ''}</span></a></div>`; }).join('')}</div>`
@@ -70,6 +71,12 @@ export async function childrenSection(box, p, kids, { base, canBudget, onNew, ca
       if (error) return toast(error.message);
       k.name = name; m.close(); toast('Nome mudado.'); after ? after() : childrenSection(box, p, kids, { base, canBudget, onNew, canEdit, after });
     });
+  }));
+  box.querySelectorAll('[data-hide]').forEach((b) => b.addEventListener('click', async () => {
+    const k = kid(b.dataset.hide);
+    if (!(await hideProject(k.id))) return;
+    toast(`"${k.name}" saiu da tua lista. Os outros continuam a vê-lo; voltas a mostrá-lo em "Escondidos", no início.`);
+    after ? after() : childrenSection(box, p, kids.filter((x) => x.id !== k.id), { base, canBudget, onNew, canEdit, after });
   }));
   box.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => {
     const k = kid(b.dataset.del);

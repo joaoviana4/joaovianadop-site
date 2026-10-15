@@ -86,6 +86,9 @@ export async function budgetPage(main, p) {
     clearTimeout(saveT);
     saveT = setTimeout(async () => { if (await write({ budget: b })) p.budget = b; }, delay);
   };
+  // nome do orçamento e do valor geral: personalizáveis (ficam guardados com a tabela)
+  p._renameBudget = (name) => { if (!b) b = baseBudget(); b.title = name; save(0); };
+  const capName = () => b?.capName || p._capLabel || 'Orçamento geral do projeto';
   const saveTotal = async () => { if (await write({ value: total })) p.value = total; };
   async function history() {
     const { data, error } = await sb.from('project_budget_history').select('id, value, budget, saved_at').eq('project_id', p.id).order('saved_at', { ascending: false }).limit(30);
@@ -141,7 +144,7 @@ export async function budgetPage(main, p) {
     main.innerHTML = `
       <section class="panel bsum">
         <div class="btotal-in">
-          <label class="field"><span class="label">${esc(p._capLabel || 'Orçamento geral do projeto')}</span><span class="money-in"><input class="num" data-total inputmode="decimal" value="${total != null ? esc(fmtIn({ type: 'money' }, total)) : ''}" placeholder="Ex.: 8000" autocomplete="off"><i>€</i></span></label>
+          <div class="field"><input class="label-in" data-capname value="${esc(capName())}" aria-label="Nome do valor geral" title="Clica para mudar o nome" maxlength="60"><span class="money-in"><input class="num" data-total inputmode="decimal" value="${total != null ? esc(fmtIn({ type: 'money' }, total)) : ''}" placeholder="Ex.: 8000" autocomplete="off" aria-label="${esc(capName())}"><i>€</i></span></div>
           ${hasFee ? `<div class="field bfee"><span class="label">Grain fee</span><span class="bfee-in"><label class="switch-l"><input type="checkbox" data-feeon ${b.gfee?.off ? '' : 'checked'}> aplicar</label><span class="money-in"><input class="num" data-feepct inputmode="decimal" value="${esc(String(b.gfee?.pct ?? GRAIN_FEE).replace('.', ','))}" ${b.gfee?.off ? 'disabled' : ''} aria-label="Percentagem da Grain fee"><i>%</i></span></span></div>` : ''}
           ${moneyCols.length > 1 ? `<label class="field"><span class="label">Compara com a coluna</span><select data-main>${moneyCols.map((c) => `<option value="${c.id}" ${c.id === b.main ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>` : ''}
         </div>
@@ -179,6 +182,9 @@ export async function budgetPage(main, p) {
     const totalIn = main.querySelector('[data-total]');
     totalIn.addEventListener('input', () => { total = num(totalIn.value); refreshSums(); clearTimeout(totalIn._t); totalIn._t = setTimeout(saveTotal, 600); });
     totalIn.addEventListener('blur', () => { if (total != null) totalIn.value = fmtIn({ type: 'money' }, total); });
+    const cn = main.querySelector('[data-capname]');
+    cn.addEventListener('change', () => { const v = cn.value.trim(); snapshot('nome'); if (!v || v === (p._capLabel || 'Orçamento geral do projeto')) delete b.capName; else b.capName = v; cn.value = capName(); save(0); });
+    cn.addEventListener('keydown', (e) => { if (e.key === 'Enter') cn.blur(); });
     main.querySelector('[data-feeon]')?.addEventListener('change', (e) => { snapshot('Grain fee'); b.gfee = { ...(b.gfee || {}), off: !e.target.checked }; if (!b.gfee.off) delete b.gfee.off; save(0); draw(); });
     const fp = main.querySelector('[data-feepct]');
     fp?.addEventListener('change', () => { const n = num(fp.value); snapshot('Grain fee'); b.gfee = { ...(b.gfee || {}), pct: n == null ? GRAIN_FEE : Math.max(0, n) }; save(0); draw(); });
@@ -205,10 +211,10 @@ export async function budgetPage(main, p) {
       groups.push(cur);
       const mainCol = b.cols.find((c) => c.id === b.main); const t = (b.main && tot[b.main]) || 0;
       exportPdf({
-        title: `Orçamento — ${p.name}`, subtitle: new Date().toLocaleDateString('pt-PT'),
+        title: `${b.title || 'Orçamento'} — ${p.name}`, subtitle: new Date().toLocaleDateString('pt-PT'),
         columns: b.cols.map((c) => ({ label: c.name, align: c.type === 'text' ? undefined : 'right' })),
         groups: groups.filter((g) => g.title !== null || g.rows.length),
-        footer: [['Total da tabela', mainCol ? fmt(mainCol, t) : ''], ...(feeP() ? [[`Grain fee (${String(feeP()).replace('.', ',')} %)`, eur.format(feeOf(t))], ['Total com Grain fee', eur.format(t + feeOf(t))]] : []), ...(total != null ? [[p._capLabel || 'Orçamento geral', eur.format(total)], [total - t - feeOf(t) < 0 ? 'Passa' : 'Sobram', eur.format(Math.abs(total - t - feeOf(t)))]] : [])],
+        footer: [['Total da tabela', mainCol ? fmt(mainCol, t) : ''], ...(feeP() ? [[`Grain fee (${String(feeP()).replace('.', ',')} %)`, eur.format(feeOf(t))], ['Total com Grain fee', eur.format(t + feeOf(t))]] : []), ...(total != null ? [[capName(), eur.format(total)], [total - t - feeOf(t) < 0 ? 'Passa' : 'Sobram', eur.format(Math.abs(total - t - feeOf(t)))]] : [])],
       });
     });
     const tbody = main.querySelector('tbody');

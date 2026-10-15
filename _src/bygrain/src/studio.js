@@ -1,5 +1,6 @@
 import './style.css';
 import { daysUntil } from './lib.js';
+import { loadHidden, hideProject, unhideProject } from './lib.js';
 import { sb, state, esc, $, loadProfile, isStaff, isAdmin, toast, modal, confirmBox, ICON, LOGO, KINDS, ROLES, phaseOf, greeting, initials, signedUrls, uploadImage, callFn, authPw, MIN_PW, fmtDate, dueInfo, registerSW, BASE, PROJECT_COLS, hasPerm } from './lib.js';
 import { renderAuth } from './auth.js';
 import { mountBoard } from './board.js';
@@ -143,7 +144,7 @@ async function homePage() {
         <div class="row between wrap-gap">
           <h2 id="h-proj" class="h2">${staff ? 'Projetos' : 'Os teus projetos'}</h2>
           <div class="seg dark" role="tablist" aria-label="Estado dos projetos">
-            ${[['active', 'Em curso'], ['done', 'Finalizados'], ['archived', 'Arquivo'], ...(staff ? [['trash', 'Reciclagem']] : [])].map(([k, v]) => `<button type="button" role="tab" aria-selected="${homeState.tab === k}" data-tab="${k}">${v}</button>`).join('')}
+            ${[['active', 'Em curso'], ['done', 'Finalizados'], ['archived', 'Arquivo'], ['hidden', 'Escondidos'], ...(staff ? [['trash', 'Reciclagem']] : [])].map(([k, v]) => `<button type="button" role="tab" aria-selected="${homeState.tab === k}" data-tab="${k}">${v}</button>`).join('')}
           </div>
         </div>
         <div class="proj-tools">
@@ -172,10 +173,11 @@ async function homePage() {
   app.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { homeState.tab = b.dataset.tab; homePage(); }));
   app.querySelector('[data-new]')?.addEventListener('click', () => newProject());
 
-  const [{ data: projects }, { data: tasks }, { data: myMem }] = await Promise.all([
+  const [{ data: projects }, { data: tasks }, { data: myMem }, hidden] = await Promise.all([
     sb.from('projects').select(PROJECT_COLS).eq('is_central', false).order('updated_at', { ascending: false }),
     sb.from('tasks').select('id, project_id, title, status, due, assignee_id'),
     sb.from('project_members').select('project_id').eq('user_id', state.user.id),
+    loadHidden(),
   ]);
   // "atribuídos a mim": sou membro do projeto ou tenho tarefas lá
   const mineSet = new Set([...(myMem || []).map((m) => m.project_id), ...(tasks || []).filter((t) => t.assignee_id === state.user.id).map((t) => t.project_id)]);
@@ -184,8 +186,10 @@ async function homePage() {
   // projetos dentro de uma pasta (ex.: videoclipes de um álbum) aparecem dentro dela; numa pesquisa aparecem soltos
   const byId = new Map((projects || []).map((p) => [p.id, p]));
   const inFolder = (p) => { const par = p.parent_id && byId.get(p.parent_id); return !!par && !par.deleted_at && (!homeState.mine || mineSet.has(par.id)); };
-  const kidsOf = (id) => (projects || []).filter((k) => k.parent_id === id && !k.deleted_at);
-  const pick = () => (projects || []).filter((p) => (homeState.tab === 'trash' ? !!p.deleted_at && !(p.parent_id && byId.get(p.parent_id)?.deleted_at === p.deleted_at) : !p.deleted_at && p.status === homeState.tab && (homeState.q || !inFolder(p))) && (!homeState.mine || mineSet.has(p.id) || kidsOf(p.id).some((k) => mineSet.has(k.id))) && (!homeState.q || norm(`${p.name} ${p.client} ${byId.get(p.parent_id)?.name || ''}`).includes(norm(homeState.q)))).sort(sorters[homeState.sort]);
+  const kidsOf = (id) => (projects || []).filter((k) => k.parent_id === id && !k.deleted_at && !hidden.has(k.id));
+  // projetos que tirei da minha lista: só desaparecem para mim (os outros continuam a vê-los)
+  const isHidden = (p) => hidden.has(p.id) || (p.parent_id && hidden.has(p.parent_id));
+  const pick = () => (projects || []).filter((p) => (homeState.tab === 'trash' ? !!p.deleted_at && !(p.parent_id && byId.get(p.parent_id)?.deleted_at === p.deleted_at) : homeState.tab === 'hidden' ? !p.deleted_at && hidden.has(p.id) : !p.deleted_at && !isHidden(p) && p.status === homeState.tab && (homeState.q || !inFolder(p))) && (!homeState.mine || mineSet.has(p.id) || kidsOf(p.id).some((k) => mineSet.has(k.id))) && (!homeState.q || norm(`${p.name} ${p.client} ${byId.get(p.parent_id)?.name || ''}`).includes(norm(homeState.q)))).sort(sorters[homeState.sort]);
   let list = pick();
   const open = (pid) => (tasks || []).filter((t) => t.project_id === pid && t.status !== 'done').length;
   const covers = await signedUrls((projects || []).map((p) => p.cover_path));
@@ -228,7 +232,19 @@ async function homePage() {
       projects.splice(projects.indexOf(p), 1); toast('Apagado de vez.'); drawGrid();
     }));
   };
-  const drawGrid = () => { list = pick(); if (homeState.tab === 'trash') return drawTrash(); grid.innerHTML = list.length ? list.map((p) => {
+  const drawHidden = () => {
+    grid.innerHTML = list.length ? list.map((p) => `<article class="proj-card trash-card">
+        <div class="proj-cover" style="${covers[p.cover_path] ? `background-image:url('${esc(covers[p.cover_path])}')` : `background:${coverColor(p.id)}`}"><div class="grain-layer soft" aria-hidden="true"></div><span class="tag dark">${esc(KINDS[p.kind] || p.kind)}</span></div>
+        <div class="proj-body">
+          <div><div class="proj-name">${esc(p.name)}</div><div class="muted small">${esc(p.client || '—')} · tiraste da tua lista a ${fmtDate(hidden.get(p.id))}</div></div>
+          <div class="row wrap-gap"><button type="button" class="btn primary" data-unhide="${p.id}">${ICON.eye} Voltar a mostrar</button><a class="btn ghost" href="#/p/${p.id}">Abrir</a></div>
+        </div></article>`).join('') : '<p class="empty-note">Não tens projetos escondidos. Quando tiras um projeto da tua lista, ele fica aqui — e continua a existir para o resto da equipa.</p>';
+    grid.querySelectorAll('[data-unhide]').forEach((b) => b.addEventListener('click', async () => {
+      if (!(await unhideProject(b.dataset.unhide))) return;
+      hidden.delete(b.dataset.unhide); toast('Voltou para a tua lista.'); drawGrid();
+    }));
+  };
+  const drawGrid = () => { list = pick(); if (homeState.tab === 'trash') return drawTrash(); if (homeState.tab === 'hidden') return drawHidden(); grid.innerHTML = list.length ? list.map((p) => {
     const ph = phaseOf(p); const kids = kidsOf(p.id); const n = open(p.id) + kids.reduce((a, k) => a + open(k.id), 0);
     const par = p.parent_id && byId.get(p.parent_id);
     return `<article class="proj-card ${p.kind === 'album' ? 'is-folder' : ''}">
@@ -236,7 +252,7 @@ async function homePage() {
       <div class="proj-cover" style="${covers[p.cover_path] ? `background-image:url('${esc(covers[p.cover_path])}')` : `background:${coverColor(p.id)}`}">
         <div class="grain-layer soft" aria-hidden="true"></div>
         <span class="tag dark">${esc(KINDS[p.kind] || p.kind)}</span>
-        ${staff ? `<button type="button" class="icon-btn on-cover" data-more="${p.id}" aria-label="Opções de ${esc(p.name)}">${ICON.dots}</button>` : ''}
+        <span class="on-cover-acts"><button type="button" class="icon-btn on-cover" data-hidep="${p.id}" title="Tirar da minha lista (os outros continuam a vê-lo)" aria-label="Tirar ${esc(p.name)} da minha lista">${ICON.hide}</button>${staff ? `<button type="button" class="icon-btn on-cover" data-more="${p.id}" aria-label="Opções de ${esc(p.name)}">${ICON.dots}</button>` : ''}</span>
       </div>
       <div class="proj-body">
         <div><div class="proj-name">${p.kind === 'album' ? `<span class="fold-ic">${ICON.board}</span>` : ''}${esc(p.name)}</div><div class="muted small">${esc(p.client || '—')}${par ? ` · em ${esc(par.name)}` : ''}</div></div>
@@ -246,7 +262,13 @@ async function homePage() {
       </div>
     </article>`;
   }).join('') : `<p class="empty-note">${homeState.q ? `Nenhum projeto com "${esc(homeState.q)}".` : homeState.mine ? 'Não estás atribuído a nenhum projeto aqui.' : homeState.tab === 'active' ? (staff ? 'Ainda não há projetos em curso. Cria o primeiro em "Novo projeto".' : 'Ainda não foste convidado para nenhum projeto em curso.') : 'Nada aqui.'}</p>`;
-  grid.querySelectorAll('[data-more]').forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); const p = list.find((x) => x.id === b.dataset.more); projectDetailsModal(p, homePage); })); };
+  grid.querySelectorAll('[data-more]').forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); const p = list.find((x) => x.id === b.dataset.more); projectDetailsModal(p, homePage); }));
+  grid.querySelectorAll('[data-hidep]').forEach((b) => b.addEventListener('click', async (e) => {
+    e.preventDefault(); const p = list.find((x) => x.id === b.dataset.hidep);
+    if (!(await hideProject(p.id))) return;
+    hidden.set(p.id, new Date().toISOString());
+    toast(`"${p.name}" saiu da tua lista. Para o resto da equipa continua igual; voltas a mostrá-lo em "Escondidos".`); drawGrid();
+  })); };
   drawGrid();
   app.querySelector('[data-q]').addEventListener('input', (e) => { homeState.q = e.target.value; drawGrid(); });
   app.querySelector('[data-sort]').addEventListener('change', (e) => { homeState.sort = e.target.value; drawGrid(); });
@@ -328,7 +350,7 @@ function detailsForm(p) {
       <button type="button" class="link-btn" data-dadd>${ICON.plus} Departamento</button>
     </fieldset>
     <div class="row between">
-      ${isAdmin() && !p.is_central ? `<button type="button" class="btn ghost danger-text" data-delp>${ICON.trash} Apagar projeto</button>` : '<span></span>'}
+      <span class="row wrap-gap">${!p.is_central ? `<button type="button" class="btn ghost" data-hidep title="Os outros continuam a vê-lo">${ICON.hide} Tirar da minha lista</button>` : ''}${isAdmin() && !p.is_central ? `<button type="button" class="btn ghost danger-text" data-delp title="Vai para a reciclagem para toda a gente">${ICON.trash} Apagar para todos</button>` : ''}</span>
       <button class="btn primary">Guardar</button>
     </div>
   </form>`;
@@ -347,6 +369,11 @@ function bindDetails(root, p, after) {
     inp.click();
   });
   form.querySelector('[data-nocover]')?.addEventListener('click', async () => { await sb.from('projects').update({ cover_path: null }).eq('id', p.id); p.cover_path = null; toast('Capa tirada.'); after && after(); });
+  form.querySelector('[data-hidep]')?.addEventListener('click', async () => {
+    if (!(await hideProject(p.id))) return;
+    document.querySelector('#modal')?.replaceChildren();
+    toast(`"${p.name}" saiu da tua lista. Para o resto da equipa continua igual; voltas a mostrá-lo em "Escondidos", no início.`); go('#/'); if (location.hash === '#/' || !location.hash) homePage();
+  });
   form.querySelector('[data-delp]')?.addEventListener('click', async () => {
     if (!(await confirmBox(`Apagar "${p.name}"? Vai para a reciclagem e só é apagado de vez daqui a 10 dias. Até lá, qualquer pessoa da equipa o pode recuperar.`, 'Mandar para a reciclagem'))) return;
     const { error } = await sb.rpc('trash_project', { p: p.id });
@@ -650,10 +677,14 @@ async function projectPage(projectId, page, sub) {
   if (page === 'financas' && p.is_central && isStaff()) return financePage(main, sub);
   if (page === 'orcamento' && p.canBudget) {
     const folder = isFolder(p);
-    main.innerHTML = `<div class="row between wrap-gap"><div><h1 class="h1 pm-title">Orçamento</h1><p class="muted">${folder ? 'Orçamento geral da pasta: os custos próprios (tabela em baixo) mais o que está atribuído a cada projeto lá dentro.' : 'Soma tudo o que está na tabela e compara com o orçamento geral do projeto.'}</p></div><div data-who></div></div>${folder ? '<div data-kids></div>' : ''}<div class="budget-wrap" data-b></div>`;
+    main.innerHTML = `<div class="row between wrap-gap"><div><h1 class="h1 pm-title"><input class="title-in" data-btitle value="${esc(p.budget?.title || 'Orçamento')}" aria-label="Nome do orçamento" title="Clica para mudar o nome" maxlength="80"></h1><p class="muted">${folder ? 'Orçamento geral da pasta: os custos próprios (tabela em baixo) mais o que está atribuído a cada projeto lá dentro.' : 'Soma tudo o que está na tabela e compara com o orçamento geral do projeto.'}</p></div><div data-who></div></div>${folder ? '<div data-kids></div>' : ''}<div class="budget-wrap" data-b></div>`;
     budgetWhoChip(main.querySelector('[data-who]'), p);
     if (folder) { const kids = await loadChildren(p); p._extra = { amount: budgetChildrenPanel(main.querySelector('[data-kids]'), p, kids), label: 'atribuídos aos projetos dentro' }; }
-    return budgetPage(main.querySelector('[data-b]'), p);
+    const done = budgetPage(main.querySelector('[data-b]'), p);
+    const ti = main.querySelector('[data-btitle]');
+    const commitT = () => { const v = ti.value.trim() || 'Orçamento'; ti.value = v; if (v !== (p.budget?.title || 'Orçamento')) p._renameBudget?.(v); };
+    ti.addEventListener('change', commitT); ti.addEventListener('keydown', (e) => { if (e.key === 'Enter') ti.blur(); if (e.key === 'Escape') { ti.value = p.budget?.title || 'Orçamento'; ti.blur(); } });
+    return done;
   }
   if (page === 'shotlist') return shotlistPage(main, p, projBase(p));
   if (page === 'equipamento' && !p.is_central) return gearPage(main, p, projBase(p));

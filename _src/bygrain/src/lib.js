@@ -232,6 +232,8 @@ export const ICON = {
   fit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
   minus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg>',
   trash: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
+  hide: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 6.1A10 10 0 0 1 12 6c5 0 9 6 9 6a17 17 0 0 1-2.6 3.2M6.6 6.6C4.3 8.2 3 12 3 12s4 6 9 6c1.6 0 3-.4 4.3-1.1M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>',
+  eye: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12s4-6 9-6 9 6 9 6-4 6-9 6-9-6-9-6z"/><circle cx="12" cy="12" r="3"/></svg>',
   edit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg>',
   copy: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg>',
   open: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/></svg>',
@@ -248,3 +250,9 @@ export const ICON = {
 };
 
 export const LOGO = (sub = 'studio') => `<span class="logo" aria-label="byGrain ${esc(sub)}"><span class="logo-mark"><span class="by">by</span><span class="grain">grain</span><span class="reg">®</span></span><span class="logo-sub">${esc(sub)}</span></span>`;
+
+// Tirar um projeto só da minha lista (como no Milanote): os outros continuam a vê-lo.
+// Mandar para a reciclagem (para toda a gente) é só para administradores.
+export async function loadHidden() { const { data } = await sb.from('project_hidden').select('project_id, hidden_at'); return new Map((data || []).map((x) => [x.project_id, x.hidden_at])); }
+export async function hideProject(id) { const { error } = await sb.from('project_hidden').insert({ project_id: id }); if (error && !/duplicate/i.test(error.message)) { toast(error.message); return false; } return true; }
+export async function unhideProject(id) { const { error } = await sb.from('project_hidden').delete().eq('project_id', id); if (error) { toast(error.message); return false; } return true; }
