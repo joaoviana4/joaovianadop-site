@@ -117,10 +117,14 @@ export async function budgetPage(main, p) {
     const has = total != null && total > 0; const ratio = has ? t / total : 0; const diff = has ? total - t : 0;
     const stt = !has ? 'none' : diff < 0 ? 'over' : ratio >= 0.9 ? 'near' : 'ok';
     const label = { none: p._capLabel ? 'Sem limite definido' : 'Sem orçamento geral definido', over: 'Fora do orçamento', near: 'Dentro, mas perto do limite', ok: 'Dentro do orçamento' }[stt];
-    return `<div class="bsum-grid"><div><span class="fl">${extra ? 'Total comprometido' : fee ? 'Total com Grain fee' : 'Total da tabela'}</span><strong class="bbig">${eur.format(t)}</strong>${fee ? `<small class="muted">${eur.format(costs)} custos + ${eur.format(fee)} Grain fee (${String(feeP()).replace('.', ',')} %)</small>` : ''}${extra ? `<small class="muted">${eur.format(own)} nesta tabela + ${eur.format(extra)} ${esc(p._extra.label || 'nos projetos dentro')}</small>` : ''}</div>
-      ${has ? `<div><span class="fl">${diff < 0 ? 'Passa' : 'Sobram'}</span><strong class="bbig bst-${stt}">${eur.format(Math.abs(diff))}</strong></div>` : ''}
+    const pctTxt = String(feeP()).replace('.', ',');
+    const lines = [[extra ? 'Custos desta tabela' : 'Custos', costs], ...(fee ? [[`Grain fee · ${pctTxt} %`, fee]] : []), ...(extra ? [[p._extra.label ? p._extra.label.charAt(0).toUpperCase() + p._extra.label.slice(1) : 'Projetos dentro', extra]] : [])];
+    return `<div class="bsum-grid">
+      <div class="bsum-main"><span class="fl">${extra ? 'Total comprometido' : fee ? 'Total com Grain fee' : 'Total da tabela'}</span><strong class="bbig">${eur.format(t)}</strong>
+        ${lines.length > 1 ? `<dl class="bsum-lines">${lines.map(([l, v]) => `<div><dt>${esc(l)}</dt><dd>${eur.format(v)}</dd></div>`).join('')}</dl>` : ''}</div>
+      ${has ? `<div class="bsum-left"><span class="fl">${diff < 0 ? 'Passa' : 'Sobram'}</span><strong class="bbig bst-${stt}">${eur.format(Math.abs(diff))}</strong></div>` : ''}
       <div class="bstate"><span class="bchip bst-${stt}">${label}</span></div></div>
-      ${has ? `<div class="bbar" role="img" aria-label="${Math.round(ratio * 100)} % do orçamento geral"><span class="bst-${stt}" style="width:${Math.min(100, ratio * 100).toFixed(1)}%"></span>${ratio > 1 ? `<i style="left:${(100 / ratio).toFixed(1)}%"></i>` : ''}</div><p class="muted small">${Math.round(ratio * 100)} % do orçamento geral</p>` : ''}`;
+      ${has ? `<div class="bbar-w"><div class="bbar" role="img" aria-label="${Math.round(ratio * 100)} % do orçamento geral"><span class="bst-${stt}" style="width:${Math.min(100, ratio * 100).toFixed(1)}%"></span>${ratio > 1 ? `<i style="left:${(100 / ratio).toFixed(1)}%"></i>` : ''}</div><p class="muted small">${Math.round(ratio * 100)} % do orçamento geral</p></div>` : ''}`;
   }
 
   function cellInput(r, c) {

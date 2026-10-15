@@ -1744,3 +1744,24 @@ tr:hover > td > .cst-x, tr:hover > td > .cst-mv, tr:hover .cst-colh .cst-x, .cst
 .dpick input:focus-visible + span { outline: 2px solid var(--blue); outline-offset: 2px; }
 @media (max-width: 640px) { .crew-row { grid-template-columns: auto 1fr auto; } .crew-d { grid-column: 2 / -1; } }
 [data-crew] { margin-bottom: 28px; }
+/* resumo do orçamento: campos alinhados e totais arrumados */
+.btotal-in { align-items: flex-end; gap: 16px 24px; }
+.btotal-in .field { display: flex; flex-direction: column; gap: 6px; margin: 0; }
+.btotal-in .field > .label, .btotal-in .field > input.label-in { font-size: 13px; line-height: 18px; height: 20px; margin: 0; }
+.field input.label-in, input.label-in { min-height: 0; height: 20px; padding: 0 0 1px; border: 0; border-bottom: 1px dashed transparent; border-radius: 0; background: transparent; box-shadow: none; color: rgba(244,241,232,.75); font-size: 13px; font-weight: 400; }
+.field input.label-in:hover { border-bottom-color: rgba(244,241,232,.3); }
+.field input.label-in:focus { border-bottom-color: var(--blue); color: var(--cream); }
+.btotal-in .bfee { flex: 0 0 auto; }
+.bfee-in { height: 48px; }
+.bfee-in .money-in { width: 92px; }
+.bsum-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: start; gap: 16px 32px; margin-top: 8px; }
+.bsum-grid > div { display: flex; flex-direction: column; gap: 6px; }
+.bstate { margin-left: 0; align-self: start; }
+.bsum-lines { margin: 6px 0 0; display: grid; gap: 4px; max-width: 360px; }
+.bsum-lines > div { display: flex; justify-content: space-between; gap: 16px; font-size: 13px; }
+.bsum-lines dt { color: var(--muted); } .bsum-lines dd { margin: 0; font-variant-numeric: tabular-nums; }
+.bbar-w { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.bbar-w p { margin: 0; }
+@media (max-width: 760px) { .bsum-grid { grid-template-columns: 1fr; } }
+.btotal-in { width: 100%; } .btotal-in .bfee { margin-left: auto; align-items: flex-end; } .btotal-in .bfee > .label { text-align: right; }
+.bbar-w { margin-top: 14px; } .bstate { align-items: flex-start; } .bstate .bchip { align-self: flex-start; }
