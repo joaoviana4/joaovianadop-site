@@ -31,7 +31,7 @@ ${y}`}class $ extends Error{constructor({message:e,code:r,cause:s,name:n}){var i
       <div class="grain-layer" aria-hidden="true"></div>
       <div class="scan" aria-hidden="true"></div>
       <div class="vignette" aria-hidden="true"></div>
-      <div class="auth-center warp">
+      <div class="auth-center">
         <div class="auth-col">
           <h1 class="auth-logo">${as(r)}</h1>
           ${f}

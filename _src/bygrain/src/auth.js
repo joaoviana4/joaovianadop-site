@@ -10,7 +10,7 @@ export function renderAuth(root, { mobile = false, sub = 'studio', onDone } = {}
       <div class="grain-layer" aria-hidden="true"></div>
       <div class="scan" aria-hidden="true"></div>
       <div class="vignette" aria-hidden="true"></div>
-      <div class="auth-center warp">
+      <div class="auth-center">
         <div class="auth-col">
           <h1 class="auth-logo">${LOGO(sub)}</h1>
           ${inner}
