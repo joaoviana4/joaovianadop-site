@@ -1,6 +1,7 @@
 import { sb, esc, toast, confirmBox, modal, ICON, signedUrls, signedUrl } from './lib.js';
 import { shotCard, bindShots, shotViewer } from './fiction.js';
 import { mountTasks } from './tasks.js';
+import { mountLayout } from './layout.js';
 
 // Videoclipes: a música partida em secções (intro, versos, refrões, ponte…), como no Studio.
 // Cada secção é uma linha de "scenes" com tempos; décors = locations, pessoas = characters (figurantes têm info.extra).
@@ -74,12 +75,12 @@ export function ytId(url) {
 const normUrl = (u) => { u = String(u || '').trim(); return u && !/^https?:\/\//i.test(u) ? 'https://' + u : u; };
 
 // música (ficheiro ou link), pre-vis (YouTube, toca aqui) e referências (links, abrem no YouTube)
-async function mediaPanel(box, p, music, saveNow) {
+async function mediaPanel(slots, p, music, saveNow) {
   const audioUrl = music.audio_path ? await signedUrl(music.audio_path) : null;
   const pv = ytId(music.previs_url);
   const refs = music.refs || [];
+  const box = document.createElement('div');
   box.innerHTML = `
-    <div class="mv-grid">
       <section class="panel mv-previs">
         <div class="row between"><h2 class="h3">Pre-vis</h2>${music.previs_url ? `<button type="button" class="link-btn small" data-pv-edit>Mudar link</button>` : ''}</div>
         ${pv ? `<div class="yt"><iframe src="https://www.youtube-nocookie.com/embed/${pv}?rel=0" title="Pre-vis" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`
@@ -93,13 +94,12 @@ async function mediaPanel(box, p, music, saveNow) {
         <form class="mv-form" data-song-form><input type="url" name="u" placeholder="ou link (Spotify, YouTube, Drive…)" value="${esc(music.song_url || '')}" aria-label="Link da música"><button class="btn ghost">Guardar</button></form>
         ${music.song_url ? `<a class="small" href="${esc(music.song_url)}" target="_blank" rel="noopener noreferrer">${ICON.open} Abrir o link da música</a>` : ''}
       </section>
-    </div>
     <section class="panel mv-refs">
       <div class="row between"><h2 class="h3">Referências</h2><span class="muted small">abrem no YouTube</span></div>
       ${refs.length ? `<div class="ref-grid">${refs.map((r, i) => { const id = ytId(r.url); return `<div class="ref-card"><a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer"><span class="ref-thumb">${id ? `<img src="https://i.ytimg.com/vi/${id}/hqdefault.jpg" alt="" loading="lazy" onerror="this.remove()">` : ICON.link}<i>${ICON.open}</i></span><span class="ref-t">${esc(r.title || (id ? 'Vídeo do YouTube' : r.url))}</span></a><button type="button" class="icon-btn sm" data-ref-rm="${i}" aria-label="Tirar referência">${ICON.close}</button></div>`; }).join('')}</div>` : ''}
       <form class="mv-form ref-add" data-ref-form><input type="url" name="u" placeholder="Link do YouTube" required aria-label="Link da referência"><input name="t" placeholder="Nota (opcional): o que interessa aqui" aria-label="Nota da referência"><button class="btn primary">${ICON.plus} Juntar</button></form>
     </section>`;
-  const redraw = () => mediaPanel(box, p, music, saveNow);
+  const redraw = () => mediaPanel(slots, p, music, saveNow);
   const set = async (patch) => { Object.assign(music, patch); if (await saveNow()) redraw(); };
   box.querySelector('[data-pv-form]')?.addEventListener('submit', (e) => { e.preventDefault(); set({ previs_url: normUrl(e.target.u.value) || null }); });
   box.querySelector('[data-pv-edit]')?.addEventListener('click', () => {
@@ -131,6 +131,9 @@ async function mediaPanel(box, p, music, saveNow) {
   });
   box.querySelector('[data-ref-form]').addEventListener('submit', (e) => { e.preventDefault(); const u = normUrl(e.target.u.value); if (!u) return; set({ refs: [...refs, { url: u, title: e.target.t.value.trim() }] }); });
   box.querySelectorAll('[data-ref-rm]').forEach((b) => b.addEventListener('click', () => set({ refs: refs.filter((_, i) => i !== +b.dataset.refRm) })));
+  slots.previs?.replaceChildren(box.querySelector('.mv-previs'));
+  slots.song?.replaceChildren(box.querySelector('.mv-song'));
+  slots.refs?.replaceChildren(box.querySelector('.mv-refs'));
 }
 
 async function musicPage(main, p, f, sub, base, cleanup) {
@@ -142,16 +145,19 @@ async function musicPage(main, p, f, sub, base, cleanup) {
     const L = layout(f.scenes, music.duration);
     main.innerHTML = `
       <div class="row between wrap-gap"><div><h1 class="h1 pm-title">Seguimento</h1><p class="muted">Parte o clipe em secções da música. Cada secção funciona como uma cena: décors, atores, figurantes, planos e tarefas.</p></div></div>
-      <div class="mv" data-media></div>
-      <section class="panel seg">
+      <div data-lay>
+      <div data-blk="previs"><div data-slot="previs"></div></div>
+      <div data-blk="song"><div data-slot="song"></div></div>
+      <div data-blk="refs"><div data-slot="refs"></div></div>
+      <div data-blk="track"><section class="panel seg">
         <div class="seg-head"><strong>${esc(music.title || p.name)}</strong>
           <label class="seg-dur"><span class="muted small">Duração</span><input class="mini-in num" data-dur value="${esc(music.duration || '')}" placeholder="3:45" aria-label="Duração da música"></label>
           <label class="seg-dur"><span class="muted small">BPM</span><input class="mini-in num" data-bpm value="${esc(music.bpm || '')}" placeholder="—" aria-label="BPM" inputmode="numeric"></label>
           ${f.scenes.length ? '' : '<button type="button" class="btn primary" data-auto>Partir com as secções habituais</button>'}
         </div>
         ${f.scenes.length ? trackHtml(f.scenes, music.duration, { base, f }) + (L.scaled ? '' : '<p class="muted small">Escreve quando começa cada secção (e a duração da música) para a barra ficar à escala.</p>') : '<p class="muted">Ainda sem secções. Junta-as em baixo, uma a uma, ou parte já com as secções habituais de uma música (intro, versos, refrões, ponte).</p>'}
-      </section>
-      ${f.scenes.length ? `<div class="panel table-wrap"><table class="table seg-table"><thead><tr><th></th><th>Secção</th><th>Começa</th><th>Acaba</th><th>Décors</th><th>Pessoas</th><th class="num">Planos</th><th></th></tr></thead><tbody>
+      </section></div>
+      ${f.scenes.length ? `<div data-blk="table"><div class="panel table-wrap"><table class="table seg-table"><thead><tr><th></th><th>Secção</th><th>Começa</th><th>Acaba</th><th>Décors</th><th>Pessoas</th><th class="num">Planos</th><th></th></tr></thead><tbody>
         ${L.items.map((x) => `<tr data-sid="${x.s.id}">
           <td><i class="seg-dot" style="--sc:${x.col}"></i></td>
           <td><input class="cell-in" data-f="heading" value="${esc(x.s.heading || '')}" list="dl-parts" aria-label="Nome da secção"></td>
@@ -161,16 +167,21 @@ async function musicPage(main, p, f, sub, base, cleanup) {
           <td class="small">${esc([...(x.s.character_ids || []), ...(x.s.extra_ids || [])].map((id) => f.characters.find((c) => c.id === id)?.name).filter(Boolean).join(', ')) || '<span class="muted">—</span>'}</td>
           <td class="num">${f.shots.filter((y) => y.scene_id === x.s.id).length || '<span class="muted">—</span>'}</td>
           <td><a class="btn ghost sm-btn" href="${base}/seguimento/${x.s.id}">Abrir ${ICON.chev}</a></td></tr>`).join('')}
-      </tbody></table></div>` : ''}
-      <form class="panel row wrap-gap seg-add" data-add>
+      </tbody></table></div></div>` : ''}
+      <div data-blk="add"><form class="panel row wrap-gap seg-add" data-add>
         <strong class="small">Nova secção</strong>
         <input name="name" placeholder="ex: Refrão" list="dl-parts" aria-label="Nome da secção" required>
         <input name="start" class="mini-in num" placeholder="começa 1:20" aria-label="Começa">
         <input name="end" class="mini-in num" placeholder="acaba 1:45" aria-label="Acaba">
         <button class="btn primary">${ICON.plus} Juntar</button>
-      </form>
+      </form></div>
+      </div>
       <datalist id="dl-parts">${PARTS.map((x) => `<option value="${x}">`).join('')}</datalist>`;
-    mediaPanel(main.querySelector('[data-media]'), p, music, saveNow);
+    mediaPanel({ previs: main.querySelector('[data-slot=previs]'), song: main.querySelector('[data-slot=song]'), refs: main.querySelector('[data-slot=refs]') }, p, music, saveNow);
+    mountLayout(main.querySelector('[data-lay]'), { project: p, key: 'seguimento', title: 'página do seguimento', blocks: [
+      { id: 'previs', label: 'Pre-vis', pos: 'left' }, { id: 'song', label: 'A música', pos: 'right' }, { id: 'refs', label: 'Referências', pos: 'full' },
+      { id: 'track', label: 'Barra das secções', pos: 'full' }, { id: 'table', label: 'Tabela das secções', pos: 'full' }, { id: 'add', label: 'Nova secção', pos: 'full' },
+    ] });
     main.querySelector('[data-dur]').addEventListener('input', (e) => { music.duration = e.target.value.trim(); saveMusic(); });
     main.querySelector('[data-dur]').addEventListener('change', draw);
     main.querySelector('[data-bpm]').addEventListener('input', (e) => { music.bpm = e.target.value.trim(); saveMusic(); });

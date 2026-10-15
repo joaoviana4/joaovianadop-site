@@ -2,6 +2,7 @@ import { sb, esc, toast, modal, ICON, dueInfo, fmtDate, initials, daysUntil, tod
 import { loadPeople } from './tasks.js';
 import { PROP_STATUS } from './props.js';
 import { trackHtml, musicStats } from './music.js';
+import { mountLayout } from './layout.js';
 
 // "Ponto de situação" do projeto: o que falta fazer e por quem, adereços em falta,
 // questões de produção por decidir, departamentos e cronograma. Sem valores (esses ficam no Orçamento).
@@ -66,19 +67,18 @@ export async function mountSituation(box, p, base, { onChange } = {}) {
     const groups = new Map();
     open.forEach((t) => { const k = t.assignee_id || ''; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); });
     const order = [...groups.entries()].sort(([a, x], [b, y]) => (a === '') - (b === '') || y.filter((t) => late.includes(t)).length - x.filter((t) => late.includes(t)).length || y.length - x.length);
-    box.innerHTML = `
-      <div class="ov-kpis">
+    box.innerHTML = `<div data-lay>
+      <div data-blk="kpis"><div class="ov-kpis">
         <a class="ov-kpi ${late.length ? 'warn' : ''}" href="${base}/tarefas"><span class="k-ic">${ICON.task}</span><strong>${open.length}</strong><span>${open.length === 1 ? 'tarefa por fazer' : 'tarefas por fazer'}</span>${late.length ? `<em>${plural(late.length, 'atrasada', 'atrasadas')}</em>` : all.length ? `<em class="ok">${all.length - open.length} de ${all.length} feitas</em>` : ''}</a>
         <a class="ov-kpi ${missing.length ? 'warn' : ''}" href="${base}/aderecos"><span class="k-ic">${ICON.prop}</span><strong>${missing.length}</strong><span>${missing.length === 1 ? 'adereço em falta' : 'adereços em falta'}</span>${P.length ? `<em class="${missing.length ? '' : 'ok'}">${P.length - missing.length} de ${P.length} prontos</em>` : '<em>sem lista ainda</em>'}</a>
         <a class="ov-kpi ${qOpen.length ? 'warn' : ''}" href="#ov-q" data-jump><span class="k-ic">${ICON.question}</span><strong>${qOpen.length}</strong><span>${qOpen.length === 1 ? 'questão por decidir' : 'questões por decidir'}</span>${qDone.length ? `<em class="ok">${plural(qDone.length, 'resolvida', 'resolvidas')}</em>` : ''}</a>
         <div class="ov-kpi ${mile.late ? 'warn' : ''}"><span class="k-ic">${ICON.calendar || ICON.clock || ICON.task}</span><strong>${esc(mile.big)}</strong><span>${esc(mile.label)}</span></div>
         ${ms ? `<a class="ov-kpi" href="${base}/seguimento"><span class="k-ic">${ICON.music}</span><strong>${ms.scenes.length}</strong><span>${ms.scenes.length === 1 ? 'secção no seguimento' : 'secções no seguimento'}</span><em>${plural(ms.shots, 'plano', 'planos')}</em></a>` : ''}
-      </div>
+      </div></div>
 
-      ${ms && ms.scenes.length ? `<section class="panel ov-music"><div class="row between"><h2 class="h3">Seguimento</h2><a class="small" href="${base}/seguimento">Abrir</a></div>${trackHtml(ms.scenes, p.music?.duration, { base, compact: true })}</section>` : ''}
+      ${ms && ms.scenes.length ? `<div data-blk="music"><section class="panel ov-music"><div class="row between"><h2 class="h3">Seguimento</h2><a class="small" href="${base}/seguimento">Abrir</a></div>${trackHtml(ms.scenes, p.music?.duration, { base, compact: true })}</section></div>` : ''}
 
-      <div class="ov-grid">
-        <section class="panel ov-who">
+        <div data-blk="who"><section class="panel ov-who">
           <div class="row between"><h2 class="h3">Quem tem o quê</h2><a class="small" href="${base}/tarefas">Todas as tarefas</a></div>
           ${order.length ? `<ul class="ov-people">${order.map(([uid, list]) => { const who = people.find((x) => x.id === uid); const l = list.filter((t) => late.includes(t)).length; const sorted = [...list].sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999'));
             return `<li class="${uid ? '' : 'nobody'}">
@@ -86,15 +86,13 @@ export async function mountSituation(box, p, base, { onChange } = {}) {
               <ul class="ovp-t">${sorted.slice(0, 3).map((t) => { const du = dueInfo(t.due, t.status); const d = deptOf(t.department); return `<li><a href="${base}/tarefas">${d ? `<i class="dot" style="--g:${esc(d.color)}"></i>` : '<i class="dot"></i>'}<span>${esc(t.title)}</span><span class="due due-${du.tone}">${esc(du.label)}</span></a></li>`; }).join('')}${sorted.length > 3 ? `<li class="muted small">e mais ${sorted.length - 3}…</li>` : ''}</ul>
             </li>`; }).join('')}</ul>`
           : `<div class="empty-box sm"><p>${all.length ? 'Está tudo feito.' : 'Ainda não há tarefas.'}</p><a class="btn ghost" href="${base}/tarefas">${ICON.plus} Distribuir tarefas</a></div>`}
-        </section>
+        </section></div>
 
-        <div class="ov-col">
-          <section class="panel"><h2 class="h3">Cronograma</h2>${timelineHtml(p, phases)}</section>
-          ${depts.length ? `<section class="panel"><h2 class="h3">Por departamento</h2><ul class="ov-depts">${depts.map((d) => { const dt = all.filter((t) => t.department === d.id); const done = dt.filter((t) => t.status === 'done').length; const q = qOpen.filter((x) => x.department === d.id).length;
-              return `<li style="--g:${esc(d.color)}"><div class="row between small"><span><i class="dot"></i>${esc(d.name)}</span><span class="muted">${dt.length ? `${done}/${dt.length}` : '—'}${q ? ` · ${plural(q, 'questão', 'questões')}` : ''}</span></div><div class="bar"><i style="width:${dt.length ? Math.round((done / dt.length) * 100) : 0}%"></i></div></li>`; }).join('')}</ul></section>` : ''}
-        </div>
+        <div data-blk="crono"><section class="panel"><h2 class="h3">Cronograma</h2>${timelineHtml(p, phases)}</section></div>
+          ${depts.length ? `<div data-blk="depts"><section class="panel"><h2 class="h3">Por departamento</h2><ul class="ov-depts">${depts.map((d) => { const dt = all.filter((t) => t.department === d.id); const done = dt.filter((t) => t.status === 'done').length; const q = qOpen.filter((x) => x.department === d.id).length;
+              return `<li style="--g:${esc(d.color)}"><div class="row between small"><span><i class="dot"></i>${esc(d.name)}</span><span class="muted">${dt.length ? `${done}/${dt.length}` : '—'}${q ? ` · ${plural(q, 'questão', 'questões')}` : ''}</span></div><div class="bar"><i style="width:${dt.length ? Math.round((done / dt.length) * 100) : 0}%"></i></div></li>`; }).join('')}</ul></section></div>` : ''}
 
-        <section class="panel ov-q" id="ov-q">
+        <div data-blk="questions"><section class="panel ov-q" id="ov-q">
           <div class="row between"><h2 class="h3">Questões de produção</h2><span class="muted small">o que ainda está por decidir</span></div>
           <form class="ov-qadd" data-qadd>
             <input name="text" placeholder="ex: Licença para filmar na rua? Confirmar o cão no set?" aria-label="Nova questão" autocomplete="off" required>
@@ -110,15 +108,20 @@ export async function mountSituation(box, p, base, { onChange } = {}) {
           : `<p class="muted small">${qDone.length ? 'Nada por decidir.' : 'Aponta aqui o que ainda tem de ser resolvido: autorizações, décors por confirmar, transportes, horários, dúvidas para o cliente…'}</p>`}
           ${qDone.length ? `<button type="button" class="link-btn" data-qact="toggle">${st.showResolved ? 'Esconder' : 'Ver'} as resolvidas (${qDone.length})</button>
             ${st.showResolved ? `<ul class="ov-qs done">${qDone.map((q) => `<li data-q="${q.id}"><button type="button" class="q-check on" data-qact="reopen" aria-label="Reabrir">${ICON.done || '✓'}</button><span class="q-main"><span class="q-text">${esc(q.text)}</span>${q.answer ? `<span class="q-ans">${esc(q.answer)}</span>` : ''}<span class="muted small">Resolvida a ${fmtDate(q.resolved_at)}</span></span></li>`).join('')}</ul>` : ''}` : ''}
-        </section>
+        </section></div>
 
-        <section class="panel ov-props">
+        <div data-blk="props"><section class="panel ov-props">
           <div class="row between"><h2 class="h3">Adereços em falta</h2><a class="small" href="${base}/aderecos">Todos os adereços</a></div>
           ${P.length ? `<div class="bar ok"><i style="width:${Math.round(((P.length - missing.length) / P.length) * 100)}%"></i></div>
             ${missing.length ? `<ul class="ov-pl">${missing.slice(0, 8).map((x) => { const s = PROP_STATUS.find((y) => y[0] === x.status) || PROP_STATUS[0]; return `<li><a href="${base}/aderecos/${x.id}"><span>${esc(x.name)}</span><span class="pstat" style="--c:${s[2]}">${esc(s[1])}</span></a></li>`; }).join('')}${missing.length > 8 ? `<li class="muted small">e mais ${missing.length - 8}…</li>` : ''}</ul>` : '<p class="muted small">Está tudo pronto.</p>'}`
           : `<p class="muted small">Ainda não há adereços.</p><a class="btn ghost" href="${base}/aderecos">${ICON.plus} Juntar adereços</a>`}
-        </section>
+        </section></div>
       </div>`;
+    mountLayout(box.querySelector('[data-lay]'), { project: p, key: 'overview', title: 'vista geral', blocks: [
+      { id: 'kpis', label: 'Números do projeto', pos: 'full' }, { id: 'music', label: 'Seguimento', pos: 'full' },
+      { id: 'who', label: 'Quem tem o quê', pos: 'left' }, { id: 'crono', label: 'Cronograma', pos: 'right' }, { id: 'depts', label: 'Por departamento', pos: 'right' },
+      { id: 'questions', label: 'Questões de produção', pos: 'left' }, { id: 'props', label: 'Adereços em falta', pos: 'right' },
+    ] });
     bind();
   };
 
