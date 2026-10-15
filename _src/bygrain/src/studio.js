@@ -490,7 +490,7 @@ function projectNav(p, active) {
   const base = projBase(p);
   navState.p = p; navState.active = active;
   const mods = p.is_central ? [['tarefas', 'Tarefas', ICON.task]] : modulesOf(p).filter((k) => (k !== 'orcamento' || p.canBudget) && k !== 'equipamento' && k !== 'aderecos').map((k) => [modPath(p, k), modLabel(p, k), ICON[MODULES[k].icon]]);
-  const pages = [['geral', 'Visão geral', ICON.home], ...(p.is_central && hasPerm('finance') ? [['financas', 'Finanças', ICON.money]] : []), ...mods, ['equipa', p.is_central ? 'Equipa' : 'Equipa e convites', ICON.team], ...(isStaff() ? [['detalhes', 'Detalhes', ICON.info]] : [])];
+  const pages = [['geral', 'Visão geral', ICON.home], ...(p.is_central && isStaff() ? [['financas', 'Finanças', ICON.money]] : []), ...mods, ['equipa', p.is_central ? 'Equipa' : 'Equipa e convites', ICON.team], ...(isStaff() ? [['detalhes', 'Detalhes', ICON.info]] : [])];
   return `
     ${p._parent ? `<a class="pn-parent" href="#/p/${p._parent.id}">${ICON.back}<span>${esc(p._parent.name)}</span></a>` : ''}
     <div class="pn-h"><div><strong>${esc(p.name)}</strong>${p.client ? `<span class="muted small">${esc(p.client)}</span>` : ''}</div>${!p.is_central && isStaff() ? `<button type="button" class="icon-btn sm pn-mods" data-mods title="Páginas do projeto" aria-label="Juntar ou tirar páginas">${ICON.plus}</button>` : ''}</div>
@@ -647,7 +647,7 @@ async function projectPage(projectId, page, sub) {
     onCleanup(() => lk.destroy());
   }
   if (page === 'geral') return projectOverview(main, p);
-  if (page === 'financas' && p.is_central && hasPerm('finance')) return financePage(main, sub);
+  if (page === 'financas' && p.is_central && isStaff()) return financePage(main, sub);
   if (page === 'orcamento' && p.canBudget) {
     const folder = isFolder(p);
     main.innerHTML = `<div class="row between wrap-gap"><div><h1 class="h1 pm-title">Orçamento</h1><p class="muted">${folder ? 'Orçamento geral da pasta: os custos próprios (tabela em baixo) mais o que está atribuído a cada projeto lá dentro.' : 'Soma tudo o que está na tabela e compara com o orçamento geral do projeto.'}</p></div><div data-who></div></div>${folder ? '<div data-kids></div>' : ''}<div class="budget-wrap" data-b></div>`;

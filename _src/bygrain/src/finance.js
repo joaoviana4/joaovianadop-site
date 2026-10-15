@@ -1,4 +1,4 @@
-import { sb, esc, toast, modal, confirmBox, ICON, todayISO } from './lib.js';
+import { sb, esc, toast, modal, confirmBox, ICON, todayISO, hasPerm } from './lib.js';
 import { summaryTab, earningsTab, peopleTab } from './finsummary.js';
 
 // Finanças da Grain (Central de Produção, só membros): movimentos do mês, contas e despesas mensais fixas.
@@ -16,9 +16,12 @@ const lastDay = (ym) => { const [y, m] = ym.split('-').map(Number); return new D
 const dmy = (iso) => { const [, m, d] = iso.split('-'); return `${+d} ${MESES[+m - 1].slice(0, 3)}`; };
 
 export async function financePage(main, sub) {
+  // Resumo, Ganhos e Pessoas: membros e administradores. Movimentos, contas e custos fixos: quem tem a permissão Finanças.
+  const full = hasPerm('finance');
   if (['resumo', 'ganhos', 'pessoas', 'movimentos', 'contas', 'despesas'].includes(sub)) st.tab = sub;
+  if (!full && ['movimentos', 'contas', 'despesas'].includes(st.tab)) st.tab = 'resumo';
   main.innerHTML = `<div class="row between wrap-gap"><h1 class="h1 pm-title">Finanças</h1>
-    <div class="seg dark" role="tablist">${[['resumo', 'Resumo'], ['ganhos', 'Ganhos'], ['pessoas', 'Pessoas'], ['movimentos', 'Movimentos'], ['contas', 'Contas'], ['despesas', 'Custos fixos']].map(([k, l]) => `<button type="button" role="tab" aria-selected="${st.tab === k}" data-t="${k}">${l}</button>`).join('')}</div></div>
+    <div class="seg dark" role="tablist">${[['resumo', 'Resumo'], ['ganhos', 'Ganhos'], ['pessoas', 'Pessoas'], ...(full ? [['movimentos', 'Movimentos'], ['contas', 'Contas'], ['despesas', 'Custos fixos']] : [])].map(([k, l]) => `<button type="button" role="tab" aria-selected="${st.tab === k}" data-t="${k}">${l}</button>`).join('')}</div></div>
     <div class="fin" data-fin><p class="muted">A carregar…</p></div>`;
   main.querySelectorAll('[data-t]').forEach((b) => b.addEventListener('click', () => { st.tab = b.dataset.t; financePage(main); }));
   const box = main.querySelector('[data-fin]');
