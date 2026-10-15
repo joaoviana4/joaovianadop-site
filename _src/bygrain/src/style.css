@@ -573,7 +573,16 @@ details.panel[open] summary { margin-bottom: 4px; }
 .prop-gh { display: flex; align-items: center; gap: 10px; font-size: 14px; font-family: 'Courier Prime', monospace; margin: 16px 0 6px; }
 .prop-gh:first-child { margin-top: 0; }
 .prop-list { list-style: none; margin: 0; padding: 0; }
-.prop-row { display: flex; align-items: center; gap: 10px; padding: 6px 0 6px 12px; border-top: 1px solid var(--line); box-shadow: inset 3px 0 0 var(--c); }
+.prop-row { display: grid; grid-template-columns: minmax(0, 1fr) 130px 190px; align-items: center; gap: 12px; padding: 6px 0 6px 12px; border-top: 1px solid var(--line); box-shadow: inset 3px 0 0 var(--c); transition: background .6s; }
+.prop-row.just-added { background: rgba(30, 42, 212, .22); }
+.prop-row .sel select { width: 100%; }
+.prop-head { display: grid; grid-template-columns: minmax(0, 1fr) 130px 190px; gap: 12px; padding: 0 0 8px 12px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.prop-price { position: relative; display: flex; align-items: center; }
+.prop-price input { width: 100%; min-height: 36px !important; padding: 4px 26px 4px 10px !important; text-align: right; font-variant-numeric: tabular-nums; background: transparent !important; border-color: transparent !important; }
+.prop-price input:hover, .prop-price input:focus { border-color: var(--line2) !important; background: var(--bg2) !important; }
+.prop-price i { position: absolute; right: 10px; font-style: normal; font-size: 13px; color: var(--muted); pointer-events: none; }
+.prop-quick { display: grid; grid-template-columns: minmax(0, 1fr) 130px 190px auto; gap: 8px; }
+@media (max-width: 760px) { .prop-quick { grid-template-columns: minmax(0, 1fr) 110px; } .prop-quick input[name=name] { grid-column: 1 / -1; } .prop-row, .prop-head { grid-template-columns: minmax(0, 1fr) 96px; } .prop-row .sel, .prop-head span:last-child { grid-column: 1 / -1; } .prop-head span:last-child { display: none; } }
 .prop-main { flex: 1; min-width: 0; display: flex; flex-direction: column; text-decoration: none; padding: 4px 0; }
 .prop-row select { width: auto; min-height: 36px; font-size: 13px; padding: 4px 32px 4px 10px; }
 .chip-x { border: 0; background: none; color: var(--muted); padding: 0; margin-left: 2px; cursor: pointer; display: inline-flex; }
@@ -961,3 +970,4 @@ a.ov-kpi:hover { border-color: var(--line2); }
 .ref-t { font-size: 13px; }
 .ref-card .icon-btn { position: absolute; top: 6px; right: 6px; background: rgba(12, 12, 18, .75); }
 .ref-add input[name=t] { flex: 2 1 240px; }
+.prop-head span:nth-child(2) { text-align: right; padding-right: 26px; }

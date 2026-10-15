@@ -39,7 +39,7 @@ export async function propsPage(main, p, sub, base, cleanup) {
   main.innerHTML = '<p class="muted">A carregar…</p>';
   const f = await load(p.id);
   if (sub) return propPage(main, p, f, sub, base, cleanup);
-  const hasScenes = f.scenes.length > 0; const clip = p.kind === 'videoclipe';
+  const hasScenes = f.scenes.length > 0; const clip = p.kind === 'videoclipe'; f.clip = clip;
   if (!hasScenes && st.sort === 'scene') st.sort = 'name';
   const urls = await signedUrls(f.props.map((x) => (x.refs || []).find((r) => r.kind === 'image')?.path).filter(Boolean));
   const draw = () => {
@@ -59,6 +59,12 @@ export async function propsPage(main, p, sub, base, cleanup) {
       </div>
       ${visible.length ? `<div class="status-bar">${PROP_STATUS.filter(([k]) => counts[k]).map(([k, l, c]) => `<i style="flex:${counts[k]};background:${c}" title="${l}: ${counts[k]}"></i>`).join('')}</div>
       <div class="pills">${PROP_STATUS.filter(([k]) => counts[k]).map(([k, l, c]) => `<button type="button" class="pill ${st.filter === k ? 'on' : ''}" data-filter="${k}" style="--c:${c}"><i></i>${l} ${counts[k]}</button>`).join('')}${st.filter ? '<button type="button" class="link-btn" data-filter="">Ver todos</button>' : ''}</div>` : ''}
+      <form class="prop-quick" data-quick>
+        <input name="name" placeholder="Novo adereço ${st.tab === 'acao' ? 'de ação' : 'de cenário'}… (Enter para juntar)" aria-label="Nome do novo adereço" autocomplete="off" required>
+        <input name="price" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Valor €" aria-label="Valor">
+        <select name="status" aria-label="Estado">${PROP_STATUS.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select>
+        <button class="btn primary">${ICON.plus} Juntar</button>
+      </form>
       <section class="${st.view === 'grid' ? 'props-gridwrap' : 'panel'}" data-listbox>${list.length ? renderList(list, f, base, urls) : `<p class="empty-note">${st.q ? `Nenhum adereço com "${esc(st.q)}".` : f.props.length ? 'Nada com este filtro.' : (hasScenes ? 'Ainda não há adereços. Analisa o guião ou junta-os à mão.' : 'Ainda não há adereços. Junta-os em "Adereço".')}</p>`}</section>`;
     main.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { st.tab = b.dataset.tab; st.filter = ''; draw(); }));
     main.querySelector('[data-sort]').addEventListener('change', (e) => { st.sort = e.target.value; draw(); });
@@ -71,16 +77,26 @@ export async function propsPage(main, p, sub, base, cleanup) {
       await sb.from('props').update({ status: sel.value }).eq('id', x.id);
       sel.closest('[data-prop]').style.setProperty('--c', statusOf(sel.value)[2]);
     }));
-    main.querySelector('[data-add]').addEventListener('click', () => {
-      const m = modal(`<h2>Novo adereço</h2><form class="stack"><div class="field"><label for="pn">Nome</label><input id="pn" required></div>
-        <div class="field"><label for="pt">Tipo</label><select id="pt"><option value="acao" ${st.tab === 'acao' ? 'selected' : ''}>De ação</option><option value="cenario" ${st.tab === 'cenario' ? 'selected' : ''}>De cenário</option></select></div>
-        <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Criar</button></div></form>`);
-      m.el.querySelector('form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const { data, error } = await sb.from('props').insert({ project_id: p.id, name: m.el.querySelector('#pn').value.trim(), type: m.el.querySelector('#pt').value, manual: true }).select().single();
-        if (error) return toast(error.message); m.close(); location.hash = `${base}/aderecos/${data.id}`;
-      });
+    // juntar sem sair da página: escreve, Enter, e continua a escrever o próximo
+    main.querySelector('[data-add]').addEventListener('click', () => main.querySelector('[data-quick] [name=name]').focus());
+    main.querySelector('[data-quick]').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = Object.fromEntries(new FormData(e.target)); const name = fd.name.trim(); if (!name) return;
+      const btn = e.target.querySelector('button'); btn.disabled = true;
+      const { data, error } = await sb.from('props').insert({ project_id: p.id, name, type: st.tab, status: fd.status, price: fd.price === '' ? null : Number(fd.price), manual: true }).select().single();
+      btn.disabled = false;
+      if (error) return toast(error.message);
+      f.props.push(data); st.filter = ''; st.q = ''; st.lastAdded = data.id;
+      draw();
+      main.querySelector('[data-quick] [name=name]').focus();
+      toast(`"${name}" juntado.`);
     });
+    main.querySelectorAll('[data-price]').forEach((inp) => {
+      const x = f.props.find((y) => y.id === inp.dataset.price);
+      const save = debounce((v) => sb.from('props').update({ price: v }).eq('id', x.id).then(({ error }) => error && toast(error.message)), 600);
+      inp.addEventListener('input', () => { x.price = inp.value === '' ? null : Number(inp.value); save(x.price); });
+    });
+    if (st.lastAdded) { main.querySelector(`[data-prop="${st.lastAdded}"]`)?.classList.add('just-added'); st.lastAdded = null; }
     main.querySelector('[data-analyze]')?.addEventListener('click', () => analyze(p, f, () => propsPage(main, p, null, base, cleanup)));
   };
   draw();
@@ -92,7 +108,7 @@ function row(x, f, base) {
   const pr = priceLabel(x, f);
   return `<li class="prop-row" data-prop="${x.id}" style="--c:${c}">
     <a href="${base}/aderecos/${x.id}" class="prop-main"><strong>${esc(x.name)}</strong><span class="small muted">${[x.category, x.quantity > 1 ? `${x.quantity} un.` : '', x.supplier, scenes.length ? `Cenas ${scenes.join(', ')}` : ''].filter(Boolean).map(esc).join(' · ')}</span></a>
-    ${pr ? `<span class="prop-price">${pr}</span>` : ''}
+    <span class="prop-price">${x.bundle_id ? `<span class="small muted">${pr}</span>` : `<input type="number" step="0.01" min="0" inputmode="decimal" data-price="${x.id}" value="${esc(x.price ?? '')}" placeholder="—" aria-label="Valor de ${esc(x.name)}"><i>€</i>`}</span>
     <label class="sel"><span class="vh">Estado de ${esc(x.name)}</span><select data-status="${x.id}">${PROP_STATUS.map(([k, l]) => `<option value="${k}" ${x.status === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
   </li>`;
 }
@@ -108,10 +124,13 @@ function tile(x, f, base, urls) {
 }
 function renderList(list, f, base, urls) {
   const wrap = (ps) => (st.view === 'grid' ? `<div class="prop-grid">${ps.map((x) => tile(x, f, base, urls)).join('')}</div>` : `<ul class="prop-list">${ps.map((x) => row(x, f, base)).join('')}</ul>`);
+  const head = st.view === 'grid' ? '' : '<div class="prop-head" aria-hidden="true"><span>Adereço</span><span>Valor</span><span>Estado</span></div>';
   const group = (title, ps) => (ps.length ? `<h3 class="prop-gh">${title}</h3>${wrap(ps)}` : '');
+  return head + body();
+  function body() {
   if (st.sort === 'scene') {
     return f.scenes.map((s) => group(`<span class="scene-n sm">${esc(s.number)}</span>${esc(s.heading)}`, list.filter((x) => (x.scene_ids || []).includes(s.id)))).join('')
-      + group('Sem cena', list.filter((x) => !(x.scene_ids || []).length));
+      + group(f.clip ? 'Sem secção' : 'Sem cena', list.filter((x) => !(x.scene_ids || []).length));
   }
   if (st.sort === 'status') return PROP_STATUS.map(([k, l]) => group(l, list.filter((x) => x.status === k))).join('');
   if (st.sort === 'category') { const cats = [...new Set(list.map((x) => x.category || 'Sem categoria'))].sort(); return cats.map((c) => group(esc(c), list.filter((x) => (x.category || 'Sem categoria') === c))).join(''); }
@@ -123,6 +142,7 @@ function renderList(list, f, base, urls) {
     return a.name.localeCompare(b.name, 'pt');
   });
   return wrap(sorted);
+  }
 }
 
 // ---------- página do adereço ----------
