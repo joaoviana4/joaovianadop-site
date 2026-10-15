@@ -257,7 +257,7 @@ async function propPage(main, p, f, id, base, cleanup) {
       <div class="field"><label for="pco">Continuidade (parte-se, molha-se, fica vazio…)</label><textarea id="pco" rows="2" data-k="continuity">${esc(x.continuity)}</textarea></div></section>
       <section class="panel stack" data-acq></section>
       <section class="panel"><h2 class="h3">Interações</h2>${(x.interactions || []).length ? `<ul class="inter">${x.interactions.map((it) => `<li><strong>${esc(it.character || '—')}</strong> · ${esc(it.action || '')}${it.scene ? ` <span class="muted small">(cena ${esc(it.scene)})</span>` : ''}</li>`).join('')}</ul>` : '<p class="muted small">Sem interações registadas.</p>'}</section>
-      <section class="panel"><div class="row between"><h2 class="h3">Referências</h2><div class="row"><button type="button" class="btn ghost" data-addimg>${ICON.image} Imagens</button><button type="button" class="btn ghost" data-addlink>${ICON.link} Link</button></div></div>
+      <section class="panel"><div class="row between"><h2 class="h3">Referências</h2><div class="row"><span class="muted small paste-hint">ou cola com Ctrl+V</span><button type="button" class="btn ghost" data-addimg>${ICON.image} Imagens</button><button type="button" class="btn ghost" data-addlink>${ICON.link} Link</button></div></div>
         ${imgs.length ? `<div class="photo-grid">${imgs.map((r, i) => `<figure><img src="${esc(urls[r.path] || '')}" alt=""><button type="button" class="icon-btn sm" data-rmimg="${i}" aria-label="Tirar imagem">${ICON.close}</button></figure>`).join('')}</div>` : ''}
         ${links.length ? `<ul class="links">${links.map((r, i) => `<li><a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${esc(r.title || r.url)}</a><button type="button" class="icon-btn sm" data-rmlink="${i}" aria-label="Tirar link">${ICON.close}</button></li>`).join('')}</ul>` : ''}
         ${!imgs.length && !links.length ? '<p class="muted small">Imagens e links para produtos.</p>' : ''}</section>
@@ -282,6 +282,18 @@ async function propPage(main, p, f, id, base, cleanup) {
     inp.onchange = async () => { toast('A enviar…'); for (const file of inp.files) { try { const up = await uploadImage(p.id, 'props', file); x.refs = [...(x.refs || []), { kind: 'image', path: up.path }]; } catch (e) { toast(e.message); } } saveRefs(); };
     inp.click();
   });
+  // colar imagens (Ctrl+V / Cmd+V) em qualquer sítio da página do adereço
+  const onPaste = async (e) => {
+    if (!document.body.contains(main.querySelector('[data-addimg]'))) { document.removeEventListener('paste', onPaste); return; }
+    if (e.target.closest?.('input, textarea')) return;
+    const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith('image/'));
+    if (!files.length) return;
+    e.preventDefault(); toast('A colar a imagem…');
+    for (const file of files) { try { const up = await uploadImage(p.id, 'props', file); x.refs = [...(x.refs || []), { kind: 'image', path: up.path }]; } catch (er) { toast(er.message); } }
+    saveRefs();
+  };
+  document.addEventListener('paste', onPaste);
+  cleanup(() => document.removeEventListener('paste', onPaste));
   main.querySelector('[data-addlink]').addEventListener('click', () => {
     const m = modal(`<h2>Link para produto</h2><form class="stack"><div class="field"><label for="lu">Endereço</label><input id="lu" type="url" required placeholder="https://"></div><div class="field"><label for="lt">Nome (opcional)</label><input id="lt"></div><div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Juntar</button></div></form>`);
     m.el.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); let u = m.el.querySelector('#lu').value.trim(); if (!/^https?:\/\//.test(u)) u = 'https://' + u; x.refs = [...(x.refs || []), { kind: 'link', url: u, title: m.el.querySelector('#lt').value.trim() }]; m.close(); saveRefs(); });

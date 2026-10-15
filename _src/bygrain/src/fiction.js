@@ -169,7 +169,7 @@ function cenas(main, p, f, sub, base, cleanup) {
 
 export function shotCard(sh, url) {
   return `<article class="shot" data-shot="${sh.id}">
-    <div class="shot-img" data-img tabindex="0" role="button" aria-label="${url ? 'Ver o plano em grande' : 'Juntar imagem de storyboard'}">${url ? `<img src="${esc(url)}" alt="Storyboard ${esc(sh.code)}">` : `<span>${ICON.image}<small>Juntar storyboard</small></span>`}</div>
+    <div class="shot-img" data-img tabindex="0" role="button" aria-label="${url ? 'Ver o plano em grande' : 'Juntar imagem de storyboard'}">${url ? `<img src="${esc(url)}" alt="Storyboard ${esc(sh.code)}">` : `<span>${ICON.image}<small>Juntar storyboard</small><small class="muted">ou cola com Ctrl+V</small></span>`}</div>
     <div class="shot-f">
       <div class="row between"><input class="shot-code" data-f="code" value="${esc(sh.code)}" aria-label="Código do plano"><button type="button" class="icon-btn sm" data-del aria-label="Apagar plano">${ICON.trash}</button></div>
       <label class="mini">Enquadramento<select data-f="framing">${FRAMINGS.map((x) => `<option ${x === sh.framing ? 'selected' : ''} value="${esc(x)}">${esc(x || '—')}</option>`).join('')}${sh.framing && !FRAMINGS.includes(sh.framing) ? `<option selected>${esc(sh.framing)}</option>` : ''}</select></label>
@@ -257,6 +257,21 @@ export function bindShots(main, p, f, s, shots, urls, base) {
     const card = box.closest('[data-shot]'); const sh = shots.find((x) => x.id === card.dataset.shot);
     const file = [...e.dataTransfer.files].find((x) => x.type.startsWith('image/')); file && setImage(sh, card, file);
   });
+  // colar (Ctrl+V) para o plano com o rato por cima ou o último em que se carregou
+  let target = null;
+  wrap.addEventListener('pointerover', (e) => { const c = e.target.closest('[data-shot]'); if (c) target = c; });
+  wrap.addEventListener('focusin', (e) => { const c = e.target.closest('[data-shot]'); if (c) target = c; });
+  const onPaste = (e) => {
+    if (!document.body.contains(wrap)) { document.removeEventListener('paste', onPaste); return; }
+    if (e.target.closest?.('input, textarea')) return;
+    const file = [...(e.clipboardData?.files || [])].find((f) => f.type.startsWith('image/'));
+    if (!file) return;
+    const card = target && document.body.contains(target) ? target : wrap.querySelector('[data-shot]');
+    if (!card) return toast('Cria primeiro um plano para colar a imagem.');
+    e.preventDefault();
+    setImage(shots.find((x) => x.id === card.dataset.shot), card, file);
+  };
+  document.addEventListener('paste', onPaste);
   function pickImage(sh, card) { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.onchange = () => inp.files[0] && setImage(sh, card, inp.files[0]); inp.click(); }
   async function setImage(sh, card, file) {
     try {
