@@ -92,7 +92,8 @@ export function confirmBox(text, okLabel = 'Confirmar') {
 }
 
 // ---------- sessão ----------
-export const state = { user: null, profile: null };
+// ctx = onde estou: numa comunidade (comm) e/ou num projeto (project). As permissões do ecrã dependem disto.
+export const state = { user: null, profile: null, comms: [], ctx: { comm: null, project: null } };
 
 export async function loadProfile() {
   const { data: { session } } = await sb.auth.getSession();
@@ -100,17 +101,30 @@ export async function loadProfile() {
   if (!state.user) { state.profile = null; return null; }
   const { data } = await sb.from('profiles').select('*').eq('id', state.user.id).single();
   state.profile = data;
-  const { data: perms } = await sb.from('user_perms').select('perm').eq('user_id', state.user.id);
-  state.perms = new Set((perms || []).map((x) => x.perm));
-  return data;
+    return data;
 }
-export const isStaff = () => ['admin', 'member'].includes(state.profile?.role);
-export const isAdmin = () => state.profile?.role === 'admin';
-// permissões: os administradores têm tudo; os outros só o que um administrador lhes der
-export const PERMS = { budget: ['Orçamentos', 'Vê e edita o orçamento e os valores de todos os projetos'], finance: ['Finanças', 'Vê e edita as finanças da Central (movimentos, contas e despesas)'] };
-export const hasPerm = (k) => isAdmin() || !!state.perms?.has(k);
+// as minhas comunidades, com o meu papel e permissões em cada uma
+export async function loadComms() {
+  if (!state.user) { state.comms = []; return []; }
+  const { data } = await sb.from('community_members').select('role, perms, communities(id, name, slug, color, logo_path, business, created_at)').eq('user_id', state.user.id);
+  state.comms = (data || []).filter((x) => x.communities).map((x) => ({ ...x.communities, my_role: x.role, my_perms: x.perms || [] })).sort((a, b) => a.name.localeCompare(b.name, 'pt'));
+  return state.comms;
+}
+export const commById = (id) => state.comms.find((c) => c.id === id) || null;
+export function setCtx({ comm = null, project = null } = {}) { state.ctx = { comm, project }; }
+export const CID = () => state.ctx?.comm?.id || null;
+// junta a comunidade atual a uma linha (ou lista de linhas) antes de gravar
+export const withC = (x) => (Array.isArray(x) ? x.map((r) => ({ ...r, community_id: CID() })) : { ...x, community_id: CID() });
+const ownsCtxProject = () => { const p = state.ctx?.project; return !!p && p.created_by === state.user?.id; };
+// "equipa" = membro ou administrador da comunidade; num projeto pessoal, o dono; fora de tudo (início), eu
+export const isStaff = () => { const c = state.ctx?.comm; if (c) return ['admin', 'member'].includes(c.my_role); return state.ctx?.project ? ownsCtxProject() : true; };
+export const isAdmin = () => { const c = state.ctx?.comm; if (c) return c.my_role === 'admin'; return state.ctx?.project ? ownsCtxProject() : true; };
+export const isPlatformAdmin = () => state.profile?.role === 'admin';
+// permissões dentro da comunidade (dadas pelo administrador): orçamentos e finanças
+export const PERMS = { budget: ['Orçamentos', 'Vê e edita o orçamento e os valores de todos os projetos da comunidade'], finance: ['Finanças', 'Vê e edita as finanças da Central (movimentos, contas e despesas)'] };
+export const hasPerm = (k) => { const c = state.ctx?.comm; if (c) return c.my_role === 'admin' || (c.my_perms || []).includes(k); return state.ctx?.project ? ownsCtxProject() && k === 'budget' : false; };
 // colunas de projects que a app pode ler (os valores vivem em project_budgets, protegidos)
-export const PROJECT_COLS = 'id, name, client, kind, status, is_central, cover_path, departments, starts_on, ends_on, created_by, created_at, updated_at, done_at, music, layouts, modules, deleted_at, deleted_by, parent_id, lead_id, manager_id';
+export const PROJECT_COLS = 'id, community_id, name, client, kind, status, is_central, cover_path, departments, starts_on, ends_on, created_by, created_at, updated_at, done_at, music, layouts, modules, deleted_at, deleted_by, parent_id, lead_id, manager_id';
 
 export async function signIn(identifier, password) {
   let email = String(identifier || '').trim().toLowerCase();
@@ -233,6 +247,7 @@ export const ICON = {
   dots: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg>',
   note: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5"/></svg>',
   image: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/></svg>',
+  pin: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 6 3 3v1H7v-1l3-3z"/><path d="M12 14v6"/></svg>',
   palette: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.2 0 1.6-1 1.1-1.9-.6-1-.1-2.1 1.1-2.1H17a4 4 0 0 0 4-4c0-5.5-4-10-9-10z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/></svg>',
   list: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>',
   board: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><rect x="7" y="7" width="5" height="5"/><path d="M14 8h3M14 12h3M7 16h10"/></svg>',

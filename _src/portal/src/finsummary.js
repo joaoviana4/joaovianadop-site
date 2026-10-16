@@ -1,4 +1,5 @@
 import { sb, esc, toast, modal, confirmBox, ICON, todayISO, hasPerm } from './lib.js';
+import { CID, withC } from './lib.js';
 import { costsOf, grainFee, feePct } from './folders.js';
 
 // Finanças: Resumo (com gráficos e saúde financeira), Ganhos por projeto e Ganhos por pessoa.
@@ -21,11 +22,11 @@ const dd = (iso) => (iso ? `${+iso.slice(8, 10)} ${MES[+iso.slice(5, 7) - 1]}` :
 // carrega tudo o que as contas precisam
 export async function loadFin() {
   const [{ data: earn }, { data: mov }, { data: acc }, { data: rec }, { data: projects }, { data: people }] = await Promise.all([
-    sb.from('fin_earnings').select('*').order('date', { ascending: false }),
-    sb.from('fin_movements').select('date, amount, direction, category, project_id, account_id'),
-    sb.from('fin_accounts').select('id, opening_balance'),
-    sb.from('fin_recurring').select('amount, active'),
-    sb.from('projects').select('id, name, client, kind, status, deleted_at').eq('is_central', false).is('deleted_at', null).order('name'),
+    sb.from('fin_earnings').select('*').eq('community_id', CID()).order('date', { ascending: false }),
+    sb.from('fin_movements').select('date, amount, direction, category, project_id, account_id').eq('community_id', CID()),
+    sb.from('fin_accounts').select('id, opening_balance').eq('community_id', CID()),
+    sb.from('fin_recurring').select('amount, active').eq('community_id', CID()),
+    sb.from('projects').select('id, name, client, kind, status, deleted_at').eq('is_central', false).eq('community_id', CID()).is('deleted_at', null).order('name'),
     sb.from('profiles').select('id, display_name').order('display_name'),
   ]);
   const ids = [...new Set((projects || []).map((p) => p.id))];
@@ -241,7 +242,7 @@ export async function earningsTab(box, st) {
   box.querySelectorAll('[data-e]').forEach((r) => r.addEventListener('click', () => earningForm(F, F.E.find((x) => x.id === r.dataset.e), again)));
   box.querySelector('[data-sync]')?.addEventListener('click', async () => {
     if (!(await confirmBox(`Criar ${missing.length} linha${missing.length === 1 ? '' : 's'} de ganhos a partir dos projetos com orçamento? O valor segue o orçamento de cada projeto.`, 'Juntar'))) return;
-    const { error } = await sb.from('fin_earnings').insert(missing.map((p) => ({ project_id: p.id, title: p.name, client: p.client, follow_budget: true, status: 'aceite', date: todayISO() })));
+    const { error } = await sb.from('fin_earnings').insert(withC(missing.map((p) => ({ project_id: p.id, title: p.name, client: p.client, follow_budget: true, status: 'aceite', date: todayISO() }))));
     if (error) return toast(error.message); toast('Projetos juntados aos ganhos.'); again();
   });
 }
@@ -300,7 +301,7 @@ function earningForm(F, e, after) {
   f.addEventListener('submit', async (ev) => {
     ev.preventDefault(); const v = Object.fromEntries(new FormData(f));
     const row = { leader: (v.leader || '').trim(), fee: num(v.fee), color: v.color || null, project_id: v.project_id || null, title: v.title.trim(), client: v.client.trim(), date: v.date, follow_budget: !!v.follow_budget, amount: num(v.amount), vat_rate: num(v.vat_rate) ?? 23, costs: num(v.costs), status: v.status, due_date: v.due_date || null, paid_on: v.paid_on || null, notes: v.notes, cuts: cuts.filter((c) => c.name.trim()).map((c) => ({ ...c, name: c.name.trim(), amount: num(c.amount) || 0 })), updated_at: new Date().toISOString() };
-    const { error } = isNew ? await sb.from('fin_earnings').insert(row) : await sb.from('fin_earnings').update(row).eq('id', e.id);
+    const { error } = isNew ? await sb.from('fin_earnings').insert(withC(row)) : await sb.from('fin_earnings').update(row).eq('id', e.id);
     if (error) return toast(error.message); m.close(); after();
   });
   m.el.querySelector('[data-del]')?.addEventListener('click', async () => { m.close(); if (!(await confirmBox(`Apagar "${e.title}" dos ganhos?`, 'Apagar'))) return; await sb.from('fin_earnings').delete().eq('id', e.id); after(); });

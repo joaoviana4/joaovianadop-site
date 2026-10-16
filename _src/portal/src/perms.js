@@ -1,4 +1,4 @@
-import { sb, esc, toast, modal, ICON, ROLES, PERMS, hasPerm, isAdmin, initials, state } from './lib.js';
+import { sb, esc, toast, modal, ICON, ROLES, PERMS, hasPerm, isAdmin, initials, state, CID } from './lib.js';
 import { loadPeople } from './tasks.js';
 
 // Quem pode ver o orçamento de um projeto:
@@ -11,12 +11,12 @@ export async function budgetAccess(p) {
     loadPeople(),
     sb.from('project_members').select('user_id').eq('project_id', p.id),
     sb.from('budget_access').select('user_id').eq('project_id', p.id),
-    sb.from('user_perms').select('user_id, perm'),
+    CID() ? sb.from('community_members').select('user_id, perms').eq('community_id', CID()) : Promise.resolve({ data: [] }),
   ]);
   const memberIds = new Set((members || []).map((m) => m.user_id));
   const granted = new Set((grants || []).map((g) => g.user_id));
-  const global = new Set((perms || []).filter((x) => x.perm === 'budget').map((x) => x.user_id));
-  // quem tem acesso ao projeto: equipa da Grain + convidados deste projeto
+  const global = new Set((perms || []).filter((x) => (x.perms || []).includes('budget')).map((x) => x.user_id));
+  // quem tem acesso ao projeto: equipa da comunidade (ou o dono, num projeto pessoal) + convidados deste projeto
   const inProject = people.filter((x) => x.role !== 'guest' || memberIds.has(x.id));
   const how = (x) => (x.role === 'admin' ? 'admin' : global.has(x.id) ? 'global' : granted.has(x.id) ? 'project' : null);
   return { people: inProject, how, sees: inProject.filter((x) => how(x)) };
@@ -45,7 +45,7 @@ export async function budgetAccessPanel(root, p, after) {
         : h === 'global' ? '<span class="perm-tag">Todos os projetos</span>'
         : `<label class="switch ${can ? '' : 'off'}"><input type="checkbox" data-grant="${x.id}" ${h === 'project' ? 'checked' : ''} ${can ? '' : 'disabled'}><span class="sw-ui" aria-hidden="true"></span><span class="vh">Ver o orçamento deste projeto</span></label>`}
     </li>`; }).join('')}</ul>
-    ${can ? '<p class="muted small">"Todos os projetos" muda-se em Equipa e permissões. Aqui dás acesso só a este projeto, por exemplo a um produtor externo.</p>' : '<p class="muted small">Só administradores ou quem tem a permissão "Orçamentos" pode mudar isto.</p>'}`;
+    ${can ? '<p class="muted small">"Todos os projetos" muda-se nas pessoas da comunidade. Aqui dás acesso só a este projeto, por exemplo a um produtor externo.</p>' : '<p class="muted small">Só quem gere os orçamentos (o dono do projeto, ou na comunidade os administradores e quem tem a permissão "Orçamentos") pode mudar isto.</p>'}`;
   root.querySelectorAll('[data-grant]').forEach((c) => c.addEventListener('change', async () => {
     const q = c.checked
       ? sb.from('budget_access').insert({ project_id: p.id, user_id: c.dataset.grant })
@@ -61,7 +61,7 @@ export async function budgetAccessPanel(root, p, after) {
 export async function globalPermsPanel(root) {
   const [{ data: people }, { data: perms }] = await Promise.all([
     sb.from('profiles').select('id, display_name, role, color').order('display_name'),
-    sb.from('user_perms').select('user_id, perm'),
+    CID() ? sb.from('community_members').select('user_id, perms').eq('community_id', CID()) : Promise.resolve({ data: [] }),
   ]);
   const has = (u, k) => (perms || []).some((x) => x.user_id === u && x.perm === k);
   const staff = (people || []).filter((x) => x.role !== 'guest');

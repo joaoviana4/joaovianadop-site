@@ -22,15 +22,19 @@ async function entityNames(tasks) {
   return out;
 }
 
-export function mountTaskCenter(root, { projectId = null } = {}) {
+export function mountTaskCenter(root, { projectId = null, communityId = null, mine = false } = {}) {
   const st = { tasks: [], people: [], projects: new Map(), names: {}, f: { status: 'open', who: 'all', about: 'all', dept: 'all', sort: 'due' }, q: '', histLimit: 60, dead: false };
 
   async function load() {
     let q = sb.from('tasks').select('*').order('created_at');
     if (projectId) q = q.eq('project_id', projectId);
-    const [{ data: tasks, error }, people, { data: projects }] = await Promise.all([
-      q, loadPeople(), sb.from('projects').select('id, name, departments, is_central, kind, status').is('deleted_at', null).order('name'),
+    if (mine) q = q.eq('assignee_id', state.user.id);
+    const pq = sb.from('projects').select('id, name, departments, is_central, kind, status, community_id').is('deleted_at', null).order('name');
+    const [{ data: tasks0, error }, people, { data: projects }] = await Promise.all([
+      q, loadPeople(), communityId ? pq.eq('community_id', communityId) : pq,
     ]);
+    // numa comunidade: só as tarefas dos projetos dela
+    const tasks = communityId ? (tasks0 || []).filter((t) => (projects || []).some((p) => p.id === t.project_id)) : tasks0;
     if (st.dead) return;
     if (error) { root.innerHTML = `<p class="muted">${esc(error.message)}</p>`; return; }
     st.tasks = tasks || []; st.people = people; st.projects = new Map((projects || []).map((p) => [p.id, p]));

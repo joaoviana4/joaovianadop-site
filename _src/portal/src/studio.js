@@ -1,6 +1,7 @@
 import './style.css';
 import { daysUntil } from './lib.js';
 import { loadHidden, hideProject, unhideProject } from './lib.js';
+import { loadComms, commById, setCtx, CID, isPlatformAdmin, PERMS } from './lib.js';
 import { IS_STUDIO, sb, BUCKET, state, esc, $, loadProfile, isStaff, isAdmin, toast, modal, confirmBox, ICON, LOGO, KINDS, ROLES, phaseOf, greeting, initials, signedUrls, uploadImage, callFn, authPw, MIN_PW, fmtDate, dueInfo, registerSW, BASE, PROJECT_COLS, hasPerm } from './lib.js';
 import { renderAuth } from './auth.js';
 import { mountBoard } from './board.js';
@@ -21,7 +22,7 @@ const lazy = {
 // pré-carrega em segundo plano depois de o site abrir, para a primeira abertura também ser rápida
 setTimeout(() => { const idle = window.requestIdleCallback || ((f) => setTimeout(f, 1500)); idle(() => Object.values(lazy).forEach((f) => f().catch(() => {}))); }, 4000);
 import { joinProject, leaveProject, lockPage, boardPresence, onPresence, whoLabel } from './presence.js';
-import { budgetWhoChip, budgetAccessPanel, globalPermsPanel } from './perms.js';
+import { budgetWhoChip, budgetAccessPanel } from './perms.js';
 import { MODULES, TEMPLATES, modulesOf, hasMod, scriptMode, modLabel, modPath, modulesModal, autoModules, ensureModules } from './modules.js';
 import { FICTION_PAGES, FICTION_DEPTS, fictionPage, fictionStats } from './fiction.js';
 
@@ -44,6 +45,7 @@ sb.auth.onAuthStateChange((ev) => {
 async function boot() {
   if (recovering) return;
   await loadProfile();
+  await loadComms();
   if (IS_STUDIO) import('./appearance.js').then((a) => a.syncLookFromProfile());
   if (!state.user || !state.profile) {
     teardown();
@@ -64,36 +66,50 @@ async function route() {
   const h = location.hash.replace(/^#\/?/, '');
   const parts = h.split('/').filter(Boolean);
   if (parts[0] === 'p' && parts[1]) return parts[2] === 'b' ? boardView(parts[1], parts[3]) : parts[2] === 'f' ? toolPage(parts[1], parts[3]) : projectPage(parts[1], parts[2] || 'geral', parts[3]);
-  if (parts[0] === 'central') {
-    if (!isStaff()) return go('#/');
-    const { data } = await sb.from('projects').select('id').eq('is_central', true).limit(1).maybeSingle();
-    if (!data) return toast('A Central de Produção ainda não existe.');
-    return parts[1] === 'b' ? boardView(data.id, parts[2]) : parts[1] === 'f' ? toolPage(data.id, parts[2]) : projectPage(data.id, parts[1] || 'geral', parts[2]);
+  // comunidades: #/c/<id>, #/c/<id>/central/..., #/c/<id>/pessoas, #/c/<id>/tarefas
+  if (parts[0] === 'c' && parts[1]) {
+    const c = commById(parts[1]) || (await loadComms(), commById(parts[1]));
+    if (!c) { setCtx(); toast('Não tens acesso a esta comunidade.'); return go('#/'); }
+    setCtx({ comm: c });
+    if (parts[2] === 'central') {
+      if (!c.business || !isStaff()) return go(`#/c/${c.id}`);
+      const { data } = await sb.from('projects').select('id').eq('is_central', true).eq('community_id', c.id).limit(1).maybeSingle();
+      if (!data) { toast('A Central desta comunidade ainda não existe.'); return go(`#/c/${c.id}`); }
+      return parts[3] === 'b' ? boardView(data.id, parts[4]) : parts[3] === 'f' ? toolPage(data.id, parts[4]) : projectPage(data.id, parts[3] || 'geral', parts[4]);
+    }
+    leaveProject();
+    if (parts[2] === 'pessoas') return isAdmin() ? communityTeamPage(c) : go(`#/c/${c.id}`);
+    if (parts[2] === 'tarefas') return tasksPage(c);
+    return homePage(c);
   }
+  setCtx();
   leaveProject();
+  if (parts[0] === 'central') return go(state.comms.find((c) => c.business) ? `#/c/${state.comms.find((c) => c.business).id}/central` : '#/');
   if (parts[0] === 'tarefas') return tasksPage();
-  if (parts[0] === 'equipamento') return isStaff() ? gearDbPage() : go('#/');
-  if (parts[0] === 'equipa') return isAdmin() ? teamPage() : go('#/');
+  if (parts[0] === 'equipamento') return gearDbPage();
   return homePage();
 }
 
 // ---------- cabeçalho ----------
 function header(active) {
-  const p = state.profile;
+  const p = state.profile; const c = state.ctx?.comm;
   const link = (href, label, key) => `<a href="${href}" class="nav-a" ${active === key ? 'aria-current="page"' : ''}>${label}</a>`;
+  const role = c ? ROLES[c.my_role] : 'Conta pessoal';
   return `<header class="topbar">
     <div class="topbar-l">
       <a href="#/" class="brand" aria-label="byGrain Studio, início">${LOGO('studio')}</a>
       <nav aria-label="Principal" class="nav">
         ${link('#/', 'Início', 'home')}
-        ${isStaff() ? link('#/central', 'Central de Produção', 'central') + link('#/tarefas', 'Tarefas', 'tasks') : ''}
-        ${isAdmin() ? link('#/equipa', 'Equipa e permissões', 'team') : ''}
+        ${c ? `<span class="nav-sep" aria-hidden="true">/</span><a href="#/c/${c.id}" class="nav-a nav-comm" ${active === 'comm' ? 'aria-current="page"' : ''}><i style="background:${esc(c.color)}"></i>${esc(c.name)}</a>
+          ${c.business && isStaff() ? link(`#/c/${c.id}/central`, 'Central de Produção', 'central') : ''}
+          ${isStaff() ? link(`#/c/${c.id}/tarefas`, 'Tarefas', 'tasks') : ''}
+          ${isAdmin() ? link(`#/c/${c.id}/pessoas`, 'Pessoas', 'team') : ''}` : link('#/tarefas', 'As minhas tarefas', 'tasks')}
       </nav>
     </div>
     <div class="topbar-r">
     ${IS_STUDIO ? `<button type="button" class="icon-btn look-btn" data-look aria-label="Aparência" title="Aparência">${ICON.palette}</button>` : ''}
     <button type="button" class="acct" data-acct aria-label="Conta e definições">
-      <span class="acct-role">${esc(ROLES[p.role])}</span>
+      <span class="acct-role">${esc(role)}</span>
       <span class="avatar" style="--c:${esc(p.color)}">${esc(initials(p.display_name))}</span>
     </button>
     </div>
@@ -107,7 +123,7 @@ function accountMenu() {
   const p = state.profile;
   const m = modal(`
     <div class="acct-card"><span class="avatar lg" style="--c:${esc(p.color)}">${esc(initials(p.display_name))}</span>
-      <div><strong>${esc(p.display_name)}</strong><div class="muted">${esc(p.username ? '@' + p.username : p.email)} · ${esc(ROLES[p.role])}</div></div></div>
+      <div><strong>${esc(p.display_name)}</strong><div class="muted">${esc(p.username ? '@' + p.username : p.email)}</div></div></div>
     <div class="menu-list">
       <button type="button" data-a="name">${ICON.team} Mudar o meu nome</button>
       <button type="button" data-a="pw">${ICON.info} Mudar palavra-passe</button>
@@ -136,56 +152,75 @@ function changePassword() {
 
 // ---------- página inicial ----------
 const homeState = { tab: 'active', q: '', mine: false, sort: 'recent' };
-async function homePage() {
+// Início (comm = null): os meus projetos (fora de comunidades), os fixados e as minhas comunidades.
+// Comunidade (comm): os projetos dela, a Central (se tiver parte business) e as pessoas.
+async function homePage(comm = null) {
   const staff = isStaff();
-  app.innerHTML = `<div class="page">${header('home')}
+  if (homeState.scope !== (comm?.id || '')) { homeState.scope = comm?.id || ''; homeState.tab = 'active'; homeState.mine = false; }
+  app.innerHTML = `<div class="page">${header(comm ? 'comm' : 'home')}
     <section class="hero"><div class="grain-layer" aria-hidden="true"></div>
       <div class="wrap hero-in">
-        <div><h1 class="hero-h">${greeting()}, ${esc(state.profile.display_name.split(' ')[0])}.</h1><p class="hero-p" data-hero>&nbsp;</p></div>
+        <div>${comm ? `<p class="hero-kicker"><i style="background:${esc(comm.color)}"></i>Comunidade · ${esc(ROLES[comm.my_role])}</p><h1 class="hero-h">${esc(comm.name)}</h1>` : `<h1 class="hero-h">${greeting()}, ${esc(state.profile.display_name.split(' ')[0])}.</h1>`}<p class="hero-p" data-hero>&nbsp;</p></div>
         ${staff ? `<button type="button" class="btn cream" data-new>${ICON.plus} Novo projeto</button>` : ''}
       </div>
     </section>
     <div class="wrap home-grid">
       <section aria-labelledby="h-proj" class="home-main">
         <div class="row between wrap-gap">
-          <h2 id="h-proj" class="h2">${staff ? 'Projetos' : 'Os teus projetos'}</h2>
+          <h2 id="h-proj" class="h2">${comm ? (staff ? 'Projetos' : 'Os teus projetos') : 'Os meus projetos'}</h2>
           <div class="seg dark" role="tablist" aria-label="Estado dos projetos">
-            ${[['active', 'Em curso'], ['done', 'Finalizados'], ['archived', 'Arquivo'], ['hidden', 'Escondidos'], ...(staff ? [['trash', 'Reciclagem']] : [])].map(([k, v]) => `<button type="button" role="tab" aria-selected="${homeState.tab === k}" data-tab="${k}">${v}</button>`).join('')}
+            ${[['active', 'Em curso'], ['done', 'Finalizados'], ['archived', 'Arquivo'], ['hidden', 'Escondidos'], ...(isAdmin() ? [['trash', 'Reciclagem']] : [])].map(([k, v]) => `<button type="button" role="tab" aria-selected="${homeState.tab === k}" data-tab="${k}">${v}</button>`).join('')}
           </div>
         </div>
         <div class="proj-tools">
           <label class="search"><span class="vh">Procurar projetos</span>${ICON.search}<input type="search" data-q placeholder="Procurar por projeto ou artista…" value="${esc(homeState.q)}" autocomplete="off"></label>
-          ${staff ? `<div class="seg" role="tablist" aria-label="Que projetos mostrar">${[[false, 'Todos'], [true, 'Atribuídos a mim']].map(([k, v]) => `<button type="button" role="tab" aria-selected="${homeState.mine === k}" data-mine-f="${k}">${v}</button>`).join('')}</div>` : ''}
+          ${comm && staff ? `<div class="seg" role="tablist" aria-label="Que projetos mostrar">${[[false, 'Todos'], [true, 'Atribuídos a mim']].map(([k, v]) => `<button type="button" role="tab" aria-selected="${homeState.mine === k}" data-mine-f="${k}">${v}</button>`).join('')}</div>` : ''}
           <label class="sel"><span class="vh">Ordenar</span><select data-sort>${[['recent', 'Mais recentes'], ['az', 'Ordem alfabética'], ['due', 'Entrega mais próxima']].map(([k, v]) => `<option value="${k}" ${homeState.sort === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
         </div>
         <div class="proj-grid" data-grid><p class="muted">A carregar…</p></div>
       </section>
-      ${staff ? `<aside class="home-side">
-        <section class="panel">
-          <div class="row between"><h2 class="h3">Central de Produção</h2><span class="tag internal">${ICON.lock}Internal</span></div>
-          <div class="menu-list" data-central>
-            <a href="#/central">${ICON.board}<span><strong>Abrir a Central</strong><small>Contas, planeamento e calendário da Grain</small></span>${ICON.chev}</a>
-            <a href="#/central">${ICON.task}<span><strong>Tarefas internas</strong><small>O que não pertence a um projeto</small></span>${ICON.chev}</a>
-            <a href="#/equipamento">${ICON.camera || ICON.board}<span><strong>Base de dados de equipamento</strong><small>Câmaras, luzes, tripés e o resto</small></span>${ICON.chev}</a>
+      <aside class="home-side">
+        ${comm ? `${comm.business && staff ? `<section class="panel">
+          <div class="row between"><h2 class="h3">Central de Produção</h2><span class="tag internal">${ICON.lock}Interno</span></div>
+          <div class="menu-list">
+            <a href="#/c/${comm.id}/central">${ICON.board}<span><strong>Abrir a Central</strong><small>Visão geral, finanças e planeamento da comunidade</small></span>${ICON.chev}</a>
+            <a href="#/c/${comm.id}/central/tarefas">${ICON.task}<span><strong>Tarefas internas</strong><small>O que não pertence a um projeto</small></span>${ICON.chev}</a>
           </div>
-        </section>
+        </section>` : ''}
+        ${isAdmin() ? `<section class="panel"><div class="row between"><h2 class="h3">Pessoas</h2><a href="#/c/${comm.id}/pessoas" class="small">Gerir</a></div><div class="av-stack" data-cpeople></div></section>` : ''}
+        ${!staff ? '<section class="panel"><h2 class="h3">Acesso de convidado</h2><p class="muted">Vês apenas os projetos desta comunidade para os quais foste convidado.</p></section>' : ''}`
+        : `<section class="panel">
+          <div class="row between"><h2 class="h3">Comunidades</h2><button type="button" class="link-btn small" data-newcomm>${ICON.plus} Nova</button></div>
+          <div class="menu-list comm-list">${state.comms.length ? state.comms.map((c) => `<a href="#/c/${c.id}"><span class="comm-dot" style="background:${esc(c.color)}">${esc(initials(c.name))}</span><span><strong>${esc(c.name)}</strong><small>${esc(ROLES[c.my_role])}${c.business ? ' · com Central' : ''}</small></span>${ICON.chev}</a>`).join('') : '<p class="muted small">Uma comunidade é um espaço partilhado (uma produtora, um coletivo): pessoas próprias, projetos dela e, se quiseres, a parte business com a Central de Produção.</p>'}</div>
+        </section>`}
         <section class="panel">
-          <div class="row between"><h2 class="h3">As minhas tarefas</h2><a href="#/tarefas" class="small">Ver todas</a></div>
+          <div class="row between"><h2 class="h3">As minhas tarefas</h2><a href="${comm ? `#/c/${comm.id}/tarefas` : '#/tarefas'}" class="small">Ver todas</a></div>
           <ul class="mini-tasks" data-mine><li class="muted">A carregar…</li></ul>
           <a class="small muted" href="${BASE}tasks/" target="_blank" rel="noopener">Abrir no telemóvel</a>
         </section>
-      </aside>` : `<aside class="home-side"><section class="panel"><h2 class="h3">Acesso de convidado</h2><p class="muted">Vês apenas os projetos para os quais foste convidado. Para entrar noutro projeto, pede um código a quem o gere.</p></section></aside>`}
+        <a class="side-link" href="#/equipamento">${ICON.camera || ICON.board} Base de dados de equipamento</a>
+      </aside>
     </div></div>`;
   bindHeader(app);
-  app.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { homeState.tab = b.dataset.tab; homePage(); }));
-  app.querySelector('[data-new]')?.addEventListener('click', () => newProject());
+  app.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { homeState.tab = b.dataset.tab; homePage(comm); }));
+  app.querySelector('[data-new]')?.addEventListener('click', () => newProject({ comm }));
+  app.querySelector('[data-newcomm]')?.addEventListener('click', () => newCommunity());
+  const cpe = app.querySelector('[data-cpeople]'); if (cpe) loadPeople().then((pp) => { cpe.innerHTML = pp.slice(0, 8).map((x) => `<span class="avatar sm" title="${esc(x.display_name)}" style="--c:${esc(x.color)}">${esc(initials(x.display_name))}</span>`).join('') + (pp.length > 8 ? `<span class="avatar sm more">+${pp.length - 8}</span>` : ''); });
 
-  const [{ data: projects }, { data: tasks }, { data: myMem }, hidden] = await Promise.all([
-    sb.from('projects').select(PROJECT_COLS).eq('is_central', false).order('updated_at', { ascending: false }),
+  const pq = sb.from('projects').select(PROJECT_COLS).eq('is_central', false).order('updated_at', { ascending: false });
+  const [{ data: projects0 }, { data: tasks0 }, { data: myMem }, hidden, { data: pins }] = await Promise.all([
+    comm ? pq.eq('community_id', comm.id) : pq.is('community_id', null),
     sb.from('tasks').select('id, project_id, title, status, due, assignee_id'),
     sb.from('project_members').select('project_id').eq('user_id', state.user.id),
     loadHidden(),
+    sb.from('project_pins').select('project_id'),
   ]);
+  const pinned = new Set((pins || []).map((x) => x.project_id));
+  // no início também aparecem os projetos de comunidades que fixei (continuam a ser da comunidade)
+  let projects = projects0 || [];
+  if (!comm && pinned.size) { const { data: pp } = await sb.from('projects').select(PROJECT_COLS).in('id', [...pinned]).not('community_id', 'is', null); projects = [...projects, ...(pp || [])]; }
+  const projIds = new Set(projects.map((x) => x.id));
+  const tasks = (tasks0 || []).filter((t) => comm ? projIds.has(t.project_id) : true);
   // "atribuídos a mim": sou membro do projeto ou tenho tarefas lá
   const mineSet = new Set([...(myMem || []).map((m) => m.project_id), ...(tasks || []).filter((t) => t.assignee_id === state.user.id).map((t) => t.project_id), ...(projects || []).filter((x) => x.lead_id === state.user.id || x.manager_id === state.user.id).map((x) => x.id)]);
   const norm = (x) => (x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -202,7 +237,7 @@ async function homePage() {
   const covers = await signedUrls((projects || []).map((p) => p.cover_path));
   const mineOpen = (tasks || []).filter((t) => t.assignee_id === state.user.id && t.status !== 'done');
   const hero = app.querySelector('[data-hero]');
-  if (hero) hero.textContent = staff ? `Tens ${mineOpen.length} ${mineOpen.length === 1 ? 'tarefa aberta' : 'tarefas abertas'} em ${new Set(mineOpen.map((t) => t.project_id)).size} projetos.` : `Tens acesso a ${(projects || []).length} ${projects?.length === 1 ? 'projeto' : 'projetos'}.`;
+  if (hero) hero.textContent = staff || !comm ? `Tens ${mineOpen.length} ${mineOpen.length === 1 ? 'tarefa aberta' : 'tarefas abertas'} em ${new Set(mineOpen.map((t) => t.project_id)).size} projetos.` : `Tens acesso a ${(projects || []).length} ${projects?.length === 1 ? 'projeto' : 'projetos'}.`;
 
   const grid = app.querySelector('[data-grid]');
   const people = staff ? await loadPeople() : [];
@@ -259,17 +294,24 @@ async function homePage() {
       <div class="proj-cover" style="${covers[p.cover_path] ? `background-image:url('${esc(covers[p.cover_path])}')` : `background:${coverColor(p.id)}`}">
         <div class="grain-layer soft" aria-hidden="true"></div>
         <span class="tag dark">${esc(KINDS[p.kind] || p.kind)}</span>
-        <span class="on-cover-acts"><button type="button" class="icon-btn on-cover" data-hidep="${p.id}" title="Tirar da minha lista (os outros continuam a vê-lo)" aria-label="Tirar ${esc(p.name)} da minha lista">${ICON.hide}</button>${staff ? `<button type="button" class="icon-btn on-cover" data-more="${p.id}" aria-label="Opções de ${esc(p.name)}">${ICON.dots}</button>` : ''}</span>
+        <span class="on-cover-acts">${p.community_id ? `<button type="button" class="icon-btn on-cover ${pinned.has(p.id) ? 'on' : ''}" data-pin="${p.id}" title="${pinned.has(p.id) ? 'Tirar do meu início' : 'Fixar no meu início (continua a ser da comunidade)'}" aria-label="Fixar ${esc(p.name)}">${ICON.pin}</button>` : ''}<button type="button" class="icon-btn on-cover" data-hidep="${p.id}" title="Tirar da minha lista (os outros continuam a vê-lo)" aria-label="Tirar ${esc(p.name)} da minha lista">${ICON.hide}</button>${staff ? `<button type="button" class="icon-btn on-cover" data-more="${p.id}" aria-label="Opções de ${esc(p.name)}">${ICON.dots}</button>` : ''}</span>
       </div>
       <div class="proj-body">
-        <div><div class="proj-name">${p.kind === 'album' ? `<span class="fold-ic">${ICON.board}</span>` : ''}${esc(p.name)}</div><div class="muted small">${esc(p.client || '—')}${par ? ` · em ${esc(par.name)}` : ''}</div></div>
+        <div><div class="proj-name">${p.kind === 'album' ? `<span class="fold-ic">${ICON.board}</span>` : ''}${esc(p.name)}</div><div class="muted small">${esc(p.client || '—')}${par ? ` · em ${esc(par.name)}` : ''}</div>${!comm && p.community_id ? (() => { const c = commById(p.community_id); return c ? `<span class="comm-chip" style="--cc:${esc(c.color)}">${esc(c.name)}</span>` : ''; })() : ''}</div>
         ${p.kind === 'album' ? `<div class="fold-kids">${kids.length ? kids.slice(0, 4).map((k) => `<span>${esc(k.name)}</span>`).join('') + (kids.length > 4 ? `<span>+${kids.length - 4}</span>` : '') : '<span class="muted">Sem projetos lá dentro</span>'}</div>` : ''}
         <div class="proj-prog"><div class="row between small muted"><span>${esc(ph.label || 'Sem datas')}</span><span>${n} ${n === 1 ? 'tarefa aberta' : 'tarefas abertas'}</span></div>
         <div class="bar"><i style="width:${Math.round(ph.pct * 100)}%"></i></div></div>
       </div>
     </article>`;
   }).join('') : `<p class="empty-note">${homeState.q ? `Nenhum projeto com "${esc(homeState.q)}".` : homeState.mine ? 'Não estás atribuído a nenhum projeto aqui.' : homeState.tab === 'active' ? (staff ? 'Ainda não há projetos em curso. Cria o primeiro em "Novo projeto".' : 'Ainda não foste convidado para nenhum projeto em curso.') : 'Nada aqui.'}</p>`;
-  grid.querySelectorAll('[data-more]').forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); const p = list.find((x) => x.id === b.dataset.more); projectDetailsModal(p, homePage); }));
+  grid.querySelectorAll('[data-more]').forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); const p = list.find((x) => x.id === b.dataset.more); projectDetailsModal(p, () => homePage(comm)); }));
+  grid.querySelectorAll('[data-pin]').forEach((b) => b.addEventListener('click', async (e) => {
+    e.preventDefault(); const id = b.dataset.pin;
+    const r = pinned.has(id) ? await sb.from('project_pins').delete().eq('project_id', id).eq('user_id', state.user.id) : await sb.from('project_pins').insert({ project_id: id });
+    if (r.error) return toast(r.error.message);
+    if (pinned.has(id)) { pinned.delete(id); toast('Saiu do teu início.'); if (!comm) { projects = projects.filter((x) => x.id !== id); } } else { pinned.add(id); toast('Fixado no teu início.'); }
+    drawGrid();
+  }));
   grid.querySelectorAll('[data-hidep]').forEach((b) => b.addEventListener('click', async (e) => {
     e.preventDefault(); const p = list.find((x) => x.id === b.dataset.hidep);
     if (!(await hideProject(p.id))) return;
@@ -308,8 +350,11 @@ function coverColor(id) {
 
 async function newProject(opts = {}) {
   const parent = opts.parent && opts.parent.id ? opts.parent : null;
-  const { data: folders } = await sb.from('projects').select('id, name').eq('kind', 'album').is('deleted_at', null).order('name');
-  const m = modal(`<h2>${parent ? `Novo projeto em ${esc(parent.name)}` : 'Novo projeto'}</h2>
+  // o projeto fica na comunidade onde estou (ou na da pasta); fora de comunidades é pessoal
+  const commId = parent ? parent.community_id || null : opts.comm?.id || CID();
+  const fq = sb.from('projects').select('id, name').eq('kind', 'album').is('deleted_at', null).order('name');
+  const { data: folders } = await (commId ? fq.eq('community_id', commId) : fq.is('community_id', null));
+  const m = modal(`<h2>${parent ? `Novo projeto em ${esc(parent.name)}` : 'Novo projeto'}</h2>${!parent ? `<p class="muted small">${commId ? `Na comunidade <b>${esc(commById(commId)?.name || '')}</b>: a equipa da comunidade tem acesso.` : 'Projeto pessoal: só tu e quem convidares.'}</p>` : ''}
     <form class="stack">
       <div class="field"><label for="pn">Nome</label><input id="pn" name="name" required></div>
       <div class="field"><label for="pc">Artista ou marca</label><input id="pc" name="client"></div>
@@ -320,7 +365,7 @@ async function newProject(opts = {}) {
         <label class="sc-opt"><input type="radio" name="start" value="tpl" checked><span><strong>Modelo de <span data-kname></span></strong><small data-tplpages></small></span></label>
         <label class="sc-opt"><input type="radio" name="start" value="zero"><span><strong>Do zero</strong><small>Só Visão geral, Equipa e Detalhes. As outras páginas juntas-as depois com o + ao lado do nome do projeto, ou aparecem sozinhas quando houver dados para elas.</small></span></label>
       </fieldset>
-      ${hasPerm('budget') ? `<div class="field"><label for="pv">Orçamento (€, opcional)</label><input id="pv" name="value" type="number" step="0.01" min="0" inputmode="decimal"><span class="muted small">${ICON.lock} Só quem tem acesso ao orçamento vê este valor.</span></div>` : ''}
+      ${(commId ? (commById(commId)?.my_role === 'admin' || (commById(commId)?.my_perms || []).includes('budget')) : true) ? `<div class="field"><label for="pv">Orçamento (€, opcional)</label><input id="pv" name="value" type="number" step="0.01" min="0" inputmode="decimal"><span class="muted small">${ICON.lock} Só quem tem acesso ao orçamento vê este valor.</span></div>` : ''}
       <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Criar</button></div>
     </form>`);
   const syncTpl = () => { const k = m.el.querySelector('#pk').value; m.el.querySelector('[data-kname]').textContent = (KINDS[k] || k).toLowerCase(); m.el.querySelector('[data-tplpages]').textContent = (TEMPLATES[k] || TEMPLATES.default).map((x) => (x === 'elenco' && k === 'ficcao' ? MODULES.elenco.scriptLabel : MODULES[x].label)).join(' · '); };
@@ -330,10 +375,11 @@ async function newProject(opts = {}) {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target));
     const modules = { list: f.start === 'zero' ? [] : [...(TEMPLATES[f.kind] || TEMPLATES.default)], removed: [] };
-    const { data, error } = await sb.from('projects').insert({ name: f.name.trim(), client: f.client.trim(), kind: f.kind, parent_id: f.kind !== 'album' && f.parent_id ? f.parent_id : null, starts_on: f.starts_on || null, ends_on: f.ends_on || null, modules, ...(f.kind === 'ficcao' ? { departments: FICTION_DEPTS } : {}) }).select(PROJECT_COLS).single();
+    const { data, error } = await sb.from('projects').insert({ community_id: commId, name: f.name.trim(), client: f.client.trim(), kind: f.kind, parent_id: f.kind !== 'album' && f.parent_id ? f.parent_id : null, starts_on: f.starts_on || null, ends_on: f.ends_on || null, modules, ...(f.kind === 'ficcao' ? { departments: FICTION_DEPTS } : {}) }).select(PROJECT_COLS).single();
     if (error) return toast(error.message);
     await sb.from('project_members').insert({ project_id: data.id, user_id: state.user.id });
     if (f.value) await sb.from('project_budgets').upsert({ project_id: data.id, value: Number(f.value) });
+    clearPeopleCache();
     m.close(); go(`#/p/${data.id}`);
   });
 }
@@ -383,14 +429,14 @@ function bindDetails(root, p, after) {
   form.querySelector('[data-hidep]')?.addEventListener('click', async () => {
     if (!(await hideProject(p.id))) return;
     document.querySelector('#modal')?.replaceChildren();
-    toast(`"${p.name}" saiu da tua lista. Para o resto da equipa continua igual; voltas a mostrá-lo em "Escondidos", no início.`); go('#/'); if (location.hash === '#/' || !location.hash) homePage();
+    toast(`"${p.name}" saiu da tua lista. Para o resto da equipa continua igual; voltas a mostrá-lo em "Escondidos", no início.`); go(p.community_id ? `#/c/${p.community_id}` : '#/');
   });
   form.querySelector('[data-delp]')?.addEventListener('click', async () => {
     if (!(await confirmBox(`Apagar "${p.name}"? Vai para a reciclagem e só é apagado de vez daqui a 10 dias. Até lá, qualquer pessoa da equipa o pode recuperar.`, 'Mandar para a reciclagem'))) return;
     const { error } = await sb.rpc('trash_project', { p: p.id });
     if (error) return toast(error.message);
     document.querySelector('#modal')?.replaceChildren();
-    toast('Foi para a reciclagem. Podes recuperá-lo durante 10 dias, no separador "Reciclagem".'); homeState.tab = 'active'; go('#/'); if (location.hash === '#/' || !location.hash) homePage();
+    toast('Foi para a reciclagem. Podes recuperá-lo durante 10 dias, no separador "Reciclagem".'); homeState.tab = 'active'; go(p.community_id ? `#/c/${p.community_id}` : '#/');
   });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -424,7 +470,7 @@ async function projectTeam(root, p) {
   const istate = (i) => (i.used_at ? `Usado a ${fmtDate(i.used_at)}` : new Date(i.expires_at) < new Date() ? 'Expirou' : `Válido até ${fmtDate(i.expires_at)}`);
   root.innerHTML = `
     <section class="stack">
-      ${p.is_central ? `<h3 class="h3">Equipa da Grain</h3><p class="muted small">Todos os membros e administradores têm acesso à Central.</p>` : ''}
+      ${p.is_central ? `<h3 class="h3">Equipa de ${esc(state.ctx?.comm?.name || '')}</h3><p class="muted small">Todos os membros e administradores da comunidade têm acesso à Central.</p>` : ''}
       ${p.is_central ? `<ul class="people">${staff.map((x) => `<li><span class="avatar sm" style="--c:${esc(x.color)}">${esc(initials(x.display_name))}</span><span>${esc(x.display_name)}</span><span class="muted small">${esc(ROLES[x.role])}</span></li>`).join('')}</ul>` : '<div data-crew></div>'}
     </section>
     ${p.canBudget ? `<section class="stack">
@@ -481,7 +527,7 @@ async function crewPanel(el, p, people, members, reload) {
     ${canEdit ? `<span class="crew-a"><button type="button" class="link-btn" data-cedit="${x.t}:${x.id}">Editar</button><button type="button" class="link-btn danger-text" data-crm="${x.t}:${x.id}">Tirar</button></span>` : ''}</li>`;
   const groups = depts.map((d) => ({ d, xs: list.filter((x) => x.depts.includes(d.id)) }));
   const none = list.filter((x) => !x.depts.some((id) => depts.some((d) => d.id === id)));
-  el.innerHTML = `<div class="row between wrap-gap"><div><h3 class="h3">Equipa do projeto</h3><p class="muted small">Quem trabalha neste projeto, por departamento. Todos os membros da Grain continuam a ter acesso.</p></div>${canEdit ? `<button type="button" class="btn primary" data-cadd>${ICON.plus} Adicionar pessoa</button>` : ''}</div>
+  el.innerHTML = `<div class="row between wrap-gap"><div><h3 class="h3">Equipa do projeto</h3><p class="muted small">Quem trabalha neste projeto, por departamento. ${p.community_id ? 'Os membros da comunidade têm sempre acesso.' : 'Num projeto pessoal só entra quem está aqui.'}</p></div>${canEdit ? `<button type="button" class="btn primary" data-cadd>${ICON.plus} Adicionar pessoa</button>` : ''}</div>
     ${groups.map((g) => `<div class="crew-g"><div class="crew-hrow"><h4 class="crew-h"><i style="background:${esc(g.d.color)}"></i>${esc(g.d.name)} <span class="muted">${g.xs.length}</span></h4>${canEdit ? `<button type="button" class="link-btn" data-cadd-d="${esc(g.d.id)}">${ICON.plus} Juntar a ${esc(g.d.name)}</button>` : ''}</div>${g.xs.length ? `<ul class="crew">${g.xs.map(row).join('')}</ul>` : '<p class="crew-empty muted small">Ninguém neste departamento.</p>'}</div>`).join('')}
     ${none.length ? `<div class="crew-g"><div class="crew-hrow"><h4 class="crew-h"><i></i>Sem departamento <span class="muted">${none.length}</span></h4></div><ul class="crew">${none.map(row).join('')}</ul></div>` : ''}
     ${!list.length && !depts.length ? `<p class="empty-note">Ainda ninguém na equipa.${canEdit ? ' Usa “Adicionar pessoa”.' : ''}</p>` : ''}`;
@@ -489,7 +535,7 @@ async function crewPanel(el, p, people, members, reload) {
     const isNew = !x; const inProj = (id) => members.find((m) => m.user_id === id);
     const free = people.filter((y) => y.role !== 'guest');
     const m = modal(`<h2>${isNew ? 'Adicionar pessoa' : esc(x.name)}</h2><form class="stack" data-cf>
-      ${isNew ? `<div class="seg dark" role="tablist"><button type="button" role="tab" aria-selected="true" data-ct="m">Da Grain</button><button type="button" role="tab" aria-selected="false" data-ct="c">Sem conta</button></div>
+      ${isNew ? `<div class="seg dark" role="tablist"><button type="button" role="tab" aria-selected="true" data-ct="m">Com conta</button><button type="button" role="tab" aria-selected="false" data-ct="c">Sem conta</button></div>
         <div class="field" data-for="m"><label for="cu">Pessoa</label><select id="cu" name="user_id">${free.map((y) => `<option value="${y.id}">${esc(y.display_name)}${inProj(y.id) ? ' — já está no projeto' : ''}</option>`).join('')}</select></div>
         <div data-for="c" hidden class="grid2"><div class="field"><label for="cn2">Nome</label><input id="cn2" name="name"></div><div class="field"><label for="ce">Email</label><input id="ce" name="email" type="email"></div><div class="field"><label for="cp">Telefone</label><input id="cp" name="phone" inputmode="tel"></div></div>`
         : x.t === 'c' ? `<div class="grid2"><div class="field"><label for="cn2">Nome</label><input id="cn2" name="name" value="${esc(x.name)}" required></div><div class="field"><label for="ce">Email</label><input id="ce" name="email" type="email" value="${esc(x.email || '')}"></div><div class="field"><label for="cp">Telefone</label><input id="cp" name="phone" value="${esc(x.phone || '')}"></div></div>` : ''}
@@ -528,7 +574,7 @@ async function crewPanel(el, p, people, members, reload) {
 }
 
 // ---------- projeto: página com ferramentas; os boards criam-se lá dentro ----------
-const projBase = (p) => (p.is_central ? '#/central' : `#/p/${p.id}`);
+const projBase = (p) => (p.is_central ? `#/c/${p.community_id}/central` : `#/p/${p.id}`);
 const toolHref = (p, b) => `${projBase(p)}/${(b.kind || 'board') === 'board' ? 'b' : 'f'}/${b.id}`;
 
 async function loadProject(id) {
@@ -542,6 +588,9 @@ async function loadProject(id) {
     sb.from('boards').select('id, parent_id, title, group_id, position, created_at, kind').eq('project_id', id).order('position').order('created_at'),
   ]);
   if (!p || p.deleted_at) return null;
+  // permissões do ecrã: as da comunidade do projeto, ou de dono/convidado num projeto pessoal
+  if (p.community_id && !commById(p.community_id)) await loadComms();
+  setCtx({ comm: p.community_id ? commById(p.community_id) : null, project: p });
   p._hasScript = (nScripts || 0) > 0;
   p.canBudget = !p.is_central && (hasPerm('budget') || !!grant);
   p.value = p.canBudget ? fin?.value ?? null : null;
@@ -776,7 +825,7 @@ async function projectPage(projectId, page, sub) {
   if (page === 'tarefas') { body.classList.remove('panel'); body.classList.add('tc'); const t = mountTaskCenter(body, { projectId: p.id }); onCleanup(() => t.destroy()); }
   if (page === 'equipa') projectTeam(body, p);
   if (page === 'detalhes') {
-    if (!p.is_central && p.kind !== 'album') { const { data: fs } = await sb.from('projects').select('id, name').eq('kind', 'album').is('deleted_at', null).neq('id', p.id).order('name'); p._folders = fs || []; }
+    if (!p.is_central && p.kind !== 'album') { const fq = sb.from('projects').select('id, name').eq('kind', 'album').is('deleted_at', null).neq('id', p.id).order('name'); const { data: fs } = await (p.community_id ? fq.eq('community_id', p.community_id) : fq.is('community_id', null)); p._folders = fs || []; }
     body.innerHTML = detailsForm(p); bindDetails(body, p, () => projectPage(projectId, 'detalhes'));
   }
 }
@@ -886,7 +935,7 @@ const MESES_L = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'ju
 async function centralOverview(box) {
   box.innerHTML = '<p class="muted">A carregar os projetos…</p>';
   const [{ data: projects }, { data: members }, { data: fins }, { data: tasks }, people] = await Promise.all([
-    sb.from('projects').select(PROJECT_COLS).eq('is_central', false).is('deleted_at', null),
+    sb.from('projects').select(PROJECT_COLS).eq('is_central', false).eq('community_id', CID()).is('deleted_at', null),
     sb.from('project_members').select('project_id, user_id'),
     sb.from('project_budgets').select('project_id, value'),
     sb.from('tasks').select('project_id, assignee_id, status'),
@@ -1105,87 +1154,128 @@ async function gearDbPage() {
   bindHeader(app);
   (await import('./gearbase.js')).gearBasePage(app.querySelector('[data-gdb]'));
 }
-function tasksPage() {
+function tasksPage(comm = null) {
   app.innerHTML = `<div class="page">${header('tasks')}
     <div class="wrap page-pad">
-      <h1 class="h1">Tarefas</h1>
+      <h1 class="h1">${comm ? `Tarefas · ${esc(comm.name)}` : 'As minhas tarefas'}</h1>
       <div class="tc" data-list></div>
     </div></div>`;
   bindHeader(app);
-  const t = mountTaskCenter(app.querySelector('[data-list]'));
+  const t = mountTaskCenter(app.querySelector('[data-list]'), comm ? { communityId: comm.id } : { mine: true });
   onCleanup(() => t.destroy());
 }
 
-// ---------- equipa e permissões (administradores) ----------
-async function teamPage() {
+// ---------- comunidades ----------
+const COMM_COLORS = ['#0071e3', '#5e5ce6', '#bf5af2', '#e5579b', '#d93a3a', '#d9731f', '#1f9a5c', '#14857f', '#1d1d1f'];
+function newCommunity() {
+  const m = modal(`<h2>Nova comunidade</h2><p class="muted small">Um espaço partilhado, como uma produtora ou um coletivo: tem as suas pessoas e os seus projetos. Tu ficas administrador.</p>
+    <form class="stack">
+      <div class="field"><label for="cn">Nome</label><input id="cn" name="name" required placeholder="Ex.: byGrain"></div>
+      <div class="field"><span class="label">Cor</span><div class="look-sw">${COMM_COLORS.map((c, i) => `<label class="look-c ${i === 0 ? 'on' : ''}" style="--c:${c}"><input type="radio" name="color" value="${c}" ${i === 0 ? 'checked' : ''} class="vh">&nbsp;</label>`).join('')}</div></div>
+      <label class="sc-opt"><input type="checkbox" name="business" checked><span><strong>Parte business</strong><small>Central de Produção: visão geral de todos os projetos, finanças (ganhos, movimentos, contas, custos fixos) e tarefas internas. Dá para ligar ou desligar depois.</small></span></label>
+      <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Criar comunidade</button></div>
+    </form>`);
+  m.el.querySelectorAll('input[name=color]').forEach((r) => r.addEventListener('change', () => m.el.querySelectorAll('.look-c').forEach((l) => l.classList.toggle('on', l.contains(r) && r.checked))));
+  m.el.querySelector('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const name = String(f.get('name') || '').trim(); if (!name) return;
+    const slug = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + Math.random().toString(36).slice(2, 6);
+    const { data, error } = await sb.from('communities').insert({ name, slug, color: f.get('color') || COMM_COLORS[0], business: !!f.get('business'), created_by: state.user.id }).select('id').single();
+    if (error) return toast(error.message);
+    await loadComms(); m.close(); toast('Comunidade criada.'); go(`#/c/${data.id}`);
+  });
+}
+
+// pessoas da comunidade (administradores): papéis, permissões, contas e definições
+async function communityTeamPage(c) {
   app.innerHTML = `<div class="page">${header('team')}
     <div class="wrap page-pad stack-lg">
-      <div class="row between wrap-gap"><h1 class="h1">Equipa e permissões</h1><button type="button" class="btn primary" data-newuser>${ICON.plus} Nova conta</button></div>
-      <section class="panel"><h2 class="h3">Contas</h2>
-        <p class="muted small">Administradores gerem contas e permissões. Membros veem todos os projetos e a Central de Produção. Convidados só veem os projetos para os quais foram convidados.</p>
-        <div class="table-wrap"><table class="table"><thead><tr><th>Nome</th><th>Utilizador</th><th>Email</th><th>Papel</th><th><span class="vh">Ações</span></th></tr></thead><tbody data-users><tr><td colspan="5" class="muted">A carregar…</td></tr></tbody></table></div>
+      <div class="row between wrap-gap"><div><h1 class="h1">Pessoas</h1><p class="muted">${esc(c.name)}</p></div><button type="button" class="btn primary" data-newuser>${ICON.plus} Juntar pessoa</button></div>
+      <section class="panel"><h2 class="h3">Membros</h2>
+        <p class="muted small">Administradores gerem a comunidade e as pessoas. Membros veem todos os projetos da comunidade${c.business ? ' e a Central de Produção' : ''}. Convidados só veem os projetos para os quais foram convidados.</p>
+        <div class="table-wrap"><table class="table"><thead><tr><th>Nome</th><th>Utilizador</th><th>Email</th><th>Papel</th>${Object.entries(PERMS).map(([, [l]]) => `<th>${l}</th>`).join('')}<th><span class="vh">Ações</span></th></tr></thead><tbody data-users><tr><td colspan="7" class="muted">A carregar…</td></tr></tbody></table></div>
+        <p class="muted small">${Object.entries(PERMS).map(([, [l, d]]) => `<b>${l}</b>: ${esc(d)}.`).join(' ')} Os administradores têm sempre tudo.</p>
       </section>
-      <section class="panel"><h2 class="h3">Permissões</h2>
-        <p class="muted small">O que cada pessoa da equipa pode ver para além dos projetos. Os administradores veem sempre tudo. O acesso ao orçamento de um único projeto dá-se na equipa desse projeto.</p>
-        <div data-perms class="muted">A carregar…</div>
+      <section class="panel stack"><h2 class="h3">Comunidade</h2>
+        <form class="stack" data-csettings>
+          <div class="grid2"><div class="field"><label for="ccn">Nome</label><input id="ccn" name="name" value="${esc(c.name)}" required></div>
+          <div class="field"><span class="label">Cor</span><div class="look-sw">${COMM_COLORS.map((col) => `<label class="look-c ${col === c.color ? 'on' : ''}" style="--c:${col}"><input type="radio" name="color" value="${col}" ${col === c.color ? 'checked' : ''} class="vh">&nbsp;</label>`).join('')}</div></div></div>
+          <label class="sc-opt"><input type="checkbox" name="business" ${c.business ? 'checked' : ''}><span><strong>Parte business</strong><small>Central de Produção com a visão geral, finanças e tarefas internas.</small></span></label>
+          <div class="row between"><button type="button" class="btn ghost danger-text" data-leave>Sair da comunidade</button><button class="btn primary">Guardar</button></div>
+        </form>
       </section>
-      <section class="panel"><h2 class="h3">Convites</h2><div data-invites class="muted">A carregar…</div></section>
     </div></div>`;
   bindHeader(app);
-  app.querySelector('[data-newuser]').addEventListener('click', newUser);
-  globalPermsPanel(app.querySelector('[data-perms]'));
-  const [people, { data: invites }, { data: projects }] = await Promise.all([
-    sb.from('profiles').select('*').order('role').order('display_name').then((r) => r.data || []),
-    sb.from('invites').select('*').order('created_at', { ascending: false }),
-    sb.from('projects').select('id, name'),
-  ]);
-  const pmap = new Map((projects || []).map((p) => [p.id, p.name]));
+  app.querySelector('[data-newuser]').addEventListener('click', () => newUser(c));
+  const { data: rows } = await sb.from('community_members').select('role, perms, user_id, profiles!community_members_user_id_fkey(id, display_name, username, email, color)').eq('community_id', c.id);
+  const people = (rows || []).filter((r) => r.profiles).map((r) => ({ ...r.profiles, role: r.role, perms: r.perms || [] })).sort((a, b) => ['admin', 'member', 'guest'].indexOf(a.role) - ['admin', 'member', 'guest'].indexOf(b.role) || a.display_name.localeCompare(b.display_name, 'pt'));
+  const call = (body) => callFn('admin-users', { community_id: c.id, ...body });
   app.querySelector('[data-users]').innerHTML = people.map((u) => `<tr>
     <td><span class="cell-person"><span class="avatar sm" style="--c:${esc(u.color)}">${esc(initials(u.display_name))}</span>${esc(u.display_name)}</span></td>
     <td>${u.username ? '@' + esc(u.username) : '<span class="muted">—</span>'}</td>
     <td class="muted">${esc(u.email || '')}</td>
     <td><select data-role="${u.id}" aria-label="Papel de ${esc(u.display_name)}" ${u.id === state.user.id ? 'disabled' : ''}>${Object.entries(ROLES).map(([k, v]) => `<option value="${k}" ${u.role === k ? 'selected' : ''}>${v}</option>`).join('')}</select></td>
-    <td><div class="row end"><button type="button" class="link-btn" data-pw="${u.id}">Palavra-passe</button>${u.id !== state.user.id ? `<button type="button" class="icon-btn" data-deluser="${u.id}" aria-label="Apagar a conta de ${esc(u.display_name)}">${ICON.trash}</button>` : ''}</div></td>
+    ${Object.keys(PERMS).map((k) => `<td>${u.role === 'admin' ? '<span class="perm-tag">Sempre</span>' : `<label class="switch"><input type="checkbox" data-perm="${k}" data-user="${u.id}" ${u.perms.includes(k) ? 'checked' : ''}><span class="sw-ui" aria-hidden="true"></span><span class="vh">${PERMS[k][0]}</span></label>`}</td>`).join('')}
+    <td><div class="row end"><button type="button" class="link-btn" data-pw="${u.id}">Palavra-passe</button>${u.id !== state.user.id ? `<button type="button" class="icon-btn" data-deluser="${u.id}" aria-label="Tirar ${esc(u.display_name)} da comunidade">${ICON.trash}</button>` : ''}</div></td>
   </tr>`).join('');
-  app.querySelectorAll('[data-role]').forEach((s) => s.addEventListener('change', async () => {
-    try { clearPeopleCache(); await callFn('admin-users', { action: 'update', user_id: s.dataset.role, role: s.value }); toast('Papel mudado.'); } catch (e) { toast(e.message); teamPage(); }
+  app.querySelectorAll('[data-role]').forEach((sel) => sel.addEventListener('change', async () => {
+    try { clearPeopleCache(); await call({ action: 'update', user_id: sel.dataset.role, role: sel.value }); toast('Papel mudado.'); communityTeamPage(c); } catch (e) { toast(e.message); communityTeamPage(c); }
+  }));
+  app.querySelectorAll('[data-perm]').forEach((cb) => cb.addEventListener('change', async () => {
+    const u = people.find((x) => x.id === cb.dataset.user);
+    const perms = cb.checked ? [...new Set([...u.perms, cb.dataset.perm])] : u.perms.filter((x) => x !== cb.dataset.perm);
+    try { await call({ action: 'update', user_id: u.id, perms }); u.perms = perms; toast('Permissão mudada.'); } catch (e) { toast(e.message); cb.checked = !cb.checked; }
   }));
   app.querySelectorAll('[data-pw]').forEach((b) => b.addEventListener('click', () => {
     const u = people.find((x) => x.id === b.dataset.pw);
-    const m = modal(`<h2>Palavra-passe de ${esc(u.display_name)}</h2><form class="stack"><div class="field"><label for="npw">Nova palavra-passe</label><input id="npw" type="text" autocomplete="off" required></div><div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Guardar</button></div></form>`);
+    const m = modal(`<h2>Palavra-passe de ${esc(u.display_name)}</h2><p class="muted small">Só funciona para contas que pertencem apenas a esta comunidade. Quem também usa o PØRTAL noutros sítios muda a sua palavra-passe sozinho.</p><form class="stack"><div class="field"><label for="npw">Nova palavra-passe</label><input id="npw" type="text" autocomplete="off" required></div><div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Guardar</button></div></form>`);
     m.el.querySelector('form').addEventListener('submit', async (e) => {
       e.preventDefault(); const v = m.el.querySelector('#npw').value;
       if (v.length < MIN_PW) return toast(`Pelo menos ${MIN_PW} caracteres.`);
-      try { clearPeopleCache(); await callFn('admin-users', { action: 'update', user_id: u.id, password: authPw(v) }); m.close(); toast('Palavra-passe mudada.'); } catch (er) { toast(er.message); }
+      try { await call({ action: 'update', user_id: u.id, password: authPw(v) }); m.close(); toast('Palavra-passe mudada.'); } catch (er) { toast(er.message); }
     });
   }));
   app.querySelectorAll('[data-deluser]').forEach((b) => b.addEventListener('click', async () => {
     const u = people.find((x) => x.id === b.dataset.deluser);
-    if (!(await confirmBox(`Apagar a conta de ${u.display_name}?`, 'Apagar'))) return;
-    try { clearPeopleCache(); await callFn('admin-users', { action: 'delete', user_id: u.id }); toast('Conta apagada.'); teamPage(); } catch (e) { toast(e.message); }
+    if (!(await confirmBox(`Tirar ${u.display_name} da comunidade? A conta continua a existir; só deixa de ver os projetos da comunidade.`, 'Tirar'))) return;
+    try { clearPeopleCache(); await call({ action: 'delete', user_id: u.id }); toast('Saiu da comunidade.'); communityTeamPage(c); } catch (e) { toast(e.message); }
   }));
-  const ist = (i) => (i.used_at ? `Usado a ${fmtDate(i.used_at)}` : new Date(i.expires_at) < new Date() ? 'Expirou' : `Válido até ${fmtDate(i.expires_at)}`);
-  app.querySelector('[data-invites]').innerHTML = (invites || []).length
-    ? `<ul class="invites">${invites.map((i) => `<li><span>${esc(i.email)}</span><span class="muted small">${esc(pmap.get(i.project_id) || '')}</span><span class="muted small">${ist(i)}</span></li>`).join('')}</ul>`
-    : '<p class="muted small">Ainda não há convites. Gera-os dentro de cada projeto, em "Equipa e convites".</p>';
+  const form = app.querySelector('[data-csettings]');
+  form.querySelectorAll('input[name=color]').forEach((r) => r.addEventListener('change', () => form.querySelectorAll('.look-c').forEach((l) => l.classList.toggle('on', l.contains(r) && r.checked))));
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault(); const f = new FormData(form);
+    const { error } = await sb.from('communities').update({ name: String(f.get('name')).trim() || c.name, color: f.get('color') || c.color, business: !!f.get('business') }).eq('id', c.id);
+    if (error) return toast(error.message);
+    await loadComms(); toast('Guardado.'); setCtx({ comm: commById(c.id) }); communityTeamPage(commById(c.id));
+  });
+  app.querySelector('[data-leave]').addEventListener('click', async () => {
+    const admins = people.filter((x) => x.role === 'admin');
+    if (admins.length === 1 && admins[0].id === state.user.id) return toast('És o único administrador: passa a administração a outra pessoa antes de saíres.');
+    if (!(await confirmBox(`Sair de ${c.name}? Deixas de ver os projetos da comunidade.`, 'Sair'))) return;
+    const { error } = await sb.from('community_members').delete().eq('community_id', c.id).eq('user_id', state.user.id);
+    if (error) return toast(error.message);
+    await loadComms(); go('#/');
+  });
 }
 
-function newUser() {
-  const m = modal(`<h2>Nova conta</h2>
+function newUser(c) {
+  const m = modal(`<h2>Juntar pessoa a ${esc(c.name)}</h2>
+    <p class="muted small">Se a pessoa já tem conta no PØRTAL (ou no Viewfinder), basta o email: entra logo na comunidade. Se não tem, cria-se a conta com a palavra-passe que escolheres.</p>
     <form class="stack">
-      <div class="field"><label for="un">Nome</label><input id="un" name="display_name" required></div>
+      <div class="field"><label for="ue">Email</label><input id="ue" name="email" type="email" required></div>
       <div class="grid2">
-        <div class="field"><label for="uu">Utilizador</label><input id="uu" name="username" autocapitalize="none" spellcheck="false" placeholder="ex: rubenmendes" required></div>
+        <div class="field"><label for="un">Nome</label><input id="un" name="display_name"></div>
         <div class="field"><label for="ur">Papel</label><select id="ur" name="role"><option value="member">Membro</option><option value="admin">Administrador</option><option value="guest">Convidado</option></select></div>
+        <div class="field"><label for="uu">Utilizador (opcional)</label><input id="uu" name="username" autocapitalize="none" spellcheck="false" placeholder="ex: rubenmendes"></div>
+        <div class="field"><label for="up">Palavra-passe inicial (só para contas novas)</label><input id="up" name="password" type="text" autocomplete="off"></div>
       </div>
-      <div class="field"><label for="ue">Email (opcional, serve para recuperar a palavra-passe)</label><input id="ue" name="email" type="email"></div>
-      <div class="field"><label for="up">Palavra-passe inicial</label><input id="up" name="password" type="text" autocomplete="off" required></div>
-      <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Criar conta</button></div>
-    </form>`);
+      <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Juntar</button></div>
+    </form>`, { wide: true });
   m.el.querySelector('form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target));
-    if (f.password.length < MIN_PW) return toast(`Pelo menos ${MIN_PW} caracteres.`);
-    try { clearPeopleCache(); await callFn('admin-users', { action: 'create', ...f, password: authPw(f.password) }); m.close(); toast('Conta criada.'); teamPage(); } catch (er) { toast(er.message); }
+    if (f.password && f.password.length < MIN_PW) return toast(`Pelo menos ${MIN_PW} caracteres.`);
+    try { clearPeopleCache(); await callFn('admin-users', { action: 'create', community_id: c.id, ...f, password: f.password ? authPw(f.password) : '' }); m.close(); toast('Está na comunidade.'); communityTeamPage(c); } catch (er) { toast(er.message); }
   });
 }

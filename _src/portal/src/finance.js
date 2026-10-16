@@ -1,4 +1,5 @@
 import { sb, esc, toast, modal, confirmBox, ICON, todayISO, hasPerm } from './lib.js';
+import { CID, withC } from './lib.js';
 import { summaryTab, earningsTab, peopleTab } from './finsummary.js';
 
 // Finanças da Grain (Central de Produção, só membros): movimentos do mês, contas e despesas mensais fixas.
@@ -29,9 +30,9 @@ export async function financePage(main, sub) {
   if (st.tab === 'ganhos') return earningsTab(box, st);
   if (st.tab === 'pessoas') return peopleTab(box, st);
   const [{ data: accounts }, { data: recurring }, { data: projects }] = await Promise.all([
-    sb.from('fin_accounts').select('*').order('position'),
-    sb.from('fin_recurring').select('*').order('day_of_month'),
-    sb.from('projects').select('id, name').eq('is_central', false).is('deleted_at', null).order('name'),
+    sb.from('fin_accounts').select('*').eq('community_id', CID()).order('position'),
+    sb.from('fin_recurring').select('*').eq('community_id', CID()).order('day_of_month'),
+    sb.from('projects').select('id, name').eq('is_central', false).eq('community_id', CID()).is('deleted_at', null).order('name'),
   ]);
   const ctx = { accounts: accounts || [], recurring: recurring || [], projects: projects || [], reload: () => financePage(main) };
   if (st.tab === 'movimentos') return movements(box, ctx);
@@ -42,7 +43,7 @@ export async function financePage(main, sub) {
 // ---------- movimentos ----------
 async function movements(box, ctx) {
   const from = `${st.ym}-01`, to = `${st.ym}-${lastDay(st.ym)}`;
-  const { data } = await sb.from('fin_movements').select('*').gte('date', from).lte('date', to).order('date', { ascending: false }).order('created_at', { ascending: false });
+  const { data } = await sb.from('fin_movements').select('*').eq('community_id', CID()).gte('date', from).lte('date', to).order('date', { ascending: false }).order('created_at', { ascending: false });
   const list = data || [];
   const sum = (dir) => list.filter((x) => x.direction === dir).reduce((a, x) => a + Number(x.amount), 0);
   const inn = sum('in'), out = sum('out');
@@ -76,7 +77,7 @@ async function movements(box, ctx) {
   box.querySelector('[data-fixed]')?.addEventListener('click', async () => {
     if (!(await confirmBox(`Lançar ${pending.length} ${pending.length === 1 ? 'despesa mensal' : 'despesas mensais'} em ${ymLabel(st.ym)} (${money(pending.reduce((a, r) => a + Number(r.amount), 0))})?`, 'Lançar'))) return;
     const rows = pending.map((r) => ({ date: `${st.ym}-${String(Math.min(r.day_of_month, lastDay(st.ym))).padStart(2, '0')}`, description: r.name, amount: r.amount, direction: 'out', category: r.category, account_id: r.account_id, recurring_id: r.id }));
-    const { error } = await sb.from('fin_movements').insert(rows);
+    const { error } = await sb.from('fin_movements').insert(withC(rows));
     if (error) return toast(error.message);
     toast('Despesas mensais lançadas.'); movements(box, ctx);
   });
@@ -111,7 +112,7 @@ function movementForm(ctx, m, after) {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target));
     const row = { description: f.description.trim(), amount: Number(String(f.amount).replace(',', '.')), direction: f.direction, date: f.date, category: f.category.trim(), account_id: f.account_id || null, project_id: f.project_id || null, notes: f.notes };
-    const { error } = isNew ? await sb.from('fin_movements').insert(row) : await sb.from('fin_movements').update(row).eq('id', m.id);
+    const { error } = isNew ? await sb.from('fin_movements').insert(withC(row)) : await sb.from('fin_movements').update(row).eq('id', m.id);
     if (error) return toast(error.message);
     md.close(); after();
   });
@@ -123,7 +124,7 @@ function movementForm(ctx, m, after) {
 
 // ---------- contas ----------
 async function accountsTab(box, ctx) {
-  const { data } = await sb.from('fin_movements').select('account_id, amount, direction');
+  const { data } = await sb.from('fin_movements').select('account_id, amount, direction').eq('community_id', CID());
   const bal = (a) => Number(a.opening_balance) + (data || []).filter((m) => m.account_id === a.id).reduce((s, m) => s + (m.direction === 'in' ? 1 : -1) * Number(m.amount), 0);
   const total = ctx.accounts.reduce((s, a) => s + bal(a), 0);
   box.innerHTML = `
@@ -144,7 +145,7 @@ function accountForm(ctx, a) {
   md.el.querySelector('form').addEventListener('submit', async (e) => {
     e.preventDefault(); const f = Object.fromEntries(new FormData(e.target));
     const row = { name: f.name.trim(), kind: f.kind, opening_balance: Number(f.opening_balance) || 0, color: f.color, notes: f.notes };
-    const { error } = isNew ? await sb.from('fin_accounts').insert({ ...row, position: ctx.accounts.length }) : await sb.from('fin_accounts').update(row).eq('id', a.id);
+    const { error } = isNew ? await sb.from('fin_accounts').insert(withC({ ...row, position: ctx.accounts.length })) : await sb.from('fin_accounts').update(row).eq('id', a.id);
     if (error) return toast(error.message); md.close(); st.tab = 'contas'; ctx.reload();
   });
   md.el.querySelector('[data-del]')?.addEventListener('click', async () => {
@@ -179,7 +180,7 @@ function recurringForm(ctx, r) {
   md.el.querySelector('form').addEventListener('submit', async (e) => {
     e.preventDefault(); const f = Object.fromEntries(new FormData(e.target));
     const row = { name: f.name.trim(), amount: Number(f.amount) || 0, day_of_month: Math.min(31, Math.max(1, +f.day_of_month || 1)), category: f.category.trim(), account_id: f.account_id || null, active: !!f.active };
-    const { error } = isNew ? await sb.from('fin_recurring').insert(row) : await sb.from('fin_recurring').update(row).eq('id', r.id);
+    const { error } = isNew ? await sb.from('fin_recurring').insert(withC(row)) : await sb.from('fin_recurring').update(row).eq('id', r.id);
     if (error) return toast(error.message); md.close(); st.tab = 'despesas'; ctx.reload();
   });
   md.el.querySelector('[data-del]')?.addEventListener('click', async () => {

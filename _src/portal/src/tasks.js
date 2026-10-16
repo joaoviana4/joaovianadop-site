@@ -8,10 +8,34 @@ const SICON = { todo: ICON.circle, doing: ICON.half, done: ICON.done };
 
 // a lista de pessoas muda pouco: guarda-se 2 minutos (e pedidos em simultâneo partilham o mesmo pedido)
 let peopleCache = null;
+// Pessoas que contam para o sítio onde estou, com o papel que têm lá:
+//  · numa comunidade: os membros dela (admin/member/guest) + convidados do projeto aberto (guest)
+//  · num projeto pessoal: o dono (admin) + os convidados (guest)
+//  · no início: todas as pessoas que consigo ver
+const PCOLS = 'id, display_name, username, role, color';
+async function fetchPeople() {
+  const c = state.ctx?.comm; const pr = state.ctx?.project;
+  const projGuests = async (pid) => { if (!pid) return []; const { data } = await sb.from('project_members').select(`user_id, profiles!project_members_user_id_fkey(${PCOLS})`).eq('project_id', pid); return (data || []).map((m) => m.profiles).filter(Boolean); };
+  if (c) {
+    const [{ data }, guests] = await Promise.all([sb.from('community_members').select(`role, profiles!community_members_user_id_fkey(${PCOLS})`).eq('community_id', c.id), projGuests(pr?.id)]);
+    const out = (data || []).filter((m) => m.profiles).map((m) => ({ ...m.profiles, role: m.role }));
+    guests.forEach((g) => { if (!out.some((x) => x.id === g.id)) out.push({ ...g, role: 'guest' }); });
+    return out.sort((a, b) => a.display_name.localeCompare(b.display_name, 'pt'));
+  }
+  if (pr) {
+    const [{ data: owner }, guests] = await Promise.all([sb.from('profiles').select(PCOLS).eq('id', pr.created_by).maybeSingle(), projGuests(pr.id)]);
+    const out = owner ? [{ ...owner, role: 'admin' }] : [];
+    guests.forEach((g) => { if (!out.some((x) => x.id === g.id)) out.push({ ...g, role: 'guest' }); });
+    return out.sort((a, b) => a.display_name.localeCompare(b.display_name, 'pt'));
+  }
+  const { data } = await sb.from('profiles').select(PCOLS).order('display_name');
+  return data || [];
+}
 export async function loadPeople(fresh = false) {
-  if (!fresh && peopleCache && Date.now() - peopleCache.t < 120000) return (await peopleCache.p).map((x) => ({ ...x }));
-  const p = sb.from('profiles').select('id, display_name, username, role, color').order('display_name').then(({ data }) => data || []);
-  peopleCache = { t: Date.now(), p };
+  const key = `${state.ctx?.comm?.id || ''}:${state.ctx?.project?.id || ''}`;
+  if (!fresh && peopleCache && peopleCache.key === key && Date.now() - peopleCache.t < 120000) return (await peopleCache.p).map((x) => ({ ...x }));
+  const p = fetchPeople();
+  peopleCache = { t: Date.now(), p, key };
   p.catch(() => { peopleCache = null; });
   return (await p).map((x) => ({ ...x }));
 }
