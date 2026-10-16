@@ -1,21 +1,25 @@
 import { createClient } from '@supabase/supabase-js';
+import { FLAVOR, IS_STUDIO } from './flavor.js';
+export { IS_STUDIO, FLAVOR };
 
-// Projeto Supabase "byGrain" (separado do BlackCat). A chave anon é pública por natureza;
+// byGrain: Supabase "byGrain". Studio: BlackCat, esquema "studio" (ver flavor.js). A chave anon é pública por natureza;
 // o que protege os dados são as regras de acesso (RLS) na base de dados.
-export const SUPABASE_URL = 'https://ppovjdyrhdfedjcdnnol.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwb3ZqZHlyaGRmZWRqY2Rubm9sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE5OTI5MzAsImV4cCI6MjEwNzU2ODkzMH0.kPXLy8d8J0RoiRrXbihP17BU264RWbnsJ1Mokvkcf_8';
+export const SUPABASE_URL = FLAVOR.url;
+const SUPABASE_ANON = FLAVOR.anon;
 
 export const sb = createClient(SUPABASE_URL, SUPABASE_ANON, {
-  auth: { persistSession: true, autoRefreshToken: true, storageKey: 'bygrain-auth' },
+  auth: { persistSession: true, autoRefreshToken: true, storageKey: FLAVOR.storageKey },
+  db: { schema: FLAVOR.schema },
 });
+// ficheiros: sb.storage.from(BUCKET)
+export const BUCKET = FLAVOR.bucket;
 
-// O Supabase exige palavras-passe com 6+ caracteres. Para aceitar palavras-passe curtas
-// na fase de teste (ex: 1234), a app junta sempre o mesmo prefixo antes de enviar.
-// Tem de ser igual em todo o lado (entrar, criar conta, convites, mudar palavra-passe).
-export const authPw = (p) => 'bygrain:' + p;
-export const MIN_PW = 4;
+// byGrain: o Supabase exige 6+ caracteres; para aceitar palavras-passe curtas na fase de teste (ex: 1234)
+// a app junta sempre o mesmo prefixo antes de enviar. No Studio as contas são as do BlackCat: vai tal e qual.
+export const authPw = (p) => FLAVOR.pwPrefix + p;
+export const MIN_PW = FLAVOR.minPw;
 
-export const BASE = '/bygrain/';
+export const BASE = FLAVOR.base;
 
 // ---------- texto e datas ----------
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -120,7 +124,7 @@ export async function signIn(identifier, password) {
 }
 
 export async function callFn(name, body) {
-  const { data, error } = await sb.functions.invoke(name, { body });
+  const { data, error } = await sb.functions.invoke(FLAVOR.fn(name), { body });
   if (error) {
     let msg = error.message;
     try { const j = await error.context.json(); msg = j.error || msg; } catch { /* sem corpo */ }
@@ -134,12 +138,15 @@ export async function callFn(name, body) {
 const urlCache = new Map();
 // imagens que já são links da web (ex.: projetos de demonstração) não passam pelo armazenamento
 const isWeb = (p) => /^https?:\/\//.test(p || '');
+// 'vf:<caminho>' = fotografia do Viewfinder (balde photos do BlackCat); o resto = ficheiros do projeto
+const bucketOf = (path) => (String(path).startsWith('vf:') ? ['photos', path.slice(3)] : [BUCKET, path]);
 export async function signedUrl(path) {
   if (!path) return null;
   if (isWeb(path)) return path;
   const c = urlCache.get(path);
   if (c && c.exp > Date.now()) return c.url;
-  const { data } = await sb.storage.from('files').createSignedUrl(path, 3600 * 6);
+  const [bk, key] = bucketOf(path);
+  const { data } = await sb.storage.from(bk).createSignedUrl(key, 3600 * 6);
   if (!data) return null;
   urlCache.set(path, { url: data.signedUrl, exp: Date.now() + 3600 * 5 * 1000 });
   return data.signedUrl;
@@ -147,8 +154,14 @@ export async function signedUrl(path) {
 export async function signedUrls(paths) {
   const need = [...new Set(paths.filter((p) => p && !isWeb(p) && !(urlCache.get(p)?.exp > Date.now())))];
   if (need.length) {
-    const { data } = await sb.storage.from('files').createSignedUrls(need, 3600 * 6);
-    (data || []).forEach((d) => d.signedUrl && urlCache.set(d.path, { url: d.signedUrl, exp: Date.now() + 3600 * 5 * 1000 }));
+    // por balde: os ficheiros do projeto e (no Studio) as fotografias do Viewfinder, que vêm como 'vf:<caminho>'
+    const groups = {};
+    for (const p of need) { const [bk, key] = bucketOf(p); (groups[bk] ||= []).push([p, key]); }
+    await Promise.all(Object.entries(groups).map(async ([bk, list]) => {
+      const { data } = await sb.storage.from(bk).createSignedUrls(list.map((x) => x[1]), 3600 * 6);
+      const back = new Map(list.map(([p, key]) => [key, p]));
+      (data || []).forEach((d) => d.signedUrl && urlCache.set(back.get(d.path) || d.path, { url: d.signedUrl, exp: Date.now() + 3600 * 5 * 1000 }));
+    }));
   }
   return Object.fromEntries(paths.filter(Boolean).map((p) => [p, isWeb(p) ? p : urlCache.get(p)?.url]));
 }
@@ -167,7 +180,7 @@ export async function compressImage(file, max = 2400) {
 export async function uploadImage(projectId, folder, file) {
   const { blob, w, h, ext } = await compressImage(file);
   const path = `${projectId}/${folder}/${crypto.randomUUID()}.${ext}`;
-  const { error } = await sb.storage.from('files').upload(path, blob, { contentType: blob.type || 'image/webp', upsert: false });
+  const { error } = await sb.storage.from(BUCKET).upload(path, blob, { contentType: blob.type || 'image/webp', upsert: false });
   if (error) throw error;
   return { path, w, h };
 }
@@ -251,7 +264,10 @@ export const ICON = {
   done: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" class="fill"/><path d="M8 12.5l2.8 2.8L16.5 9.5" class="ink"/></svg>',
 };
 
-export const LOGO = (sub = 'studio') => `<span class="logo" aria-label="byGrain ${esc(sub)}"><span class="logo-mark"><span class="by">by</span><span class="grain">grain</span><span class="reg">®</span></span><span class="logo-sub">${esc(sub)}</span></span>`;
+const PORTAL_MARK = '<svg class="pmark" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="9.5" fill="none" stroke="currentColor" stroke-width="4.4"/><path d="M5.5 26.5 26.5 5.5" stroke="currentColor" stroke-width="3.2"/></svg>';
+export const LOGO = IS_STUDIO
+  ? (sub = 'studio') => `<span class="logo plogo" aria-label="PØRTAL ${esc(sub)}">${PORTAL_MARK}<span class="plogo-name">PØRTAL <span>${esc(sub === 'studio' ? 'STUDIØ' : String(sub).toUpperCase())}</span></span></span>`
+  : (sub = 'studio') => `<span class="logo" aria-label="byGrain ${esc(sub)}"><span class="logo-mark"><span class="by">by</span><span class="grain">grain</span><span class="reg">®</span></span><span class="logo-sub">${esc(sub)}</span></span>`;
 
 // Tirar um projeto só da minha lista (como no Milanote): os outros continuam a vê-lo.
 // Mandar para a reciclagem (para toda a gente) é só para administradores.
@@ -260,7 +276,7 @@ export async function hideProject(id) { const { error } = await sb.from('project
 export async function unhideProject(id) { const { error } = await sb.from('project_hidden').delete().eq('project_id', id); if (error) { toast(error.message); return false; } return true; }
 
 // ---------- avisos no telemóvel (web push) ----------
-export const VAPID_PUBLIC = 'BFN0DLO1kU0Ydsua1qfcY7Jcm-pE0E8To76LCxC1m51yTizh018Lnqp2Wf8ILE2ouHYh-ToVxOuF5hxnqV1s_N8';
+export const VAPID_PUBLIC = FLAVOR.vapid || 'BFN0DLO1kU0Ydsua1qfcY7Jcm-pE0E8To76LCxC1m51yTizh018Lnqp2Wf8ILE2ouHYh-ToVxOuF5hxnqV1s_N8';
 const b64u = (s) => { const p = '='.repeat((4 - (s.length % 4)) % 4); const r = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from([...r].map((c) => c.charCodeAt(0))); };
 export const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 export const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
@@ -287,3 +303,4 @@ export async function disablePush() {
   const reg = await navigator.serviceWorker.getRegistration(BASE); const sub = reg && (await reg.pushManager.getSubscription());
   if (sub) { await sb.from('push_subscriptions').delete().eq('endpoint', sub.endpoint); await sub.unsubscribe(); }
 }
+export const DB_SCHEMA = FLAVOR.schema;

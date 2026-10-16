@@ -1,4 +1,4 @@
-import { sb, esc, state, dueInfo, fmtDate, STATUS, ICON, modal, confirmBox, toast, initials, todayISO } from './lib.js';
+import { DB_SCHEMA, sb, esc, state, dueInfo, fmtDate, STATUS, ICON, modal, confirmBox, toast, initials, todayISO } from './lib.js';
 
 // Lista de tarefas reutilizada no projeto, na Central, na página "Tarefas" e no telemóvel.
 // scope: { projectId } para um projeto, ou { mine: true } para as tarefas da pessoa em todos os projetos.
@@ -138,7 +138,7 @@ export function mountTasks(root, { projectId = null, mine = false, compact = fal
 
   if (entity) root.classList.add('tasks-compact');
   const ch = sb.channel('tasks-' + (projectId || 'mine') + Math.random().toString(36).slice(2))
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', ...(projectId ? { filter: `project_id=eq.${projectId}` } : {}) }, () => { clearTimeout(ch._t); ch._t = setTimeout(load, 400); })
+    .on('postgres_changes', { event: '*', schema: DB_SCHEMA, table: 'tasks', ...(projectId ? { filter: `project_id=eq.${projectId}` } : {}) }, () => { clearTimeout(ch._t); ch._t = setTimeout(load, 400); })
     .subscribe();
 
   root.innerHTML = '<p class="muted">A carregar…</p>';

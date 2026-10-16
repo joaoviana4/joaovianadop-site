@@ -1,4 +1,4 @@
-import { sb, esc, toast, modal, confirmBox, ICON, signedUrl, signedUrls, uploadImage, fmtDate } from './lib.js';
+import { sb, BUCKET, esc, toast, modal, confirmBox, ICON, signedUrl, signedUrls, uploadImage, fmtDate } from './lib.js';
 import { parseScript, fileToText, eighthsLabel } from './script.js';
 import { mountTasks } from './tasks.js';
 import { newLightmapData } from './lmdata.js';
@@ -107,7 +107,7 @@ function guiao(main, p, f, _sub, base) {
         let file_path = null;
         if (file) {
           file_path = `${p.id}/scripts/v${version}-${file.name.replace(/[^\w.\-]+/g, '_')}`;
-          const { error } = await sb.storage.from('files').upload(file_path, file, { contentType: file.type || 'application/octet-stream' });
+          const { error } = await sb.storage.from(BUCKET).upload(file_path, file, { contentType: file.type || 'application/octet-stream' });
           if (error) file_path = null;
         }
         await sb.from('scripts').update({ is_current: false }).eq('project_id', p.id);

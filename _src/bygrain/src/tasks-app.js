@@ -1,5 +1,5 @@
 import './style.css';
-import { sb, state, esc, $, loadProfile, toast, ICON, LOGO, dueInfo, daysUntil, fmtDate, initials, registerSW, STATUS, BASE, pushState, enablePush, disablePush, isIOS } from './lib.js';
+import { DB_SCHEMA, sb, state, esc, $, loadProfile, toast, ICON, LOGO, dueInfo, daysUntil, fmtDate, initials, registerSW, STATUS, BASE, pushState, enablePush, disablePush, isIOS } from './lib.js';
 import { renderAuth } from './auth.js';
 import { loadPeople, deptOf, editTask } from './tasks.js';
 
@@ -28,7 +28,7 @@ async function boot() {
   load();
   if (!st.ch) {
     const re = () => { clearTimeout(st.t); st.t = setTimeout(load, 500); };
-    st.ch = sb.channel('my-tasks').on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, re).on('postgres_changes', { event: '*', schema: 'public', table: 'project_questions' }, re).subscribe();
+    st.ch = sb.channel('my-tasks').on('postgres_changes', { event: '*', schema: DB_SCHEMA, table: 'tasks' }, re).on('postgres_changes', { event: '*', schema: DB_SCHEMA, table: 'project_questions' }, re).subscribe();
   }
 }
 boot();

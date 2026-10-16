@@ -1,4 +1,4 @@
-import { sb, esc, toast, confirmBox, modal, ICON, signedUrls, signedUrl, uploadImage } from './lib.js';
+import { sb, BUCKET, esc, toast, confirmBox, modal, ICON, signedUrls, signedUrl, uploadImage } from './lib.js';
 import { shotCard, bindShots, shotViewer } from './fiction.js';
 import { mountTasks } from './tasks.js';
 import { mountLayout, fullscreenButton } from './layout.js';
@@ -78,7 +78,7 @@ export function ytId(url) {
 async function removeIfUnused(pid, path) {
   if (!path) return;
   const { count } = await sb.from('board_items').select('id', { count: 'exact', head: true }).eq('project_id', pid).eq('kind', 'audio').eq('data->>path', path);
-  if (!count) await sb.storage.from('files').remove([path]);
+  if (!count) await sb.storage.from(BUCKET).remove([path]);
 }
 const normUrl = (u) => { u = String(u || '').trim(); return u && !/^https?:\/\//i.test(u) ? 'https://' + u : u; };
 
@@ -124,7 +124,7 @@ export async function mediaPanel(slots, p, music, saveNow) {
       toast('A enviar a música…');
       const ext = (file.name.split('.').pop() || 'mp3').toLowerCase().replace(/[^a-z0-9]/g, '');
       const path = `${p.id}/music/${Date.now()}.${ext}`;
-      const { error } = await sb.storage.from('files').upload(path, file, { contentType: file.type || 'audio/mpeg' });
+      const { error } = await sb.storage.from(BUCKET).upload(path, file, { contentType: file.type || 'audio/mpeg' });
       if (error) return toast(error.message);
       const old = music.audio_path;
       await set({ audio_path: path, audio_name: file.name });
@@ -310,7 +310,7 @@ async function section(main, p, f, sid, base, cleanup) {
   refsBox.querySelectorAll('[data-refrm]').forEach((b) => b.addEventListener('click', async () => {
     if (!(await confirmBox('Tirar esta imagem das referências?', 'Tirar'))) return;
     const r = s.refs[+b.dataset.refrm]; s.refs = s.refs.filter((x) => x !== r);
-    await sb.from('scenes').update({ refs: s.refs }).eq('id', s.id); if (r?.path) sb.storage.from('files').remove([r.path]); redraw();
+    await sb.from('scenes').update({ refs: s.refs }).eq('id', s.id); if (r?.path) sb.storage.from(BUCKET).remove([r.path]); redraw();
   }));
   refsBox.querySelectorAll('[data-refopen]').forEach((b) => b.addEventListener('click', () => {
     const imgs = (s.refs || []).map((r) => refUrls[r.path]).filter(Boolean); let i = +b.dataset.refopen;

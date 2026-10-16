@@ -10,7 +10,7 @@ const eur = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' 
 // Só existe no orçamento geral do projeto — os orçamentos de departamento (ex.: Arte) não têm fee.
 export const GRAIN_FEE = 10;
 // uma linha da tabela chamada "Agency fee" / "Grain fee" já É a fee: nesse caso não se soma a automática por cima
-const FEE_RE = /\b(agency|grain)\s*fee\b|^\s*fee\s*$/i;
+const FEE_RE = /\b(agency|grain)\s*fee\b|^\s*(fee|agency)\s*$/i;
 export const isFeeRow = (b, r) => r.kind === 'item' && (b?.cols || []).some((c) => c.type === 'text' && FEE_RE.test(String(r.cells?.[c.id] || '')));
 export const feeRowSum = (b) => (!b?.rows || !b.main ? 0 : b.rows.filter((r) => isFeeRow(b, r)).reduce((a, r) => a + (Number(r.cells?.[b.main]) || 0), 0));
 export const costsOf = (b) => tableTotal(b) - feeRowSum(b);

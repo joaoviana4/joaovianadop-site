@@ -1,4 +1,4 @@
-import { sb, esc, signedUrls, uploadImage, toast, modal, confirmBox, ICON } from './lib.js';
+import { DB_SCHEMA, sb, BUCKET, esc, signedUrls, uploadImage, toast, modal, confirmBox, ICON } from './lib.js';
 import { ytId } from './music.js';
 
 // Board infinito à maneira do Milanote: cada cartão é uma linha própria na base de dados,
@@ -397,7 +397,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
         toast('A enviar a música…');
         const ext = (file.name.split('.').pop() || 'mp3').toLowerCase().replace(/[^a-z0-9]/g, '');
         const path = `${projectId}/audio/${Date.now()}.${ext}`;
-        const { error } = await sb.storage.from('files').upload(path, file, { contentType: file.type || 'audio/mpeg' });
+        const { error } = await sb.storage.from(BUCKET).upload(path, file, { contentType: file.type || 'audio/mpeg' });
         if (error) return toast(error.message);
         urls = { ...urls, ...(await signedUrls([path])) };
         create('audio', null, { path, name: file.name, title: file.name.replace(/\.[^.]+$/, '') });
@@ -665,7 +665,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   // apaga o ficheiro de uma imagem/áudio que saiu do board (se mais nada no projeto o usar)
   async function cleanupFiles(it) {
     const path = it.data?.path; if (!path) return;
-    if (it.kind === 'image') { const { count } = await sb.from('board_items').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('data->>path', path); if (!count) await sb.storage.from('files').remove([path]); return; }
+    if (it.kind === 'image') { const { count } = await sb.from('board_items').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('data->>path', path); if (!count) await sb.storage.from(BUCKET).remove([path]); return; }
     if (it.kind !== 'audio' || it.data.shared) return;
     const [{ count }, { data: pr }, { data: tools }] = await Promise.all([
       sb.from('board_items').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('kind', 'audio').eq('data->>path', path),
@@ -673,23 +673,23 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
       sb.from('boards').select('data').eq('project_id', projectId).eq('kind', 'media'),
     ]);
     const used = (count || 0) > 0 || pr?.music?.audio_path === path || (tools || []).some((t) => t.data?.audio_path === path);
-    if (!used) await sb.storage.from('files').remove([path]);
+    if (!used) await sb.storage.from(BUCKET).remove([path]);
   }
 
   // ---------- tempo real ----------
   const ch = sb.channel('board-' + boardId)
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'board_items', filter: `board_id=eq.${boardId}` }, async ({ new: row }) => {
+    .on('postgres_changes', { event: 'INSERT', schema: DB_SCHEMA, table: 'board_items', filter: `board_id=eq.${boardId}` }, async ({ new: row }) => {
       if (items.has(row.id)) return;
       if ((row.kind === 'image' || row.kind === 'audio') && row.data?.path) urls = { ...urls, ...(await signedUrls([row.data.path])) };
       items.set(row.id, row); cardEl(row);
     })
-    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'board_items', filter: `board_id=eq.${boardId}` }, ({ new: row }) => {
+    .on('postgres_changes', { event: 'UPDATE', schema: DB_SCHEMA, table: 'board_items', filter: `board_id=eq.${boardId}` }, ({ new: row }) => {
       if (st.drag?.id === row.id || st.editing?.id === row.id || saveT.has(row.id)) return;
       const cur = items.get(row.id); if (!cur) return;
       if (cur.updated_at && row.updated_at && row.updated_at < cur.updated_at) return;
       items.set(row.id, row); cardEl(row);
     })
-    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'board_items' }, ({ old }) => {
+    .on('postgres_changes', { event: 'DELETE', schema: DB_SCHEMA, table: 'board_items' }, ({ old }) => {
       if (old?.id && items.has(old.id)) { items.delete(old.id); world.querySelector(`[data-id="${old.id}"]`)?.remove(); }
     })
     .subscribe();

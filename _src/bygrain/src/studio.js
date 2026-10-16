@@ -1,7 +1,7 @@
 import './style.css';
 import { daysUntil } from './lib.js';
 import { loadHidden, hideProject, unhideProject } from './lib.js';
-import { sb, state, esc, $, loadProfile, isStaff, isAdmin, toast, modal, confirmBox, ICON, LOGO, KINDS, ROLES, phaseOf, greeting, initials, signedUrls, uploadImage, callFn, authPw, MIN_PW, fmtDate, dueInfo, registerSW, BASE, PROJECT_COLS, hasPerm } from './lib.js';
+import { sb, BUCKET, state, esc, $, loadProfile, isStaff, isAdmin, toast, modal, confirmBox, ICON, LOGO, KINDS, ROLES, phaseOf, greeting, initials, signedUrls, uploadImage, callFn, authPw, MIN_PW, fmtDate, dueInfo, registerSW, BASE, PROJECT_COLS, hasPerm } from './lib.js';
 import { renderAuth } from './auth.js';
 import { mountBoard } from './board.js';
 import { mountTasks, loadPeople, clearPeopleCache } from './tasks.js';
@@ -288,11 +288,11 @@ async function homePage() {
 async function purgeFiles(pid) {
   const all = [];
   const walk = async (prefix, depth = 0) => {
-    const { data } = await sb.storage.from('files').list(prefix, { limit: 1000 });
+    const { data } = await sb.storage.from(BUCKET).list(prefix, { limit: 1000 });
     for (const it of data || []) { const path = `${prefix}/${it.name}`; if (it.id) all.push(path); else if (depth < 4) await walk(path, depth + 1); }
   };
   await walk(pid);
-  for (let i = 0; i < all.length; i += 100) await sb.storage.from('files').remove(all.slice(i, i + 100));
+  for (let i = 0; i < all.length; i += 100) await sb.storage.from(BUCKET).remove(all.slice(i, i + 100));
 }
 
 function coverColor(id) {

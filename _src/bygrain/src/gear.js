@@ -1,4 +1,4 @@
-import { sb, esc, toast, modal, confirmBox, ICON } from './lib.js';
+import { sb, esc, toast, modal, confirmBox, ICON, isStaff } from './lib.js';
 import { exportPdf } from './pdf.js';
 import { BUILTIN } from './gearcat.js';
 
@@ -25,9 +25,25 @@ export function loadCatalog(force = false) {
   catAt = Date.now();
   catP = sb.from('gear_catalog').select('*').order('category').order('brand').order('name').then(({ data, error }) => {
     if (!error && data?.length) CATALOG.splice(0, CATALOG.length, ...data);
+    // base de dados vazia (ex.: um Studio novo): a equipa semeia-a com a lista inicial, uma vez
+    else if (!error && isStaff()) return seedCatalog();
     return CATALOG;
   }).catch(() => CATALOG);
   return catP;
+}
+let seeding = null;
+function seedCatalog() {
+  seeding ||= (async () => {
+    const rows = BUILTIN.map((g) => ({ category: g.category, brand: g.brand || '', name: g.name, specs: g.specs || {}, price_day: g.price_day ?? null, supplier: g.supplier || null, notes: g.notes || null, owned: false }));
+    for (let i = 0; i < rows.length; i += 100) {
+      const { error } = await sb.from('gear_catalog').upsert(rows.slice(i, i + 100), { onConflict: 'category,brand,name', ignoreDuplicates: true });
+      if (error) return CATALOG;
+    }
+    const { data } = await sb.from('gear_catalog').select('*').order('category').order('brand').order('name');
+    if (data?.length) CATALOG.splice(0, CATALOG.length, ...data);
+    return CATALOG;
+  })();
+  return seeding;
 }
 
 // --------- especificações: resumo curto e utilidades para o mapa ---------

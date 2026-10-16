@@ -1,0 +1,99 @@
+/* ===== PØRTAL Studio: tema claro por cima do byGrain =====
+   Só entra no build "--mode studio" (vite.config.js junta-o ao fim de style.css).
+   Marca PØRTAL: fundo claro, Archivo, um só azul. */
+:root {
+  --blue: #0071e3;
+  --blue-d: #0062c4;
+  --cream: #1d1d1f;      /* no byGrain é o "claro forte" por cima do escuro; aqui é a tinta */
+  --ink: #ffffff;        /* texto por cima de --cream */
+  --bg: #f5f5f7;
+  --bg2: #ececf0;
+  --panel: #ffffff;
+  --panel2: #f5f5f7;
+  --line: rgba(0, 0, 0, 0.09);
+  --line2: rgba(0, 0, 0, 0.17);
+  --text: #1d1d1f;
+  --muted: #6e6e73;
+  --late: #d93a3a;
+  --soon: #d9731f;
+  --ok: #1f9a5c;
+  --doing: #b88a00;
+  --sans: 'Archivo', Helvetica, Arial, sans-serif;
+  --serif: 'Archivo', Helvetica, Arial, sans-serif;
+  --logo: 'Archivo', Helvetica, Arial, sans-serif;
+  color-scheme: light;
+}
+body { background: var(--bg); color: var(--text); }
+body.is-auth { background: var(--bg); }
+a { color: var(--blue); }
+a:hover { color: var(--blue-d); }
+:focus-visible { outline-color: var(--blue); }
+.serif { font-style: normal; }
+.h1, .hero-h, .pm-name, .title-txt { font-stretch: 125%; font-weight: 640; letter-spacing: -0.02em; }
+.stat strong, .fstat strong, .bbig, .ov-kpi strong, .acc-bal, .fin-sum strong, .pm-budget strong, .co-total { font-weight: 700; letter-spacing: -0.01em; }
+
+/* grão: o PØRTAL não usa */
+.grain-layer, .scan, .vignette { display: none !important; }
+
+/* logótipo */
+.plogo { flex-direction: row !important; align-items: center !important; gap: .4em !important; color: var(--text); }
+.plogo .pmark { width: 1.15em; height: 1.15em; stroke: none; }
+.plogo-name { font-stretch: 125%; font-weight: 700; letter-spacing: .02em; font-size: .62em; white-space: nowrap; }
+.plogo-name span { font-weight: 500; color: var(--muted); }
+.brand { font-size: 24px; color: var(--text); }
+.auth-logo { font-size: 46px !important; }
+.m-head .logo { font-size: 30px; }
+.pv-mark { color: var(--text); text-shadow: none; }
+
+/* botões */
+.btn { border-color: var(--line2); }
+.btn.cream { background: var(--text); color: #fff; }
+.btn.cream:hover { background: #000; }
+.btn.ghost:hover { background: rgba(0, 0, 0, .05); }
+.seg button { color: var(--text); }
+.seg button[aria-selected="true"] { color: #fff; }
+.icon-btn.light { color: var(--text); }
+
+/* entrada: painel branco sobre o cinzento, como o PØRTAL antigo */
+.auth { background: var(--bg); color: var(--text); }
+.auth-col { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 32px 28px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 12px 32px rgba(0,0,0,.07); }
+.auth-form input:not([type=checkbox]) { background: var(--panel); border-color: var(--line2); color: var(--text); }
+.auth-form .field label, .reqs li.ok { color: var(--text); }
+.auth-foot { color: var(--muted); }
+.pw-eye { color: var(--muted); }
+
+/* topo e cabeçalhos: papel em vez de azul cheio */
+.hero, .pm-head:not([style*="background-image"]), .m-head { background: var(--panel); color: var(--text); border-bottom: 1px solid var(--line); }
+.pm-head:not([style*="background-image"]) { border: 1px solid var(--line); }
+.pm-head:not([style*="background-image"]) .pm-budget { border-color: var(--line2); }
+.bar.light i { background: var(--blue); }
+.code-box { background: var(--panel2); color: var(--text); border: 1px solid var(--line); }
+.code-box textarea { background: var(--panel); border-color: var(--line2); color: var(--text); }
+.stat.cta span { color: #fff; }
+
+/* sombras mais leves no claro */
+.modal, .menu, .pop { box-shadow: 0 2px 4px rgba(0,0,0,.06), 0 24px 48px rgba(0,0,0,.14); }
+
+/* segmentos (o .seg base era para cima do azul) */
+.seg { background: var(--panel2); border-color: var(--line); }
+.auth .link-btn, .auth-lead, .auth-ok .muted, .reqs, .auth-note { color: var(--muted); }
+.reqs li.ok { color: var(--ok); }
+.pill-ok { background: rgba(31, 154, 92, .1); border-color: rgba(31, 154, 92, .3); color: var(--ok); }
+.auth-form input::placeholder { color: var(--muted); opacity: .7; }
+.m-head .avatar { box-shadow: 0 0 0 2px var(--line2); }
+.bar.light { background: var(--line); }
+
+/* valor do orçamento no topo do projeto */
+.pm-head:not([style*="background-image"]) .pm-budget { background: var(--panel2); color: var(--text); border: 1px solid var(--line); }
+.pm-head:not([style*="background-image"]) .pm-budget:hover { background: var(--bg2); }
+.pm-head:not([style*="background-image"]) .pm-budget.over small { color: var(--late); }
+.pm-head:not([style*="background-image"]) .pm-budget .appr { color: var(--ok); }
+
+/* campos */
+input:where(:not([type=checkbox]):not([type=color]):not([type=radio])), select, textarea { background-color: var(--panel); }
+input:focus, select:focus, textarea:focus { border-color: var(--blue); }
+select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236e6e73' stroke-width='1.8'%3E%3Cpath d='M7 10l5 5 5-5'/%3E%3C/svg%3E"); }
+input[type=date], input[type=time], input[type=datetime-local], input[type=month] { color-scheme: light; }
+
+/* calendário de marketing */
+.mk-day.out { background: var(--panel2); }
