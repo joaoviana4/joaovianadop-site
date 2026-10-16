@@ -726,13 +726,15 @@
     }
     html[data-theme="light"] body { color-scheme: light; }
     /* light mode: film grain over the whole background (a GPU-moved layer, no repaints) */
-    .bggrain { position: absolute; inset: -50%; pointer-events: none; display: none; mix-blend-mode: multiply; opacity: .16; animation: hgrain .5s steps(6) infinite; will-change: transform; }
+    .bggrain { position: absolute; inset: -50%; pointer-events: none; display: none; mix-blend-mode: multiply; opacity: .12; animation: hgrainsoft 1.6s steps(4) infinite; will-change: transform; }
+    /* calmer grain for light mode: slower, smaller jumps */
+    @keyframes hgrainsoft { 0%{transform:translate(0,0)} 25%{transform:translate(-2%,1.5%)} 50%{transform:translate(1.5%,-2%)} 75%{transform:translate(-1%,2%)} }
     html[data-theme="light"] .bggrain { display: block; }
-    html[data-theme="light"] header::before { content: ""; position: absolute; inset: 0; animation-name: hgrainpos !important; z-index: -1; pointer-events: none; background-image: var(--grain); mix-blend-mode: multiply; opacity: .16; animation: hgrain .5s steps(6) infinite; }
+    html[data-theme="light"] header::before { content: ""; position: absolute; inset: 0; animation-name: hgrainpos !important; z-index: -1; pointer-events: none; background-image: var(--grain); mix-blend-mode: multiply; opacity: .12; animation: hgrainsoft 1.6s steps(4) infinite; }
     html[data-theme="light"] header { isolation: isolate; }
     /* homepage tiles in light mode: white, with dark sage lettering and black grain */
     html[data-theme="light"] .htile.link, html[data-theme="light"] .ftile { background: #fff; }
-    html[data-theme="light"] .htile.link .grain, html[data-theme="light"] .ftile .grain { mix-blend-mode: multiply; opacity: .12; }
+    html[data-theme="light"] .htile.link .grain, html[data-theme="light"] .ftile .grain { mix-blend-mode: multiply; opacity: .1; animation: hgrainsoft 1.6s steps(4) infinite; }
     html[data-theme="light"] .htile.link .lt, html[data-theme="light"] .ftile .vw, html[data-theme="light"] .ftile .vj { filter: none; }
     html[data-theme="light"] .htile.link:hover .lt { color: #000; }
     html[data-theme="light"] .ftile .vg2 { color: #000; }
