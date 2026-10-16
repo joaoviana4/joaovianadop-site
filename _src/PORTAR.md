@@ -11,7 +11,13 @@ O byGrain (`_src/bygrain`) é o protótipo e o caso de estudo do Studio. O que f
   - Grain fee e agency fee;
   - ligação dos orçamentos aos ganhos.
 - Os modelos confidenciais enviados para as folhas de serviço e transportes não existem em lado nenhum, e continua a ser assim.
-- Antes de portar, o código-fonte do Studio tem de estar neste repositório, em `_src/studio`. Neste momento só está a versão compilada em `/studio`.
+- O código-fonte do Studio está em `_src/studio` (desde 16 out 2026).
+- **Arquitetura diferente.** O Studio não é uma cópia do byGrain:
+  - é uma app num só ficheiro (`src/main.js`), que desenha a página a partir de um estado;
+  - guarda as ferramentas como JSON em `hub_pages` e `hub_projects`, no Supabase BlackCat (`cwdjpcebyhwcdwwwazev`), partilhado com o Viewfinder e o Lighthouse;
+  - segue a marca PØRTAL (Archivo, um só azul, "tu", sem pontos de exclamação);
+  - funciona com um projeto de cada vez e, por agora, um só utilizador.
+- Portar é **reimplementar no estilo do Studio**, não copiar ficheiros. Não se mexe em tabelas que o Viewfinder e o Lighthouse usam sem confirmar primeiro.
 - Cada linha tem um estado:
   - ☐ = por portar;
   - ◐ = em curso;
