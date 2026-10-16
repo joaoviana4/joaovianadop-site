@@ -12,6 +12,7 @@ Desde 16 out 2026 o PØRTAL Studio é construído a partir do código do byGrain
   - `vite.config.js` (plugin `portal-studio-flavor`): troca os textos da marca ("byGrain Studio" → "PØRTAL Studio", "Grain fee" → "Agency fee", "da Grain" → "do Studio"…), passa as cores do tema escuro para o claro e gera a pasta public do Studio (ícones PØRTAL vêm de `_src/studio/public/icons`).
   - `src/studio-theme.css`: tema claro PØRTAL (Archivo, fundo #f5f5f7, um só azul #0071e3). Só entra no build do Studio.
 - Texto novo com "Grain" no byGrain: se for para aparecer no Studio, confirma que o plugin o troca (lista `TEXT` em `vite.config.js`).
+- Aparência (só no Studio): `src/appearance.js` (tema claro/escuro/sistema, cor de destaque, fundo), guardada em `localStorage` (`portal-look`) e em `studio.profiles.prefs.look`. As cores fixas do byGrain passam a variáveis do tema no build (`--fg-rgb`, `--bg-rgb`, `--panel-rgb`, `--deep`…); os valores de cada tema estão em `studio-theme.css`.
 - `IS_STUDIO` (de `lib.js`/`flavor.js`) existe para os raros casos em que o comportamento tem de ser diferente. Usar o mínimo possível.
 
 ## Base de dados do Studio
