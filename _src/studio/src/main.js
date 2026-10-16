@@ -243,6 +243,7 @@ async function loadAll(){
   state.projects = (pr.data || []).map(r => {
     const h = (hp.data || []).find(x => x.project_id === r.id);
     const pages = (pg.data || []).filter(x => x.project_id === r.id).map(x => ({id:x.id, type:x.type, title:x.title, group:x.group_id, data:x.data || {}}));
+    pages.forEach((x, i) => { pageSnap[x.id] = JSON.stringify({id:x.id, project_id:r.id, type:x.type, title:x.title, group_id:x.group, position:i, data:x.data, deleted:false}); });
     known[r.id] = new Set(pages.map(x => x.id));
     return {id:r.id, name:r.name, type:r.type, scriptName:r.script_name, appChars:r.characters || [], hasHub:!!h,
       format:h ? h.format : (r.type === 'fiction' ? 'Curta-metragem' : 'Outro'),
@@ -250,12 +251,16 @@ async function loadAll(){
       groups:h && Array.isArray(h.groups) && h.groups.length ? h.groups : DEPTS.map(n => ({id:uid(), name:n})),
       script:h ? h.script : null, entities:(h && h.entities) || {}, perms:(h && h.perms) || {}, cover:h ? h.cover : null, kind:(h && h.kind) || 'fiction', tasks:(h && h.tasks) || [], homeGroup:(h && h.home_group) || '', props:(h && h.props) || [], budget:(h && h.budget) || null, propsRemoved:(h && h.props_removed) || [], propsAnalysed:(h && h.entities && h.entities['meta:props']) || null, status:(h && h.status) || 'active', members:((mbr && mbr.data) || []).filter(x => x.project_id === r.id), docs:((dc && dc.data) || []).filter(x => x.project_id === r.id), pages, lh:(sc.data || []).filter(x => x.project_id === r.id)};
   });
+  // o que veio do servidor (antes de migrações locais, para essas serem guardadas)
+  state.projects.forEach(p => { if (p.hasHub) hubSnap[p.id] = JSON.stringify(hubRowOf(p)); });
   state.projects.forEach(migrateStoryboards);
   state.loading = false;
   if (state.ui.view === 'project' && !cur()) state.ui.view = 'home';
   render();
 }
 const known = {};
+const hubRowOf = p => ({project_id:p.id, format:p.format, phases:p.phases, groups:p.groups, script:p.script || null, entities:Object.assign({}, p.entities || {}, p.propsAnalysed ? {'meta:props':p.propsAnalysed} : {}), perms:p.perms || {}, cover:p.cover || null, kind:p.kind || 'fiction', tasks:p.tasks || [], home_group:p.homeGroup || null, props:p.props || [], props_removed:p.propsRemoved || [], ...(p.budget ? {budget:p.budget} : {}), status:p.status || 'active'});
+const pageSnap = {}, hubSnap = {}; // o que já está guardado no servidor, para só enviar o que mudou
 let persistTimer = null, persistQueue = new Set();
 function setStatus(s){ state.status = s; const el = $('#status'); if (el) { el.textContent = STATUS[s]; el.classList.toggle('off', s === 'off'); } }
 const STATUS = {saved:'Guardado', saving:'A guardar…', off:'Sem ligação. Guardo quando houver rede.'};
@@ -269,10 +274,14 @@ async function flush(){
   for (const id of ids) {
     const p = state.projects.find(x => x.id === id); if (!p) continue;
     try {
-      let r = await sb.from('hub_projects').upsert({project_id:p.id, format:p.format, phases:p.phases, groups:p.groups, script:p.script || null, entities:Object.assign({}, p.entities || {}, p.propsAnalysed ? {'meta:props':p.propsAnalysed} : {}), perms:p.perms || {}, cover:p.cover || null, kind:p.kind || 'fiction', tasks:p.tasks || [], home_group:p.homeGroup || null, props:p.props || [], props_removed:p.propsRemoved || [], ...(p.budget ? {budget:p.budget} : {}), status:p.status || 'active'}); if (r.error) throw r.error;
+      const hubRow = hubRowOf(p);
+      const hubJ = JSON.stringify(hubRow); let r;
+      // só envia o que mudou desde a última vez (antes enviava o projeto e todas as páginas a cada tecla)
+      if (!p.hasHub || hubSnap[p.id] !== hubJ) { r = await sb.from('hub_projects').upsert(hubRow); if (r.error) throw r.error; hubSnap[p.id] = hubJ; }
       p.hasHub = true;
       const rows = p.pages.map((pg, i) => ({id:pg.id, project_id:p.id, type:pg.type, title:pg.title, group_id:pg.group, position:i, data:pg.data, deleted:false}));
-      if (rows.length) { r = await sb.from('hub_pages').upsert(rows); if (r.error) throw r.error; }
+      const snaps = rows.map(x => JSON.stringify(x)), changed = rows.filter((x, i) => pageSnap[x.id] !== snaps[i]);
+      if (changed.length) { r = await sb.from('hub_pages').upsert(changed); if (r.error) throw r.error; rows.forEach((x, i) => { pageSnap[x.id] = snaps[i]; }); }
       const gone = Array.from(known[p.id] || []).filter(x => !p.pages.some(pg => pg.id === x));
       if (gone.length) { r = await sb.from('hub_pages').update({deleted:true}).in('id', gone); if (r.error) throw r.error; }
       known[p.id] = new Set(p.pages.map(x => x.id));
@@ -286,15 +295,19 @@ window.addEventListener('online', () => { if (persistQueue.size) flush(); });
 window.addEventListener('beforeunload', e => { if (persistQueue.size) { e.preventDefault(); e.returnValue = ''; } });
 
 /* imagens: vão para o armazenamento do Supabase, na pasta da tua conta */
-const urlCache = new Map();
+const urlCache = new Map(), urlAt = new Map();
+let hydrating = null;
 async function hydrate(){
+  if (hydrating) { await hydrating; }
   const imgs = Array.from(document.querySelectorAll('img[data-path]'));
-  const need = [...new Set(imgs.map(i => i.dataset.path).filter(p => !urlCache.has(p)))];
+  const now = Date.now(), web = p => /^https?:\/\//.test(p);
+  // os links assinados valem 1 hora: renovam-se aos 50 minutos (antes as imagens partiam ao fim de uma hora)
+  const need = [...new Set(imgs.map(i => i.dataset.path).filter(p => p && !web(p) && (!urlCache.has(p) || now - urlAt.get(p) > 3e6)))];
   if (need.length) {
-    const r = await sb.storage.from('photos').createSignedUrls(need, 3600);
-    (r.data || []).forEach(x => { if (x.signedUrl) urlCache.set(x.path, x.signedUrl); });
+    hydrating = sb.storage.from('photos').createSignedUrls(need, 3600).then(r => { (r.data || []).forEach(x => { if (x.signedUrl) { urlCache.set(x.path, x.signedUrl); urlAt.set(x.path, now); } }); }).finally(() => { hydrating = null; });
+    await hydrating;
   }
-  imgs.forEach(i => { const u = urlCache.get(i.dataset.path); if (u && i.getAttribute('src') !== u) i.src = u; });
+  imgs.forEach(i => { const p = i.dataset.path, u = web(p) ? p : urlCache.get(p); if (u && i.getAttribute('src') !== u) i.src = u; });
 }
 async function uploadImage(file, proj){
   const blob = await shrink(file, 1600, .8);
@@ -1956,6 +1969,7 @@ function render(){
   document.body.classList.toggle('bfs-on', !!$('#bfs'));
   bindDrop(); hydrate().catch(() => {}); saveUi();
 }
+let mapRaf = 0;
 function renderMap(){ const p = cur(), pg = p && curPage(p), box = $('#map-box'); if (box && pg && pg.type === 'map') box.innerHTML = mapSVG(pg.data, state.ui.mapSel); }
 function go(){ render(); window.scrollTo(0, 0); }
 function openProject(id){
@@ -2596,7 +2610,7 @@ document.addEventListener('pointerdown', e => {
 });
 document.addEventListener('pointermove', e => {
   if (!drag || e.pointerId !== drag.id) return;
-  if (drag.map) { const pt = svgPoint($('#map-svg'), e); if (!pt) return; drag.it.x = Math.round(Math.max(12, Math.min(MW - 12, pt.x + drag.dx))); drag.it.y = Math.round(Math.max(12, Math.min(MH - 12, pt.y + drag.dy))); renderMap(); return; }
+  if (drag.map) { const pt = svgPoint($('#map-svg'), e); if (!pt) return; drag.it.x = Math.round(Math.max(12, Math.min(MW - 12, pt.x + drag.dx))); drag.it.y = Math.round(Math.max(12, Math.min(MH - 12, pt.y + drag.dy))); if (!mapRaf) mapRaf = requestAnimationFrame(() => { mapRaf = 0; renderMap(); }); return; }
   if (drag.pan) { const p = cur(), pg = p && curPage(p); if (!pg) return; const v = bview(pg); v.x = drag.ox + e.clientX - drag.sx; v.y = drag.oy + e.clientY - drag.sy; applyView(); return; }
   if (drag.rsz) {
     const w = Math.max(drag.c.type === 'ref' ? 80 : 150, Math.round(drag.ow + (e.clientX - drag.sx) / drag.z)), h = Math.max(70, Math.round(drag.oh + (e.clientY - drag.sy) / drag.z));
