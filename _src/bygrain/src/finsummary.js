@@ -1,5 +1,5 @@
 import { sb, esc, toast, modal, confirmBox, ICON, todayISO, hasPerm } from './lib.js';
-import { tableTotal, grainFee, feePct } from './folders.js';
+import { costsOf, grainFee, feePct } from './folders.js';
 
 // Finanças: Resumo (com gráficos e saúde financeira), Ganhos por projeto e Ganhos por pessoa.
 // Ganhos (fin_earnings): uma linha por trabalho, ligada ou não a um projeto. Se seguir o orçamento,
@@ -32,7 +32,7 @@ export async function loadFin() {
   const { data: bud } = ids.length ? await sb.from('project_budgets').select('project_id, value, budget, approved_at').in('project_id', ids) : { data: [] };
   // ligado ao orçamento do projeto: o valor é o orçamento geral (ou, se não houver, a tabela + Grain fee);
   // a agency fee, se não for escrita à mão, é a Grain fee do orçamento
-  const fullOf = (b) => (b.value != null ? Number(b.value) : b.budget?.rows ? tableTotal(b.budget) + grainFee(b.budget) : null);
+  const fullOf = (b) => (b.value != null ? Number(b.value) : b.budget?.rows ? costsOf(b.budget) + grainFee(b.budget) : null);
   const bmap = new Map((bud || []).map((b) => [b.project_id, fullOf(b)]));
   const feeMap = new Map((bud || []).filter((b) => b.budget?.rows).map((b) => [b.project_id, { fee: grainFee(b.budget), pct: feePct(b.budget) }]));
   const movs = mov || [];

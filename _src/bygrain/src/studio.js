@@ -85,7 +85,7 @@ function header(active) {
       <a href="#/" class="brand" aria-label="byGrain Studio, início">${LOGO('studio')}</a>
       <nav aria-label="Principal" class="nav">
         ${link('#/', 'Início', 'home')}
-        ${isStaff() ? link('#/central', 'Central de Produção', 'central') + link('#/tarefas', 'Tarefas', 'tasks') + link('#/equipamento', 'Equipamento', 'gear') : ''}
+        ${isStaff() ? link('#/central', 'Central de Produção', 'central') + link('#/tarefas', 'Tarefas', 'tasks') : ''}
         ${isAdmin() ? link('#/equipa', 'Equipa e permissões', 'team') : ''}
       </nav>
     </div>
@@ -161,6 +161,7 @@ async function homePage() {
           <div class="menu-list" data-central>
             <a href="#/central">${ICON.board}<span><strong>Abrir a Central</strong><small>Contas, planeamento e calendário da Grain</small></span>${ICON.chev}</a>
             <a href="#/central">${ICON.task}<span><strong>Tarefas internas</strong><small>O que não pertence a um projeto</small></span>${ICON.chev}</a>
+            <a href="#/equipamento">${ICON.camera || ICON.board}<span><strong>Base de dados de equipamento</strong><small>Câmaras, luzes, tripés e o resto</small></span>${ICON.chev}</a>
           </div>
         </section>
         <section class="panel">
@@ -1086,7 +1087,7 @@ async function boardView(projectId, boardId) {
 
 // ---------- tarefas (todas) ----------
 async function gearDbPage() {
-  app.innerHTML = `<div class="page">${header('gear')}<div class="wrap page-pad" data-gdb></div></div>`;
+  app.innerHTML = `<div class="page">${header('')}<div class="wrap page-pad" data-gdb></div></div>`;
   bindHeader(app);
   (await import('./gearbase.js')).gearBasePage(app.querySelector('[data-gdb]'));
 }

@@ -9,8 +9,13 @@ const eur = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' 
 // Grain fee: percentagem da byGrain sobre os custos do orçamento do projeto (10 % por defeito).
 // Só existe no orçamento geral do projeto — os orçamentos de departamento (ex.: Arte) não têm fee.
 export const GRAIN_FEE = 10;
-export const feePct = (b) => (b?.gfee?.off ? 0 : b?.gfee?.pct != null ? Number(b.gfee.pct) || 0 : GRAIN_FEE);
-export const grainFee = (b) => tableTotal(b) * feePct(b) / 100;
+// uma linha da tabela chamada "Agency fee" / "Grain fee" já É a fee: nesse caso não se soma a automática por cima
+const FEE_RE = /\b(agency|grain)\s*fee\b|^\s*fee\s*$/i;
+export const isFeeRow = (b, r) => r.kind === 'item' && (b?.cols || []).some((c) => c.type === 'text' && FEE_RE.test(String(r.cells?.[c.id] || '')));
+export const feeRowSum = (b) => (!b?.rows || !b.main ? 0 : b.rows.filter((r) => isFeeRow(b, r)).reduce((a, r) => a + (Number(r.cells?.[b.main]) || 0), 0));
+export const costsOf = (b) => tableTotal(b) - feeRowSum(b);
+export const feePct = (b) => (feeRowSum(b) ? 0 : b?.gfee?.off ? 0 : b?.gfee?.pct != null ? Number(b.gfee.pct) || 0 : GRAIN_FEE);
+export const grainFee = (b) => feeRowSum(b) || costsOf(b) * feePct(b) / 100;
 export const tableTotal = (b) => (!b?.rows || !b.main ? 0 : b.rows.filter((r) => r.kind === 'item').reduce((a, r) => a + (Number(r.cells?.[b.main]) || 0), 0));
 
 // projetos dentro da pasta, com o orçamento de cada um (só chega o de quem tem acesso)
@@ -26,7 +31,7 @@ export async function loadChildren(p) {
   const bmap = new Map((bud || []).map((b) => [b.project_id, b]));
   return list.map((k) => {
     const b = bmap.get(k.id);
-    return { ...k, _b: b ? { value: b.value != null ? Number(b.value) : null, spent: tableTotal(b.budget), fee: grainFee(b.budget) } : null, _open: (tasks || []).filter((t) => t.project_id === k.id).length };
+    return { ...k, _b: b ? { value: b.value != null ? Number(b.value) : null, spent: costsOf(b.budget), fee: grainFee(b.budget) } : null, _open: (tasks || []).filter((t) => t.project_id === k.id).length };
   });
 }
 // quanto cada projeto pesa no orçamento geral: o valor atribuído; se não tiver, o total da sua tabela
@@ -40,7 +45,7 @@ export function rollup(kids) {
 export async function childrenSection(box, p, kids, { base, canBudget, onNew, canEdit, after }) {
   const covers = await signedUrls(kids.map((k) => k.cover_path));
   const R = rollup(kids);
-  const own = tableTotal(p.budget) + grainFee(p.budget);
+  const own = costsOf(p.budget) + grainFee(p.budget);
   const total = p.value != null ? Number(p.value) : null;
   const committed = R.alloc + own;
   box.innerHTML = `

@@ -200,7 +200,7 @@ export async function gearPage(main, p, base) {
     const shown = gear.filter((g) => (!fcat || g.category === fcat) && words.every((w) => norm(`${gearName(g)} ${g.supplier} ${specLine(g)} ${g.notes}`).includes(w)));
     main.innerHTML = `
       <div class="row between wrap-gap"><div><h1 class="h1 pm-title">Equipamento</h1><p class="muted">Tudo o que vem para a rodagem. Os mapas de luz só usam o que está aqui, por isso o plano de luz bate certo com a lista da rental.</p></div>
-        <div class="row wrap-gap"><button type="button" class="btn ghost" data-paste>${ICON.list} Colar lista</button><button type="button" class="btn ghost" data-pdf>${ICON.open} Exportar PDF</button><button type="button" class="btn primary" data-add>${ICON.plus} Equipamento</button></div></div>
+        <div class="row wrap-gap"><a class="btn ghost" href="#/equipamento" title="Câmaras, luzes, tripés e o resto, para todos os projetos">${ICON.search} Base de dados</a><button type="button" class="btn ghost" data-paste>${ICON.list} Colar lista</button><button type="button" class="btn ghost" data-pdf>${ICON.open} Exportar PDF</button><button type="button" class="btn primary" data-add>${ICON.plus} Equipamento</button></div></div>
       <div class="gr-stats" data-stats></div>
       <div class="row wrap-gap gr-filters">
         <div class="seg dark gr-seg" role="tablist">${[['', 'Tudo'], ...CATS].filter(([k]) => !k || gear.some((g) => g.category === k)).map(([k, l]) => `<button type="button" role="tab" aria-selected="${fcat === k}" data-c="${k}">${l}<small>${k ? gear.filter((g) => g.category === k).length : gear.length}</small></button>`).join('')}</div>
