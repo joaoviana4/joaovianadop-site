@@ -1,6 +1,11 @@
-# byGrain e PØRTAL Studio: um só código
+# byGrain e PØRTAL Studio
 
-Desde 16 out 2026 o PØRTAL Studio é construído a partir do código do byGrain (`_src/bygrain`). Já não há nada para "portar" à mão: muda-se no byGrain e o Studio fica igual ao reconstruir.
+**Desde 16 out 2026 (tarde): códigos separados.**
+- `_src/bygrain` → byGrain (joaovianadop.com/bygrain). **Parado**: a equipa da Grain já o usa; não se reconstrói nem se publica sem o João pedir.
+- `_src/portal` → PØRTAL Studio (joaovianadop.com/studio). É aqui que se trabalha. Construir: `_src/portal/build.sh`.
+- Cópia de segurança do byGrain: esquema `backup_20261016` na própria base de dados do byGrain (todas as tabelas, lista de ficheiros e contas) e um ZIP descarregado pelo João.
+
+O resto deste ficheiro descreve como o Studio nasceu do código do byGrain (ainda válido para `_src/portal`).
 
 ## Como funciona
 
