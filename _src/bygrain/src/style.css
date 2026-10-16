@@ -1796,8 +1796,8 @@ body.tool-dragging, body.tool-dragging * { cursor: grabbing !important; user-sel
 .gdb-act .link-btn { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; } .gdb-act svg { width: 14px; height: 14px; }
 .gdb-filters .search { position: relative; display: flex; align-items: center; } .gdb-filters .search svg { position: absolute; left: 12px; width: 18px; height: 18px; color: var(--muted); pointer-events: none; } .gdb-filters .search input { width: 100%; padding-left: 40px; }
 .gdb-filters .search input { padding-left: 38px !important; min-height: 42px; border-radius: 999px !important; }
-/* usar o ecrã todo (como no Studio): sem largura máxima nem margens grandes dos lados */
-.wrap { max-width: none; padding-left: clamp(16px, 2.6vw, 40px); padding-right: clamp(16px, 2.6vw, 40px); }
-.proj-layout { max-width: none; margin: 0; }
-.proj-nav { max-width: 260px; }
-.proj-main { padding-left: clamp(16px, 2.6vw, 40px); padding-right: clamp(16px, 2.6vw, 40px); }
+/* meio termo: mais largo do que antes, mas com respiração dos lados */
+.wrap { max-width: 1600px; padding-left: clamp(20px, 4vw, 64px); padding-right: clamp(20px, 4vw, 64px); }
+.proj-layout { max-width: 1760px; margin: 0 auto; }
+.proj-nav { max-width: 270px; }
+.proj-main { padding-left: clamp(20px, 3.5vw, 56px); padding-right: clamp(20px, 3.5vw, 56px); }
