@@ -1786,3 +1786,13 @@ body.tool-dragging, body.tool-dragging * { cursor: grabbing !important; user-sel
 .crew-hrow .link-btn { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
 .crew-hrow .link-btn svg { width: 14px; height: 14px; }
 .crew-empty { margin: 0; padding: 10px 14px; border: 1px dashed var(--line); border-radius: 12px; }
+/* base de dados de equipamento */
+.gdb-head { margin-bottom: 14px; align-items: flex-end; } .gdb-head p { max-width: 70ch; }
+.gdb-tabs { margin-bottom: 14px; flex-wrap: wrap; } .gdb-tabs .count { opacity: .55; font-size: 12px; margin-left: 2px; }
+.gdb-filters { margin-bottom: 14px; align-items: center; } .gdb-filters .search { flex: 1 1 260px; }
+.gdb-t td { padding: 9px 10px; } .gdb-t th { padding: 8px 10px; }
+.gdb-t .chip.own { border-color: var(--blue); color: #9fb0ff; font-size: 11px; }
+.gdb-act { text-align: right; white-space: nowrap; }
+.gdb-act .link-btn { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; } .gdb-act svg { width: 14px; height: 14px; }
+.gdb-filters .search { position: relative; display: flex; align-items: center; } .gdb-filters .search svg { position: absolute; left: 12px; width: 18px; height: 18px; color: var(--muted); pointer-events: none; } .gdb-filters .search input { width: 100%; padding-left: 40px; }
+.gdb-filters .search input { padding-left: 38px !important; min-height: 42px; border-radius: 999px !important; }

@@ -1,5 +1,6 @@
 import { sb, esc, toast, modal, confirmBox, ICON } from './lib.js';
 import { exportPdf } from './pdf.js';
+import { BUILTIN } from './gearcat.js';
 
 // Equipamento do projeto (sobretudo imagem): câmaras, objetivas, luzes, modificadores, maquinaria, elétrico, filtros.
 // O mapa de luz só usa o que está nesta lista: assim o plano de luz bate certo com o que vem da rental.
@@ -15,88 +16,28 @@ export const COLOR_KINDS = [['day', 'Daylight'], ['tungsten', 'Tungsténio'], ['
 export const MOD_KINDS = [['softbox', 'Softbox'], ['lantern', 'Lanterna / china ball'], ['dome', 'Dome / parabólico'], ['fresnel', 'Lente Fresnel'], ['grid', 'Grelha (eggcrate)'], ['frame', 'Frame / butterfly'], ['flag', 'Bandeira / negativo'], ['bounce', 'Rebatedor']];
 export const FABRICS = ['', 'Full Grid Cloth', '1/2 Grid Cloth', '1/4 Grid Cloth', 'Silk', 'Ultrabounce', 'Muslin', 'Negativo (Duvetyne)', 'Lee 216', 'Lee 250', 'Lee 251', 'Opal'];
 
-// catálogo de equipamento comum (valores de referência: confirma sempre na ficha técnica da rental)
-const L = (brand, name, type, watts, cct, color, beam, extra = {}) => ({ category: 'light', brand, name, specs: { type, watts, cct, color, beam, ...extra } });
-const C = (brand, name, sensor_w, format) => ({ category: 'camera', brand, name, specs: { sensor_w, format } });
-const O = (brand, name, specs) => ({ category: 'lens', brand, name, specs });
-const M = (brand, name, mod, size_m, extra = {}) => ({ category: 'modifier', brand, name, specs: { mod, size_m, ...extra } });
-export const CATALOG = [
-  L('Aputure', 'LS 600d Pro', 'COB / LED pontual', 720, [5600, 5600], 'day', 55),
-  L('Aputure', 'LS 600x Pro', 'COB / LED pontual', 720, [2700, 6500], 'bicolor', 55),
-  L('Aputure', 'LS 1200d Pro', 'COB / LED pontual', 1440, [5600, 5600], 'day', 55),
-  L('Aputure', 'LS 300x', 'COB / LED pontual', 350, [2700, 6500], 'bicolor', 55),
-  L('Aputure', 'Nova P300c', 'Painel LED', 360, [2000, 10000], 'rgb', 110),
-  L('Aputure', 'Nova P600c', 'Painel LED', 720, [2000, 10000], 'rgb', 110),
-  L('Aputure', 'MC Pro', 'Prático', 8, [2000, 10000], 'rgb', 120, { battery: true }),
-  L('Aputure', 'INFINIBAR PB12', 'Tubo LED', 60, [2000, 10000], 'rgb', 120, { battery: true, length_m: 1.2 }),
-  L('Amaran', '200x S', 'COB / LED pontual', 200, [2700, 6500], 'bicolor', 55),
-  L('Amaran', '100d S', 'COB / LED pontual', 100, [5600, 5600], 'day', 55),
-  L('ARRI', 'SkyPanel S60-C', 'Painel LED', 450, [2800, 10000], 'rgb', 110),
-  L('ARRI', 'SkyPanel S30-C', 'Painel LED', 220, [2800, 10000], 'rgb', 110),
-  L('ARRI', 'Orbiter', 'COB / LED pontual', 500, [2000, 20000], 'rgb', 60),
-  L('ARRI', 'L7-C', 'Fresnel', 160, [2800, 10000], 'rgb', 50),
-  L('ARRI', '650 Plus Fresnel', 'Fresnel', 650, [3200, 3200], 'tungsten', 45),
-  L('ARRI', '150 Fresnel', 'Fresnel', 150, [3200, 3200], 'tungsten', 45),
-  L('ARRI', 'True Blue T1 (1K)', 'Fresnel', 1000, [3200, 3200], 'tungsten', 45),
-  L('ARRI', 'True Blue T2 (2K)', 'Fresnel', 2000, [3200, 3200], 'tungsten', 45),
-  L('ARRI', 'M18 HMI', 'HMI', 1800, [5600, 5600], 'day', 50),
-  L('ARRI', 'M40 HMI', 'HMI', 4000, [5600, 5600], 'day', 50),
-  L('K5600', 'Joker 800 Bug-a-beam', 'HMI', 800, [5600, 5600], 'day', 45),
-  L('Creamsource', 'Vortex8', 'Painel LED', 650, [2200, 15000], 'rgb', 100),
-  L('Astera', 'Titan Tube', 'Tubo LED', 72, [1750, 20000], 'rgb', 120, { battery: true, length_m: 1.0 }),
-  L('Astera', 'Helios Tube', 'Tubo LED', 36, [1750, 20000], 'rgb', 120, { battery: true, length_m: 0.5 }),
-  L('Astera', 'NYX Bulb', 'Prático', 15, [1750, 20000], 'rgb', 120, { battery: true }),
-  L('Nanlite', 'Forza 500', 'COB / LED pontual', 500, [5600, 5600], 'day', 55),
-  L('Nanlite', 'Forza 60B', 'COB / LED pontual', 60, [2700, 6500], 'bicolor', 55, { battery: true }),
-  L('Nanlite', 'PavoTube II 30X', 'Tubo LED', 40, [2700, 12000], 'rgb', 120, { battery: true, length_m: 1.2 }),
-  L('Kino Flo', '4ft 4Bank', 'Softlight', 220, [3200, 5600], 'bicolor', 100),
-  L('Dedolight', 'DLH4', 'Fresnel', 150, [3200, 3200], 'tungsten', 40),
-  L('Godox', 'SL60W', 'COB / LED pontual', 60, [5600, 5600], 'day', 55),
-  L('', 'Lâmpada prática 60W', 'Prático', 60, [2700, 2700], 'tungsten', 180),
-  C('Sony', 'FX3', 35.6, 'Full frame'), C('Sony', 'FX6', 35.7, 'Full frame'), C('Sony', 'FX9', 35.7, 'Full frame'), C('Sony', 'Venice 2', 36.2, 'Full frame'),
-  C('ARRI', 'Alexa Mini', 28.25, 'Super 35'), C('ARRI', 'Alexa Mini LF', 36.7, 'Large format'), C('ARRI', 'Alexa 35', 27.99, 'Super 35'),
-  C('RED', 'Komodo 6K', 27.03, 'Super 35'), C('RED', 'V-Raptor 8K VV', 40.96, 'Vista Vision'),
-  C('Blackmagic', 'Pocket 6K Pro', 23.1, 'Super 35'), C('Blackmagic', 'URSA Mini Pro 12K', 27.03, 'Super 35'),
-  C('Canon', 'C70', 26.2, 'Super 35'), C('Canon', 'C300 Mark III', 26.2, 'Super 35'), C('Canon', 'EOS R5 C', 36, 'Full frame'), C('Panasonic', 'Lumix S1H', 35.6, 'Full frame'),
-  O('Cooke', 'S4/i (set)', { focals: [18, 25, 32, 50, 75, 100], tstop: 'T2.0' }),
-  O('Zeiss', 'Super Speed MkII (set)', { focals: [18, 25, 35, 50, 85], tstop: 'T1.3' }),
-  O('Sigma', 'Cine FF High Speed (set)', { focals: [14, 20, 24, 35, 50, 85, 135], tstop: 'T1.5' }),
-  O('Canon', 'CN-E Primes (set)', { focals: [14, 24, 35, 50, 85, 135], tstop: 'T1.3' }),
-  O('DZOFilm', 'Vespid (set)', { focals: [16, 25, 35, 50, 75, 100, 125], tstop: 'T2.1' }),
-  O('Atlas', 'Orion Anamórfica 2x (set)', { focals: [32, 40, 50, 65, 80, 100], tstop: 'T2.0', squeeze: 2 }),
-  O('Laowa', 'Probe 24mm', { focals: [24], tstop: 'T14' }),
-  O('Sony', 'FE 24-70 GM II', { zoom: [24, 70], tstop: 'f/2.8' }),
-  O('Canon', 'CN-E 18-80', { zoom: [18, 80], tstop: 'T4.4' }),
-  O('Fujinon', 'MK 18-55', { zoom: [18, 55], tstop: 'T2.9' }),
-  M('Aputure', 'Light Dome II', 'softbox', 0.9), M('Aputure', 'Lantern 90', 'lantern', 0.9), M('Aputure', 'F10 Fresnel', 'fresnel', 0.3),
-  M('', 'Grelha 40°', 'grid', 0.9), M('', 'Chimera Medium', 'softbox', 0.9),
-  M('', 'Frame 4x4', 'frame', 1.2, { fabric: 'Full Grid Cloth' }), M('', 'Frame 6x6', 'frame', 1.8, { fabric: 'Full Grid Cloth' }), M('', 'Frame 8x8', 'frame', 2.4, { fabric: 'Silk' }),
-  M('', 'Butterfly 12x12', 'frame', 3.6, { fabric: 'Ultrabounce' }), M('', 'Butterfly 20x20', 'frame', 6, { fabric: 'Silk' }),
-  M('', 'Bandeira 18x24', 'flag', 0.6), M('', 'Bandeira 24x36', 'flag', 0.9), M('', 'Negativo 4x4', 'flag', 1.2, { fabric: 'Negativo (Duvetyne)' }),
-  M('', 'Esferovite / poly', 'bounce', 1.2), M('', 'Rebatedor 5 em 1 (1 m)', 'bounce', 1),
-  M('', 'Flanela preta (negativo)', 'flag', 1.5, { fabric: 'Negativo (Duvetyne)' }), M('', 'Rebatedor branco/prata 1x1', 'bounce', 1),
-  { category: 'stand', brand: '', name: 'C-stand', specs: { stand: 'light', max_h: 3.2 } }, { category: 'stand', brand: '', name: 'Combo stand', specs: { stand: 'light', max_h: 4.5 } },
-  { category: 'stand', brand: '', name: 'Baby stand', specs: { stand: 'light', max_h: 2.4 } }, { category: 'stand', brand: '', name: 'High roller', specs: { stand: 'light', max_h: 6 } },
-  { category: 'stand', brand: 'Manfrotto', name: 'Tripé de luz 1004BAC', specs: { stand: 'light', max_h: 3.6 } },
-  { category: 'stand', brand: 'Sachtler', name: 'Tripé de câmara Flowtech 75', specs: { stand: 'camera', max_h: 1.6 } },
-  { category: 'stand', brand: "O'Connor", name: 'Tripé de câmara 2575 + pernas', specs: { stand: 'camera', max_h: 1.8 } },
-  { category: 'stand', brand: '', name: 'Hi-hat', specs: { stand: 'camera', max_h: 0.2 } },
-  { category: 'stand', brand: '', name: 'Dolly + calhas', specs: { stand: 'camera' } }, { category: 'stand', brand: 'DJI', name: 'Ronin 2', specs: { stand: 'camera' } }, { category: 'stand', brand: '', name: 'Easyrig', specs: { stand: 'camera' } },
-  { category: 'grip', brand: '', name: 'Apple boxes (set)', specs: {} }, { category: 'grip', brand: '', name: 'Sacos de areia', specs: {} }, { category: 'grip', brand: '', name: 'Slider 1 m', specs: {} },
-  { category: 'power', brand: 'Honda', name: 'Gerador EU22i', specs: { capacity_w: 2200 } }, { category: 'power', brand: 'Honda', name: 'Gerador EU70is', specs: { capacity_w: 7000 } },
-  { category: 'power', brand: '', name: 'Extensão 16A 25 m', specs: {} }, { category: 'power', brand: '', name: 'Quadro de distribuição', specs: {} }, { category: 'power', brand: 'EcoFlow', name: 'Delta 2 Max', specs: { capacity_w: 2400, battery: true } },
-  { category: 'filter', brand: 'Tiffen', name: 'Black Pro-Mist 1/4', specs: {} }, { category: 'filter', brand: '', name: 'ND variável', specs: {} },
-  { category: 'filter', brand: 'Lee', name: 'Rolo CTO (full, 1/2, 1/4)', specs: {} }, { category: 'filter', brand: 'Lee', name: 'Rolo CTB (full, 1/2, 1/4)', specs: {} },
-];
+// Base de dados geral de equipamento: tabela `gear_catalog` (a equipa junta e corrige); BUILTIN é só o ponto de partida
+// e serve enquanto a base de dados não responde. CATALOG é sempre o mesmo array (o mapa de luz lê-o diretamente).
+export const CATALOG = BUILTIN.map((g) => ({ ...g, specs: { ...g.specs } }));
+let catAt = 0; let catP = null;
+export function loadCatalog(force = false) {
+  if (!force && catP && Date.now() - catAt < 300000) return catP;
+  catAt = Date.now();
+  catP = sb.from('gear_catalog').select('*').order('category').order('brand').order('name').then(({ data, error }) => {
+    if (!error && data?.length) CATALOG.splice(0, CATALOG.length, ...data);
+    return CATALOG;
+  }).catch(() => CATALOG);
+  return catP;
+}
 
 // --------- especificações: resumo curto e utilidades para o mapa ---------
 export function specLine(g) {
   const s = g.specs || {};
   if (g.category === 'light') return [s.type, s.watts ? `${s.watts} W` : '', s.cct ? (s.cct[0] === s.cct[1] ? `${s.cct[0]}K` : `${s.cct[0]}–${s.cct[1]}K`) : '', (COLOR_KINDS.find((c) => c[0] === s.color) || [])[1], s.beam ? `${s.beam}°` : '', s.battery ? 'bateria' : ''].filter(Boolean).join(' · ');
-  if (g.category === 'camera') return [s.format, s.sensor_w ? `sensor ${s.sensor_w} mm` : ''].filter(Boolean).join(' · ');
+  if (g.category === 'camera') return [s.format, s.sensor_w ? `sensor ${s.sensor_w} mm` : '', s.mount ? `encaixe ${s.mount}` : ''].filter(Boolean).join(' · ');
   if (g.category === 'lens') return [s.zoom ? `${s.zoom[0]}–${s.zoom[1]} mm` : (s.focals || []).join(', ') + ((s.focals || []).length ? ' mm' : ''), s.tstop, s.squeeze ? `anamórfica ${s.squeeze}x` : ''].filter(Boolean).join(' · ');
   if (g.category === 'modifier') return [(MOD_KINDS.find((m) => m[0] === s.mod) || [])[1], s.size_m ? `${s.size_m} m` : '', s.fabric].filter(Boolean).join(' · ');
-  if (g.category === 'stand') return [s.stand === 'camera' ? 'Para câmara' : s.stand === 'light' ? 'Para luz / frames' : '', s.max_h ? `até ${s.max_h} m` : ''].filter(Boolean).join(' · ');
+  if (g.category === 'stand') return [s.stand === 'camera' ? 'Para câmara' : s.stand === 'light' ? 'Para luz / frames' : '', s.max_h ? `até ${s.max_h} m` : '', s.max_kg ? `aguenta ${s.max_kg} kg` : ''].filter(Boolean).join(' · ');
   if (g.category === 'power') return [s.capacity_w ? `${s.capacity_w} W disponíveis` : '', s.battery ? 'bateria' : ''].filter(Boolean).join(' · ');
   return '';
 }
@@ -121,6 +62,7 @@ export function addGearModal(p, { cat = '', onDone } = {}) {
     <details class="gr-own"><summary>${ICON.plus} Não está no catálogo? Escrever à mão</summary><form class="stack" data-own>
       <div class="grid2"><div class="field"><label for="go-n">Nome</label><input id="go-n" name="name" required placeholder="ex: Aputure 600c Pro"></div>
       <div class="field"><label for="go-c">Categoria</label><select id="go-c" name="category">${CATS.map(([k, l]) => `<option value="${k}" ${k === (cat || 'light') ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
+      <label class="check"><input type="checkbox" name="tocat" checked> Guardar também na base de dados geral (para os outros projetos)</label>
       <div class="row end"><button class="btn primary">Juntar e editar</button></div></form></details>
     <div class="row end"><button type="button" class="btn ghost" data-close>Fechar</button></div>`, { wide: true });
   const list = m.el.querySelector('[data-list]');
@@ -131,7 +73,7 @@ export function addGearModal(p, { cat = '', onDone } = {}) {
     list.innerHTML = rows.length ? CATS.filter(([k]) => rows.some((r) => r.g.category === k)).map(([k, l]) => `<h4>${l}</h4>${rows.filter((r) => r.g.category === k).map(({ g, i }) => `<button type="button" class="gr-ci" data-i="${i}"><b>${esc(gearName(g))}</b><small>${esc(specLine(g))}</small><span class="gr-plus">${ICON.plus}</span></button>`).join('')}`).join('') : '<p class="muted small">Nada no catálogo com isto. Escreve à mão em baixo.</p>';
     list.querySelectorAll('[data-i]').forEach((b) => b.addEventListener('click', async () => {
       const g = CATALOG[+b.dataset.i];
-      const row = await insertGear(p, { ...g, specs: JSON.parse(JSON.stringify(g.specs)) });
+      const row = await insertGear(p, { ...g, specs: JSON.parse(JSON.stringify(g.specs || {})) });
       if (!row) return;
       b.classList.add('added'); b.querySelector('.gr-plus').innerHTML = '✓';
       toast(`${gearName(g)} juntado ao equipamento.`);
@@ -140,25 +82,35 @@ export function addGearModal(p, { cat = '', onDone } = {}) {
   };
   m.el.querySelector('[data-q]').addEventListener('input', (e) => { q = e.target.value; draw(); });
   m.el.querySelector('[data-cat]').addEventListener('change', (e) => { fcat = e.target.value; draw(); });
+  loadCatalog().then(() => { if (document.body.contains(list)) draw(); });
   m.el.querySelector('[data-own]').addEventListener('submit', async (e) => {
     e.preventDefault(); const f = Object.fromEntries(new FormData(e.target));
     const specs = f.category === 'light' ? { type: 'COB / LED pontual', watts: null, cct: [5600, 5600], color: 'day', beam: 55 } : f.category === 'modifier' ? { mod: 'frame', size_m: 1.2 } : f.category === 'lens' ? { focals: [] } : {};
     const row = await insertGear(p, { category: f.category, name: f.name.trim(), brand: '', specs });
     if (!row) return;
+    if (f.tocat) await toCatalog(row, true);
     m.close(); onDone && onDone(row); editGearModal(row, { onDone });
   });
   draw();
   return m;
 }
+// copia uma peça para a base de dados geral (se ainda lá não estiver; se estiver, atualiza as especificações)
+export async function toCatalog(g, quiet = false) {
+  const row = { category: g.category, brand: (g.brand || '').trim(), name: (g.name || '').trim(), specs: g.specs || {}, supplier: g.supplier || null, price_day: g.price_day ?? null, notes: g.notes || null, updated_at: new Date().toISOString() };
+  const { error } = await sb.from('gear_catalog').upsert(row, { onConflict: 'category,brand,name' });
+  if (error) { toast(error.message); return false; }
+  loadCatalog(true); if (!quiet) toast('Guardado na base de dados de equipamento.');
+  return true;
+}
 async function insertGear(p, g) {
-  const { data, error } = await sb.from('gear').insert({ project_id: p.id, category: g.category, name: g.name, brand: g.brand || '', qty: g.qty || 1, specs: g.specs || {}, position: Date.now() / 1000 }).select().single();
+  const { data, error } = await sb.from('gear').insert({ project_id: p.id, category: g.category, name: g.name, brand: g.brand || '', qty: g.qty || 1, specs: g.specs || {}, price_day: g.price_day ?? null, supplier: g.supplier || null, position: Date.now() / 1000 }).select().single();
   if (error) { toast(error.message); return null; }
   return data;
 }
 
 // --------- editar uma peça ---------
-export function editGearModal(g, { onDone, onDelete } = {}) {
-  const s = g.specs || {};
+export function editGearModal(g, { onDone, onDelete, table = 'gear' } = {}) {
+  const s = g.specs || {}; const isCat = table === 'gear_catalog';
   const num = (name, label, val, extra = '') => `<div class="field"><label>${label}</label><input name="${name}" inputmode="decimal" value="${esc(val ?? '')}" ${extra}></div>`;
   let specs = '';
   if (g.category === 'light') specs = `<div class="grid3">
@@ -167,19 +119,19 @@ export function editGearModal(g, { onDone, onDelete } = {}) {
       ${num('watts', 'Consumo (W)', s.watts)}
       ${num('cct0', 'Temperatura mín. (K)', s.cct?.[0])}${num('cct1', 'Temperatura máx. (K)', s.cct?.[1])}${num('beam', 'Abertura do feixe (°)', s.beam)}
       <label class="check"><input type="checkbox" name="battery" ${s.battery ? 'checked' : ''}> Funciona a bateria</label></div>`;
-  if (g.category === 'camera') specs = `<div class="grid2">${num('format', 'Formato', s.format)}${num('sensor_w', 'Largura do sensor (mm)', s.sensor_w)}</div><p class="muted small">A largura do sensor serve para o mapa de luz desenhar o enquadramento certo.</p>`;
+  if (g.category === 'camera') specs = `<div class="grid3">${num('format', 'Formato', s.format)}${num('sensor_w', 'Largura do sensor (mm)', s.sensor_w)}${num('mount', 'Encaixe (mount)', s.mount)}</div><p class="muted small">A largura do sensor serve para o mapa de luz desenhar o enquadramento certo.</p>`;
   if (g.category === 'lens') specs = `<div class="grid3">${num('focals', 'Focais do set (mm, separadas por vírgula)', (s.focals || []).join(', '))}${num('zoom', 'Ou zoom (ex: 24-70)', s.zoom ? s.zoom.join('-') : '')}${num('tstop', 'Abertura', s.tstop)}${num('squeeze', 'Anamórfica (squeeze, ex: 2)', s.squeeze)}</div>`;
   if (g.category === 'modifier') specs = `<div class="grid3"><div class="field"><label>Tipo</label><select name="mod">${MOD_KINDS.map(([k, l]) => `<option value="${k}" ${k === s.mod ? 'selected' : ''}>${l}</option>`).join('')}</select></div>${num('size_m', 'Tamanho (m)', s.size_m)}
       <div class="field"><label>Tela</label><select name="fabric">${FABRICS.map((t) => `<option ${t === (s.fabric || '') ? 'selected' : ''} value="${esc(t)}">${t || '—'}</option>`).join('')}</select></div></div>`;
-  if (g.category === 'stand') specs = `<div class="grid2"><div class="field"><label>Para</label><select name="stand"><option value="light" ${s.stand !== 'camera' ? 'selected' : ''}>Luz / frames / bandeiras</option><option value="camera" ${s.stand === 'camera' ? 'selected' : ''}>Câmara</option></select></div>${num('max_h', 'Altura máxima (m)', s.max_h)}</div>`;
+  if (g.category === 'stand') specs = `<div class="grid2"><div class="field"><label>Para</label><select name="stand"><option value="light" ${s.stand !== 'camera' ? 'selected' : ''}>Luz / frames / bandeiras</option><option value="camera" ${s.stand === 'camera' ? 'selected' : ''}>Câmara</option></select></div>${num('max_h', 'Altura máxima (m)', s.max_h)}${num('max_kg', 'Carga máxima (kg)', s.max_kg)}</div>`;
   if (g.category === 'power') specs = `<div class="grid2">${num('capacity_w', 'Potência disponível (W)', s.capacity_w)}<label class="check"><input type="checkbox" name="battery" ${s.battery ? 'checked' : ''}> Bateria / estação</label></div><p class="muted small">Geradores e baterias com potência entram na conta de consumo dos mapas de luz.</p>`;
   const m = modal(`<h2>${esc(gearName(g) || 'Equipamento')}</h2>
     <form class="stack" data-f>
       <div class="grid3"><div class="field" style="grid-column:span 2"><label>Nome / modelo</label><input name="name" value="${esc(g.name)}" required></div><div class="field"><label>Marca</label><input name="brand" value="${esc(g.brand || '')}"></div></div>
-      <div class="grid3"><div class="field"><label>Categoria</label><select name="category">${CATS.map(([k, l]) => `<option value="${k}" ${k === g.category ? 'selected' : ''}>${l}</option>`).join('')}</select></div>${num('qty', 'Quantidade', g.qty)}${num('price_day', 'Preço por dia (€)', g.price_day)}</div>
+      <div class="grid3"><div class="field"><label>Categoria</label><select name="category">${CATS.map(([k, l]) => `<option value="${k}" ${k === g.category ? 'selected' : ''}>${l}</option>`).join('')}</select></div>${isCat ? `<label class="check"><input type="checkbox" name="owned" ${g.owned ? 'checked' : ''}> É da Grain (kit próprio)</label>` : num('qty', 'Quantidade', g.qty)}${num('price_day', 'Preço por dia (€)', g.price_day)}</div>
       ${specs}
       <div class="grid2"><div class="field"><label>Fornecedor / rental</label><input name="supplier" value="${esc(g.supplier || '')}"></div><div class="field"><label>Notas</label><input name="notes" value="${esc(g.notes || '')}"></div></div>
-      <div class="row between"><button type="button" class="btn ghost danger-text" data-del>${ICON.trash} Tirar da lista</button><div class="row"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Guardar</button></div></div>
+      <div class="row between"><span class="row wrap-gap">${g.id ? `<button type="button" class="btn ghost danger-text" data-del>${ICON.trash} ${isCat ? 'Apagar da base de dados' : 'Tirar da lista'}</button>` : ''}${!isCat && g.id ? '<button type="button" class="btn ghost" data-tocat title="Fica disponível em todos os projetos e nos mapas de luz">Guardar na base de dados</button>' : ''}</span><div class="row"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Guardar</button></div></div>
     </form>`, { wide: true });
   const f = m.el.querySelector('[data-f]');
   const n = (v) => { const x = parseFloat(String(v ?? '').replace(',', '.')); return Number.isFinite(x) ? x : null; };
@@ -187,19 +139,22 @@ export function editGearModal(g, { onDone, onDelete } = {}) {
     e.preventDefault(); const v = Object.fromEntries(new FormData(f));
     const ns = { ...s };
     if (g.category === 'light' && v.category === 'light') Object.assign(ns, { type: v.type, color: v.color, watts: n(v.watts), cct: [n(v.cct0) || 5600, n(v.cct1) || n(v.cct0) || 5600], beam: n(v.beam), battery: !!v.battery });
-    if (g.category === 'camera') Object.assign(ns, { format: v.format, sensor_w: n(v.sensor_w) });
+    if (g.category === 'camera') Object.assign(ns, { format: v.format, sensor_w: n(v.sensor_w), mount: v.mount || undefined });
     if (g.category === 'lens') { const z = String(v.zoom || '').split(/[-–]/).map(n).filter(Boolean); Object.assign(ns, { focals: String(v.focals || '').split(/[,;\s]+/).map(n).filter(Boolean), zoom: z.length === 2 ? z : null, tstop: v.tstop, squeeze: n(v.squeeze) }); if (!ns.zoom) delete ns.zoom; if (!ns.squeeze) delete ns.squeeze; }
     if (g.category === 'modifier') Object.assign(ns, { mod: v.mod, size_m: n(v.size_m), fabric: v.fabric });
-    if (g.category === 'stand') Object.assign(ns, { stand: v.stand, max_h: n(v.max_h) });
+    if (g.category === 'stand') { Object.assign(ns, { stand: v.stand, max_h: n(v.max_h), max_kg: n(v.max_kg) }); if (!ns.max_kg) delete ns.max_kg; }
     if (g.category === 'power') Object.assign(ns, { capacity_w: n(v.capacity_w), battery: !!v.battery });
-    const patch = { name: v.name.trim(), brand: v.brand.trim(), category: v.category, qty: Math.max(0, Math.round(n(v.qty) ?? 1)), price_day: n(v.price_day), supplier: v.supplier.trim(), notes: v.notes.trim(), specs: ns, updated_at: new Date().toISOString() };
-    const { data, error } = await sb.from('gear').update(patch).eq('id', g.id).select().single();
-    if (error) return toast(error.message);
+    const patch = { name: v.name.trim(), brand: v.brand.trim(), category: v.category, ...(isCat ? { owned: !!v.owned } : { qty: Math.max(0, Math.round(n(v.qty) ?? 1)) }), price_day: n(v.price_day), supplier: v.supplier.trim(), notes: v.notes.trim(), specs: ns, updated_at: new Date().toISOString() };
+    const { data, error } = g.id ? await sb.from(table).update(patch).eq('id', g.id).select().single() : await sb.from(table).insert(patch).select().single();
+    if (error) return toast(/duplicate|unique/i.test(error.message) ? 'Já existe um equipamento com esta marca e nome nesta categoria.' : error.message);
+    if (isCat) loadCatalog(true);
     m.close(); onDone && onDone(data);
   });
-  m.el.querySelector('[data-del]').addEventListener('click', async () => {
-    if (!(await confirmBox(`Tirar "${gearName(g)}" do equipamento? Nos mapas de luz onde está usado fica marcado como "fora da lista".`, 'Tirar'))) return;
-    const { error } = await sb.from('gear').delete().eq('id', g.id); if (error) return toast(error.message);
+  m.el.querySelector('[data-tocat]')?.addEventListener('click', () => toCatalog(g));
+  m.el.querySelector('[data-del]')?.addEventListener('click', async () => {
+    if (!(await confirmBox(isCat ? `Apagar "${gearName(g)}" da base de dados de equipamento? Os projetos que já o têm na lista continuam a tê-lo.` : `Tirar "${gearName(g)}" do equipamento? Nos mapas de luz onde está usado fica marcado como "fora da lista".`, isCat ? 'Apagar' : 'Tirar'))) return;
+    const { error } = await sb.from(table).delete().eq('id', g.id); if (error) return toast(error.message);
+    if (isCat) loadCatalog(true);
     m.close(); onDelete && onDelete(g);
   });
 }
@@ -221,6 +176,7 @@ export const lightWatts = (gear) => gear.filter((g) => g.category === 'light').r
 // --------- página Equipamento ---------
 export async function gearPage(main, p, base) {
   main.innerHTML = '<p class="muted">A carregar…</p>';
+  loadCatalog();
   let gear = await loadGear(p.id);
   let usage = await gearUsage(p.id);
   let fcat = ''; let q = '';

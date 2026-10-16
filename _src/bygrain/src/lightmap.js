@@ -1,5 +1,5 @@
 import { sb, esc, toast, modal, ICON } from './lib.js';
-import { loadGear, addGearModal, gearName, specLine, lensFocals, MOD_KINDS, FABRICS, CATALOG } from './gear.js';
+import { loadGear, addGearModal, gearName, specLine, lensFocals, MOD_KINDS, FABRICS, CATALOG, loadCatalog } from './gear.js';
 import { makeHistory, bindUndoKeys } from './tablekit.js';
 
 // Mapa de luz (planta vista de cima) para DF e gaffers.
@@ -43,6 +43,7 @@ export function lightmapTool(main, p, tool, opts = {}) {
   const data = { items: [], ...(tool.data || {}) };
   const st = { sel: null, view: null, drag: null };
   let gear = [];
+  loadCatalog().then(() => { if (popKind) drawPop(); });
   let saveT;
   const save = () => { clearTimeout(saveT); saveT = setTimeout(async () => { const { error } = await sb.from('boards').update({ data, updated_at: new Date().toISOString() }).eq('id', tool.id); if (error) toast(error.message); }, 500); };
   const G = (id) => gear.find((g) => g.id === id);

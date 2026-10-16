@@ -71,6 +71,7 @@ async function route() {
   }
   leaveProject();
   if (parts[0] === 'tarefas') return tasksPage();
+  if (parts[0] === 'equipamento') return isStaff() ? gearDbPage() : go('#/');
   if (parts[0] === 'equipa') return isAdmin() ? teamPage() : go('#/');
   return homePage();
 }
@@ -84,7 +85,7 @@ function header(active) {
       <a href="#/" class="brand" aria-label="byGrain Studio, início">${LOGO('studio')}</a>
       <nav aria-label="Principal" class="nav">
         ${link('#/', 'Início', 'home')}
-        ${isStaff() ? link('#/central', 'Central de Produção', 'central') + link('#/tarefas', 'Tarefas', 'tasks') : ''}
+        ${isStaff() ? link('#/central', 'Central de Produção', 'central') + link('#/tarefas', 'Tarefas', 'tasks') + link('#/equipamento', 'Equipamento', 'gear') : ''}
         ${isAdmin() ? link('#/equipa', 'Equipa e permissões', 'team') : ''}
       </nav>
     </div>
@@ -1084,6 +1085,11 @@ async function boardView(projectId, boardId) {
 }
 
 // ---------- tarefas (todas) ----------
+async function gearDbPage() {
+  app.innerHTML = `<div class="page">${header('gear')}<div class="wrap page-pad" data-gdb></div></div>`;
+  bindHeader(app);
+  (await import('./gearbase.js')).gearBasePage(app.querySelector('[data-gdb]'));
+}
 function tasksPage() {
   app.innerHTML = `<div class="page">${header('tasks')}
     <div class="wrap page-pad">
