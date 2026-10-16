@@ -1,0 +1,23 @@
+{
+  "name": "portal-studio-web",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "vite": "^5.4.11"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.4",
+    "exceljs": "^4.4.0",
+    "pdfjs-dist": "^4.4.168"
+  },
+  "private": true
+}
