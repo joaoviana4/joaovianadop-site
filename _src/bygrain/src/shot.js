@@ -1,6 +1,5 @@
 import { sb, esc, toast, confirmBox, ICON, signedUrl, uploadImage } from './lib.js';
 import { mountTasks } from './tasks.js';
-import { newLightmapData } from './lmdata.js';
 
 // Página de um plano: imagem em grande, tudo o que se sabe dele, secção/cena e grupo da shotlist, tarefas.
 // Chega-se aqui a partir do storyboard, da grelha do seguimento, da shotlist e das secções.
@@ -67,14 +66,7 @@ export async function shotPage(main, p, id, base, cleanup) {
     if (!(await confirmBox('Tirar a imagem deste plano?', 'Tirar'))) return;
     await sb.from('shots').update({ image_path: null }).eq('id', x.id); shotPage(main, p, id, base, cleanup);
   });
-  main.querySelector('[data-lm]').addEventListener('click', async () => {
-    if (x.lightmap_id) { location.hash = `${base}/f/${x.lightmap_id}`; return; }
-    const grp = (p.departments || []).find((d) => d.id === 'imagem') ? 'imagem' : null;
-    const { data: tool, error } = await sb.from('boards').insert({ project_id: p.id, kind: 'lightmap', title: `Mapa de luz ${x.code || ''}`.trim(), group_id: grp, data: { ...newLightmapData({ cameraCode: x.code || '' }), shot_id: x.id } }).select().single();
-    if (error) return toast(error.message);
-    await sb.from('shots').update({ lightmap_id: tool.id }).eq('id', x.id);
-    location.hash = `${base}/f/${tool.id}`;
-  });
+  main.querySelector('[data-lm]').addEventListener('click', async () => (await import('./lmhub.js')).openShotLightmap(p, x, base));
   main.querySelector('[data-del]').addEventListener('click', async () => {
     if (!(await confirmBox(`Apagar o plano "${title}"?`, 'Apagar plano'))) return;
     const { error } = await sb.from('shots').delete().eq('id', x.id); if (error) return toast(error.message);

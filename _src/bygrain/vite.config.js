@@ -46,12 +46,14 @@ const TEXT = [
 const swap = (s) => TEXT.reduce((acc, [a, b]) => acc.split(a).join(b), s);
 
 // cores do tema escuro do byGrain → tema claro PØRTAL (o resto afina-se em studio-theme.css)
+// as cores fixas passam a variáveis do tema, para o Studio poder ser claro ou escuro (ver studio-theme.css)
+const NV = '(?<!--[\\w-]+:\\s*)'; // não mexe nas declarações das próprias variáveis
 const COLOR = [
-  [/rgba\(\s*244\s*,\s*241\s*,\s*232\s*,/g, 'rgba(29, 29, 31,'], // creme por cima do escuro → tinta por cima do claro
-  [/rgba\(\s*12\s*,\s*12\s*,\s*18\s*,/g, 'rgba(245, 245, 247,'],
-  [/rgba\(\s*(21\s*,\s*21\s*,\s*29|15\s*,\s*15\s*,\s*20)\s*,/g, 'rgba(255, 255, 255,'],
-  [/#1E2AD4\b/gi, '#0071e3'], [/#1621A8\b/gi, '#0062c4'], [/#2B37E8\b/gi, '#2b8af0'], [/#232A7A\b/gi, '#0b4a8f'],
-  [/#0a0a10\b/gi, '#ececf0'], [/#101017\b/gi, '#f0f0f3'], [/#22222c\b/gi, '#e6e6ea'], [/#24242D\b/gi, '#e3e3e8'],
+  [/rgba\(\s*244\s*,\s*241\s*,\s*232\s*,/g, 'rgba(var(--fg-rgb),'], // creme por cima do escuro → cor do texto do tema
+  [/rgba\(\s*12\s*,\s*12\s*,\s*18\s*,/g, 'rgba(var(--bg-rgb),'],
+  [/rgba\(\s*(21\s*,\s*21\s*,\s*29|15\s*,\s*15\s*,\s*20)\s*,/g, 'rgba(var(--panel-rgb),'],
+  [new RegExp(NV + '#1E2AD4\\b', 'gi'), 'var(--blue)'], [new RegExp(NV + '#1621A8\\b', 'gi'), 'var(--blue-d)'], [new RegExp(NV + '#2B37E8\\b', 'gi'), 'var(--blue)'], [new RegExp(NV + '#232A7A\\b', 'gi'), 'var(--blue-d)'],
+  [new RegExp(NV + '#0a0a10\\b', 'gi'), 'var(--deep)'], [new RegExp(NV + '#101017\\b', 'gi'), 'var(--deep2)'], [new RegExp(NV + '#(22222c|24242D)\\b', 'gi'), 'var(--panel3)'],
 ];
 
 function studioFlavor() {
@@ -72,7 +74,7 @@ function studioFlavor() {
     },
     transformIndexHtml(html) {
       return swap(html)
-        .replace('</head>', '  <link rel="preconnect" href="https://fonts.googleapis.com">\n  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap">\n  <meta name="theme-color" content="#f5f5f7">\n</head>')
+        .replace('</head>', '  <link rel="preconnect" href="https://fonts.googleapis.com">\n  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap">\n  <meta name="theme-color" content="#f5f5f7">\n  <script>try{var l=JSON.parse(localStorage.getItem("portal-look")||"{}"),r=document.documentElement,d=l.theme==="dark"||(l.theme==="auto"&&matchMedia("(prefers-color-scheme: dark)").matches);r.dataset.theme=d?"dark":"light";r.dataset.bg=l.bg||"liso";if(l.accent)r.style.setProperty("--blue",l.accent==="#1d1d1f"&&d?"#e5e5ea":l.accent)}catch(e){}</script>\n</head>')
         .replace(/<meta name="theme-color" content="#[0-9A-Fa-f]+">\s*(?=[\s\S]*<meta name="theme-color" content="#f5f5f7">)/, '');
     },
     // pasta public do Studio: a do byGrain com os textos trocados e os ícones PØRTAL

@@ -1,9 +1,20 @@
-/* ===== PØRTAL Studio: tema claro por cima do byGrain =====
-   Só entra no build "--mode studio" (vite.config.js junta-o ao fim de style.css).
-   Marca PØRTAL: fundo claro, Archivo, um só azul. */
+/* ===== PØRTAL Studio: tema por cima do byGrain =====
+   Só entra no build "--mode studio" (vite.config.js junta-o ao fim de style.css e troca as cores fixas
+   do byGrain por variáveis: --fg-rgb, --bg-rgb, --panel-rgb, --deep, --deep2, --panel3).
+   Marca PØRTAL: Archivo, um só azul. Claro por defeito; escuro e cor de destaque à escolha de cada pessoa
+   (appearance.js põe data-theme, data-bg e --blue no <html>). */
 :root {
   --blue: #0071e3;
-  --blue-d: #0062c4;
+  --blue-d: color-mix(in srgb, var(--blue) 84%, #000);
+  --late: #d93a3a;
+  --soon: #d9731f;
+  --ok: #1f9a5c;
+  --doing: #b88a00;
+  --sans: 'Archivo', Helvetica, Arial, sans-serif;
+  --serif: 'Archivo', Helvetica, Arial, sans-serif;
+  --logo: 'Archivo', Helvetica, Arial, sans-serif;
+}
+:root, :root[data-theme="light"] {
   --cream: #1d1d1f;      /* no byGrain é o "claro forte" por cima do escuro; aqui é a tinta */
   --ink: #ffffff;        /* texto por cima de --cream */
   --bg: #f5f5f7;
@@ -14,15 +25,49 @@
   --line2: rgba(0, 0, 0, 0.17);
   --text: #1d1d1f;
   --muted: #6e6e73;
-  --late: #d93a3a;
-  --soon: #d9731f;
-  --ok: #1f9a5c;
-  --doing: #b88a00;
-  --sans: 'Archivo', Helvetica, Arial, sans-serif;
-  --serif: 'Archivo', Helvetica, Arial, sans-serif;
-  --logo: 'Archivo', Helvetica, Arial, sans-serif;
+  --fg-rgb: 29, 29, 31;
+  --bg-rgb: 245, 245, 247;
+  --panel-rgb: 255, 255, 255;
+  --deep: #ececf0;
+  --deep2: #f0f0f3;
+  --panel3: #e6e6ea;
+  --hover: rgba(0, 0, 0, .05);
+  --shadow: 0 1px 2px rgba(0,0,0,.04), 0 12px 32px rgba(0,0,0,.07);
   color-scheme: light;
 }
+:root[data-theme="dark"] {
+  --cream: #f5f5f7;
+  --ink: #131315;
+  --bg: #131315;
+  --bg2: #1b1b1e;
+  --panel: #1f1f22;
+  --panel2: #28282c;
+  --line: rgba(255, 255, 255, 0.1);
+  --line2: rgba(255, 255, 255, 0.2);
+  --text: #f5f5f7;
+  --muted: #98989d;
+  --fg-rgb: 236, 236, 240;
+  --bg-rgb: 19, 19, 21;
+  --panel-rgb: 31, 31, 34;
+  --deep: #0c0c0e;
+  --deep2: #161619;
+  --panel3: #2c2c30;
+  --hover: rgba(255, 255, 255, .06);
+  --late: #ff6b6b;
+  --soon: #ff9a4d;
+  --ok: #4fd18b;
+  --doing: #f2c14e;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 32px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+/* fundos à escolha */
+:root[data-bg="quente"] { --bg: #f4f1ea; --bg2: #ebe6db; --panel2: #f4f1ea; --bg-rgb: 244, 241, 234; }
+:root[data-theme="dark"][data-bg="quente"] { --bg: #17140f; --bg2: #201c16; --panel: #221e18; --panel2: #2b2620; --bg-rgb: 23, 20, 15; --panel-rgb: 34, 30, 24; }
+:root[data-bg="frio"] { --bg: #eef2f7; --bg2: #e3e9f1; --panel2: #eef2f7; --bg-rgb: 238, 242, 247; }
+:root[data-theme="dark"][data-bg="frio"] { --bg: #0f141b; --bg2: #161d26; --panel: #18202a; --panel2: #212a36; --bg-rgb: 15, 20, 27; --panel-rgb: 24, 32, 42; }
+:root[data-bg="preto"][data-theme="dark"] { --bg: #000; --bg2: #0a0a0a; --panel: #111113; --panel2: #1a1a1d; --bg-rgb: 0, 0, 0; --panel-rgb: 17, 17, 19; }
+:root[data-bg="pontos"] body:not(.is-board) { background-image: radial-gradient(rgba(var(--fg-rgb), .09) 1px, transparent 1.2px); background-size: 18px 18px; background-attachment: fixed; }
+:root[data-bg="cor"] body:not(.is-board) { background-image: linear-gradient(160deg, color-mix(in srgb, var(--blue) 10%, transparent), transparent 55%); background-attachment: fixed; }
 body { background: var(--bg); color: var(--text); }
 body.is-auth { background: var(--bg); }
 a { color: var(--blue); }
@@ -47,16 +92,16 @@ a:hover { color: var(--blue-d); }
 
 /* botões */
 .btn { border-color: var(--line2); }
-.btn.cream { background: var(--text); color: #fff; }
-.btn.cream:hover { background: #000; }
-.btn.ghost:hover { background: rgba(0, 0, 0, .05); }
+.btn.cream { background: var(--cream); color: var(--ink); }
+.btn.cream:hover { background: color-mix(in srgb, var(--cream) 85%, var(--blue)); }
+.btn.ghost:hover { background: var(--hover); }
 .seg button { color: var(--text); }
-.seg button[aria-selected="true"] { color: #fff; }
+.seg button[aria-selected="true"] { color: var(--ink); }
 .icon-btn.light { color: var(--text); }
 
 /* entrada: painel branco sobre o cinzento, como o PØRTAL antigo */
 .auth { background: var(--bg); color: var(--text); }
-.auth-col { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 32px 28px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 12px 32px rgba(0,0,0,.07); }
+.auth-col { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 32px 28px; box-shadow: var(--shadow); }
 .auth-form input:not([type=checkbox]) { background: var(--panel); border-color: var(--line2); color: var(--text); }
 .auth-form .field label, .reqs li.ok { color: var(--text); }
 .auth-foot { color: var(--muted); }
@@ -97,3 +142,27 @@ input[type=date], input[type=time], input[type=datetime-local], input[type=month
 
 /* calendário de marketing */
 .mk-day.out { background: var(--panel2); }
+
+/* aparência: botão ao lado do perfil e o painel */
+.topbar-r { display: flex; align-items: center; gap: 8px; }
+.look-btn { border: 1px solid var(--line2); border-radius: 999px; width: 44px; height: 44px; color: var(--text); }
+.look-btn:hover { background: var(--hover); }
+.look-btn svg .fill { fill: var(--blue); }
+.look-form .seg { grid-auto-columns: auto; justify-self: start; }
+.look-sw { display: flex; flex-wrap: wrap; gap: 8px; }
+.look-c { position: relative; width: 32px; height: 32px; border-radius: 50%; border: 2px solid var(--panel); background: var(--c); box-shadow: 0 0 0 1px var(--line2); cursor: pointer; padding: 0; display: inline-flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; }
+.look-c.on { box-shadow: 0 0 0 2px var(--text); }
+.look-c.custom { background: conic-gradient(#ff6b6b, #f2c14e, #4fd18b, #3fc9bf, #0a84ff, #b39bff, #ff6b6b); }
+.look-c.custom.on { background: var(--c); }
+.look-c input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; min-height: 0; padding: 0; }
+.look-bgs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.look-bg { display: flex; flex-direction: column; gap: 6px; padding: 6px; border: 1px solid var(--line2); border-radius: 10px; background: var(--panel); color: var(--text); cursor: pointer; font: inherit; font-size: 13px; text-align: left; }
+.look-bg.on { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
+.look-bg i { display: block; height: 38px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); }
+.look-bg i.lb-quente { background: #f4f1ea; } :root[data-theme="dark"] .look-bg i.lb-quente { background: #17140f; }
+.look-bg i.lb-frio { background: #eef2f7; } :root[data-theme="dark"] .look-bg i.lb-frio { background: #0f141b; }
+.look-bg i.lb-pontos { background-image: radial-gradient(rgba(var(--fg-rgb), .25) 1px, transparent 1.3px); background-size: 8px 8px; }
+.look-bg i.lb-cor { background-image: linear-gradient(160deg, color-mix(in srgb, var(--blue) 35%, transparent), transparent 70%); }
+.look-bg i.lb-preto { background: #000; }
+@media (max-width: 560px) { .look-bgs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.look-bg i.lb-liso { background: #f5f5f7; } :root[data-theme="dark"] .look-bg i.lb-liso { background: #131315; }

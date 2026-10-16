@@ -1,7 +1,7 @@
 import './style.css';
 import { daysUntil } from './lib.js';
 import { loadHidden, hideProject, unhideProject } from './lib.js';
-import { sb, BUCKET, state, esc, $, loadProfile, isStaff, isAdmin, toast, modal, confirmBox, ICON, LOGO, KINDS, ROLES, phaseOf, greeting, initials, signedUrls, uploadImage, callFn, authPw, MIN_PW, fmtDate, dueInfo, registerSW, BASE, PROJECT_COLS, hasPerm } from './lib.js';
+import { IS_STUDIO, sb, BUCKET, state, esc, $, loadProfile, isStaff, isAdmin, toast, modal, confirmBox, ICON, LOGO, KINDS, ROLES, phaseOf, greeting, initials, signedUrls, uploadImage, callFn, authPw, MIN_PW, fmtDate, dueInfo, registerSW, BASE, PROJECT_COLS, hasPerm } from './lib.js';
 import { renderAuth } from './auth.js';
 import { mountBoard } from './board.js';
 import { mountTasks, loadPeople, clearPeopleCache } from './tasks.js';
@@ -14,7 +14,7 @@ import { clearFullscreen } from './layout.js';
 import { newLightmapData } from './lmdata.js';
 // páginas pesadas só carregam quando são abertas (o site arranca mais depressa)
 const lazy = {
-  finance: () => import('./finance.js'), lightmap: () => import('./lightmap.js'), gear: () => import('./gear.js'),
+  finance: () => import('./finance.js'), lightmap: () => import('./lightmap.js'), lmhub: () => import('./lmhub.js'), gear: () => import('./gear.js'),
   props: () => import('./props.js'), budget: () => import('./budget.js'), shotlist: () => import('./shotlist.js'),
   shot: () => import('./shot.js'), marketing: () => import('./marketing.js'), callsheet: () => import('./callsheet.js'), transport: () => import('./transport.js'),
 };
@@ -44,6 +44,7 @@ sb.auth.onAuthStateChange((ev) => {
 async function boot() {
   if (recovering) return;
   await loadProfile();
+  if (IS_STUDIO) import('./appearance.js').then((a) => a.syncLookFromProfile());
   if (!state.user || !state.profile) {
     teardown();
     document.body.className = 'is-auth';
@@ -89,14 +90,18 @@ function header(active) {
         ${isAdmin() ? link('#/equipa', 'Equipa e permissões', 'team') : ''}
       </nav>
     </div>
+    <div class="topbar-r">
+    ${IS_STUDIO ? `<button type="button" class="icon-btn look-btn" data-look aria-label="Aparência" title="Aparência">${ICON.palette}</button>` : ''}
     <button type="button" class="acct" data-acct aria-label="Conta e definições">
       <span class="acct-role">${esc(ROLES[p.role])}</span>
       <span class="avatar" style="--c:${esc(p.color)}">${esc(initials(p.display_name))}</span>
     </button>
+    </div>
   </header>`;
 }
 function bindHeader(root) {
   root.querySelector('[data-acct]')?.addEventListener('click', accountMenu);
+  if (IS_STUDIO) root.querySelector('[data-look]')?.addEventListener('click', async () => (await import('./appearance.js')).appearanceMenu());
 }
 function accountMenu() {
   const p = state.profile;
@@ -567,20 +572,19 @@ async function ensureDept(p, key) {
   p.departments = deps; return key;
 }
 function boardGroups(p) {
-  const top = p._boards.filter((b) => !b.parent_id && b.kind !== 'mkt');
-  const img = deptOf(p, 'imagem'); const arte = deptOf(p, 'arte');
-  const imgId = img?.id || 'imagem';
-  const fixedGroup = (b) => (b.kind === 'lightmap' ? imgId : b.group_id);
-  const groups = (p.departments || []).map((d) => ({ ...d, boards: top.filter((b) => fixedGroup(b) === d.id), pages: [] }));
-  const need = (key, mod) => { if (p.is_central || !hasMod(p, mod)) return; let g = groups.find((x) => x.id === (deptOf(p, key)?.id || key)); if (!g) { g = { id: key, ...FIXED_DEPTS[key], boards: [], pages: [], virtual: true }; groups.push(g); } g.pages.push(mod); };
-  need('imagem', 'equipamento'); need('arte', 'aderecos');
-  if (!img && top.some((b) => b.kind === 'lightmap') && !groups.some((g) => g.id === 'imagem')) groups.push({ id: 'imagem', ...FIXED_DEPTS.imagem, boards: top.filter((b) => b.kind === 'lightmap'), pages: [], virtual: true });
-  const vg = groups.find((g) => g.id === 'imagem' && g.virtual); if (vg && !vg.boards.length) vg.boards = top.filter((b) => b.kind === 'lightmap');
+  // os mapas de luz não aparecem um a um: ficam todos na página "Mapas de luz" do departamento Imagem
+  const top = p._boards.filter((b) => !b.parent_id && b.kind !== 'mkt' && b.kind !== 'lightmap');
+  const hasMaps = p._boards.some((b) => b.kind === 'lightmap');
+  const groups = (p.departments || []).map((d) => ({ ...d, boards: top.filter((b) => b.group_id === d.id), pages: [] }));
+  const need = (key, mod) => { if (p.is_central || !(mod === 'mapas' ? hasMaps || ['equipamento', 'storyboard', 'shotlist'].some((k) => hasMod(p, k)) : hasMod(p, mod))) return; let g = groups.find((x) => x.id === (deptOf(p, key)?.id || key)); if (!g) { g = { id: key, ...FIXED_DEPTS[key], boards: [], pages: [], virtual: true }; groups.push(g); } g.pages.push(mod); };
+  need('imagem', 'equipamento'); need('imagem', 'mapas'); need('arte', 'aderecos');
   const known = new Set(groups.map((g) => g.id));
-  const other = top.filter((b) => b.kind !== 'lightmap' && (!b.group_id || !known.has(b.group_id)));
+  const other = top.filter((b) => !b.group_id || !known.has(b.group_id));
   if (other.length) groups.push({ id: '', name: 'Outros', color: '#8A8A99', boards: other, pages: [] });
   return groups;
 }
+// páginas fixas dentro de um departamento (módulos e a página dos mapas de luz)
+const pageMeta = (k) => (k === 'mapas' ? { label: 'Mapas de luz', icon: 'bulb' } : MODULES[k]);
 
 function projectNav(p, active) {
   const base = projBase(p);
@@ -595,7 +599,7 @@ function projectNav(p, active) {
     <div class="pn-sec"><span>Ferramentas</span><button type="button" class="icon-btn sm" data-newboard="" aria-label="Nova ferramenta">${ICON.plus}</button></div>
     ${boardGroups(p).map((g) => `<div class="pn-group" style="--g:${esc(g.color)}">
       <div class="pn-gh"><i></i><span>${esc(g.name)}</span>${g.id ? `<button type="button" class="icon-btn sm" data-newboard="${esc(g.id)}" aria-label="Novo board em ${esc(g.name)}">${ICON.plus}</button>` : ''}</div>
-      ${(g.pages || []).map((k) => `<a class="side-a sub" href="${base}/${k}" ${active === k ? 'aria-current="page"' : ''}>${ICON[MODULES[k].icon]}<span>${esc(MODULES[k].label)}</span></a>`).join('')}
+      ${(g.pages || []).map((k) => `<a class="side-a sub" href="${base}/${k}" ${active === k ? 'aria-current="page"' : ''}>${ICON[pageMeta(k).icon]}<span>${esc(pageMeta(k).label)}</span></a>`).join('')}
       ${g.boards.map((b) => `<a class="side-a sub" href="${toolHref(p, b)}" ${active === b.id ? 'aria-current="page"' : ''}>${(TOOL_KINDS[b.kind] || TOOL_KINDS.board).icon}<span>${esc(b.title)}</span></a>`).join('')}
     </div>`).join('')}`;
 }
@@ -758,6 +762,7 @@ async function projectPage(projectId, page, sub) {
   if (page === 'marketing' && !p.is_central) return (await lazy.marketing()).marketingPage(main, p, sub, projBase(p));
   if (page === 'shotlist') return (await lazy.shotlist()).shotlistPage(main, p, projBase(p));
   if (page === 'equipamento' && !p.is_central) return (await lazy.gear()).gearPage(main, p, projBase(p));
+  if (page === 'mapas' && !p.is_central) return (await lazy.lmhub()).lightmapsPage(main, p, projBase(p));
   if (page === 'plano' && sub) return (await lazy.shot()).shotPage(main, p, sub, projBase(p), onCleanup);
   {
     const scr = scriptMode(p);
@@ -795,7 +800,8 @@ async function projectOverview(main, p) {
   const imgPaths = (items || []).filter((i) => i.kind === 'image').map((i) => i.data?.path);
   const thumbs = await signedUrls(imgPaths.slice(0, 40));
   const ph = phaseOf(p);
-  const top = p._boards.filter((b) => !b.parent_id && b.kind !== 'mkt');
+  const top = p._boards.filter((b) => !b.parent_id && b.kind !== 'mkt' && b.kind !== 'lightmap');
+  const nMaps = p._boards.filter((b) => b.kind === 'lightmap').length;
   const count = (id) => (items || []).filter((i) => i.board_id === id).length;
   const thumbOf = (id) => { const im = (items || []).find((i) => i.board_id === id && i.kind === 'image' && thumbs[i.data?.path]); return im ? thumbs[im.data.path] : null; };
   const deptMap = new Map((p.departments || []).map((d) => [d.id, d]));
@@ -820,13 +826,13 @@ async function projectOverview(main, p) {
     <div class="pm-grid ${p.is_central ? '' : 'solo'}">
       <section class="pm-boards" aria-labelledby="h-boards">
         <div class="row between"><h2 id="h-boards" class="h2">Ferramentas</h2><button type="button" class="btn primary" data-nb>${ICON.plus} Nova ferramenta</button></div>
-        ${top.length ? `<div class="board-grid">${top.map((b) => { const d = deptMap.get(b.group_id); const th = thumbOf(b.id); return `
+        ${top.length || nMaps ? `<div class="board-grid">${top.map((b) => { const d = deptMap.get(b.group_id); const th = thumbOf(b.id); return `
           <article class="board-card" style="--g:${esc(d?.color || '#8A8A99')}">
             <a href="${toolHref(p, b)}" class="proj-link" aria-label="Abrir ${esc(b.title)}"></a>
             <div class="bc-cover" ${th ? `style="background-image:url('${esc(th)}')"` : ''}>${th ? '' : (TOOL_KINDS[b.kind] || TOOL_KINDS.board).icon}</div>
             <div class="bc-body"><strong>${esc(b.title)}</strong><span class="small muted">${d ? `<i class="dot"></i>${esc(d.name)} · ` : ''}${(b.kind || 'board') === 'board' ? `${count(b.id)} ${count(b.id) === 1 ? 'cartão' : 'cartões'}` : esc((TOOL_KINDS[b.kind] || {}).label || '')}</span></div>
             <button type="button" class="icon-btn bc-more" data-bopt="${b.id}" aria-label="Opções de ${esc(b.title)}">${ICON.dots}</button>
-          </article>`; }).join('')}</div>`
+          </article>`; }).join('')}${nMaps ? `<article class="board-card" style="--g:${esc(deptOf(p, 'imagem')?.color || '#2FB67C')}"><a href="${base}/mapas" class="proj-link" aria-label="Abrir os mapas de luz"></a><div class="bc-cover">${ICON.bulb}</div><div class="bc-body"><strong>Mapas de luz</strong><span class="small muted"><i class="dot"></i>Imagem · ${nMaps} ${nMaps === 1 ? 'mapa' : 'mapas'}</span></div></article>` : ''}</div>`
         : `<div class="empty-box"><p>Ainda não há ferramentas neste projeto.</p><p class="muted small">Boards para o tratamento, o moodboard ou um brainstorm (abrem em ecrã inteiro), tabelas, cronograma e mapas de luz.</p><button type="button" class="btn primary" data-nb>${ICON.plus} Criar a primeira</button></div>`}
       </section>
       ${p.is_central ? `<aside class="pm-side">
@@ -938,11 +944,11 @@ async function lightmapView(p, tool) {
     <div class="lmv-stage" data-main></div>
     <div class="pv-top">
       <button type="button" class="pv-mark" data-side aria-label="Abrir o menu do projeto">${LOGO('studio')}</button>
-      <nav class="crumbs" aria-label="Caminho"><a href="${base}">${esc(p.name)}</a><span>/</span><span>Imagem</span><span>/</span><span aria-current="page">${esc(tool.title)}</span></nav>
+      <nav class="crumbs" aria-label="Caminho"><a href="${base}">${esc(p.name)}</a><span>/</span><a href="${base}/mapas">Mapas de luz</a><span>/</span><span aria-current="page">${esc(tool.title)}</span></nav>
     </div>
     <div class="pv-edge" data-edge aria-hidden="true"></div>
     <nav class="pv-side" data-sidebar aria-label="Páginas do projeto">
-      ${projectNav(p, tool.id)}
+      ${projectNav(p, 'mapas')}
       <hr>
       <a class="side-a" href="#/">${ICON.back}<span>Voltar ao início</span></a>
     </nav>

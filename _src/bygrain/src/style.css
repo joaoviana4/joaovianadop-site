@@ -1892,3 +1892,30 @@ body.tool-dragging, body.tool-dragging * { cursor: grabbing !important; user-sel
 .ent-photo img { width: 160px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
 .photo-grid figure { position: relative; }
 .photo-grid figcaption, .photo-grid [data-coverph] { position: absolute; left: 6px; bottom: 6px; padding: 2px 8px; border-radius: 6px; background: rgba(12, 12, 18, .7); color: #fff; text-decoration: none; min-height: 0; }
+
+/* mapas de luz: uma página com os mapas de todos os planos */
+.lmh-bar { margin: 4px 0 18px; }
+.lmh-sec { margin-bottom: 26px; }
+.lmh-sec > .h3 { margin-bottom: 10px; }
+.lmh-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+.lmh-tile { display: flex; flex-direction: column; padding: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel); color: var(--text); text-align: left; cursor: pointer; font: inherit; transition: border-color .15s, transform .15s; }
+.lmh-tile:hover { border-color: var(--line2); transform: translateY(-1px); }
+.lmh-tile .sb-img { aspect-ratio: 16 / 9; background: #101017; display: flex; flex-direction: column; gap: 4px; align-items: center; justify-content: center; color: var(--muted); overflow: hidden; }
+.lmh-tile .sb-img img { width: 100%; height: 100%; object-fit: cover; }
+.lmh-b { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px 12px; min-width: 0; }
+.lmh-b > .muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lmh-st { display: inline-flex; align-items: center; gap: 5px; margin-top: 4px; color: var(--muted); }
+.lmh-st svg { width: 14px; height: 14px; }
+.lmh-tile.has .lmh-st { color: var(--ok); }
+.lmh-t td { vertical-align: middle; }
+.lmh-th { width: 84px; } .lmh-th img { width: 72px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 4px; display: block; }
+.lmh-t .chip svg, .lmh-t td.num svg { width: 14px; height: 14px; vertical-align: -2px; }
+.ok-chip { color: var(--ok); }
+.lmh-others { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.lmh-others li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.lmh-others a { display: inline-flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; }
+.lmh-others a svg { width: 18px; height: 18px; color: var(--muted); }
+.lmh-bar { align-items: center; }
+.lmh-bar .search { position: relative; flex: 1 1 240px; max-width: 360px; display: flex; align-items: center; }
+.lmh-bar .search > svg { position: absolute; left: 12px; width: 16px; height: 16px; opacity: .6; pointer-events: none; }
+.lmh-bar .search input { width: 100%; padding-left: 36px !important; min-height: 40px; border-radius: 999px !important; }
