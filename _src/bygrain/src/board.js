@@ -183,6 +183,22 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     st.view.y = py - (py - st.view.y) * (k2 / st.view.k);
     st.view.k = k2; applyView();
   }
+  // Ctrl + roda: zoom suave. Cada passo da roda junta-se a um alvo e o zoom chega lá aos poucos
+  // (rato: ~12% por passo; trackpad/pinça: segue o gesto quase direto).
+  const zs = { want: 0, cx: 0, cy: 0, raf: 0 };
+  function smoothZoom(e) {
+    let d = e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 400 : 1);
+    d = Math.max(-120, Math.min(120, d));
+    const rate = Math.abs(d) < 40 ? 0.006 : 0.0012;
+    zs.want += -d * rate; zs.cx = e.clientX; zs.cy = e.clientY;
+    if (!zs.raf) zs.raf = requestAnimationFrame(stepZoom);
+  }
+  function stepZoom() {
+    const part = Math.abs(zs.want) < 0.002 ? zs.want : zs.want * 0.28;
+    zs.want -= part;
+    zoomAt(zs.cx, zs.cy, Math.exp(part));
+    zs.raf = zs.want ? requestAnimationFrame(stepZoom) : 0;
+  }
   function zoomBy(f) { const r = stage.getBoundingClientRect(); zoomAt(r.left + r.width / 2, r.top + r.height / 2, f); }
   function setZoom(k) { zoomBy(k / st.view.k); }
   function fit() {
@@ -585,7 +601,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
 
   stage.addEventListener('wheel', (e) => {
     e.preventDefault();
-    if (e.ctrlKey || e.metaKey) zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * (e.deltaMode ? 0.05 : 0.01)));
+    if (e.ctrlKey || e.metaKey) smoothZoom(e);
     else { st.view.x -= e.deltaX; st.view.y -= e.deltaY; applyView(); }
   }, { passive: false });
 
