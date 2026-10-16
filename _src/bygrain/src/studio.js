@@ -16,7 +16,7 @@ import { newLightmapData } from './lmdata.js';
 const lazy = {
   finance: () => import('./finance.js'), lightmap: () => import('./lightmap.js'), gear: () => import('./gear.js'),
   props: () => import('./props.js'), budget: () => import('./budget.js'), shotlist: () => import('./shotlist.js'),
-  shot: () => import('./shot.js'), callsheet: () => import('./callsheet.js'), transport: () => import('./transport.js'),
+  shot: () => import('./shot.js'), marketing: () => import('./marketing.js'), callsheet: () => import('./callsheet.js'), transport: () => import('./transport.js'),
 };
 // pré-carrega em segundo plano depois de o site abrir, para a primeira abertura também ser rápida
 setTimeout(() => { const idle = window.requestIdleCallback || ((f) => setTimeout(f, 1500)); idle(() => Object.values(lazy).forEach((f) => f().catch(() => {}))); }, 4000);
@@ -567,7 +567,7 @@ async function ensureDept(p, key) {
   p.departments = deps; return key;
 }
 function boardGroups(p) {
-  const top = p._boards.filter((b) => !b.parent_id);
+  const top = p._boards.filter((b) => !b.parent_id && b.kind !== 'mkt');
   const img = deptOf(p, 'imagem'); const arte = deptOf(p, 'arte');
   const imgId = img?.id || 'imagem';
   const fixedGroup = (b) => (b.kind === 'lightmap' ? imgId : b.group_id);
@@ -755,6 +755,7 @@ async function projectPage(projectId, page, sub) {
     ti.addEventListener('change', commitT); ti.addEventListener('keydown', (e) => { if (e.key === 'Enter') ti.blur(); if (e.key === 'Escape') { ti.value = p.budget?.title || 'Orçamento'; ti.blur(); } });
     return done;
   }
+  if (page === 'marketing' && !p.is_central) return (await lazy.marketing()).marketingPage(main, p, sub, projBase(p));
   if (page === 'shotlist') return (await lazy.shotlist()).shotlistPage(main, p, projBase(p));
   if (page === 'equipamento' && !p.is_central) return (await lazy.gear()).gearPage(main, p, projBase(p));
   if (page === 'plano' && sub) return (await lazy.shot()).shotPage(main, p, sub, projBase(p), onCleanup);
@@ -794,7 +795,7 @@ async function projectOverview(main, p) {
   const imgPaths = (items || []).filter((i) => i.kind === 'image').map((i) => i.data?.path);
   const thumbs = await signedUrls(imgPaths.slice(0, 40));
   const ph = phaseOf(p);
-  const top = p._boards.filter((b) => !b.parent_id);
+  const top = p._boards.filter((b) => !b.parent_id && b.kind !== 'mkt');
   const count = (id) => (items || []).filter((i) => i.board_id === id).length;
   const thumbOf = (id) => { const im = (items || []).find((i) => i.board_id === id && i.kind === 'image' && thumbs[i.data?.path]); return im ? thumbs[im.data.path] : null; };
   const deptMap = new Map((p.departments || []).map((d) => [d.id, d]));
@@ -813,6 +814,7 @@ async function projectOverview(main, p) {
     </section>
     ${fs ? `<div class="stats">${[['cenas', 'Cenas', fs.scenes], ['personagens', 'Personagens', fs.characters], ['decors', 'Décors', fs.locations], ['storyboard', 'Planos', fs.shots]].map(([k, l, n]) => `<a class="stat" href="${base}/${k}"><strong>${n}</strong><span>${l}</span></a>`).join('')}${fs.scenes ? '' : `<a class="stat cta" href="${base}/guiao"><strong>${ICON.plus}</strong><span>Importar guião</span></a>`}</div>` : ''}
     ${kids ? '<section class="panel fold-sec" data-kids></section>' : ''}
+    ${!p.is_central && hasMod(p, 'marketing') ? '<section class="panel mk-upbox" data-mkup></section>' : ''}
     ${p._parent ? `<a class="fold-up" href="#/p/${p._parent.id}">${ICON.back} Faz parte de <b>${esc(p._parent.name)}</b></a>` : ''}
     ${p.is_central ? '' : '<div class="ov" data-situation></div>'}
     <div class="pm-grid ${p.is_central ? '' : 'solo'}">
@@ -847,6 +849,7 @@ async function projectOverview(main, p) {
   });
   main.querySelectorAll('[data-bopt]').forEach((btn) => btn.addEventListener('click', () => boardOptions(p, p._boards.find((x) => x.id === btn.dataset.bopt), () => projectPage(p.id, 'geral'))));
   if (!p.is_central) { mountSituation(main.querySelector('[data-situation]'), p, base); autoModules(p); }
+  const mkup = main.querySelector('[data-mkup]'); if (mkup) lazy.marketing().then((m) => m.upcomingBox(mkup, p, base));
   if (kids) childrenSection(main.querySelector('[data-kids]'), p, kids, { base, canBudget: p.canBudget, onNew: isStaff() ? () => newProject({ parent: p }) : null, canEdit: isStaff(), after: () => projectPage(p.id, 'geral') });
   const leadsEl = main.querySelector('[data-leads]');
   if (leadsEl) drawLeads(leadsEl, p);
@@ -1028,7 +1031,12 @@ async function boardView(projectId, boardId) {
   const board = mountBoard(app.querySelector('.pv-board'), {
     projectId: p.id, boardId: cur.id, presence: bp,
     onOpenBoard: (id) => go(`${base}/b/${id}`),
-    onUp: () => go(cur.parent_id ? `${base}/b/${cur.parent_id}` : base),
+    onUp: async () => {
+      if (cur.parent_id) return go(`${base}/b/${cur.parent_id}`);
+      // board de um item de marketing: volta para a página do item
+      if (cur.kind === 'mkt') { const { data: mi } = await sb.from('marketing_items').select('id').eq('board_id', cur.id).maybeSingle(); if (mi) return go(`${base}/marketing/${mi.id}`); }
+      go(base);
+    },
     onZoom: (k) => (pct.textContent = Math.round(k * 100) + '%'),
     onSelect: (info) => {
       selInfo = info;

@@ -17,10 +17,11 @@ export const MODULES = {
   planificacao: { label: 'Planificação', icon: 'board', desc: 'Lista de planos para a rodagem.' },
   equipamento: { label: 'Equipamento', icon: 'camera', desc: 'Câmaras, objetivas, luzes, frames, maquinaria e elétrico do projeto, com especificações, quantidades e rental. Os mapas de luz usam esta lista.' },
   aderecos: { label: 'Adereços', icon: 'prop', desc: 'Lista e grelha de adereços com fotos, estado, custo, fornecedor e pacotes de aluguer.' },
+  marketing: { label: 'Marketing', icon: 'megaphone', desc: 'Calendário de lançamentos e conteúdos (videoclipes, teasers, TikToks, capas…), com responsável, estado e página própria para cada um.' },
   tarefas: { label: 'Tarefas', icon: 'task', desc: 'Tarefas do projeto, por pessoa e departamento.' },
 };
 // ordem no menu
-export const ORDER = ['orcamento', 'seguimento', 'guiao', 'cenas', 'elenco', 'decors', 'storyboard', 'shotlist', 'planificacao', 'equipamento', 'aderecos', 'tarefas'];
+export const ORDER = ['orcamento', 'seguimento', 'guiao', 'cenas', 'elenco', 'decors', 'storyboard', 'shotlist', 'planificacao', 'equipamento', 'aderecos', 'marketing', 'tarefas'];
 // o seguimento e as cenas usam a mesma lista de secções/cenas: um projeto usa um ou outro
 const SCRIPT = ['guiao', 'cenas', 'planificacao'];
 
@@ -30,7 +31,7 @@ export const TEMPLATES = {
   campanha: ['orcamento', 'seguimento', 'elenco', 'decors', 'storyboard', 'shotlist', 'equipamento', 'aderecos', 'tarefas'],
   branded: ['orcamento', 'seguimento', 'decors', 'shotlist', 'equipamento', 'aderecos', 'tarefas'],
   documentario: ['orcamento', 'elenco', 'decors', 'equipamento', 'tarefas'],
-  album: ['orcamento', 'tarefas'],
+  album: ['orcamento', 'marketing', 'tarefas'],
   default: ['orcamento', 'tarefas'],
 };
 
@@ -74,6 +75,7 @@ const autoSeen = new Map();
 export async function autoModules(p) {
   if (p.is_central) return;
   const last = autoSeen.get(p.id); if (last && Date.now() - last < 180000) return; autoSeen.set(p.id, Date.now());
+  if (p.kind === 'album') ensureModules(p, ['marketing'], { user: false });
   const c = async (t, extra) => { let q = sb.from(t).select('id', { count: 'exact', head: true }).eq('project_id', p.id); if (extra) q = extra(q); const { count } = await q; return count || 0; };
   const [loc, ch, sh, pr, sc, ge] = await Promise.all([c('locations'), c('characters'), c('shots'), c('props', (q) => q.eq('removed', false)), c('scenes'), c('gear')]);
   const want = [];

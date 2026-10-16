@@ -606,7 +606,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   // teclado
   const onKey = async (e) => {
     if (document.querySelector('#modal.open')) return;
-    const typing = st.editing || /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName);
+    const typing = st.editing || /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName) || document.activeElement?.isContentEditable;
     if (st.editing && e.key === 'Escape') { e.preventDefault(); commitEdit(); return; }
     if (st.editing && e.key === 'Enter' && st.editing.el.dataset.field === 'item' && !e.shiftKey) {
       e.preventDefault(); const it = items.get(st.editing.id); commitEdit(); if (it) onUi({ dataset: { ui: 'additem' } }, it); return;
@@ -621,7 +621,8 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     else if (mod && e.key.toLowerCase() === 'd' && st.sel) {
       e.preventDefault(); const it = items.get(st.sel); if (!it || it.kind === 'board') return;
       create(it.kind, { x: it.x + it.w / 2 + 30, y: it.y + it.h / 2 + 30 }, JSON.parse(JSON.stringify(it.data)), [it.w, it.h]);
-    } else if ((e.key === 'Delete' || e.key === 'Backspace') && st.sel && (stage.contains(document.activeElement) || document.activeElement === document.body)) {
+    } else if ((e.key === 'Delete' || e.key === 'Backspace') && st.sel) {
+      // apaga o cartão selecionado, mesmo que o foco tenha ficado num botão da barra
       e.preventDefault(); const it = items.get(st.sel); if (!it) return;
       if (it.kind === 'board' && !(await confirmBox(`Apagar o board "${it.data?.title || 'Board'}" e tudo o que tem dentro?`, 'Apagar'))) return;
       await remove(it);
