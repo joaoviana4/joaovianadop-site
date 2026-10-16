@@ -1,4 +1,5 @@
 import { sb, BUCKET, esc, toast, confirmBox, modal, ICON, signedUrls, signedUrl, uploadImage } from './lib.js';
+import { entMode, entUrls, modeToggle, bindMode, entItems, photoField, bindPhoto, placePhotos, bindPlacePhotos } from './entview.js';
 import { shotCard, bindShots, shotViewer } from './fiction.js';
 import { mountTasks } from './tasks.js';
 import { mountLayout, fullscreenButton } from './layout.js';
@@ -378,16 +379,21 @@ export async function musicStats(pid) {
 // ---------- décors e pessoas (cada um tem a sua página) ----------
 const sectionsWith = (f, kind, id) => f.scenes.filter((s) => (kind === 'place' ? s.location_ids || [] : [...(s.character_ids || []), ...(s.extra_ids || [])]).includes(id));
 
-function entityList(main, p, f, kind, base) {
+async function entityList(main, p, f, kind, base) {
   const isPlace = kind === 'place';
   const path = isPlace ? 'decors' : 'elenco';
-  const card = (e) => { const n = sectionsWith(f, kind, e.id).length; return `<a class="ent-card" href="${base}/${path}/${e.id}"><strong>${esc(e.name)}</strong><span class="muted small">${isPlace ? esc(e.info?.address || 'Sem morada') : esc(e.actor || (e.info?.extra ? 'Figurante' : 'Sem nome real'))}</span><span class="small">${n ? `${n} ${n === 1 ? 'secção' : 'secções'}` : '<span class="muted">Ainda em nenhuma secção</span>'}</span></a>`; };
+  const mk = isPlace ? 'places' : 'people'; const mode = entMode(mk);
+  const urls = await entUrls([isPlace ? f.locations : f.characters]);
+  const item = (e) => { const n = sectionsWith(f, kind, e.id).length; return { e, href: `${base}/${path}/${e.id}`, title: e.name, sub: isPlace ? esc(e.info?.address || 'Sem morada') : esc(e.actor || (e.info?.extra ? 'Figurante' : 'Sem nome real')), meta: n ? `${n} ${n === 1 ? 'secção' : 'secções'}` : '<span class="muted">Ainda em nenhuma secção</span>' }; };
+  const view = (list) => entItems(list.map(item), { mode, urls, place: isPlace });
   const people = f.characters.filter((c) => !c.info?.extra), extras = f.characters.filter((c) => c.info?.extra);
+  const any = isPlace ? f.locations.length : f.characters.length;
   main.innerHTML = `<div class="row between wrap-gap"><h1 class="h1 pm-title">${isPlace ? 'Décors' : 'Atores e figurantes'}</h1>
-      <div class="row">${isPlace ? `<button type="button" class="btn ghost" data-add="place">${ICON.plus} Décor</button>` : `<button type="button" class="btn ghost" data-add="actor">${ICON.plus} Ator ou atriz</button><button type="button" class="btn ghost" data-add="extra">${ICON.plus} Figurante</button>`}</div></div>
-    ${isPlace ? (f.locations.length ? `<div class="ent-grid">${f.locations.map(card).join('')}</div>` : '<p class="empty-note">Ainda não há décors. Junta-os aqui ou dentro de cada secção do seguimento.</p>')
-      : `<h2 class="h3">Artista e elenco</h2>${people.length ? `<div class="ent-grid">${people.map(card).join('')}</div>` : '<p class="muted small">Ninguém ainda.</p>'}
-         <h2 class="h3">Figurantes</h2>${extras.length ? `<div class="ent-grid">${extras.map(card).join('')}</div>` : '<p class="muted small">Ninguém ainda.</p>'}`}`;
+      <div class="row">${any ? modeToggle(mk) : ''}${isPlace ? `<button type="button" class="btn ghost" data-add="place">${ICON.plus} Décor</button>` : `<button type="button" class="btn ghost" data-add="actor">${ICON.plus} Ator ou atriz</button><button type="button" class="btn ghost" data-add="extra">${ICON.plus} Figurante</button>`}</div></div>
+    ${isPlace ? (f.locations.length ? view(f.locations) : '<p class="empty-note">Ainda não há décors. Junta-os aqui ou dentro de cada secção do seguimento.</p>')
+      : `<h2 class="h3">Artista e elenco</h2>${people.length ? view(people) : '<p class="muted small">Ninguém ainda.</p>'}
+         <h2 class="h3">Figurantes</h2>${extras.length ? view(extras) : '<p class="muted small">Ninguém ainda.</p>'}`}`;
+  bindMode(main, mk, () => entityList(main, p, f, kind, base));
   main.querySelectorAll('[data-add]').forEach((b) => b.addEventListener('click', () => {
     const k = b.dataset.add;
     const m = modal(`<h2>${k === 'place' ? 'Novo décor' : k === 'extra' ? 'Novo figurante' : 'Novo ator ou atriz'}</h2><form class="stack"><div class="field"><label for="nm">Nome</label><input id="nm" required></div><div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Criar</button></div></form>`);
@@ -402,6 +408,7 @@ function entityList(main, p, f, kind, base) {
 }
 
 async function entityPage(main, p, f, kind, id, base, cleanup) {
+  const redrawPage = () => entityPage(main, p, f, kind, id, base, cleanup);
   const isPlace = kind === 'place'; const path = isPlace ? 'decors' : 'elenco';
   const list = isPlace ? f.locations : f.characters; const e = list.find((x) => x.id === id);
   if (!e) { main.innerHTML = `<p class="empty-note">Já não existe.</p><a href="${base}/${path}">Voltar</a>`; return; }
@@ -415,6 +422,7 @@ async function entityPage(main, p, f, kind, id, base, cleanup) {
       <button type="button" class="btn ghost danger-text" data-del>${ICON.trash} Apagar</button></header>
     <div class="ent-layout">
       <section class="panel stack">
+        ${isPlace ? '' : await photoField(e)}
         ${isPlace ? '' : `<div class="field"><label for="ea">Nome real</label><input id="ea" data-actor value="${esc(e.actor || '')}" placeholder="Quem faz"></div>${''}<label class="row small"><input type="checkbox" data-extra ${info.extra ? 'checked' : ''}> É figurante</label>`}
         ${fields.map(([k, l, ph]) => `<div class="field"><label for="ei-${k}">${l}</label><textarea id="ei-${k}" data-info="${k}" rows="${k === 'notes' ? 4 : 2}" placeholder="${esc(ph)}">${esc(info[k] || '')}</textarea></div>`).join('')}
       </section>
@@ -422,8 +430,10 @@ async function entityPage(main, p, f, kind, id, base, cleanup) {
         ${secs.length ? `<ul class="ent-secs">${secs.map((s) => { const i = f.scenes.indexOf(s); return `<li><a href="${base}/seguimento/${s.id}"><i class="seg-dot" style="--sc:${SEG_COLORS[i % SEG_COLORS.length]}"></i><span>${esc(s.heading || 'Sem nome')}</span><span class="muted small">${esc([s.starts_at, s.ends_at].filter(Boolean).join('–'))}</span></a></li>`; }).join('')}</ul>` : '<p class="muted small">Ainda em nenhuma secção. Junta-o dentro de uma secção do seguimento.</p>'}
       </section>
     </div>
+    ${isPlace ? await placePhotos(e) : ''}
     <section class="panel"><h2 class="h3">Tarefas</h2><div data-tasks></div></section>`;
   const table = isPlace ? 'locations' : 'characters';
+  if (isPlace) bindPlacePhotos(main, p, e, redrawPage); else bindPhoto(main, p, 'characters', e, redrawPage);
   const save = debounce((patch) => sb.from(table).update(patch).eq('id', e.id).then(({ error }) => error && toast(error.message)), 500);
   main.querySelector('[data-name]').addEventListener('input', (ev) => { e.name = ev.target.value; save({ name: e.name }); });
   main.querySelector('[data-actor]')?.addEventListener('input', (ev) => { e.actor = ev.target.value; save({ actor: e.actor }); });

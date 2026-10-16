@@ -1,4 +1,5 @@
 import { sb, BUCKET, esc, toast, modal, confirmBox, ICON, signedUrl, signedUrls, uploadImage, fmtDate } from './lib.js';
+import { entMode, entUrls, modeToggle, bindMode, entItems, photoField, bindPhoto } from './entview.js';
 import { parseScript, fileToText, eighthsLabel } from './script.js';
 import { mountTasks } from './tasks.js';
 import { newLightmapData } from './lmdata.js';
@@ -316,11 +317,15 @@ export async function shotViewer(f, start, base) {
 }
 
 // ---------- Personagens ----------
-function personagens(main, p, f, sub, base, cleanup) {
+async function personagens(main, p, f, sub, base, cleanup) {
   if (sub) return personagem(main, p, f, sub, base, cleanup);
   const count = (id) => f.scenes.filter((s) => (s.character_ids || []).includes(id)).length;
-  main.innerHTML = `<div class="row between wrap-gap"><h1 class="h1 pm-title">Personagens</h1><button type="button" class="btn ghost" data-add>${ICON.plus} Personagem</button></div>
-    ${f.characters.length ? `<div class="ent-grid">${f.characters.map((c) => `<a class="ent-card" href="${base}/personagens/${c.id}"><strong>${esc(c.name)}</strong><span class="muted small">${esc(c.actor || 'Sem ator ou atriz')}</span><span class="small">${count(c.id)} ${count(c.id) === 1 ? 'cena' : 'cenas'}</span></a>`).join('')}</div>` : '<p class="empty-note">Ainda não há personagens. Aparecem ao importar o guião.</p>'}`;
+  const urls = await entUrls([f.characters]);
+  const mode = entMode('people');
+  const items = f.characters.map((c) => ({ e: c, href: `${base}/personagens/${c.id}`, title: c.name, sub: esc(c.actor || 'Sem ator ou atriz'), meta: `${count(c.id)} ${count(c.id) === 1 ? 'cena' : 'cenas'}` }));
+  main.innerHTML = `<div class="row between wrap-gap"><h1 class="h1 pm-title">Personagens</h1><div class="row">${f.characters.length ? modeToggle('people') : ''}<button type="button" class="btn ghost" data-add>${ICON.plus} Personagem</button></div></div>
+    ${f.characters.length ? entItems(items, { mode, urls }) : '<p class="empty-note">Ainda não há personagens. Aparecem ao importar o guião.</p>'}`;
+  bindMode(main, 'people', () => personagens(main, p, f, sub, base, cleanup));
   main.querySelector('[data-add]').addEventListener('click', () => addNamed('characters', 'Nova personagem', p, f.characters, (id) => (location.hash = `${base}/personagens/${id}`)));
 }
 
@@ -345,20 +350,21 @@ function sceneLinks(list, f, base) {
   return list.length ? `<ul class="scene-links">${list.map((s) => `<li><a href="${base}/cenas/${s.id}"><strong>${esc(s.number)}</strong><span>${esc(sceneTitle(s, f))}</span><span class="muted small">${esc(s.time_of_day)}</span></a></li>`).join('')}</ul>` : '<p class="muted small">Ainda não entra em nenhuma cena.</p>';
 }
 
-function personagem(main, p, f, id, base, cleanup) {
+async function personagem(main, p, f, id, base, cleanup) {
   const c = f.characters.find((x) => x.id === id);
   if (!c) { main.innerHTML = '<p class="empty-note">Esta personagem já não existe.</p>'; return; }
   const scenes = f.scenes.filter((s) => (s.character_ids || []).includes(c.id));
   main.innerHTML = `<a href="${base}/personagens" class="link-btn">${ICON.back} Personagens</a>
     <header class="ent-h"><h1 class="h1">${esc(c.name)}</h1><button type="button" class="icon-btn" data-delent aria-label="Apagar personagem">${ICON.trash}</button></header>
     <div class="pm-grid"><div class="pm-boards stack">
-      <section class="panel stack"><div class="field"><label for="actor">Ator ou atriz</label><input id="actor" data-actor value="${esc(c.actor)}"></div>
+      <section class="panel stack">${await photoField(c)}<div class="field"><label for="actor">Ator ou atriz</label><input id="actor" data-actor value="${esc(c.actor)}"></div>
         ${blocks(c, [['descricao', 'Descrição'], ['guarda_roupa', 'Guarda-roupa'], ['caracterizacao', 'Caracterização']])}</section>
       <section class="panel"><h2 class="h3">Tarefas</h2><div data-tasks></div></section>
     </div><aside class="pm-side"><section class="panel"><h2 class="h3">Onde entra (${scenes.length})</h2>${sceneLinks(scenes, f, base)}</section></aside></div>`;
   const saveActor = debounce((v) => sb.from('characters').update({ actor: v }).eq('id', c.id));
   main.querySelector('[data-actor]').addEventListener('input', (e) => saveActor(e.target.value));
   bindBlocks(main, 'characters', c);
+  bindPhoto(main, p, 'characters', c, () => personagem(main, p, f, id, base, cleanup));
   const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: 'character', id: c.id } }); cleanup(() => t.destroy());
   main.querySelector('[data-delent]').addEventListener('click', async () => {
     if (!(await confirmBox(`Apagar a personagem ${c.name}?`, 'Apagar'))) return;
@@ -367,11 +373,15 @@ function personagem(main, p, f, id, base, cleanup) {
 }
 
 // ---------- Décors ----------
-function decors(main, p, f, sub, base, cleanup) {
+async function decors(main, p, f, sub, base, cleanup) {
   if (sub) return decor(main, p, f, sub, base, cleanup);
   const count = (id) => f.scenes.filter((s) => s.location_id === id).length;
-  main.innerHTML = `<div class="row between wrap-gap"><h1 class="h1 pm-title">Décors</h1><button type="button" class="btn ghost" data-add>${ICON.plus} Décor</button></div>
-    ${f.locations.length ? `<div class="ent-grid">${f.locations.map((l) => `<a class="ent-card" href="${base}/decors/${l.id}"><strong>${esc(l.name)}</strong><span class="muted small">${esc(l.info?.morada || 'Sem morada')}</span><span class="small">${count(l.id)} ${count(l.id) === 1 ? 'cena' : 'cenas'}</span></a>`).join('')}</div>` : '<p class="empty-note">Ainda não há décors. Aparecem ao importar o guião.</p>'}`;
+  const urls = await entUrls([f.locations]);
+  const mode = entMode('places');
+  const items = f.locations.map((l) => ({ e: l, href: `${base}/decors/${l.id}`, title: l.name, sub: esc(l.info?.morada || 'Sem morada'), meta: `${count(l.id)} ${count(l.id) === 1 ? 'cena' : 'cenas'}` }));
+  main.innerHTML = `<div class="row between wrap-gap"><h1 class="h1 pm-title">Décors</h1><div class="row">${f.locations.length ? modeToggle('places') : ''}<button type="button" class="btn ghost" data-add>${ICON.plus} Décor</button></div></div>
+    ${f.locations.length ? entItems(items, { mode, urls, place: true }) : '<p class="empty-note">Ainda não há décors. Aparecem ao importar o guião.</p>'}`;
+  bindMode(main, 'places', () => decors(main, p, f, sub, base, cleanup));
   main.querySelector('[data-add]').addEventListener('click', () => addNamed('locations', 'Novo décor', p, f.locations, (id) => (location.hash = `${base}/decors/${id}`)));
 }
 
