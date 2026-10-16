@@ -725,16 +725,15 @@
       --muted: #55554f; --faint: #9a9a94; --line: rgba(0, 0, 0, .16);
     }
     html[data-theme="light"] body { color-scheme: light; }
-    /* light mode: film grain over the whole background (a GPU-moved layer, no repaints) */
-    .bggrain { position: absolute; inset: -50%; pointer-events: none; display: none; mix-blend-mode: multiply; opacity: .12; animation: hgrainsoft 1.6s steps(4) infinite; will-change: transform; }
-    /* calmer grain for light mode: slower, smaller jumps */
-    @keyframes hgrainsoft { 0%{transform:translate(0,0)} 25%{transform:translate(-2%,1.5%)} 50%{transform:translate(1.5%,-2%)} 75%{transform:translate(-1%,2%)} }
-    html[data-theme="light"] .bggrain { display: block; }
-    html[data-theme="light"] header::before { content: ""; position: absolute; inset: 0; animation-name: hgrainpos !important; z-index: -1; pointer-events: none; background-image: var(--grain); mix-blend-mode: multiply; opacity: .12; animation: hgrainsoft 1.6s steps(4) infinite; }
-    html[data-theme="light"] header { isolation: isolate; }
+    /* light mode: one film-grain layer over the whole page (header included), so there is no seam under the menu.
+       sparse specks (less dense), moving at normal film speed */
+    .bggrain { display: none; }
+    .grainov { position: fixed; inset: -50%; z-index: 60; pointer-events: none; display: none; mix-blend-mode: multiply; opacity: .3;
+      background-image: var(--grainlight); animation: hgrain .45s steps(6) infinite; will-change: transform; }
+    html[data-theme="light"] .grainov { display: block; }
     /* homepage tiles in light mode: white, with dark sage lettering and black grain */
     html[data-theme="light"] .htile.link, html[data-theme="light"] .ftile { background: #fff; }
-    html[data-theme="light"] .htile.link .grain, html[data-theme="light"] .ftile .grain { mix-blend-mode: multiply; opacity: .1; animation: hgrainsoft 1.6s steps(4) infinite; }
+    html[data-theme="light"] .htile.link .grain, html[data-theme="light"] .ftile .grain { display: none; }
     html[data-theme="light"] .htile.link .lt, html[data-theme="light"] .ftile .vw, html[data-theme="light"] .ftile .vj { filter: none; }
     html[data-theme="light"] .htile.link:hover .lt { color: #000; }
     html[data-theme="light"] .ftile .vg2 { color: #000; }
@@ -775,6 +774,7 @@
     <filter id="hblur3" x="-30%" width="160%"><feGaussianBlur stdDeviation="5 0.4"/></filter>
   </svg>
   <div class="filmbg" id="filmbg" aria-hidden="true"></div>
+  <div class="grainov" aria-hidden="true"></div>
   <div class="rail left" aria-hidden="true"><div class="track" id="rail-l"></div></div>
   <div class="rail right" aria-hidden="true"><div class="track" id="rail-r"></div></div>
   <header>
@@ -1518,7 +1518,10 @@
     // grain texture for the Viana tile
     (() => { const c = document.createElement("canvas"); c.width = c.height = 160; const x = c.getContext("2d"), d = x.createImageData(160, 160);
       for (let i = 0; i < d.data.length; i += 4) { const v = Math.random() * 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
-      x.putImageData(d, 0, 0); window.GRAIN = c.toDataURL(); document.documentElement.style.setProperty("--grain", `url(${window.GRAIN})`); document.querySelectorAll(".grain, .bggrain").forEach(g => g.style.backgroundImage = `url(${GRAIN})`); })();
+      x.putImageData(d, 0, 0); window.GRAIN = c.toDataURL(); // sparse grain for light mode: mostly empty, scattered grey specks
+      { const c2 = document.createElement("canvas"); c2.width = c2.height = 200; const x2 = c2.getContext("2d"), d2 = x2.createImageData(200, 200);
+        for (let i = 0; i < d2.data.length; i += 4) { const v = Math.random() < .14 ? 110 + Math.random() * 110 : 255; d2.data[i] = d2.data[i + 1] = d2.data[i + 2] = v; d2.data[i + 3] = 255; }
+        x2.putImageData(d2, 0, 0); document.documentElement.style.setProperty("--grainlight", `url(${c2.toDataURL()})`); } document.documentElement.style.setProperty("--grain", `url(${window.GRAIN})`); document.querySelectorAll(".grain, .bggrain").forEach(g => g.style.backgroundImage = `url(${GRAIN})`); })();
 
     // ----- project page -----
     function renderProject(sec, slug) {
