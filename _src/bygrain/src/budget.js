@@ -238,7 +238,7 @@ export async function budgetPage(main, p) {
     tbody.addEventListener('input', (e) => {
       const tr = e.target.closest('[data-row]'); const r = b.rows.find((x) => x.id === tr.dataset.row);
       if (e.target.matches('[data-sec]')) r.title = e.target.value;
-      else if (e.target.matches('[data-cell]')) { const c = b.cols.find((x) => x.id === e.target.dataset.cell); r.cells = { ...(r.cells || {}), [c.id]: c.type === 'text' ? e.target.value : (num(e.target.value) ?? e.target.value) }; if (c.type !== 'text') refreshSums(); }
+      else if (e.target.matches('[data-cell]')) { const c = b.cols.find((x) => x.id === e.target.dataset.cell); r.cells = { ...(r.cells || {}), [c.id]: c.type === 'text' ? e.target.value : (num(e.target.value) ?? e.target.value) }; if (c.type !== 'text' || hasFee) refreshSums(); }
       save();
     });
     tbody.addEventListener('focusout', (e) => { if (e.target.matches('[data-cell].num')) { const c = b.cols.find((x) => x.id === e.target.dataset.cell); const n = num(e.target.value); if (n != null) e.target.value = fmtIn(c, n); } });
