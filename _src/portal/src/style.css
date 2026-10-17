@@ -2514,3 +2514,13 @@ body.readonly .proj-main input[readonly]:focus, body.readonly .proj-main textare
 .ps-stage select { width: auto; min-height: 30px; padding: 2px 26px 2px 8px; font-size: 12.5px; border-radius: 8px; }
 .phase-org-t .pot-h, .phase-org-t .pot-r { grid-template-columns: minmax(0, 1fr) repeat(var(--n, 3), 92px); }
 @media (max-width: 600px) { .phase-org-t .pot-h, .phase-org-t .pot-r { grid-template-columns: minmax(0, 1fr) repeat(var(--n, 3), 50px); } }
+/* etapa que ainda não chegou */
+.ahead-note { display: flex; gap: 18px; align-items: flex-start; padding: 22px 24px; border-radius: 16px; border: 1px dashed var(--line2); background: var(--panel); }
+.an-ic { flex: none; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: color-mix(in srgb, var(--blue) 12%, transparent); color: var(--blue); }
+.an-ic svg { width: 22px; height: 22px; }
+.an-t { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.an-t h2 { margin: 0; font-size: 19px; }
+.an-t p { margin: 0; }
+.an-t .row { margin-top: 6px; }
+/* na visão geral, numa etapa futura, fica só o banner e o aviso */
+.ov-ahead > [data-main] > :not(.pm-head) { display: none !important; }

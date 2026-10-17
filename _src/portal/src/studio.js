@@ -7,7 +7,7 @@ import { IS_STUDIO, sb, BUCKET, state, esc, $, loadProfile, isStaff, isAdmin, to
 import { renderAuth } from './auth.js';
 import { visField, bindVis, readVis } from './vis.js';
 import { onWrite, setWriteGuard } from './undo.js';
-import { stageOptions, projectStrip, bindStrip, phaseBar, bindPhaseBar, shows, modKey, toolKey, selPhase, setSelPhase, phaseLabel, phasesOf, setToolPhase } from './phases.js';
+import { aheadNotice, bindAhead, aheadOf, stageOptions, projectStrip, bindStrip, phaseBar, bindPhaseBar, shows, modKey, toolKey, selPhase, setSelPhase, phaseLabel, phasesOf, setToolPhase } from './phases.js';
 import { projectSearch } from './psearch.js';
 import { mountTasks, loadPeople, clearPeopleCache, addTaskModal } from './tasks.js';
 import { TOOL_KINDS, tableTool, timelineTool, tableTemplate } from './tools.js';
@@ -900,13 +900,14 @@ async function toolPage(projectId, toolId) {
   app.innerHTML = `<div class="page ${p.is_central ? '' : 'has-strip'}">${header(p.is_central ? 'central' : '')}${p.is_central ? '' : projectStrip(p, projBase(p))}
     <div class="proj-layout">
       <nav class="proj-nav" aria-label="Projeto">${projectNav(p, tool.id)}</nav>
-      <main class="proj-main" data-main>
+      <main class="proj-main" data-main>${p.is_central ? '' : aheadNotice(p)}
         <div class="row between wrap-gap"><div><span class="small muted">${(TOOL_KINDS[tool.kind] || {}).label || ''}${d ? ` · ${esc(d.name)}` : ''}</span><h1 class="h1">${esc(tool.title)}</h1></div>
           <div class="row wrap-gap"><button type="button" class="btn ghost" data-tooltask>${ICON.plus} Adicionar tarefa</button><button type="button" class="btn ghost" data-topt>${ICON.dots} Opções</button></div></div>
         <div data-tool></div>
       </main>
     </div></div>`;
   bindHeader(app); bindProjectNav(app, p);
+  if (!p.is_central) bindAhead(app, p, () => route());
   app.querySelector('[data-topt]').addEventListener('click', () => boardOptions(p, tool, () => toolPage(projectId, toolId)));
   app.querySelector('[data-tooltask]')?.addEventListener('click', () => addTaskModal({ projectId: p.id, departments: p.departments || [], entity: { type: 'board', id: tool.id }, where: tool.title }));
   const box = app.querySelector('[data-tool]');
@@ -964,9 +965,10 @@ async function projectPage(projectId, page, sub) {
   app.innerHTML = `<div class="page ${p.is_central ? '' : 'has-strip'}">${header(p.is_central ? 'central' : '')}${p.is_central ? '' : projectStrip(p, projBase(p))}
     <div class="proj-layout">
       <nav class="proj-nav" aria-label="Projeto">${projectNav(p, page)}</nav>
-      <main class="proj-main"><div data-main></div></main>
+      <main class="proj-main ${!p.is_central && aheadOf(p) && page === 'geral' ? 'ov-ahead' : ''}">${p.is_central ? '' : aheadNotice(p)}<div data-main></div></main>
     </div></div>`;
   bindHeader(app); bindProjectNav(app, p);
+  if (!p.is_central) bindAhead(app, p, () => route());
   const main = app.querySelector('[data-main]');
   // tarefa ligada a esta página (ou à cena / pessoa / décor / plano / adereço aberto): botão no canto superior direito
   if (!p.is_central && p.canEdit !== false) app.querySelector('.topbar-r')?.insertAdjacentHTML('afterbegin', `<button type="button" class="btn ghost sm task-top" data-pagetask>${ICON.plus}<span>Adicionar tarefa</span></button>`);
@@ -1064,7 +1066,7 @@ async function projectOverview(main, p) {
         <p class="pm-sub">${[p.client, p.starts_on && p.ends_on ? `${fmtDate(p.starts_on)} – ${fmtDate(p.ends_on)}` : ''].filter(Boolean).map(esc).join(' · ')}</p>
         ${!p.is_central ? `<div class="pm-leads" data-leads></div>` : ''}
         ${p.canBudget && hasMod(p, 'orcamento') ? (() => { const used = budgetUsed(p) + (p._kidsAlloc || 0); const over = p.value != null && used > p.value; return `<button type="button" class="pm-budget ${over ? 'over' : ''}" data-budget title="Só quem tem acesso ao orçamento vê isto"><span>${ICON.lock} Orçamento${p._approvedAt ? ' <em class="appr">✓ aprovado</em>' : ''}</span>${p.value != null ? `<strong>${eur.format(p.value)}</strong>${used ? `<small>${eur.format(used)} na tabela${over ? ` · ${eur.format(used - p.value)} acima` : ''}</small>` : ''}` : '<strong class="muted-w">Definir</strong>'}</button>`; })() : ''}
-        ${ph.label ? `<div class="pm-phase"><div class="row between small"><span>${esc(ph.label)}</span><span>${Math.round(ph.pct * 100)}%</span></div><div class="bar light"><i style="width:${Math.round(ph.pct * 100)}%"></i></div></div>` : ''}
+        ${ph.label || p.stage ? `<div class="pm-phase"><div class="row between small"><span>${esc(p.stage ? phaseLabel(p.stage) : ph.label)}</span><span>${Math.round(ph.pct * 100)}%</span></div><div class="bar light"><i style="width:${Math.round(ph.pct * 100)}%"></i></div></div>` : ''}
       </div>
     </section>
     ${fs ? `<div class="stats">${[['cenas', 'Cenas', fs.scenes], ['personagens', 'Personagens', fs.characters], ['decors', 'Décors', fs.locations], ['storyboard', 'Planos', fs.shots]].map(([k, l, n]) => `<a class="stat" href="${base}/${k}"><strong>${n}</strong><span>${l}</span></a>`).join('')}${fs.scenes ? '' : `<a class="stat cta" href="${base}/guiao"><strong>${ICON.plus}</strong><span>Importar guião</span></a>`}</div>` : ''}
