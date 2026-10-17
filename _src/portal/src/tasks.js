@@ -75,6 +75,8 @@ export function taskRow(t, { project, people, showProject }) {
 export function mountTasks(root, { projectId = null, mine = false, compact = false, entity = null } = {}) {
   const st = { tasks: [], projects: new Map(), people: [], status: 'open', who: mine ? 'me' : 'all', dept: 'all', sort: 'due', showDone: false, dead: false };
 
+  const onAdded = (e) => { if (st.dead || !document.body.contains(root)) { window.removeEventListener('portal-task-added', onAdded); return; } const t = e.detail; if (t && (!projectId || t.project_id === projectId) && (!entity || t.entity_id === entity.id)) { st.tasks.push(t); draw(); } };
+  window.addEventListener('portal-task-added', onAdded);
   async function load() {
     let q = sb.from('tasks').select('*').order('created_at');
     if (projectId) q = q.eq('project_id', projectId);
@@ -119,7 +121,7 @@ export function mountTasks(root, { projectId = null, mine = false, compact = fal
         ${depts.length && !entity ? `<label class="sel"><span class="vh">Departamento</span><select data-f="dept"><option value="all">Todos os departamentos</option>${depts.map((d) => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</select></label>` : ''}
         <label class="sel"><span class="vh">Ordenar</span><select data-f="sort"><option value="due">Por urgência</option><option value="name">Por nome</option><option value="status">Por estado</option></select></label>
       </div>
-      ${projectId ? `<form class="task-add" data-add>
+      ${projectId && !entity ? `<form class="task-add" data-add>
         <input name="title" placeholder="Nova tarefa…" aria-label="Nova tarefa" autocomplete="off">
         <select name="assignee" aria-label="Responsável"><option value="">Responsável</option>${st.people.map((p) => `<option value="${p.id}">${esc(p.display_name)}</option>`).join('')}</select>
         ${depts.length ? `<select name="department" aria-label="Departamento"><option value="">Departamento</option>${depts.map((d) => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</select>` : ''}
@@ -208,3 +210,30 @@ export function editTask(t, st, after) {
 }
 
 export { todayISO };
+
+// "Adicionar tarefa" (botão no canto de cada página): descrição, prazo e pessoa ou departamento, ligada à página
+export async function addTaskModal({ projectId, departments = [], entity = null, where = '' }) {
+  const people = await loadPeople();
+  const m = modal(`<h2>Adicionar tarefa</h2>${where ? `<p class="muted small">Fica ligada a: <b>${esc(where)}</b></p>` : ''}
+    <form class="stack">
+      <div class="field"><label for="nt-t">Descrição</label><textarea id="nt-t" name="title" rows="2" required placeholder="O que é preciso fazer"></textarea></div>
+      <div class="grid2">
+        <div class="field"><label for="nt-d">Prazo</label><input id="nt-d" name="due" type="date"></div>
+        <div class="field"><label for="nt-a">Pessoa</label><select id="nt-a" name="assignee"><option value="">— ninguém —</option>${people.map((p) => `<option value="${p.id}">${esc(p.display_name)}</option>`).join('')}</select></div>
+      </div>
+      ${departments.length ? `<div class="field"><label>Departamento</label><div class="nt-depts">${departments.map((d) => `<label class="nt-dep" style="--dept:${esc(d.color || '#888')}"><input type="radio" name="department" value="${esc(d.id)}"><span>${esc(d.name)}</span></label>`).join('')}<label class="nt-dep"><input type="radio" name="department" value="" checked><span>Nenhum</span></label></div></div>` : ''}
+      <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Adicionar tarefa</button></div>
+    </form>`);
+  setTimeout(() => m.el.querySelector('#nt-t')?.focus(), 30);
+  m.el.querySelector('#nt-t').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); m.el.querySelector('form').requestSubmit(); } });
+  m.el.querySelector('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target));
+    if (!f.title.trim()) return;
+    const row = { project_id: projectId, title: f.title.trim(), assignee_id: f.assignee || null, department: f.department || null, due: f.due || null, ...(entity ? { entity_type: entity.type, entity_id: entity.id || null } : {}) };
+    const { data, error } = await sb.from('tasks').insert(row).select().single();
+    if (error) return toast(error.message);
+    m.close(); toast('Tarefa adicionada.');
+    window.dispatchEvent(new CustomEvent('portal-task-added', { detail: data }));
+  });
+}

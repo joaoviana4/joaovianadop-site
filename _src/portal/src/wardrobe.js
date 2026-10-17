@@ -121,3 +121,20 @@ async function personPage(main, p, c, base, cleanup) {
   };
   document.addEventListener('paste', onPaste); cleanup(() => document.removeEventListener('paste', onPaste));
 }
+
+// Resumo do figurino para a página da personagem/ator: figurinos com foto, medidas, provas e o que veste em cada cena.
+export async function wardrobeSummary(el, p, c, base, scenes = []) {
+  if (!el) return;
+  const w = W(c);
+  const paths = [...w.costumes.map((k) => k.photos?.[0]?.path), ...w.fittings.slice(0, 4).map((x) => x.path)].filter(Boolean);
+  const urls = await signedUrls(paths);
+  const meas = Object.entries(w.measures || {}).filter(([, v]) => String(v || '').trim());
+  const lbl = (k) => (MEASURES.find((m) => m[0] === k) || [k, k])[1];
+  const byScene = scenes.map((s) => ({ s, x: s.info?.wardrobe?.[c.id] })).filter((r) => r.x && (r.x.costume || r.x.notes));
+  const cname = (id) => w.costumes.find((k) => k.id === id)?.name || '';
+  el.innerHTML = `<div class="row between wrap-gap"><h2 class="h3">Figurino</h2><a class="btn ghost sm" href="${base}/figurino/${c.id}">${ICON.hanger || ''} Abrir figurino</a></div>
+    ${w.costumes.length ? `<div class="wsum-c">${w.costumes.map((k) => `<a class="wsum-k" href="${base}/figurino/${c.id}"><span class="wsum-ph">${k.photos?.[0]?.path && urls[k.photos[0].path] ? `<img src="${esc(urls[k.photos[0].path])}" alt="" loading="lazy">` : ''}</span><b>${esc(k.name || 'Figurino')}</b>${k.notes ? `<small class="muted">${esc(k.notes)}</small>` : ''}</a>`).join('')}</div>` : '<p class="muted small">Ainda não há figurinos para esta personagem.</p>'}
+    ${byScene.length ? `<h3 class="h4 wsum-h">Por cena</h3><ul class="wsum-s">${byScene.map(({ s, x }) => `<li><a href="${base}/cenas/${s.id}"><b>${esc(s.number || '')}</b> <span class="muted">${esc(s.heading || '')}</span></a><span>${esc([cname(x.costume), x.notes].filter(Boolean).join(' · '))}</span></li>`).join('')}</ul>` : ''}
+    ${meas.length ? `<h3 class="h4 wsum-h">Medidas</h3><p class="small wsum-m">${meas.map(([k, v]) => `<span><span class="muted">${esc(lbl(k))}</span> ${esc(v)}</span>`).join('')}</p>` : ''}
+    ${w.fittings.length ? `<h3 class="h4 wsum-h">Provas de guarda-roupa <span class="muted small">${w.fittings.length}</span></h3><div class="wsum-f">${w.fittings.slice(0, 4).map((x) => (urls[x.path] ? `<img src="${esc(urls[x.path])}" alt="${esc(x.caption || '')}" title="${esc(x.caption || '')}" loading="lazy">` : '')).join('')}</div>` : ''}`;
+}

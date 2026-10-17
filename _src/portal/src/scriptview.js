@@ -192,7 +192,7 @@ export function mountReader(el, { version, sceneHref, pagesIndex = false, scene 
   }
   const curPage = () => {
     const top = pagesEl.scrollTop + pagesEl.clientHeight * 0.3;
-    let c = 0; pages.forEach((p, i) => { if (p.el.offsetTop <= top) c = i; }); return c;
+    let c = pages.findIndex((p) => !p.el.hidden); if (c < 0) c = 0; pages.forEach((p, i) => { if (!p.el.hidden && p.el.offsetTop <= top) c = i; }); return c;
   };
   const goPage = (i, smooth) => { const p = pages[Math.max(0, Math.min(pages.length - 1, i))]; if (p) pagesEl.scrollTo({ top: p.el.offsetTop - 16, behavior: smooth ? 'smooth' : 'auto' }); };
   function markScene() {
