@@ -696,7 +696,10 @@ window.addEventListener('bg-modules', () => {
   const nav = document.querySelector('.proj-nav'); if (!nav || !navState.p) return;
   nav.innerHTML = projectNav(navState.p, navState.active); bindProjectNav(nav, navState.p);
 });
+// a barra do projeto fica no mesmo sítio ao mudar de página (antes voltava sempre ao topo)
+const navScroll = new Map();
 function bindProjectNav(root, p) {
+  { const nav = root.querySelector('.proj-nav'); if (nav) { const y = navScroll.get(p.id); if (y) { nav.scrollTop = y; requestAnimationFrame(() => { nav.scrollTop = y; }); } nav.addEventListener('scroll', () => navScroll.set(p.id, nav.scrollTop), { passive: true }); } }
   root.querySelector('[data-psearch]')?.addEventListener('click', () => projectSearch(p, projBase(p)));
   if (!window.__psKey) { window.__psKey = true; document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && navState.p && document.querySelector('[data-psearch]')) { e.preventDefault(); if (!document.querySelector('#modal.open')) projectSearch(navState.p, projBase(navState.p)); } }); }
   const box = root.querySelector('[data-online]');
