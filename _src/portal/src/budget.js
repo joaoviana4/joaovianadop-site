@@ -131,7 +131,7 @@ export async function budgetPage(main, p) {
 
   function cellInput(r, c) {
     const v = r.cells?.[c.id] ?? '';
-    return `<input class="${c.type !== 'text' ? 'num' : ''}" data-cell="${c.id}" value="${esc(c.type === 'text' ? v : fmtIn(c, v))}" ${c.type !== 'text' ? 'inputmode="decimal"' : ''} aria-label="${esc(c.name)}">`;
+    return `<input class="${c.type !== 'text' ? 'num' : ''}" data-cell="${c.id}" value="${esc(c.type === 'text' ? v : fmtIn(c, v))}" ${c.type !== 'text' ? 'inputmode="decimal" placeholder="0,00"' : `placeholder="${esc(c.name)}"`} aria-label="${esc(c.name)}">`;
   }
 
   function draw() {
