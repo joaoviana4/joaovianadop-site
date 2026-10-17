@@ -166,3 +166,7 @@ input[type=date], input[type=time], input[type=datetime-local], input[type=month
 .look-bg i.lb-preto { background: #000; }
 @media (max-width: 560px) { .look-bgs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .look-bg i.lb-liso { background: #f5f5f7; } :root[data-theme="dark"] .look-bg i.lb-liso { background: #131315; }
+/* marca nos ecrãs inteiros (boards, mapas de luz): a mesma letra e o mesmo tamanho do topo */
+.pv-mark { font-family: inherit; font-size: 24px; padding: 4px 8px; line-height: 1; display: inline-flex; align-items: center; }
+.pv-mark .plogo { gap: .4em !important; }
+.pv-top { gap: 10px; }
