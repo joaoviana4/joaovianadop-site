@@ -2386,3 +2386,11 @@ body.tool-dragging, body.tool-dragging * { cursor: grabbing !important; user-sel
 .dist-bar .row { flex-wrap: wrap; gap: 8px; align-items: center; }
 .dist-t td:nth-child(3) select { min-width: 118px; }
 .dist-t th:first-child, .dist-t td:first-child { position: sticky; left: 0; z-index: 2; background: var(--panel); box-shadow: 1px 0 0 var(--line); }
+.tool-q, .mod-q { width: 100%; box-sizing: border-box; }
+.mod-q { margin: 4px 0 10px; }
+.tool-k[hidden], .tool-pg[hidden], .tool-pages[hidden] { display: none !important; }
+.tool-pages > p { margin: 0 0 6px; }
+.tool-pl { display: flex; flex-wrap: wrap; gap: 6px; }
+.tool-pg { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px 6px 9px; border-radius: 999px; border: 1px dashed var(--line2); background: none; color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+.tool-pg svg { width: 15px; height: 15px; }
+.tool-pg:hover { border-style: solid; border-color: var(--blue); color: var(--blue); }
