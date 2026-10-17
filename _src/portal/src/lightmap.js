@@ -1,4 +1,5 @@
-import { sb, esc, toast, modal, ICON } from './lib.js';
+import { sb, esc, toast, modal, confirmBox, ICON } from './lib.js';
+import { newLightmapData } from './lmdata.js';
 import { loadGear, addGearModal, gearName, specLine, lensFocals, MOD_KINDS, FABRICS, CATALOG, loadCatalog } from './gear.js';
 import { makeHistory, bindUndoKeys } from './tablekit.js';
 
@@ -60,6 +61,7 @@ export function lightmapTool(main, p, tool, opts = {}) {
         <label class="lm-limit" title="Ligado: só o que está na lista de equipamento. Desligado: também o catálogo geral, e o que juntares entra sozinho na lista."><input type="checkbox" data-limit ${data.limit ? 'checked' : ''}><span class="lm-sw"></span><span data-limitlabel>${data.limit ? 'Só a lista de equipamento' : 'Lista + catálogo geral'}</span></label>
         <button type="button" class="lm-ab" data-undo title="Desfazer (Ctrl+Z)" aria-label="Desfazer">↶</button>
         <button type="button" class="lm-ab" data-fit title="Ver tudo">${ICON.fit}</button>
+        <button type="button" class="lm-ab" data-reset title="Recomeçar: volta a ter só a câmara e os atores do plano">↺ Recomeçar</button>
         <button type="button" class="lm-ab" data-png title="Exportar imagem">PNG</button>
         <button type="button" class="lm-ab primary" data-pdf>${ICON.open} PDF</button>
         ${opts.onOptions ? `<button type="button" class="lm-ab" data-opt title="Opções" aria-label="Opções">${ICON.dots}</button>` : ''}
@@ -485,6 +487,21 @@ export function lightmapTool(main, p, tool, opts = {}) {
   document.addEventListener('pointerdown', popOut, true);
   main.querySelector('[data-undo]').addEventListener('click', () => hist.undo());
   main.querySelector('[data-fit]').addEventListener('click', fit);
+  // recomeçar: só a câmara do plano e os atores (os escolhidos no plano, ou os da cena); Ctrl+Z volta atrás
+  main.querySelector('[data-reset]').addEventListener('click', async () => {
+    if (data.items.length && !(await confirmBox('Recomeçar este mapa de luz? Fica só a câmara e os atores do plano. Dá para voltar atrás com Ctrl+Z.', 'Recomeçar'))) return;
+    let cameraCode = ''; let people = [];
+    if (data.shot_id) {
+      const { data: sh } = await sb.from('shots').select('code, scene_id, cast_ids, set_ids').eq('id', data.shot_id).maybeSingle();
+      cameraCode = sh?.code || 'A';
+      let ids = sh?.cast_ids?.length ? sh.cast_ids : [];
+      if (!ids.length && sh?.scene_id) { const { data: sc } = await sb.from('scenes').select('character_ids').eq('id', sh.scene_id).maybeSingle(); ids = sc?.character_ids || []; }
+      if (ids.length) { const { data: cs } = await sb.from('characters').select('id, name').in('id', ids); people = ids.map((id) => cs?.find((c) => c.id === id)?.name).filter(Boolean); }
+    } else { const cam = data.items.find((x) => x.kind === 'camera'); cameraCode = cam?.code || 'A'; people = data.items.filter((x) => x.kind === 'person').map((x) => x.name).filter(Boolean); }
+    hist.push('recomeçar');
+    data.items = newLightmapData({ cameraCode, people }).items; st.sel = null;
+    draw(); save(); fit(); toast('Mapa recomeçado.');
+  });
   main.querySelector('[data-png]').addEventListener('click', () => exportPng(svg, tool.title));
   main.querySelector('[data-pdf]').addEventListener('click', async () => {
     const url = await svgPng(svg, 2);
