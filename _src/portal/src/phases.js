@@ -7,16 +7,14 @@ import { sb, esc, toast, modal, phaseOf } from './lib.js';
 
 export const PHASES = [['pre', 'Pré-produção'], ['prod', 'Produção'], ['pos', 'Pós-produção']];
 const ALL = ['pre', 'prod', 'pos'];
-const MOD_DEF = {
-  orcamento: ['pre', 'prod', 'pos'], tratamento: ['pre'], seguimento: ['pre', 'prod'], guiao: ['pre'], cenas: ['pre', 'prod'],
-  elenco: ['pre', 'prod'], decors: ['pre', 'prod'], storyboard: ['pre', 'prod'], shotlist: ['pre', 'prod'], planificacao: ['pre', 'prod'],
-  equipamento: ['pre', 'prod'], aderecos: ['pre', 'prod'], figurino: ['pre', 'prod'], mapas: ['pre', 'prod'], marketing: ['pos'], tarefas: ALL,
-};
-const KIND_DEF = { board: ['pre'], table: ['pre', 'prod'], timeline: ALL, lightmap: ['pre', 'prod'], budget: ['pre', 'prod', 'pos'], media: ['pre', 'pos'], callsheet: ['prod'], transport: ['prod'], distribution: ['pos'] };
+// Tudo o que existia até 17 out 2026 é de pré-produção (as ferramentas de produção e pós-produção vêm a seguir).
+const PRE = ['pre'];
+const MOD_DEF = {};
+const KIND_DEF = {};
 
 export const modKey = (k) => `mod:${k}`;
 export const toolKey = (b) => `tool:${b.id}`;
-const defOf = (key, kind) => (key.startsWith('mod:') ? MOD_DEF[key.slice(4)] || ALL : KIND_DEF[kind] || ALL);
+const defOf = (key, kind) => (key.startsWith('mod:') ? MOD_DEF[key.slice(4)] || PRE : KIND_DEF[kind] || PRE);
 export function phasesOf(p, key, kind) {
   const o = p.layouts?.phases?.[key];
   return Array.isArray(o) ? o : defOf(key, kind);
