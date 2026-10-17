@@ -34,7 +34,7 @@ let fontsLoaded = false;
 function loadFonts() {
   if (fontsLoaded) return; fontsLoaded = true;
   const l = document.createElement('link'); l.rel = 'stylesheet';
-  l.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Montserrat:ital,wght@0,400;0,700;1,400&family=Archivo+Black&family=Bebas+Neue&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Serif+Display:ital@0;1&family=Lora:ital,wght@0,400;0,700;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Caveat:wght@400;700&display=swap';
+  l.href = 'https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;600;700&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;700&family=Montserrat:ital,wght@0,400;0,700;1,400&family=Archivo+Black&family=Bebas+Neue&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Serif+Display:ital@0;1&family=Lora:ital,wght@0,400;0,700;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Caveat:wght@400;700&display=swap';
   document.head.append(l);
 }
 // só deixa passar formatação simples (nada de scripts, links ou estilos estranhos)

@@ -22,3 +22,6 @@
   Cache-Control: no-cache
 /bygrain/sw.js
   Cache-Control: no-cache
+
+/studio/assets/*
+  Cache-Control: public, max-age=31536000, immutable

@@ -102,13 +102,19 @@ export async function loadProfile() {
   const { data: { session } } = await sb.auth.getSession();
   state.user = session?.user || null;
   if (!state.user) { state.profile = null; return null; }
-  const { data } = await sb.from('profiles').select('*').eq('id', state.user.id).single();
+  const [{ data }] = await Promise.all([sb.from('profiles').select('*').eq('id', state.user.id).single(), loadComms()]);
   state.profile = data;
     return data;
 }
 // as minhas comunidades, com o meu papel e permissões em cada uma
-export async function loadComms() {
-  if (!state.user) { state.comms = []; return []; }
+let commsP = null;
+export function loadComms() {
+  if (!state.user) { state.comms = []; return Promise.resolve([]); }
+  if (commsP) return commsP; // o mesmo pedido serve quem chamar ao mesmo tempo
+  commsP = loadCommsNow().finally(() => { commsP = null; });
+  return commsP;
+}
+async function loadCommsNow() {
   const { data } = await sb.from('community_members').select('role, perms, communities(id, name, slug, color, logo_path, business, created_at)').eq('user_id', state.user.id);
   state.comms = (data || []).filter((x) => x.communities).map((x) => ({ ...x.communities, my_role: x.role, my_perms: x.perms || [] })).sort((a, b) => a.name.localeCompare(b.name, 'pt'));
   return state.comms;

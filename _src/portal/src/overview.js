@@ -40,17 +40,22 @@ function timelineHtml(p, phases, items = []) {
     ${phases || its.length ? `<ul class="ov-phl">${phases ? PH.map(([k, l, c]) => phases[k] ? `<li style="--g:${c}"><i></i><span>${l}</span><span class="muted">${fmtDate(phases[k][0])} – ${fmtDate(phases[k][1])}</span></li>` : '').join('') : ''}${its.map((x) => `<li class="ms" style="--g:${esc(x.color || '#8A8A99')}"><i></i><span>${esc(x.name || 'Data')}</span><span class="muted">${fmtDate(x.start)}${x.end && x.end > x.start ? ' – ' + fmtDate(x.end) : ''}</span></li>`).join('')}</ul>` : ''}`;
 }
 
-export async function mountSituation(box, p, base, { onChange } = {}) {
-  box.innerHTML = '<p class="muted">A preparar o ponto de situação…</p>';
-  const isMusic = hasMod(p, 'seguimento'); const withProps = hasMod(p, 'aderecos');
-  const [{ data: tasks }, { data: props }, { data: questions }, people, { data: tl }, ms] = await Promise.all([
-    sb.from('tasks').select('*').eq('project_id', p.id),
+export function situationData(p, tasksP) {
+  const isMusic = hasMod(p, 'seguimento');
+  return Promise.all([
+    tasksP || sb.from('tasks').select('*').eq('project_id', p.id),
     sb.from('props').select('id, name, status, removed').eq('project_id', p.id),
     sb.from('project_questions').select('*').eq('project_id', p.id).order('created_at'),
     loadPeople(),
     sb.from('boards').select('id, data').eq('project_id', p.id).eq('kind', 'timeline').limit(1),
     isMusic ? musicStats(p.id) : Promise.resolve(null),
   ]);
+}
+export async function mountSituation(box, p, base, { onChange } = {}) {
+  box.innerHTML = '<p class="muted">A preparar o ponto de situação…</p>';
+  const isMusic = hasMod(p, 'seguimento'); const withProps = hasMod(p, 'aderecos');
+  const pre = p._preSit; p._preSit = null; // os dados pedidos pela visão geral só servem a primeira vez
+  const [{ data: tasks }, { data: props }, { data: questions }, people, { data: tl }, ms] = await (pre || situationData(p));
   const st = { showResolved: false, questions: questions || [] };
   const all = tasks || [];
   const open = all.filter((t) => t.status !== 'done');

@@ -5,7 +5,6 @@ import { loadComms, commById, setCtx, CID, isPlatformAdmin, PERMS } from './lib.
 import { activityButton, bindActivity, activityPage } from './activity.js';
 import { IS_STUDIO, sb, BUCKET, state, esc, $, loadProfile, isStaff, isAdmin, toast, modal, confirmBox, ICON, LOGO, KINDS, ROLES, phaseOf, greeting, initials, signedUrls, uploadImage, callFn, authPw, MIN_PW, fmtDate, dueInfo, registerSW, isInstalled, installApp, BASE, PROJECT_COLS, hasPerm, leadsOf } from './lib.js';
 import { renderAuth } from './auth.js';
-import { mountBoard } from './board.js';
 import { visField, bindVis, readVis } from './vis.js';
 import { onWrite, setWriteGuard } from './undo.js';
 import { projectSearch } from './psearch.js';
@@ -14,7 +13,7 @@ import { TOOL_KINDS, tableTool, timelineTool, tableTemplate } from './tools.js';
 import { isFolder, loadChildren, rollup, childrenSection, budgetChildrenPanel } from './folders.js';
 import { mountTaskCenter } from './taskcenter.js';
 import { clipPage, CLIP_PAGES, mediaTool } from './music.js';
-import { mountSituation } from './overview.js';
+import { mountSituation, situationData } from './overview.js';
 import { clearFullscreen } from './layout.js';
 import { newLightmapData } from './lmdata.js';
 // páginas pesadas só carregam quando são abertas (o site arranca mais depressa)
@@ -26,7 +25,7 @@ const lazy = {
 // pré-carrega em segundo plano depois de o site abrir, para a primeira abertura também ser rápida
 setTimeout(() => { const idle = window.requestIdleCallback || ((f) => setTimeout(f, 1500)); idle(() => Object.values(lazy).forEach((f) => f().catch(() => {}))); }, 4000);
 import { joinProject, leaveProject, lockPage, boardPresence, onPresence, whoLabel } from './presence.js';
-import { budgetWhoChip, budgetAccessPanel } from './perms.js';
+import { budgetWhoChip, budgetAccessPanel, budgetAccess } from './perms.js';
 import { MODULES, TEMPLATES, modulesOf, hasMod, scriptMode, modLabel, modPath, modulesModal, autoModules, ensureModules, addableModules } from './modules.js';
 import { FICTION_PAGES, FICTION_DEPTS, fictionPage, fictionStats } from './fiction.js';
 
@@ -48,8 +47,7 @@ sb.auth.onAuthStateChange((ev) => {
 
 async function boot() {
   if (recovering) return;
-  await loadProfile();
-  await loadComms();
+  await loadProfile(); // já traz as comunidades ao mesmo tempo
   if (IS_STUDIO) import('./appearance.js').then((a) => a.syncLookFromProfile());
   if (!state.user || !state.profile) {
     teardown();
@@ -59,6 +57,9 @@ async function boot() {
   }
   document.body.className = '';
   route();
+  // depois da primeira página, vai buscando em segundo plano o código das páginas mais usadas
+  const idle = window.requestIdleCallback || ((f) => setTimeout(f, 1500));
+  idle(() => { import('./board.js').catch(() => {}); });
 }
 window.addEventListener('hashchange', () => state.user && route());
 boot();
@@ -479,6 +480,9 @@ function projectDetailsModal(p, after) {
 
 // ---------- equipa do projeto e convites ----------
 async function projectTeam(root, p) {
+  // a equipa sem conta e quem vê o orçamento pedem-se já, ao mesmo tempo que o resto
+  const crewP = p.is_central ? null : sb.from('project_crew').select('*').eq('project_id', p.id).order('created_at');
+  const accP = p.canBudget ? budgetAccess(p) : null;
   const [{ data: members }, people, { data: invites }] = await Promise.all([
     sb.from('project_members').select('user_id, added_at, depts, job, phone, email, can_edit').eq('project_id', p.id),
     loadPeople(),
@@ -509,8 +513,8 @@ async function projectTeam(root, p) {
       <div data-code></div>
       ${inv.length ? `<ul class="invites">${inv.map((i) => `<li><span>${esc(i.email)}</span><span class="muted small">${istate(i)}</span>${!i.used_at ? `<button type="button" class="icon-btn" data-rminv="${i.id}" aria-label="Anular convite">${ICON.trash}</button>` : ''}</li>`).join('')}</ul>` : ''}
     </section>` : ''}`}`;
-  const acc = root.querySelector('[data-budgetacc]'); if (acc) budgetAccessPanel(acc, p);
-  const crewEl = root.querySelector('[data-crew]'); if (crewEl) crewPanel(crewEl, p, people, members || [], () => projectTeam(root, p));
+  const acc = root.querySelector('[data-budgetacc]'); if (acc) budgetAccessPanel(acc, p, undefined, accP);
+  const crewEl = root.querySelector('[data-crew]'); if (crewEl) crewPanel(crewEl, p, people, members || [], () => projectTeam(root, p), crewP);
   root.querySelector('[data-invite]')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = e.target.email.value.trim();
@@ -535,8 +539,8 @@ async function projectTeam(root, p) {
 
 // ---------- equipa do projeto por departamento ----------
 // Pessoas da Grain (project_members) e pessoas sem conta (project_crew), cada uma com função e departamentos.
-async function crewPanel(el, p, people, members, reload) {
-  const { data: crewRows } = await sb.from('project_crew').select('*').eq('project_id', p.id).order('created_at');
+async function crewPanel(el, p, people, members, reload, crewP) {
+  const { data: crewRows } = await (crewP || sb.from('project_crew').select('*').eq('project_id', p.id).order('created_at'));
   const depts = p.departments || [];
   const byId = new Map(people.map((x) => [x.id, x]));
   const list = [
@@ -657,7 +661,9 @@ async function loadProject(id, { fresh = false } = {}) {
 async function loadProjectNow(id) {
   // tudo de uma vez (antes eram 4 idas à base de dados, uma atrás da outra)
   const [{ data: p }, { data: fin }, { data: grant }, { count: nScripts }, { data: boards }, { data: canEdit }] = await Promise.all([
-    sb.from('projects').select(PROJECT_COLS).eq('id', id).maybeSingle(),
+    // o projeto-pai (álbum) vem no mesmo pedido
+    sb.from('projects').select(`${PROJECT_COLS}, parent:parent_id(id, name, kind, deleted_at)`).eq('id', id).maybeSingle()
+      .then((r) => (r.error ? sb.from('projects').select(PROJECT_COLS).eq('id', id).maybeSingle() : r)),
     // o orçamento só chega a quem tem acesso (a base de dados devolve vazio aos outros)
     sb.from('project_budgets').select('value, budget, updated_at, approved_at').eq('project_id', id).maybeSingle(),
     sb.from('budget_access').select('user_id').eq('project_id', id).eq('user_id', state.user.id).maybeSingle(),
@@ -677,7 +683,8 @@ async function loadProjectNow(id) {
   p._budgetAt = p.canBudget ? fin?.updated_at ?? null : null;
   p._approvedAt = p.canBudget ? fin?.approved_at ?? null : null;
   p._boards = boards || [];
-  if (p.parent_id) { const { data: par } = await sb.from('projects').select('id, name, kind, deleted_at').eq('id', p.parent_id).maybeSingle(); p._parent = par && !par.deleted_at ? par : null; }
+  if (p.parent_id) { let par = p.parent; if (par === undefined) ({ data: par } = await sb.from('projects').select('id, name, kind, deleted_at').eq('id', p.parent_id).maybeSingle()); p._parent = par && !par.deleted_at ? par : null; }
+  delete p.parent;
   return p;
 }
 function notFound() {
@@ -856,10 +863,13 @@ function newBoard(p, groupId = '', kind = 'board') {
 }
 
 // ---------- ferramentas (tabela, cronograma, mapa de luz) ----------
+const TOOL_MOD = { budget: () => lazy.budget(), callsheet: () => lazy.callsheet(), transport: () => lazy.transport(), distribution: () => import('./distribution.js') };
 async function toolPage(projectId, toolId) {
-  const p = await loadProject(projectId);
+  const cached = projCache.get(projectId)?.p;
+  const k0 = cached?._boards?.find((b) => b.id === toolId)?.kind; if (k0 && TOOL_MOD[k0]) TOOL_MOD[k0]().catch(() => {});
+  const [p, { data: tool }] = await Promise.all([loadProject(projectId), sb.from('boards').select('*').eq('id', toolId).maybeSingle()]);
   if (!p) return notFound();
-  const { data: tool } = await sb.from('boards').select('*').eq('id', toolId).maybeSingle();
+  if (tool && TOOL_MOD[tool.kind]) TOOL_MOD[tool.kind]().catch(() => {});
   if (!tool) return go(projBase(p));
   if (tool.kind === 'board') return go(toolHref(p, tool));
   if (tool.kind === 'lightmap') return lightmapView(p, tool);
@@ -924,7 +934,7 @@ function boardOptions(p, b, after) {
 }
 
 async function projectPage(projectId, page, sub) {
-  const p = await loadProject(projectId, { fresh: ['orcamento', 'detalhes', 'equipa'].includes(page) });
+  const p = await loadProject(projectId, { fresh: ['orcamento', 'detalhes'].includes(page) });
   if (!p) return notFound();
   if (page === 'detalhes' && !isStaff()) page = 'geral';
   if (page !== 'geral') setTimeout(() => autoModules(p), 0);
@@ -997,17 +1007,22 @@ function budgetUsed(p) {
 
 async function projectOverview(main, p) {
   const base = projBase(p);
-  const kids = isFolder(p) ? await loadChildren(p) : null;
-  p._kidsAlloc = kids ? rollup(kids).alloc : 0;
-  const [{ data: tasks }, { data: items }, people] = await Promise.all([
-    sb.from('tasks').select('*').eq('project_id', p.id).neq('status', 'done'),
-    sb.from('board_items').select('board_id, kind, data').eq('project_id', p.id),
-    loadPeople(),
+  // tudo ao mesmo tempo (antes eram 4 ou 5 esperas seguidas)
+  // (um pedido do Supabase só corre quando se espera por ele, e corre de novo a cada espera: Promise.resolve faz um só)
+  const allTasksP = Promise.resolve(sb.from('tasks').select('*').eq('project_id', p.id));
+  const itemsP = Promise.resolve(sb.from('board_items').select('board_id, kind, data').eq('project_id', p.id));
+  if (!p.is_central) p._preSit = situationData(p, allTasksP); // a caixa do ponto de situação começa já a pedir os seus dados
+  const thumbsP = itemsP.then(({ data }) => signedUrls((data || []).filter((i) => i.kind === 'image').map((i) => i.data?.path).slice(0, 40)));
+  const [kids, { data: allTasks }, { data: items }, people, coverMap, fs, thumbs] = await Promise.all([
+    isFolder(p) ? loadChildren(p) : null,
+    allTasksP, itemsP, loadPeople(),
+    p.cover_path ? signedUrls([p.cover_path]) : {},
+    hasMod(p, 'cenas') ? fictionStats(p) : null,
+    thumbsP,
   ]);
-  const cover = p.cover_path ? (await signedUrls([p.cover_path]))[p.cover_path] : null;
-  const fs = hasMod(p, 'cenas') ? await fictionStats(p) : null;
-  const imgPaths = (items || []).filter((i) => i.kind === 'image').map((i) => i.data?.path);
-  const thumbs = await signedUrls(imgPaths.slice(0, 40));
+  p._kidsAlloc = kids ? rollup(kids).alloc : 0;
+  const tasks = (allTasks || []).filter((t) => t.status !== 'done');
+  const cover = p.cover_path ? coverMap[p.cover_path] : null;
   const ph = phaseOf(p);
   const top = p._boards.filter((b) => !b.parent_id && b.kind !== 'mkt' && b.kind !== 'wrd' && b.kind !== 'lightmap');
   const nMaps = p._boards.filter((b) => b.kind === 'lightmap').length;
@@ -1187,6 +1202,7 @@ async function lightmapView(p, tool) {
 
 // ---------- board em ecrã inteiro ----------
 async function boardView(projectId, boardId) {
+  const boardMod = import('./board.js'); // o código do board chega ao mesmo tempo que os dados
   const p = await loadProject(projectId);
   if (!p) return notFound();
   const boards = p._boards;
@@ -1248,6 +1264,8 @@ async function boardView(projectId, boardId) {
   joinProject(p.id);
   const bp = boardPresence(cur.id);
   onCleanup(() => bp.leave());
+  const { mountBoard } = await boardMod;
+  if (!app.querySelector('.pv-board')) return;
   const board = mountBoard(app.querySelector('.pv-board'), {
     projectId: p.id, boardId: cur.id, presence: bp,
     onOpenBoard: (id) => go(`${base}/b/${id}`),
