@@ -212,9 +212,9 @@ async function cena(main, p, f, sid, base, cleanup) {
     <header class="scene-h"><span class="scene-n">${esc(s.number)}</span><div><h1 class="h2">${esc(s.heading || sceneTitle(s, f))}</h1>
       <div class="chips">${loc ? `<a class="chip" href="${base}/decors/${loc.id}">${ICON.home}${esc(loc.name)}</a>` : ''}${s.time_of_day ? `<span class="chip">${esc(s.time_of_day)}</span>` : ''}${s.eighths ? `<span class="chip">${eighthsLabel(s.eighths)} pág.</span>` : ''}
 </div></div></header>
-    <div data-sinfo class="si"></div>
     <section><div class="row between"><h2 class="h3">Planos</h2><span class="muted small">${shots.length} ${shots.length === 1 ? 'plano' : 'planos'}</span></div>
       <div class="shots" data-shots>${shots.map((x) => shotCard(x, urls[x.image_path], base)).join('')}<button type="button" class="shot-add" data-addshot>${ICON.plus}<span>Plano</span></button></div></section>
+    <div data-sinfo class="si"></div>
     <details class="panel"><summary class="h3">Texto da cena</summary><pre class="script-view">${esc(s.body || 'Sem texto.')}</pre></details>
     <section class="panel"><h2 class="h3">Tarefas da cena</h2><div data-tasks></div></section>
     <section class="panel"><h2 class="h3">Notas</h2><textarea data-notes rows="4" placeholder="Notas de realização, produção, continuidade…">${esc(s.notes)}</textarea></section>`;

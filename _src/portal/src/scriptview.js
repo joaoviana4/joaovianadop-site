@@ -28,7 +28,8 @@ export function mountReader(el, { version, sceneHref, pagesIndex = false }) {
         <span class="sr-pg"><button type="button" class="icon-btn sm" data-prev aria-label="Página anterior">‹</button>
           <input data-pg inputmode="numeric" value="1" aria-label="Página"><span class="muted">de <span data-n>…</span></span>
           <button type="button" class="icon-btn sm" data-next aria-label="Página seguinte">›</button></span>
-        <span class="sr-zoom"><button type="button" class="icon-btn sm" data-zout aria-label="Diminuir">−</button><button type="button" class="link-btn" data-zfit title="Ajustar à largura"><span data-zl>100%</span></button><button type="button" class="icon-btn sm" data-zin aria-label="Aumentar">+</button></span>
+        <span class="sr-zoom"><button type="button" class="icon-btn sm" data-zout aria-label="Diminuir">−</button><span class="sr-zl" data-zl>100%</span><button type="button" class="icon-btn sm" data-zin aria-label="Aumentar">+</button>
+          <span class="seg sr-fit" role="group" aria-label="Ajustar"><button type="button" data-zfit="fit" title="Ajustar à largura">Largura</button><button type="button" data-zfit="page" title="Ver a página inteira">Página inteira</button></span></span>
         <span class="sr-right">${version.file_path ? `<button type="button" class="link-btn" data-dl>Descarregar</button>` : ''}<button type="button" class="icon-btn sm" data-fs title="Ecrã inteiro" aria-label="Ecrã inteiro">⤢</button></span>
       </div>
       <div class="sr-pages" data-pages tabindex="0"><p class="muted sr-wait">A abrir o guião…</p></div>
@@ -45,12 +46,15 @@ export function mountReader(el, { version, sceneHref, pagesIndex = false }) {
   let pdf = null, pdfjs = null, io = null;
   const BASE_W = 816; // largura de uma página (8.5in a 96dpi)
 
+  const fitting = () => zoom === 'fit' || zoom === 'page';
   const scale = () => {
-    if (zoom !== 'fit') return Number(zoom);
-    const w = pagesEl.clientWidth - 48;
-    return Math.max(0.4, Math.min(1.6, w / BASE_W));
+    if (!fitting()) return Number(zoom);
+    const w = (pagesEl.clientWidth - 48) / (pages[0]?.w || BASE_W);
+    if (zoom === 'fit') return Math.max(0.3, Math.min(1.6, w));
+    const h = (pagesEl.clientHeight - 32) / (pages[0]?.h || BASE_W * 11 / 8.5);
+    return Math.max(0.2, Math.min(w, h));
   };
-  const zl = () => { el.querySelector('[data-zl]').textContent = `${Math.round(scale() * 100)}%`; };
+  const zl = () => { el.querySelector('[data-zl]').textContent = `${Math.round(scale() * 100)}%`; el.querySelectorAll('[data-zfit]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.zfit === zoom))); };
 
   // ---------- PDF ----------
   async function openPdfMode() {
@@ -165,10 +169,10 @@ export function mountReader(el, { version, sceneHref, pagesIndex = false }) {
     el.querySelectorAll('[data-sc]').forEach((b) => b.classList.toggle('on', +b.dataset.sc === cur));
     el.querySelectorAll('[data-tp]').forEach((b) => b.classList.toggle('on', +b.dataset.tp === c));
   }
-  const rezoom = (z) => {
+  const rezoom = (z, noSave) => {
     const c = curPage(); const p = pages[c]; const off = p ? (pagesEl.scrollTop - p.el.offsetTop) / p.el.offsetHeight : 0;
-    zoom = z; setZoom(z); layout();
-    if (p) pagesEl.scrollTop = p.el.offsetTop + off * p.el.offsetHeight;
+    zoom = z; if (!noSave) setZoom(z); layout();
+    if (p) pagesEl.scrollTop = z === 'page' ? p.el.offsetTop - 16 : p.el.offsetTop + off * p.el.offsetHeight;
   };
   const step = (d) => { const steps = [0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2]; const s = scale(); const n = d > 0 ? steps.find((x) => x > s + 0.01) : [...steps].reverse().find((x) => x < s - 0.01); if (n) rezoom(n); };
 
@@ -180,10 +184,17 @@ export function mountReader(el, { version, sceneHref, pagesIndex = false }) {
   pgIn.addEventListener('keydown', (e) => { if (e.key === 'Enter') pgIn.dispatchEvent(new Event('change')); });
   el.querySelector('[data-zin]').addEventListener('click', () => step(1));
   el.querySelector('[data-zout]').addEventListener('click', () => step(-1));
-  el.querySelector('[data-zfit]').addEventListener('click', () => rezoom('fit'));
-  el.querySelector('[data-toggle]').addEventListener('click', () => { root.classList.toggle('no-side'); if (zoom === 'fit') rezoom('fit'); });
+  el.querySelectorAll('[data-zfit]').forEach((b) => b.addEventListener('click', () => rezoom(b.dataset.zfit)));
+  el.querySelector('[data-toggle]').addEventListener('click', () => { root.classList.toggle('no-side'); if (fitting()) rezoom(zoom); });
   el.querySelector('[data-fs]').addEventListener('click', () => { if (document.fullscreenElement) document.exitFullscreen(); else root.requestFullscreen?.().catch(() => {}); });
-  const onFs = () => { root.classList.toggle('fs', document.fullscreenElement === root); if (zoom === 'fit') setTimeout(() => rezoom('fit'), 60); };
+  // em ecrã inteiro mostra a página inteira; ao sair volta ao zoom que estava
+  let beforeFs = null;
+  const onFs = () => {
+    const on = document.fullscreenElement === root;
+    root.classList.toggle('fs', on);
+    if (on) { beforeFs = zoom; setTimeout(() => rezoom('page', true), 80); }
+    else { const z = beforeFs ?? zoom; beforeFs = null; setTimeout(() => rezoom(z), 80); }
+  };
   document.addEventListener('fullscreenchange', onFs);
   el.querySelector('[data-dl]')?.addEventListener('click', async () => { const u = await signedUrl(version.file_path); u && window.open(u, '_blank', 'noopener'); });
   el.querySelector('[data-scenes]').addEventListener('click', (e) => {
@@ -204,7 +215,7 @@ export function mountReader(el, { version, sceneHref, pagesIndex = false }) {
   });
   const onWheel = (e) => { if (!(e.ctrlKey || e.metaKey)) return; e.preventDefault(); const s = scale(); rezoom(Math.max(0.4, Math.min(2.5, +(s * Math.exp(-e.deltaY * 0.002)).toFixed(3)))); };
   pagesEl.addEventListener('wheel', onWheel, { passive: false });
-  let rt = 0; const onResize = () => { clearTimeout(rt); rt = setTimeout(() => zoom === 'fit' && rezoom('fit'), 120); };
+  let rt = 0; const onResize = () => { clearTimeout(rt); rt = setTimeout(() => fitting() && rezoom(zoom, beforeFs !== null), 120); };
   window.addEventListener('resize', onResize);
   if (matchMedia('(max-width: 760px)').matches) root.classList.add('no-side');
 

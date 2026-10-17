@@ -2085,3 +2085,10 @@ body.tool-dragging, body.tool-dragging * { cursor: grabbing !important; user-sel
 .an-scenes table { width: 100%; table-layout: fixed; }
 .an-scenes th:first-child, .an-scenes td:first-child { width: 52px; }
 .an-scenes td { word-wrap: break-word; overflow-wrap: anywhere; vertical-align: top; }
+.sr-zl { min-width: 3.4em; text-align: center; font-variant-numeric: tabular-nums; font-size: 13px; }
+.sr-fit { display: inline-flex; margin-left: 6px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.sr-fit button { background: none; border: 0; color: var(--text); font: inherit; font-size: 12px; padding: 5px 9px; cursor: pointer; }
+.sr-fit button + button { border-left: 1px solid var(--line); }
+.sr-fit button[aria-pressed="true"] { background: var(--blue); color: #fff; }
+.sr.fs .sr-pages { padding: 16px 24px; }
+.sr-pages { position: relative; }
