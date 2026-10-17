@@ -26,6 +26,18 @@ export function entItems(items, { mode, urls, place = false }) {
   return `<div class="ent-tiles">${items.map(({ e, href, title, sub, meta }) => `<a class="ent-tile" href="${href}">${pic(e, title, 'ent-ph')}<span class="ent-tb"><strong>${esc(title)}</strong><span class="muted small">${sub}</span><span class="small">${meta}</span></span></a>`).join('')}</div>`;
 }
 
+
+// Ctrl+V com uma imagem copiada: entra como foto (enquanto esta página estiver aberta)
+function onPasteImages(root, fn) {
+  const h = (e) => {
+    if (!document.body.contains(root)) { document.removeEventListener('paste', h); return; }
+    if (e.target.closest?.('input, textarea, [contenteditable="true"]') || document.querySelector('#modal .modal')) return;
+    const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith('image/'));
+    if (files.length) { e.preventDefault(); fn(files); }
+  };
+  document.addEventListener('paste', h);
+}
+
 // Foto de uma pessoa (atores, figurantes, personagens): guardada em info.photo
 export async function photoField(e) {
   const path = e.info?.photo; const url = path ? await signedUrl(path) : null;
@@ -40,13 +52,14 @@ export function bindPhoto(root, p, table, e, redraw) {
   const d = root.querySelector('[data-photo-drop]');
   d?.addEventListener('dragover', (ev) => ev.preventDefault());
   d?.addEventListener('drop', (ev) => { ev.preventDefault(); up(ev.dataTransfer.files[0]); });
+  if (d) onPasteImages(d, (files) => up(files[0]));
 }
 
 // Fotos de um décor (locations.photos = [{ path }]); a primeira é a que aparece na grelha
 export async function placePhotos(l) {
   const photos = l.photos || []; const urls = await signedUrls(photos.map((x) => x.path));
   return `<section class="panel"><div class="row between"><h2 class="h3">Fotos do décor</h2><button type="button" class="btn ghost" data-addph>${ICON.plus} Fotos</button></div>
-    <div class="photo-grid" data-photos>${photos.map((ph, i) => `<figure><img src="${esc(urls[ph.path] || '')}" alt="">${i === 0 ? '<figcaption class="small muted">Capa</figcaption>' : `<button type="button" class="link-btn small" data-coverph="${i}">Usar como capa</button>`}<button type="button" class="icon-btn sm" data-rmph="${i}" aria-label="Tirar foto">${ICON.close}</button></figure>`).join('') || '<p class="muted small">Ainda sem fotos. Também podes largá-las aqui.</p>'}</div></section>`;
+    <div class="photo-grid" data-photos>${photos.map((ph, i) => `<figure><img src="${esc(urls[ph.path] || '')}" alt="">${i === 0 ? '<figcaption class="small muted">Capa</figcaption>' : `<button type="button" class="link-btn small" data-coverph="${i}">Usar como capa</button>`}<button type="button" class="icon-btn sm" data-rmph="${i}" aria-label="Tirar foto">${ICON.close}</button></figure>`).join('') || '<p class="muted small">Ainda sem fotos. Também podes largá-las aqui ou colar com Ctrl+V.</p>'}</div></section>`;
 }
 export function bindPlacePhotos(root, p, l, redraw) {
   const put = async () => { const { error } = await sb.from('locations').update({ photos: l.photos }).eq('id', l.id); if (error) toast(error.message); redraw(); };
@@ -60,6 +73,7 @@ export function bindPlacePhotos(root, p, l, redraw) {
   const grid = root.querySelector('[data-photos]');
   grid?.addEventListener('dragover', (e) => e.preventDefault());
   grid?.addEventListener('drop', (e) => { e.preventDefault(); add(e.dataTransfer.files); });
+  if (grid) onPasteImages(grid, add);
   root.querySelectorAll('[data-rmph]').forEach((b) => b.addEventListener('click', () => { l.photos = l.photos.filter((_, i) => i !== +b.dataset.rmph); put(); }));
   root.querySelectorAll('[data-coverph]').forEach((b) => b.addEventListener('click', () => { const i = +b.dataset.coverph; const ph = l.photos[i]; l.photos = [ph, ...l.photos.filter((_, j) => j !== i)]; put(); }));
 }

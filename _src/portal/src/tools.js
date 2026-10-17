@@ -166,7 +166,7 @@ export async function timelineTool(main, p, tool) {
   }
   const [{ data: tasks }, people] = await Promise.all([sb.from('tasks').select('*').eq('project_id', p.id), loadPeople()]);
   const st = { tasks: tasks || [], people, projects: new Map([[p.id, p]]) };
-  const save = debounce(() => sb.from('boards').update({ data, updated_at: new Date().toISOString() }).eq('id', tool.id));
+  const save = debounce(() => sb.from('boards').update({ data, updated_at: new Date().toISOString() }).eq('id', tool.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message)));
   const draw = () => {
     const dated = st.tasks.filter((t) => t.due);
     const all = [...Object.values(data.phases).flat(), ...dated.map((t) => t.due), todayISO()];

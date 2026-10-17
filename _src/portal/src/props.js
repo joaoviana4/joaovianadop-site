@@ -277,7 +277,7 @@ async function propPage(main, p, f, id, base, cleanup) {
   const savers = {};
   main.querySelectorAll('[data-k]').forEach((el) => el.addEventListener('input', () => {
     const k = el.dataset.k; x[k] = el.type === 'number' ? Number(el.value) || 1 : el.value;
-    (savers[k] ||= debounce((v) => sb.from('props').update({ [k]: v }).eq('id', x.id)))(x[k]);
+    (savers[k] ||= debounce((v) => sb.from('props').update({ [k]: v }).eq('id', x.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message))))(x[k]);
   }));
   const reload = () => propPage(main, p, f, id, base, cleanup);
   const saveRel = async (key) => { await sb.from('props').update({ [key]: x[key] }).eq('id', x.id); reload(); };
