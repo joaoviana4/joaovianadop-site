@@ -31,6 +31,14 @@ O resto deste ficheiro descreve como o Studio nasceu do código do byGrain (aind
 - Avisos push: chaves VAPID próprias no Vault (`studio_vapid_private`, `studio_vapid_public`, `studio_push_hook`).
 - Limpeza da reciclagem: o BlackCat não tem pg_cron; `studio.purge_trashed_projects()` existe mas não corre sozinho.
 
+## Guião, análise e tratamento
+
+- `scripts.kind`: `script` (guião da ficção) ou `tratamento` (PDF de documentário/dossiê, página "Tratamento"). Tudo o que lê o guião filtra `kind <> 'tratamento'`.
+- Leitor por páginas: `src/scriptview.js` (PDF com pdf.js; Fountain/FDX/texto paginado como guião).
+- Análise sem IA: `src/breakdown.js` (personagens por deixas, apresentações "NOME (31)" e nomes na ação; figurantes; figurino; adereços). A análise no Claude e a revisão estão em `src/scriptan.js`; os adereços usam a mesma base.
+- Figurino por cena: `scenes.info.wardrobe = { [character_id]: { costume, notes } }` (página da cena, `src/sceneinfo.js`).
+- Planos numerados `cena.plano` (1.1, 1.2…).
+
 ## Ligação ao Viewfinder e ao Lighthouse
 
 - Cada projeto do Studio tem um projeto espelho em `public.projects` (`studio.projects.vf_project_id`), e cada cena uma cena em `public.scenes` (`studio.scenes.vf_scene_id`). Criados e atualizados por gatilhos.
