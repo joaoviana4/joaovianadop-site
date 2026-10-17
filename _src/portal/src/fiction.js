@@ -226,7 +226,7 @@ export function shotCard(sh, url, base) {
   return `<article class="shot" data-shot="${sh.id}">
     <div class="shot-img" data-img tabindex="0" role="button" aria-label="${url ? 'Ver o plano em grande' : 'Juntar imagem de storyboard'}">${url ? `<img src="${esc(url)}" alt="Storyboard ${esc(sh.code)}">` : `<span>${ICON.image}<small>Juntar storyboard</small><small class="muted">ou cola com Ctrl+V</small></span>`}</div>
     <div class="shot-f">
-      <div class="row between"><input class="shot-code" data-f="code" value="${esc(sh.code)}" aria-label="Código do plano"><span class="row">${base ? `<a class="icon-btn sm" href="${base}/plano/${sh.id}" title="Abrir o plano" aria-label="Abrir o plano">${ICON.open}</a>` : ''}<button type="button" class="icon-btn sm" data-del aria-label="Apagar plano">${ICON.trash}</button></span></div>
+      <div class="row between">${base ? `<a class="shot-code shot-code-a" href="${base}/plano/${sh.id}" title="Abrir o plano ${esc(sh.code)}">${esc(sh.code || 'Plano')}</a>` : `<input class="shot-code" data-f="code" value="${esc(sh.code)}" aria-label="Código do plano">`}<span class="row">${base ? `<a class="icon-btn sm" href="${base}/plano/${sh.id}" title="Abrir o plano" aria-label="Abrir o plano">${ICON.open}</a>` : ''}<button type="button" class="icon-btn sm" data-del aria-label="Apagar plano">${ICON.trash}</button></span></div>
       <label class="mini">Enquadramento<select data-f="framing">${FRAMINGS.map((x) => `<option ${x === sh.framing ? 'selected' : ''} value="${esc(x)}">${esc(x || '—')}</option>`).join('')}${sh.framing && !FRAMINGS.includes(sh.framing) ? `<option selected>${esc(sh.framing)}</option>` : ''}</select></label>
       <label class="mini">Movimento<select data-f="movement">${MOVES.map((x) => `<option ${x === sh.movement ? 'selected' : ''} value="${esc(x)}">${esc(x || '—')}</option>`).join('')}${sh.movement && !MOVES.includes(sh.movement) ? `<option selected>${esc(sh.movement)}</option>` : ''}</select></label>
       <label class="mini">Lente<input data-f="lens" value="${esc(sh.lens)}" placeholder="ex: 35mm"></label>
@@ -523,7 +523,7 @@ function planificacao(main, p, f, _sub, base) {
   const rows = f.scenes.flatMap((s) => f.shots.filter((x) => x.scene_id === s.id).map((x) => ({ s, x })));
   main.innerHTML = `<h1 class="h1 pm-title">Planificação</h1>
     ${rows.length ? `<div class="panel table-wrap"><table class="table plan"><thead><tr><th>Cena</th><th>Plano</th><th>Enquadramento</th><th>Movimento</th><th>Lente</th><th>Descrição</th></tr></thead><tbody>
-    ${rows.map(({ s, x }) => `<tr data-shot="${x.id}"><td><a href="${base}/cenas/${s.id}">${esc(s.number)}</a></td><td><input data-f="code" value="${esc(x.code)}" aria-label="Plano"></td>
+    ${rows.map(({ s, x }) => `<tr data-shot="${x.id}"><td><a href="${base}/cenas/${s.id}">${esc(s.number)}</a></td><td><a class="pl-code" href="${base}/plano/${x.id}" title="Abrir o plano">${esc(x.code || 'Plano')}</a></td>
       <td><select data-f="framing" aria-label="Enquadramento">${FRAMINGS.map((o) => `<option ${o === x.framing ? 'selected' : ''} value="${esc(o)}">${esc(o || '—')}</option>`).join('')}</select></td>
       <td><select data-f="movement" aria-label="Movimento">${MOVES.map((o) => `<option ${o === x.movement ? 'selected' : ''} value="${esc(o)}">${esc(o || '—')}</option>`).join('')}</select></td>
       <td><input data-f="lens" value="${esc(x.lens)}" aria-label="Lente"></td><td><input data-f="description" value="${esc(x.description)}" aria-label="Descrição"></td></tr>`).join('')}
