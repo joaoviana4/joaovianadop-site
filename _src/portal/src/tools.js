@@ -155,6 +155,8 @@ export function tableTool(main, p, tool) {
 
 // ---------- cronograma ----------
 const PHASES = [['pre', 'Pré-produção', '#7C5CFF'], ['prod', 'Produção', '#F08A24'], ['post', 'Pós-produção', '#2FB67C']];
+const COLORS = [['#2B7FFF', 'Azul'], ['#E5484D', 'Vermelho'], ['#E3B341', 'Amarelo'], ['#2FB67C', 'Verde'], ['#9B6CFF', 'Roxo'], ['#F08A24', 'Laranja'], ['#E05FA8', 'Rosa'], ['#8A8A99', 'Cinzento']];
+const PRESETS = ['Repérage', 'Casting', 'Ensaio', 'Provas de guarda-roupa', 'Reunião de produção', 'Leitura técnica', 'Teste de câmara', 'Entrega do offline', 'Color grading', 'Mistura de som', 'Entrega final', 'Estreia', 'Festival'];
 const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
 const diff = (a, b) => Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
 
@@ -169,7 +171,8 @@ export async function timelineTool(main, p, tool) {
   const save = debounce(() => sb.from('boards').update({ data, updated_at: new Date().toISOString() }).eq('id', tool.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message)));
   const draw = () => {
     const dated = st.tasks.filter((t) => t.due);
-    const all = [...Object.values(data.phases).flat(), ...dated.map((t) => t.due), todayISO()];
+    const items = (data.items ||= []);
+    const all = [...Object.values(data.phases).flat(), ...dated.map((t) => t.due), ...items.flatMap((x) => [x.start, x.end]).filter(Boolean), todayISO()];
     const start = addDays(all.reduce((a, b) => (a < b ? a : b)), -3), end = addDays(all.reduce((a, b) => (a > b ? a : b)), 3);
     const total = Math.max(1, diff(start, end));
     const pct = (iso) => `${(diff(start, iso) / total) * 100}%`;
@@ -180,9 +183,23 @@ export async function timelineTool(main, p, tool) {
     const groups = [...depts.map((dp) => ({ ...dp, list: dated.filter((t) => t.department === dp.id) })), { id: '', name: 'Sem departamento', color: '#8A8A99', list: dated.filter((t) => !t.department || !depts.some((x) => x.id === t.department)) }].filter((g) => g.list.length);
     main.innerHTML = `
       <div class="tl-phases">${PHASES.map(([k, l, c]) => `<fieldset class="tl-ph" style="--g:${c}"><legend><i></i>${l}</legend><input type="date" data-ph="${k}" data-i="0" value="${data.phases[k][0]}" aria-label="${l}: início"><span>até</span><input type="date" data-ph="${k}" data-i="1" value="${data.phases[k][1]}" aria-label="${l}: fim"></fieldset>`).join('')}</div>
+      <section class="tl-items"><div class="row between wrap-gap"><h3 class="h4">Outras datas</h3><button type="button" class="btn ghost sm" data-additem>${ICON.plus} Data</button></div>
+        ${items.length ? `<ul>${items.map((x) => `<li data-item="${x.id}">
+          <label class="tl-col" style="--g:${esc(x.color)}" title="Cor"><i></i><select data-if="color" aria-label="Cor">${COLORS.map(([c, n]) => `<option value="${c}" ${c === x.color ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+          <input data-if="name" value="${esc(x.name)}" placeholder="ex: Repérage, Ensaio, Entrega do offline, Estreia" list="tl-presets" aria-label="Nome">
+          <input type="date" data-if="start" value="${esc(x.start || '')}" aria-label="Data">
+          <span class="muted small">até</span>
+          <input type="date" data-if="end" value="${esc(x.end || '')}" aria-label="Até (opcional)" title="Opcional: deixa vazio para um só dia">
+          <button type="button" class="icon-btn sm" data-delitem aria-label="Apagar esta data">${ICON.trash}</button></li>`).join('')}</ul>` : '<p class="muted small">Junta repérages, ensaios, reuniões, entregas, estreias… Aparecem no cronograma e na visão geral.</p>'}
+        <datalist id="tl-presets">${PRESETS.map((x) => `<option value="${x}">`).join('')}</datalist>
+      </section>
       <div class="tl">
         <div class="tl-scale">${months.map((m) => `<span style="left:${pct(m)}">${fmtDate(m).split(' ')[1]}</span>`).join('')}</div>
         <div class="tl-row tl-phase-row">${PHASES.map(([k, l, c]) => `<div class="tl-bar ph" style="left:${pct(data.phases[k][0])};width:${w(data.phases[k][0], data.phases[k][1])};--g:${c}" title="${l}">${l}</div>`).join('')}</div>
+        ${items.filter((x) => x.start).length ? `<div class="tl-group"><div class="tl-gh" style="--g:#8A8A99"><i></i>Outras datas</div>
+          ${[...items].filter((x) => x.start).sort((a, b) => a.start.localeCompare(b.start)).map((x) => x.end && x.end > x.start
+            ? `<div class="tl-row"><div class="tl-bar it" style="left:${pct(x.start)};width:${w(x.start, x.end)};--g:${esc(x.color)}" title="${esc(x.name)}: ${fmtDate(x.start)} – ${fmtDate(x.end)}"></div><span class="tl-lbl" style="left:calc(${pct(x.start)} + ${w(x.start, x.end)})">${esc(x.name || 'Data')} · ${fmtDate(x.start)} – ${fmtDate(x.end)}</span></div>`
+            : `<div class="tl-row"><div class="tl-ms" style="left:${pct(x.start)};--g:${esc(x.color)}" title="${esc(x.name)}: ${fmtDate(x.start)}"><i></i><span>${esc(x.name || 'Data')} · ${fmtDate(x.start)}</span></div></div>`).join('')}</div>` : ''}
         ${groups.map((g) => `<div class="tl-group"><div class="tl-gh" style="--g:${esc(g.color)}"><i></i>${esc(g.name)}</div>
           ${g.list.sort((a, b) => a.due.localeCompare(b.due)).map((t) => { const s0 = t.created_at ? t.created_at.slice(0, 10) : addDays(t.due, -3); const s1 = s0 > t.due ? addDays(t.due, -1) : s0; return `<div class="tl-row"><button type="button" class="tl-bar task ${t.status} ${t.status !== 'done' && daysUntil(t.due) < 0 ? 'late' : ''}" data-t="${t.id}" style="left:${pct(s1)};width:${w(s1, t.due)};--g:${esc(g.color)}"><span>${esc(t.title)}</span></button></div>`; }).join('')}
         </div>`).join('') || '<p class="muted small tl-empty">As tarefas com prazo aparecem aqui.</p>'}
@@ -190,6 +207,14 @@ export async function timelineTool(main, p, tool) {
       </div>`;
     main.querySelectorAll('[data-ph]').forEach((inp) => inp.addEventListener('change', () => { data.phases[inp.dataset.ph][+inp.dataset.i] = inp.value; save(); draw(); }));
     main.querySelectorAll('[data-t]').forEach((b) => b.addEventListener('click', () => editTask(st.tasks.find((t) => t.id === b.dataset.t), st, draw)));
+    main.querySelector('[data-additem]').addEventListener('click', () => { items.push({ id: uid(), name: '', start: todayISO(), end: '', color: COLORS[items.length % COLORS.length][0] }); save(); draw(); main.querySelector('[data-item]:last-of-type [data-if="name"]')?.focus(); });
+    main.querySelectorAll('[data-item]').forEach((li) => {
+      const x = items.find((y) => y.id === li.dataset.item);
+      li.querySelector('[data-if="name"]').addEventListener('input', (e) => { x.name = e.target.value; save(); });
+      li.querySelector('[data-if="name"]').addEventListener('change', () => draw());
+      ['start', 'end', 'color'].forEach((k) => li.querySelector(`[data-if="${k}"]`).addEventListener('change', (e) => { x[k] = e.target.value; if (k === 'start' && x.end && x.end < x.start) x.end = ''; save(); draw(); }));
+      li.querySelector('[data-delitem]').addEventListener('click', async () => { if (x.name && !(await confirmBox(`Apagar "${x.name}"?`, 'Apagar'))) return; data.items = items.filter((y) => y !== x); save(); draw(); });
+    });
   };
   draw();
 }
