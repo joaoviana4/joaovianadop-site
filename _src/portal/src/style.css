@@ -2302,3 +2302,4 @@ body.tool-dragging, body.tool-dragging * { cursor: grabbing !important; user-sel
 .pk-i small { color: var(--muted); font-size: 11.5px; }
 .pk-i.on, .pk-i:hover { background: var(--panel2); }
 .pk-i.new { color: var(--blue); font-weight: 600; }
+.pm-leads.in-form { margin: 2px 0 0; } .pm-lead.add { border-style: dashed; color: var(--muted); padding: 5px 12px; }
