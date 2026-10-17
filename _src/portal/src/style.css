@@ -2111,3 +2111,6 @@ body.tool-dragging, body.tool-dragging * { cursor: grabbing !important; user-sel
 .ov-ms { position: absolute; top: 50%; width: 10px; height: 10px; background: var(--g); border: 2px solid var(--panel, #fff); border-radius: 2px; transform: translate(-50%, -50%) rotate(45deg); z-index: 2; }
 .ov-phl li.ms i { transform: rotate(45deg); border-radius: 2px; width: 8px; height: 8px; }
 .tl-lbl { position: absolute; top: 8px; margin-left: 8px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.mb-panel .btn svg { width: 16px; height: 16px; }
+.si-pg { margin: 10px 0 6px; } .dp-props .si-props { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.pm-side > .mb-panel { margin-bottom: 14px; }

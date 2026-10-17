@@ -80,3 +80,19 @@ export async function sceneInfo(el, p, f, s, base) {
   };
   draw();
 }
+
+// Adereços usados num décor: os que estão ligados ao décor ou a uma cena/secção que lá acontece.
+export async function placeProps(el, p, loc, sceneIds, base) {
+  if (!el) return;
+  const { data } = await sb.from('props').select('id, name, type, status, category, scene_ids, location_ids, removed, refs').eq('project_id', p.id).order('name');
+  const sids = new Set(sceneIds);
+  const list = (data || []).filter((x) => !x.removed && ((x.location_ids || []).includes(loc.id) || (x.scene_ids || []).some((id) => sids.has(id))));
+  const urls = await signedUrls(list.map((x) => x.refs?.[0]?.path).filter(Boolean));
+  const st = (k) => PROP_STATUS.find((x) => x[0] === k) || PROP_STATUS[0];
+  const groups = [['acao', 'De ação'], ['cenario', 'De cenário']].map(([k, l]) => [l, list.filter((x) => (x.type === 'cenario' ? 'cenario' : 'acao') === k)]).filter(([, xs]) => xs.length);
+  el.innerHTML = `<div class="row between wrap-gap"><h2 class="h3">Adereços neste décor <span class="muted small">${list.length}</span></h2><a class="link-btn small" href="${base}/aderecos">Todos os adereços ${ICON.chev}</a></div>
+    ${list.length ? groups.map(([l, xs]) => `<p class="muted small si-pg">${l}</p><ul class="si-props">${xs.map((x) => { const [, lbl, col] = st(x.status); const ref = x.refs?.[0]?.path && urls[x.refs[0].path]; const n = (x.scene_ids || []).filter((id) => sids.has(id)).length; return `<li><a href="${base}/aderecos/${x.id}" style="--c:${col}">
+      <span class="si-pimg">${ref ? `<img src="${esc(ref)}" alt="">` : ''}</span>
+      <span class="si-pn"><strong>${esc(x.name)}</strong><small class="muted">${[x.category, n ? `${n} ${n === 1 ? 'cena' : 'cenas'} aqui` : ''].filter(Boolean).map(esc).join(' · ')}</small></span>
+      <span class="si-st"><i></i>${esc(lbl)}</span></a></li>`; }).join('')}</ul>`).join('') : '<p class="muted small">Ainda não há adereços ligados a este décor nem às cenas que cá acontecem.</p>'}`;
+}
