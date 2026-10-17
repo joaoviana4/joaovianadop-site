@@ -2243,3 +2243,19 @@ body.tool-dragging, body.tool-dragging * { cursor: grabbing !important; user-sel
 .ent-hl { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
 .ent-hl > span { align-self: flex-start; }
 .ent-tags { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } .ent-tags:empty { display: none; }
+.pn-search { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 10px; margin: 0 0 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
+.pn-search:hover { border-color: var(--line2); color: var(--text); }
+.pn-search svg { width: 15px; height: 15px; }
+.pn-search span { flex: 1; text-align: left; }
+.pn-search kbd { font: inherit; font-size: 10px; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.ps-in { display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--line); padding: 2px 4px 12px; }
+.ps-in svg { width: 18px; height: 18px; color: var(--muted); }
+.ps-in input { flex: 1; border: 0; background: none; font-size: 17px; padding: 6px 0; outline: none; }
+.ps-res { max-height: 60vh; overflow: auto; padding-top: 8px; }
+.ps-g { display: flex; flex-direction: column; margin-bottom: 8px; }
+.ps-gh { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 6px 8px 4px; }
+.ps-r { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 8px; color: var(--text); text-decoration: none; }
+.ps-r svg { width: 16px; height: 16px; color: var(--muted); flex: none; }
+.ps-r span { display: flex; flex-direction: column; min-width: 0; }
+.ps-r small { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ps-r.on, .ps-r:hover { background: var(--panel2); }
