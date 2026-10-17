@@ -7,7 +7,7 @@ import { IS_STUDIO, sb, BUCKET, state, esc, $, loadProfile, isStaff, isAdmin, to
 import { renderAuth } from './auth.js';
 import { visField, bindVis, readVis } from './vis.js';
 import { onWrite, setWriteGuard } from './undo.js';
-import { phaseBar, bindPhaseBar, shows, modKey, toolKey, selPhase, setSelPhase, phaseLabel, phasesOf, setToolPhase } from './phases.js';
+import { projectStrip, bindStrip, phaseBar, bindPhaseBar, shows, modKey, toolKey, selPhase, setSelPhase, phaseLabel, phasesOf, setToolPhase } from './phases.js';
 import { projectSearch } from './psearch.js';
 import { mountTasks, loadPeople, clearPeopleCache, addTaskModal } from './tasks.js';
 import { TOOL_KINDS, tableTool, timelineTool, tableTemplate } from './tools.js';
@@ -775,7 +775,7 @@ function bindProjectNav(root, p) {
     onCleanup(off);
   }
   root.querySelector('[data-mods]')?.addEventListener('click', () => modulesModal(p));
-  root.querySelector('[data-phaseclear]')?.addEventListener('click', () => { setSelPhase(p, 'all'); route(); });
+  if (!p.is_central) bindStrip(root, p, { onChange: () => route(), items: () => phaseItems(p) });
   root.querySelectorAll('[data-newboard]').forEach((b) => b.addEventListener('click', () => newBoard(p, b.dataset.newboard)));
 }
 
@@ -890,7 +890,7 @@ async function toolPage(projectId, toolId) {
   if (tool.kind === 'board') return go(toolHref(p, tool));
   if (tool.kind === 'lightmap') return lightmapView(p, tool);
   const d = (p.departments || []).find((x) => x.id === tool.group_id);
-  app.innerHTML = `<div class="page">${header(p.is_central ? 'central' : '')}
+  app.innerHTML = `<div class="page ${p.is_central ? '' : 'has-strip'}">${header(p.is_central ? 'central' : '')}${p.is_central ? '' : projectStrip(p, projBase(p))}
     <div class="proj-layout">
       <nav class="proj-nav" aria-label="Projeto">${projectNav(p, tool.id)}</nav>
       <main class="proj-main" data-main>
@@ -954,7 +954,7 @@ async function projectPage(projectId, page, sub) {
   if (!p) return notFound();
   if (page === 'detalhes' && !isStaff()) page = 'geral';
   if (page !== 'geral') setTimeout(() => autoModules(p), 0);
-  app.innerHTML = `<div class="page">${header(p.is_central ? 'central' : '')}
+  app.innerHTML = `<div class="page ${p.is_central ? '' : 'has-strip'}">${header(p.is_central ? 'central' : '')}${p.is_central ? '' : projectStrip(p, projBase(p))}
     <div class="proj-layout">
       <nav class="proj-nav" aria-label="Projeto">${projectNav(p, page)}</nav>
       <main class="proj-main"><div data-main></div></main>
@@ -1048,7 +1048,7 @@ async function projectOverview(main, p) {
   const thumbOf = (id) => { const im = (items || []).find((i) => i.board_id === id && i.kind === 'image' && thumbs[i.data?.path]); return im ? thumbs[im.data.path] : null; };
   const deptMap = new Map((p.departments || []).map((d) => [d.id, d]));
   const next = (tasks || []).sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999')).slice(0, 6);
-  main.innerHTML = `${p.is_central ? '' : phaseBar(p)}
+  main.innerHTML = `
     <section class="pm-head" style="${cover ? `background-image:linear-gradient(rgba(12,12,18,.15),rgba(12,12,18,.75)),url('${esc(cover)}')` : ''}">
       <div class="grain-layer moving" aria-hidden="true"></div>
       <div class="pm-head-in">
@@ -1085,7 +1085,6 @@ async function projectOverview(main, p) {
       </aside>` : ''}
     </div>`;
   main.querySelectorAll('[data-nb]').forEach((b) => b.addEventListener('click', () => newBoard(p)));
-  if (!p.is_central) bindPhaseBar(main, p, { onChange: () => route(), items: () => phaseItems(p) });
   main.querySelector('[data-budget]')?.addEventListener('click', () => go(`${base}/orcamento`));
   if (false) main.querySelector('[data-budget]')?.addEventListener('click', () => {
     const m = modal(`<h2>Orçamento do projeto</h2><form class="stack"><div class="field"><label for="bv">Orçamento (€)</label><input id="bv" type="number" step="0.01" min="0" inputmode="decimal" value="${esc(p.value ?? '')}"></div><div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Guardar</button></div></form>`);

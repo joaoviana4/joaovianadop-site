@@ -31,6 +31,24 @@ export function currentPhase(p) {
   return l === 'Pré-produção' ? 'pre' : l === 'Produção' ? 'prod' : l.startsWith('Pós-produção') ? 'pos' : null;
 }
 
+// barra do projeto, por baixo do cabeçalho em todas as páginas do projeto: nome + etapas como barra de progresso
+const SPAN = { pre: [0, 1 / 3], prod: [1 / 3, 2 / 3], pos: [2 / 3, 1] };
+export function projectStrip(p, base) {
+  const s = selPhase(p); const cur = currentPhase(p); const pct = phaseOf(p).pct || 0; const hasDates = !!(p.starts_on && p.ends_on);
+  const fill = (k) => { if (!hasDates) return 0; const [a, b] = SPAN[k]; return Math.max(0, Math.min(1, (pct - a) / (b - a))); };
+  return `<div class="proj-strip" role="navigation" aria-label="Etapas do projeto"><div class="ps-in">
+    <a class="ps-name" href="${base}" title="Visão geral">${esc(p.name)}</a>
+    <div class="ps-steps" role="tablist">${PHASES.map(([k, l], i) => { const f = fill(k); return `<button type="button" role="tab" class="ps-step ${k === cur ? 'now' : ''} ${f >= 1 ? 'done' : ''}" aria-selected="${s === k}" data-phase="${k}" title="${s === k ? 'Ver todas as fases' : `Ver só ${esc(l.toLowerCase())}`}">
+        <span class="ps-l"><span class="ps-n">${f >= 1 ? '✓' : i + 1}</span>${esc(l)}${k === cur ? '<i class="phase-now" title="O projeto está nesta fase"></i>' : ''}</span>
+        <span class="ps-bar"><i style="width:${Math.round(f * 100)}%"></i></span></button>`; }).join('')}</div>
+    <div class="ps-r">${s !== 'all' ? '<button type="button" class="link-btn small" data-phase="all">Ver tudo</button>' : ''}<button type="button" class="link-btn small" data-phaseorg>Organizar fases</button></div>
+  </div></div>`;
+}
+export function bindStrip(root, p, { onChange, items }) {
+  root.querySelectorAll('.proj-strip [data-phase]').forEach((b) => b.addEventListener('click', () => { const k = b.dataset.phase; setSelPhase(p, k !== 'all' && selPhase(p) === k ? 'all' : k); onChange(); }));
+  root.querySelector('.proj-strip [data-phaseorg]')?.addEventListener('click', () => organizePhases(p, items(), onChange));
+}
+
 export function phaseBar(p) {
   const s = selPhase(p); const cur = currentPhase(p);
   return `<nav class="phase-bar" aria-label="Fases do projeto">
