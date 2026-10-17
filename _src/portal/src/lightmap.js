@@ -61,7 +61,6 @@ export function lightmapTool(main, p, tool, opts = {}) {
         <label class="lm-limit" title="Ligado: só o que está na lista de equipamento. Desligado: também o catálogo geral, e o que juntares entra sozinho na lista."><input type="checkbox" data-limit ${data.limit ? 'checked' : ''}><span class="lm-sw"></span><span data-limitlabel>${data.limit ? 'Só a lista de equipamento' : 'Lista + catálogo geral'}</span></label>
         <button type="button" class="lm-ab" data-undo title="Desfazer (Ctrl+Z)" aria-label="Desfazer">↶</button>
         <button type="button" class="lm-ab" data-fit title="Ver tudo">${ICON.fit}</button>
-        <button type="button" class="lm-ab" data-reset title="Recomeçar: volta a ter só a câmara e os atores do plano">↺ Recomeçar</button>
         <button type="button" class="lm-ab" data-png title="Exportar imagem">PNG</button>
         <button type="button" class="lm-ab primary" data-pdf>${ICON.open} PDF</button>
         ${opts.onOptions ? `<button type="button" class="lm-ab" data-opt title="Opções" aria-label="Opções">${ICON.dots}</button>` : ''}
@@ -72,6 +71,8 @@ export function lightmapTool(main, p, tool, opts = {}) {
         ${OTHER.map(([k, l, ic]) => `<button type="button" data-tool="${k}" title="${l}" aria-haspopup="dialog">${ic}<span>${l}</span></button>`).join('')}
         <hr>
         <button type="button" data-drawer-t title="Legenda, consumo e material">${ICON.list}<span>Legenda</span></button>
+        <hr>
+        <button type="button" data-reset title="Recomeçar: volta a ter só a câmara e os atores do plano"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/></svg><span>Recomeçar</span></button>
       </div>
       <div class="lm-pop" data-pop hidden role="dialog"></div>
       <aside class="lm-props" data-props hidden></aside>
