@@ -782,7 +782,7 @@ function bindProjectNav(root, p) {
     onCleanup(off);
   }
   root.querySelector('[data-mods]')?.addEventListener('click', () => modulesModal(p));
-  if (!p.is_central) bindStrip(root, p, { onChange: () => route(), items: () => phaseItems(p) });
+  if (!p.is_central) bindStrip(root, p, { onChange: () => route(), onPhase: () => go(projBase(p)), items: () => phaseItems(p) });
   root.querySelectorAll('[data-newboard]').forEach((b) => b.addEventListener('click', () => newBoard(p, b.dataset.newboard)));
 }
 
@@ -907,7 +907,7 @@ async function toolPage(projectId, toolId) {
       </main>
     </div></div>`;
   bindHeader(app); bindProjectNav(app, p);
-  if (!p.is_central) bindAhead(app, p, () => route());
+  if (!p.is_central) bindAhead(app, p, () => go(projBase(p)), () => go(projBase(p)));
   app.querySelector('[data-topt]').addEventListener('click', () => boardOptions(p, tool, () => toolPage(projectId, toolId)));
   app.querySelector('[data-tooltask]')?.addEventListener('click', () => addTaskModal({ projectId: p.id, departments: p.departments || [], entity: { type: 'board', id: tool.id }, where: tool.title }));
   const box = app.querySelector('[data-tool]');
@@ -968,7 +968,7 @@ async function projectPage(projectId, page, sub) {
       <main class="proj-main ${!p.is_central && aheadOf(p) && page === 'geral' ? 'ov-ahead' : ''}">${p.is_central ? '' : aheadNotice(p)}<div data-main></div></main>
     </div></div>`;
   bindHeader(app); bindProjectNav(app, p);
-  if (!p.is_central) bindAhead(app, p, () => route());
+  if (!p.is_central) bindAhead(app, p, () => go(projBase(p)), () => go(projBase(p)));
   const main = app.querySelector('[data-main]');
   // tarefa ligada a esta página (ou à cena / pessoa / décor / plano / adereço aberto): botão no canto superior direito
   if (!p.is_central && p.canEdit !== false) app.querySelector('.topbar-r')?.insertAdjacentHTML('afterbegin', `<button type="button" class="btn ghost sm task-top" data-pagetask>${ICON.plus}<span>Adicionar tarefa</span></button>`);

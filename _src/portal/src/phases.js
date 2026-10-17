@@ -55,8 +55,8 @@ export function aheadNotice(p) {
       <div class="row wrap-gap"><button type="button" class="btn ghost" data-ahead-go="${a.cur}">Ver ${esc(phaseLabel(a.cur).toLowerCase())}</button>${p.canEdit !== false ? `<button type="button" class="btn primary" data-ahead-set="${a.sel}">Passar o projeto para ${esc(phaseLabel(a.sel).toLowerCase())}</button>` : ''}</div>
     </div></section>`;
 }
-export function bindAhead(root, p, onChange) {
-  root.querySelectorAll('[data-ahead-go]').forEach((b) => b.addEventListener('click', () => { setSelPhase(p, b.dataset.aheadGo); onChange(); }));
+export function bindAhead(root, p, onChange, onPhase) {
+  root.querySelectorAll('[data-ahead-go]').forEach((b) => b.addEventListener('click', () => { setSelPhase(p, b.dataset.aheadGo); (onPhase || onChange)(); }));
   root.querySelectorAll('[data-ahead-set]').forEach((b) => b.addEventListener('click', async () => {
     const stage = b.dataset.aheadSet;
     const { error } = await sb.from('projects').update({ stage }).eq('id', p.id);
@@ -83,8 +83,8 @@ export function projectStrip(p, base) {
     <div class="ps-r">${s !== 'all' ? '<button type="button" class="link-btn small" data-phase="all">Ver tudo</button>' : ''}${p.canEdit !== false ? `<label class="ps-stage" title="Em que fase o projeto está"><span>Está em</span><select data-stage aria-label="Fase atual do projeto"><option value="">${p.stage ? 'Pelas datas' : (cur ? `${esc(phaseLabel(cur))} (datas)` : 'Pelas datas')}</option>${list.map(([k, l]) => `<option value="${k}" ${p.stage === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label><button type="button" class="link-btn small" data-phaseorg>Organizar fases</button>` : ''}</div>
   </div></div>`;
 }
-export function bindStrip(root, p, { onChange, items }) {
-  root.querySelectorAll('.proj-strip [data-phase]').forEach((b) => b.addEventListener('click', () => { const k = b.dataset.phase; setSelPhase(p, k !== 'all' && selPhase(p) === k ? 'all' : k); onChange(); }));
+export function bindStrip(root, p, { onChange, onPhase, items }) {
+  root.querySelectorAll('.proj-strip [data-phase]').forEach((b) => b.addEventListener('click', () => { const k = b.dataset.phase; setSelPhase(p, k !== 'all' && selPhase(p) === k ? 'all' : k); (onPhase || onChange)(); }));
   root.querySelector('.proj-strip [data-phaseorg]')?.addEventListener('click', () => organizePhases(p, items(), onChange));
   root.querySelector('.proj-strip [data-stage]')?.addEventListener('change', async (e) => {
     const stage = e.target.value || null;
