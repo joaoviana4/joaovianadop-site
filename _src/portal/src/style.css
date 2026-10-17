@@ -2406,3 +2406,19 @@ body.tool-dragging, body.tool-dragging * { cursor: grabbing !important; user-sel
 .acc-pick small { color: var(--muted); font-size: 12px; }
 body.readonly .proj-main input[readonly], body.readonly .proj-main textarea[readonly] { cursor: default; }
 body.readonly .proj-main input[readonly]:focus, body.readonly .proj-main textarea[readonly]:focus { box-shadow: none !important; border-color: transparent !important; }
+/* páginas do projeto: o conteúdo vive num <div data-main> dentro do <main>; o espaço entre blocos tem de estar lá */
+.proj-main > [data-main] { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.proj-main > [data-main] > .row.between:first-child { align-items: flex-end; }
+.tool-rec { display: flex; flex-direction: column; gap: 10px; }
+.tool-rec-h { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.tool-rec-h i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+.tool-more { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: 0; padding: 4px 0; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.tool-more::before, .tool-more::after { content: ''; flex: 1; height: 1px; background: var(--line2); }
+.tool-more svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; transition: transform .15s; order: 1; }
+.tool-more span { order: 0; } .tool-more::after { order: 2; }
+.tool-more[aria-expanded="true"] svg { transform: rotate(180deg); }
+.tool-more:hover { color: var(--text); }
+.tool-more[hidden], .tool-others[hidden] { display: none !important; }
+.tool-others { display: flex; flex-direction: column; gap: 12px; }
+.tool-pg.on { border-style: solid; }
+.tool-pg small { color: var(--muted); font-size: 11px; margin-left: 2px; }
