@@ -1,16 +1,18 @@
 import { sb, esc, toast, ICON, todayISO } from './lib.js';
 import { geocode, nearby, weatherFor, pinUrl } from './geo.js';
+import { scriptMode } from './modules.js';
 
 // Painel "Perto daqui e sol" na página de um décor: hospital mais perto (com urgência, público/privado,
 // tempo de carro), polícia e bombeiros, e sol e tempo para um dia. Fica guardado em locations.info.geo / info.near.
-const addrOf = (loc) => (loc.info?.morada || loc.info?.address || '').trim();
+// a ficção escreve a morada em info.morada; os videoclipes/campanhas em info.address
+export const placeAddr = (p, loc) => { const i = loc?.info || {}; const a = p && scriptMode(p) ? [i.morada, i.address] : [i.address, i.morada]; return (a.find((x) => x && String(x).trim()) || '').trim(); };
 
 export async function geoPanel(el, p, loc, { onChange } = {}) {
   if (!el) return;
   const save = async () => { const { error } = await sb.from('locations').update({ info: loc.info }).eq('id', loc.id); if (error) toast('Não foi possível guardar: ' + error.message); onChange?.(); };
   let date = el.dataset.date || todayISO();
   const draw = (msg) => {
-    const info = loc.info || {}; const near = info.near; const addr = addrOf(loc);
+    const info = loc.info || {}; const near = info.near; const addr = placeAddr(p, loc);
     const stale = near && info.geo?.q !== addr;
     const chosen = info.hospital_pick ?? 0;
     el.innerHTML = `<div class="row between wrap-gap"><h2 class="h3">Perto daqui</h2>${addr ? `<button type="button" class="btn ghost sm" data-find>${near ? '↻ Atualizar' : `${ICON.search} Procurar`}</button>` : ''}</div>
@@ -42,7 +44,7 @@ export async function geoPanel(el, p, loc, { onChange } = {}) {
     } catch (e) { box.textContent = e.message || 'Sem dados para este dia.'; }
   };
   const find = async () => {
-    const addr = addrOf(loc);
+    const addr = placeAddr(p, loc);
     draw('A procurar no mapa…');
     try {
       const g = await geocode(addr);
@@ -59,7 +61,7 @@ export async function geoPanel(el, p, loc, { onChange } = {}) {
 
 // para a folha de serviço: hospital escolhido, polícia, bombeiros e coordenadas de um décor (procura se ainda não tiver)
 export async function placeInfo(p, loc) {
-  const addr = addrOf(loc);
+  const addr = placeAddr(p, loc);
   if (!addr) return null;
   if (!loc.info?.near || loc.info?.geo?.q !== addr) {
     const g = await geocode(addr); if (!g) return null;
