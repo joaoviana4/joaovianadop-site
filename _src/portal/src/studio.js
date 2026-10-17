@@ -2,6 +2,7 @@ import './style.css';
 import { daysUntil } from './lib.js';
 import { loadHidden, hideProject, unhideProject } from './lib.js';
 import { loadComms, commById, setCtx, CID, isPlatformAdmin, PERMS } from './lib.js';
+import { activityButton, bindActivity, activityPage } from './activity.js';
 import { IS_STUDIO, sb, BUCKET, state, esc, $, loadProfile, isStaff, isAdmin, toast, modal, confirmBox, ICON, LOGO, KINDS, ROLES, phaseOf, greeting, initials, signedUrls, uploadImage, callFn, authPw, MIN_PW, fmtDate, dueInfo, registerSW, BASE, PROJECT_COLS, hasPerm } from './lib.js';
 import { renderAuth } from './auth.js';
 import { mountBoard } from './board.js';
@@ -107,6 +108,7 @@ function header(active) {
       </nav>
     </div>
     <div class="topbar-r">
+    ${activityButton()}
     ${IS_STUDIO ? `<button type="button" class="icon-btn look-btn" data-look aria-label="Aparência" title="Aparência">${ICON.palette}</button>` : ''}
     <button type="button" class="acct" data-acct aria-label="Conta e definições">
       <span class="acct-role">${esc(role)}</span>
@@ -117,6 +119,7 @@ function header(active) {
 }
 function bindHeader(root) {
   root.querySelector('[data-acct]')?.addEventListener('click', accountMenu);
+  bindActivity(root);
   if (IS_STUDIO) root.querySelector('[data-look]')?.addEventListener('click', async () => (await import('./appearance.js')).appearanceMenu());
 }
 function accountMenu() {
@@ -639,7 +642,7 @@ function projectNav(p, active) {
   const base = projBase(p);
   navState.p = p; navState.active = active;
   const mods = p.is_central ? [['tarefas', 'Tarefas', ICON.task]] : modulesOf(p).filter((k) => (k !== 'orcamento' || p.canBudget) && k !== 'equipamento' && k !== 'aderecos').map((k) => [modPath(p, k), modLabel(p, k), ICON[MODULES[k].icon]]);
-  const pages = [['geral', 'Visão geral', ICON.home], ...(p.is_central && isStaff() ? [['financas', 'Finanças', ICON.money]] : []), ...mods, ['equipa', p.is_central ? 'Equipa' : 'Equipa e convites', ICON.team], ...(isStaff() ? [['detalhes', 'Detalhes', ICON.info]] : [])];
+  const pages = [['geral', 'Visão geral', ICON.home], ...(p.is_central && isStaff() ? [['financas', 'Finanças', ICON.money]] : []), ...mods, ['atividade', 'Atividade', ICON.bell], ['equipa', p.is_central ? 'Equipa' : 'Equipa e convites', ICON.team], ...(isStaff() ? [['detalhes', 'Detalhes', ICON.info]] : [])];
   return `
     ${p._parent ? `<a class="pn-parent" href="#/p/${p._parent.id}">${ICON.back}<span>${esc(p._parent.name)}</span></a>` : ''}
     <div class="pn-h"><div><strong>${esc(p.name)}</strong>${p.client ? `<span class="muted small">${esc(p.client)}</span>` : ''}</div>${!p.is_central && isStaff() ? `<button type="button" class="icon-btn sm pn-mods" data-mods title="Páginas do projeto" aria-label="Juntar ou tirar páginas">${ICON.plus}</button>` : ''}</div>
@@ -796,6 +799,7 @@ async function projectPage(projectId, page, sub) {
     onCleanup(() => lk.destroy());
   }
   if (page === 'geral') return projectOverview(main, p);
+  if (page === 'atividade') return activityPage(main, p);
   if (page === 'financas' && p.is_central && isStaff()) return (await lazy.finance()).financePage(main, sub);
   if (page === 'orcamento' && p.canBudget) {
     const folder = isFolder(p);
