@@ -60,6 +60,25 @@ export async function fictionPage(main, p, page, sub, base, cleanup) {
 }
 
 // ---------- Guião ----------
+// o que o projeto já conhece, para realçar no guião: personagens, décors, adereços e figurino (cada um leva à sua página)
+async function scriptMarks(p, f, base) {
+  const title = (x) => x.toLowerCase().replace(/(^|[\s\-'’.])(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
+  const out = []; const seen = new Set();
+  const add = (term, kind, href, t) => { const k = term.trim().toLocaleLowerCase('pt'); if (k.length < 2 || seen.has(k)) return; seen.add(k); out.push({ term: term.trim(), kind, href, title: t }); };
+  f.characters.filter((c) => !c.info?.extra).forEach((c) => {
+    const href = `${base}/personagens/${c.id}`; const t = `Personagem: ${c.name}${c.actor ? ` (${c.actor})` : ''}`;
+    add(c.name, 'char', href, t); add(title(c.name), 'char', href, t);
+    const core = c.name.replace(/^(SR|SRA|DR|DRA|D|DONA|PADRE|TIA|TIO)\.?\s+/i, ''); if (core !== c.name) { add(core, 'char', href, t); add(title(core), 'char', href, t); }
+  });
+  f.locations.forEach((l) => add(l.name, 'loc', `${base}/decors/${l.id}`, `Décor: ${l.name}`));
+  try {
+    const { data: props } = await sb.from('props').select('id, name, removed').eq('project_id', p.id);
+    (props || []).filter((x) => !x.removed).forEach((x) => add(x.name, 'prop', `${base}/aderecos/${x.id}`, `Adereço: ${x.name}`));
+  } catch { /* sem adereços */ }
+  f.scenes.forEach((sc) => Object.entries(sc.info?.wardrobe || {}).forEach(([cid, w]) => String(w?.notes || '').split(/;\s*/).forEach((ph) => { if (ph.length >= 4 && ph.length <= 60) add(ph, 'wrd', `${base}/figurino/${cid}`, `Figurino: ${f.characters.find((c) => c.id === cid)?.name || ''}`); })));
+  return out;
+}
+
 function guiao(main, p, f, _sub, base) {
   const cur = f.scripts.find((s) => s.is_current) || f.scripts[0];
   main.innerHTML = `
@@ -90,11 +109,13 @@ function guiao(main, p, f, _sub, base) {
     drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); const file = e.dataTransfer.files[0]; file && importFile(file); });
   }
   let reader = null;
+  const marksP = scriptMarks(p, f, base);
   const showVersion = async (id) => {
     reader?.destroy();
     const { data } = await sb.from('scripts').select('*').eq('id', id).single();
     const box = main.querySelector('[data-reader]'); if (!box || !data) return;
-    reader = mountReader(box, { version: data, sceneHref: data.is_current ? (n) => { const sc = f.scenes.find((x) => String(x.number) === String(n)); return sc ? `${base}/cenas/${sc.id}` : `${base}/cenas`; } : null });
+    const marks = data.is_current ? await marksP : null;
+    reader = mountReader(box, { version: data, marks, sceneHref: data.is_current ? (n) => { const sc = f.scenes.find((x) => String(x.number) === String(n)); return sc ? `${base}/cenas/${sc.id}` : `${base}/cenas`; } : null });
     const use = main.querySelector('[data-use]'); use.hidden = !!data.is_current; use.dataset.use = data.id;
   };
   if (cur) showVersion(cur.id);
@@ -242,8 +263,9 @@ async function cena(main, p, f, sid, base, cleanup) {
     const { data: v } = cur ? await sb.from('scripts').select('id, body, file_path, filename').eq('id', cur.id).maybeSingle() : { data: null };
     let idx = -1;
     if (v?.file_path && /\.pdf$/i.test(v.file_path)) idx = parseScript(v.body || '').scenes.findIndex((x) => String(x.number) === String(s.number));
-    const r = idx >= 0 ? mountReader(box, { version: v, scene: idx, compact: true })
-      : mountReader(box, { version: { body: `${s.heading || ''}\n\n${s.body || ''}`, file_path: null }, compact: true });
+    const marks = await scriptMarks(p, f, base);
+    const r = idx >= 0 ? mountReader(box, { version: v, scene: idx, compact: true, marks })
+      : mountReader(box, { version: { body: `${s.heading || ''}\n\n${s.body || ''}`, file_path: null }, compact: true, marks });
     cleanup(() => r.destroy());
   })();
   bindShots(main, p, f, s, shots, urls, base);

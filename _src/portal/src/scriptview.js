@@ -10,10 +10,35 @@ import { parseScript, openPdf, pdfPageText, isSceneHeading, classifyLines } from
 //   sceneHref(number): link para a página da cena, opcional
 
 const KEY = 'portal-script-zoom';
+const MARK_KINDS = [['char', 'Personagens'], ['loc', 'Décors'], ['prop', 'Adereços'], ['wrd', 'Figurino']];
+const reEsc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// realça os termos nos nós de texto (sem mexer na posição do texto do PDF)
+function markText(root, marks) {
+  if (!marks?.length || !root) return;
+  const list = [...marks].filter((m) => m.term && m.term.length >= 2).sort((a, b) => b.term.length - a.term.length);
+  if (!list.length) return;
+  const byKey = new Map(list.map((m) => [m.term.toLocaleLowerCase('pt'), m]));
+  const re = new RegExp(`(?<![\\p{L}\\p{N}])(${list.map((m) => reEsc(m.term)).join('|')})(?![\\p{L}\\p{N}])`, 'giu');
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.parentElement?.closest('a.mk, .sr-pnum') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT) });
+  const nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
+  nodes.forEach((n) => {
+    const t = n.nodeValue; re.lastIndex = 0; if (!re.test(t)) return; re.lastIndex = 0;
+    const frag = document.createDocumentFragment(); let last = 0; let m;
+    while ((m = re.exec(t))) {
+      const info = byKey.get(m[1].toLocaleLowerCase('pt')); if (!info) continue;
+      if (m.index > last) frag.append(t.slice(last, m.index));
+      const a = document.createElement('a'); a.className = `mk mk-${info.kind}`; a.href = info.href; a.textContent = m[1]; if (info.title) a.title = info.title;
+      frag.append(a); last = m.index + m[1].length;
+    }
+    if (last < t.length) frag.append(t.slice(last));
+    n.replaceWith(frag);
+  });
+}
 const getZoom = () => { try { return localStorage.getItem(KEY) || 'fit'; } catch { return 'fit'; } };
 const setZoom = (z) => { try { localStorage.setItem(KEY, String(z)); } catch { /* sem armazenamento */ } };
 
-export function mountReader(el, { version, sceneHref, pagesIndex = false, scene = null, compact = false }) {
+export function mountReader(el, { version, sceneHref, pagesIndex = false, scene = null, compact = false, marks = null }) {
+  // marks = [{ term, kind: 'char'|'loc'|'prop'|'wrd', href, title }] → realces clicáveis no texto
   // scene = índice da cena (no PDF mostra só as páginas dessa cena); compact = caixa pequena, sem índice
   const isPdf = /\.pdf$/i.test(version.file_path || '') || /\.pdf$/i.test(version.filename || '');
   const idx = pagesIndex ? [] : parseScript(version.body || '').scenes; // índice de cenas
@@ -31,6 +56,7 @@ export function mountReader(el, { version, sceneHref, pagesIndex = false, scene 
           <button type="button" class="icon-btn sm" data-next aria-label="Página seguinte">›</button></span>
         <span class="sr-zoom"><button type="button" class="icon-btn sm" data-zout aria-label="Diminuir">−</button><span class="sr-zl" data-zl>100%</span><button type="button" class="icon-btn sm" data-zin aria-label="Aumentar">+</button>
           <span class="seg sr-fit" role="group" aria-label="Ajustar"><button type="button" data-zfit="fit" title="Ajustar à largura">Largura</button><button type="button" data-zfit="page" title="Ver a página inteira">Página inteira</button></span></span>
+        ${marks?.length ? `<span class="sr-legend" data-legend>${MARK_KINDS.filter(([k]) => marks.some((m) => m.kind === k)).map(([k, l]) => `<button type="button" class="mk-chip mk-${k}" data-mk="${k}" aria-pressed="true">${l}</button>`).join('')}</span>` : ''}
         <span class="sr-right">${version.file_path ? `<button type="button" class="link-btn" data-dl>Descarregar</button>` : ''}<button type="button" class="icon-btn sm" data-fs title="Ecrã inteiro" aria-label="Ecrã inteiro">⤢</button></span>
       </div>
       <div class="sr-pages" data-pages tabindex="0"><p class="muted sr-wait">A abrir o guião…</p></div>
@@ -119,6 +145,7 @@ export function mountReader(el, { version, sceneHref, pagesIndex = false, scene 
     tl.style.setProperty('--scale-factor', vp.scale);
     try { await new pdfjs.TextLayer({ textContentSource: await p.page.getTextContent(), container: tl, viewport: vp }).render(); } catch { /* sem camada de texto */ }
     p.el.querySelectorAll('canvas, .textLayer').forEach((x) => x.remove());
+    markText(tl, marks);
     p.el.prepend(cv); p.el.append(tl);
   }
 
@@ -148,6 +175,7 @@ export function mountReader(el, { version, sceneHref, pagesIndex = false, scene 
     });
     el.querySelector('[data-n]').textContent = pages.length;
     layout();
+    markText(pagesEl, marks);
     markScene();
   }
 
@@ -202,6 +230,7 @@ export function mountReader(el, { version, sceneHref, pagesIndex = false, scene 
     else { const z = beforeFs ?? zoom; beforeFs = null; setTimeout(() => rezoom(z), 80); }
   };
   document.addEventListener('fullscreenchange', onFs);
+  el.querySelectorAll('[data-mk]').forEach((b) => b.addEventListener('click', () => { const on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', String(on)); root.classList.toggle(`hide-${b.dataset.mk}`, !on); }));
   el.querySelector('[data-dl]')?.addEventListener('click', async () => { const u = await signedUrl(version.file_path); u && window.open(u, '_blank', 'noopener'); });
   el.querySelector('[data-scenes]').addEventListener('click', (e) => {
     const b = e.target.closest('[data-sc]'); if (!b) return;

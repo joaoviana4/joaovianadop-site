@@ -2201,3 +2201,21 @@ body.tool-dragging, body.tool-dragging * { cursor: grabbing !important; user-sel
 .table.budget tr.bsec .sec-in:hover { border-color: currentColor; }
 .table.budget td input::placeholder { color: var(--muted); opacity: .45; }
 .table.budget tr.bsec td input.sec-in { background: transparent !important; border-color: transparent !important; box-shadow: none !important; } .table.budget tr.bsec td input.sec-in:hover { border-color: currentColor !important; border-style: dashed !important; } .table.budget tr.bsec td input.sec-in:focus { background: var(--panel) !important; border-color: var(--blue) !important; border-style: solid !important; }
+/* realces no guião */
+.mk { border-radius: 3px; text-decoration: none; color: inherit; cursor: pointer; }
+.mk-char { background: rgba(43, 127, 255, .18); }
+.mk-loc { background: rgba(47, 182, 124, .2); }
+.mk-prop { background: rgba(240, 138, 36, .22); }
+.mk-wrd { background: rgba(224, 95, 168, .2); }
+.mk:hover { filter: saturate(2.2) brightness(.95); outline: 1px solid currentColor; }
+.textLayer .mk { color: transparent; }
+.textLayer .mk-char { background: rgba(43, 127, 255, .22); }
+.textLayer .mk-loc { background: rgba(47, 182, 124, .24); }
+.textLayer .mk-prop { background: rgba(240, 138, 36, .26); }
+.textLayer .mk-wrd { background: rgba(224, 95, 168, .24); }
+.sr.hide-char .mk-char, .sr.hide-loc .mk-loc, .sr.hide-prop .mk-prop, .sr.hide-wrd .mk-wrd { background: transparent; pointer-events: none; }
+.sr-legend { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.mk-chip { border: 1px solid var(--line); border-radius: 999px; font: inherit; font-size: 12px; padding: 3px 9px; cursor: pointer; color: var(--text); }
+.mk-chip.mk-char { background: rgba(43, 127, 255, .18); } .mk-chip.mk-loc { background: rgba(47, 182, 124, .2); } .mk-chip.mk-prop { background: rgba(240, 138, 36, .22); } .mk-chip.mk-wrd { background: rgba(224, 95, 168, .2); }
+.mk-chip[aria-pressed="false"] { background: transparent; opacity: .55; text-decoration: line-through; }
+.sr-legend { display: inline-flex !important; flex-direction: row !important; align-items: center; } .sr-legend .mk-chip { width: auto !important; flex: none; display: inline-block; min-height: 0; line-height: 1.4; }
