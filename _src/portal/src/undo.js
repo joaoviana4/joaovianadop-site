@@ -15,6 +15,14 @@ let paused = 0; let toastFn = () => {}; let origFrom = null;
 const cache = new Map(); const CACHE_MAX = 5000;
 const listeners = new Set();
 export const onWrite = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
+// guarda de escrita (leitores): fn(tabela, operação) devolve uma mensagem para impedir, ou nada
+let guard = null; let guardToast = 0;
+export const setWriteGuard = (fn) => { guard = fn; };
+const blocked = (message) => {
+  const r = { data: null, error: { message, code: 'readonly' }, count: null, status: 403 };
+  const px = new Proxy(function () {}, { get: (t, k) => (k === 'then' ? (ok, ko) => Promise.resolve(r).then(ok, ko) : k === 'catch' ? (ko) => Promise.resolve(r) : () => px), apply: () => px });
+  return px;
+};
 function remember(table, data) {
   const rows = Array.isArray(data) ? data : data && typeof data === 'object' ? [data] : [];
   rows.forEach((r) => { if (!r || !r.id) return; const k = `${table}:${r.id}`; cache.set(k, { ...(cache.get(k) || {}), ...r }); });
@@ -34,6 +42,10 @@ export function installUndo(sb, toast) {
   origFrom = sb.from.bind(sb);
   sb.from = (table) => {
     const qb = origFrom(table);
+    if (guard) for (const m of ['update', 'insert', 'upsert', 'delete']) {
+      const o = qb[m].bind(qb);
+      qb[m] = (...args) => { const msg = guard(table, m); if (msg) { if (Date.now() - guardToast > 2500) { guardToast = Date.now(); toastFn(msg); } return blocked(msg); } return o(...args); };
+    }
     if (SKIP.has(table)) return qb;
     // o que se lê fica guardado (só em memória) para saber os valores antigos sem perguntar outra vez
     const sel = qb.select.bind(qb);

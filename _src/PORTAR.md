@@ -58,3 +58,9 @@ O resto deste ficheiro descreve como o Studio nasceu do código do byGrain (aind
 ## Ideias para o futuro
 
 - Décor em 3D (Gaussian Splatting): captura com telemóvel (Scaniverse, KIRI, Polycam) ou câmara, export .ply/.spz, separador "3D" na página do décor com visualizador web (Spark / three.js), escala por referência (A4 ou fita) e medições. Começar por um visualizador de fotos 360. Atenção ao armazenamento: 20–100 MB por décor e limite de 50 MB por ficheiro no plano gratuito.
+
+## Studio: leitores (só leitura) e Tabela Distribuição
+- `project_members.can_edit` (e `invites.can_edit`, copiado ao entrar por convite pelo trigger `member_from_invite`). `studio.can_edit_project(p)` = tem acesso e (admin, admin da comunidade, criador, líder ou não está marcado como leitor).
+- Políticas RESTRICTIVE "só editores …" (insert/update/delete) em todas as tabelas de projeto e no storage `studio-files`. Leitores podem atualizar as tarefas que lhes estão atribuídas.
+- Frontend: `p.canEdit` (rpc), `setReadOnly` em studio.js esconde botões de criar/apagar, campos ficam readonly e `setWriteGuard` (undo.js) recusa escritas com aviso. Convites usam `create_invite_as(p_project, p_email, p_can_edit)`.
+- Ferramenta `distribution` (distribution.js + countries.js): boards.data = { links, rows }.
