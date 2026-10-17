@@ -53,3 +53,7 @@ O resto deste ficheiro descreve como o Studio nasceu do código do byGrain (aind
 ## Confidencial
 
 - Os modelos confidenciais enviados para as folhas de serviço e transportes não existem em lado nenhum, e continua a ser assim.
+
+## Ideias para o futuro
+
+- Décor em 3D (Gaussian Splatting): captura com telemóvel (Scaniverse, KIRI, Polycam) ou câmara, export .ply/.spz, separador "3D" na página do décor com visualizador web (Spark / three.js), escala por referência (A4 ou fita) e medições. Começar por um visualizador de fotos 360. Atenção ao armazenamento: 20–100 MB por décor e limite de 50 MB por ficheiro no plano gratuito.
