@@ -228,13 +228,24 @@ async function cena(main, p, f, sid, base, cleanup) {
     <section><div class="row between"><h2 class="h3">Planos</h2><span class="muted small">${shots.length} ${shots.length === 1 ? 'plano' : 'planos'}</span></div>
       <div class="shots" data-shots>${shots.map((x) => shotCard(x, urls[x.image_path], base)).join('')}<button type="button" class="shot-add" data-addshot>${ICON.plus}<span>Plano</span></button></div></section>
     <div data-sinfo class="si"></div>
-    <details class="panel"><summary class="h3">Texto da cena</summary><pre class="script-view">${esc(s.body || 'Sem texto.')}</pre></details>
+    <section class="panel"><div class="row between"><h2 class="h3">Texto da cena</h2><a class="link-btn small" href="${base}/guiao">Abrir o guião ${ICON.chev}</a></div><div data-scenetext class="sr-wrap"><p class="muted small">A abrir…</p></div></section>
     <section class="panel"><h2 class="h3">Tarefas da cena</h2><div data-tasks></div></section>
     <section class="panel"><h2 class="h3">Notas</h2><textarea data-notes rows="4" placeholder="Notas de realização, produção, continuidade…">${esc(s.notes)}</textarea></section>`;
   const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: 'scene', id: s.id } }); cleanup(() => t.destroy());
   const saveNotes = debounce((v) => sb.from('scenes').update({ notes: v }).eq('id', s.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message)));
   main.querySelector('[data-notes]').addEventListener('input', (e) => saveNotes(e.target.value));
   sceneInfo(main.querySelector('[data-sinfo]'), p, f, s, base);
+  // a cena tal como está no guião: as páginas do PDF desta cena, ou o texto paginado como guião
+  (async () => {
+    const box = main.querySelector('[data-scenetext]'); if (!box) return;
+    const cur = f.scripts.find((x) => x.is_current) || f.scripts[0];
+    const { data: v } = cur ? await sb.from('scripts').select('id, body, file_path, filename').eq('id', cur.id).maybeSingle() : { data: null };
+    let idx = -1;
+    if (v?.file_path && /\.pdf$/i.test(v.file_path)) idx = parseScript(v.body || '').scenes.findIndex((x) => String(x.number) === String(s.number));
+    const r = idx >= 0 ? mountReader(box, { version: v, scene: idx, compact: true })
+      : mountReader(box, { version: { body: `${s.heading || ''}\n\n${s.body || ''}`, file_path: null }, compact: true });
+    cleanup(() => r.destroy());
+  })();
   bindShots(main, p, f, s, shots, urls, base);
 }
 

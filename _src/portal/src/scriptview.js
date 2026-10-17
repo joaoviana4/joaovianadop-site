@@ -13,7 +13,8 @@ const KEY = 'portal-script-zoom';
 const getZoom = () => { try { return localStorage.getItem(KEY) || 'fit'; } catch { return 'fit'; } };
 const setZoom = (z) => { try { localStorage.setItem(KEY, String(z)); } catch { /* sem armazenamento */ } };
 
-export function mountReader(el, { version, sceneHref, pagesIndex = false }) {
+export function mountReader(el, { version, sceneHref, pagesIndex = false, scene = null, compact = false }) {
+  // scene = índice da cena (no PDF mostra só as páginas dessa cena); compact = caixa pequena, sem índice
   const isPdf = /\.pdf$/i.test(version.file_path || '') || /\.pdf$/i.test(version.filename || '');
   const idx = pagesIndex ? [] : parseScript(version.body || '').scenes; // índice de cenas
   el.innerHTML = `<div class="sr">
@@ -82,6 +83,11 @@ export function mountReader(el, { version, sceneHref, pagesIndex = false }) {
       t.split('\n').forEach((l) => { if (isSceneHeading(l) && k < idx.length) scenePage[k++] = i; });
     }
     for (; k < idx.length; k++) scenePage[k] = scenePage[k - 1] ?? 0;
+    if (scene != null && scenePage[scene] != null) {
+      const a = scenePage[scene]; const b = scenePage[scene + 1] ?? pages.length - 1;
+      pages.forEach((pg, i) => { if (i < a || i > Math.max(a, b)) pg.el.hidden = true; });
+      layout(); goPage(a);
+    }
     markScene();
   }
   // miniaturas das páginas (índice dos tratamentos)
@@ -217,7 +223,8 @@ export function mountReader(el, { version, sceneHref, pagesIndex = false }) {
   pagesEl.addEventListener('wheel', onWheel, { passive: false });
   let rt = 0; const onResize = () => { clearTimeout(rt); rt = setTimeout(() => fitting() && rezoom(zoom, beforeFs !== null), 120); };
   window.addEventListener('resize', onResize);
-  if (matchMedia('(max-width: 760px)').matches) root.classList.add('no-side');
+  if (matchMedia('(max-width: 760px)').matches || compact) root.classList.add('no-side');
+  if (compact) root.classList.add('sr-mini');
 
   (isPdf && version.file_path ? openPdfMode() : Promise.resolve(textMode())).catch(() => { if (!destroyed) { pages = []; scenePage = []; pdf = null; textMode(); } });
 

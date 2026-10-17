@@ -12,10 +12,11 @@ const debounce = (fn, ms = 500) => { let t; return (...a) => { clearTimeout(t); 
 
 export async function shotPage(main, p, id, base, cleanup) {
   main.innerHTML = '<p class="muted">A carregar…</p>';
-  const [{ data: shots }, { data: scenes }, { data: groups }] = await Promise.all([
+  const [{ data: shots }, { data: scenes }, { data: groups }, { data: chars }] = await Promise.all([
     sb.from('shots').select('*').eq('project_id', p.id).order('position'),
-    sb.from('scenes').select('id, number, heading, position').eq('project_id', p.id).order('position'),
+    sb.from('scenes').select('id, number, heading, position, character_ids, extra_ids').eq('project_id', p.id).order('position'),
     sb.from('shot_groups').select('id, name, color, position').eq('project_id', p.id).order('position'),
+    sb.from('characters').select('id, name, actor, info').eq('project_id', p.id).order('position'),
   ]);
   const x = (shots || []).find((s) => s.id === id);
   if (!x) { main.innerHTML = `<p class="empty-note">Este plano já não existe.</p><a href="${base}/storyboard">Voltar ao storyboard</a>`; return; }
@@ -43,7 +44,9 @@ export async function shotPage(main, p, id, base, cleanup) {
         <div class="row wrap-gap"><button type="button" class="btn ghost" data-lm>${ICON.bulb} ${x.lightmap_id ? 'Abrir mapa de luz' : 'Criar mapa de luz'}</button>${img ? '<button type="button" class="btn ghost" data-rmimg>Tirar imagem</button>' : ''}<button type="button" class="btn ghost danger-text" data-del>${ICON.trash} Apagar plano</button></div>
       </section>
     </div>
+    <section class="panel" data-cast></section>
     <section class="panel"><h2 class="h3">Tarefas deste plano</h2><div data-tasks></div></section>`;
+  castPanel(main.querySelector('[data-cast]'), x, scene, chars || []);
   const savers = new Map();
   const save = (k, v) => { if (!savers.has(k)) savers.set(k, debounce((val) => sb.from('shots').update({ [k]: val, updated_at: new Date().toISOString() }).eq('id', x.id).then(({ error }) => error && toast(error.message)))); savers.get(k)(v); };
   main.querySelectorAll('[data-f]').forEach((el) => {
@@ -73,4 +76,36 @@ export async function shotPage(main, p, id, base, cleanup) {
     location.hash = next ? `${base}/plano/${next.id}` : prev ? `${base}/plano/${prev.id}` : `${base}/storyboard`;
   });
   const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: 'shot', id: x.id } }); cleanup(() => t.destroy());
+}
+
+
+// Quem está neste plano: das pessoas da cena, quem aparece em plano e quem tem de estar no set (fora de plano,
+// ex: voz off, contracampo). Clicar muda: — → Em plano → No set → —. Fica em shots.cast_ids e shots.set_ids.
+function castPanel(el, x, scene, chars) {
+  if (!el) return;
+  const inScene = scene ? [...(scene.character_ids || []), ...(scene.extra_ids || [])] : [];
+  const draw = () => {
+    const cast = new Set(x.cast_ids || []); const set = new Set(x.set_ids || []);
+    const ids = [...new Set([...inScene, ...cast, ...set])];
+    const ppl = ids.map((id) => chars.find((c) => c.id === id)).filter(Boolean);
+    const others = chars.filter((c) => !ids.includes(c.id));
+    const st = (id) => (cast.has(id) ? 'frame' : set.has(id) ? 'set' : '');
+    const lbl = { frame: 'Em plano', set: 'No set', '': '—' };
+    el.innerHTML = `<div class="row between wrap-gap"><h2 class="h3">Atores neste plano</h2><span class="muted small">${cast.size} em plano · ${set.size} no set</span></div>
+      <p class="muted small">Carrega para mudar: em plano → só no set (fora de plano, voz off, contracampo) → não precisa.</p>
+      ${ppl.length ? `<div class="cast-pick">${ppl.map((c) => `<button type="button" class="cp ${st(c.id)}" data-cp="${c.id}" aria-label="${esc(c.name)}: ${lbl[st(c.id)]}"><b>${esc(c.name)}</b><small>${esc(c.actor || (c.info?.extra ? 'Figurante' : ''))}</small><span class="cp-s">${lbl[st(c.id)]}</span></button>`).join('')}</div>` : '<p class="muted small">A cena ainda não tem personagens. Junta-as na página da cena.</p>'}
+      <div class="row wrap-gap cp-bar">${ppl.length ? '<button type="button" class="link-btn small" data-cpall>Todos em plano</button><button type="button" class="link-btn small" data-cpnone>Limpar</button>' : ''}
+        ${others.length ? `<select data-cpadd class="si-add" aria-label="Juntar outra pessoa"><option value="">+ Outra pessoa do elenco</option>${others.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select>` : ''}</div>`;
+    const save = async () => { const { error } = await sb.from('shots').update({ cast_ids: x.cast_ids, set_ids: x.set_ids, updated_at: new Date().toISOString() }).eq('id', x.id); if (error) toast(error.message); };
+    el.querySelectorAll('[data-cp]').forEach((b) => b.addEventListener('click', () => {
+      const id = b.dataset.cp; const s0 = st(id);
+      x.cast_ids = (x.cast_ids || []).filter((y) => y !== id); x.set_ids = (x.set_ids || []).filter((y) => y !== id);
+      if (s0 === '') x.cast_ids.push(id); else if (s0 === 'frame') x.set_ids.push(id);
+      save(); draw();
+    }));
+    el.querySelector('[data-cpall]')?.addEventListener('click', () => { x.cast_ids = ppl.map((c) => c.id); x.set_ids = []; save(); draw(); });
+    el.querySelector('[data-cpnone]')?.addEventListener('click', () => { x.cast_ids = []; x.set_ids = []; save(); draw(); });
+    el.querySelector('[data-cpadd]')?.addEventListener('change', (e) => { if (!e.target.value) return; x.cast_ids = [...(x.cast_ids || []), e.target.value]; save(); draw(); });
+  };
+  draw();
 }
