@@ -12,7 +12,7 @@ let peopleCache = null;
 //  · numa comunidade: os membros dela (admin/member/guest) + convidados do projeto aberto (guest)
 //  · num projeto pessoal: o dono (admin) + os convidados (guest)
 //  · no início: todas as pessoas que consigo ver
-const PCOLS = 'id, display_name, username, role, color';
+const PCOLS = 'id, display_name, username, role, color, phone';
 async function fetchPeople() {
   const c = state.ctx?.comm; const pr = state.ctx?.project;
   const projGuests = async (pid) => { if (!pid) return []; const { data } = await sb.from('project_members').select(`user_id, profiles!project_members_user_id_fkey(${PCOLS})`).eq('project_id', pid); return (data || []).map((m) => m.profiles).filter(Boolean); };

@@ -1959,3 +1959,8 @@ body.tool-dragging, body.tool-dragging * { cursor: grabbing !important; user-sel
 .act-toast small { display: block; margin-top: 2px; }
 @keyframes actin { from { opacity: 0; transform: translateY(10px); } }
 @media (prefers-reduced-motion: reduce) { .act-pop { animation: none; } }
+.cs-cpick { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px; max-height: 55vh; overflow: auto; margin: 10px 0 14px; }
+.cs-cpi { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+.cs-cpi:hover { border-color: var(--line2); }
+.cs-cpi span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cs-cpi input { margin-top: 3px; }

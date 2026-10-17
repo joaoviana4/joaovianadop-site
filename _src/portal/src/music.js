@@ -415,7 +415,7 @@ async function entityPage(main, p, f, kind, id, base, cleanup) {
   const secs = sectionsWith(f, kind, id);
   const info = { ...(e.info || {}) };
   const fields = isPlace ? [['address', 'Morada / localização', 'Onde fica, como se chega, contacto do local'], ['notes', 'Notas', 'Autorizações, horários, luz natural, som, estacionamento…']]
-    : [['role', 'Papel no clipe', 'ex: o artista, a mulher do bar, dançarina'], ['contact', 'Contacto', 'Telefone, email, agência'], ['notes', 'Notas', 'Guarda-roupa, cabelo e maquilhagem, disponibilidade…']];
+    : [['role', 'Papel no clipe', 'ex: o artista, a mulher do bar, dançarina'], ['phone', 'Telefone', '912 345 678'], ['email', 'Email', ''], ['contact', 'Agência ou outro contacto', 'Agência, representante…'], ['notes', 'Notas', 'Guarda-roupa, cabelo e maquilhagem, disponibilidade…']];
   main.innerHTML = `
     <nav class="row between wrap-gap"><a href="${base}/${path}" class="link-btn">${ICON.back} ${isPlace ? 'Décors' : 'Atores e figurantes'}</a></nav>
     <header class="row between wrap-gap"><div><span class="small muted">${isPlace ? 'Décor' : info.extra ? 'Figurante' : 'Ator ou atriz'}</span><input class="title-in h1" data-name value="${esc(e.name)}" aria-label="Nome"></div>
@@ -424,7 +424,8 @@ async function entityPage(main, p, f, kind, id, base, cleanup) {
       <section class="panel stack">
         ${isPlace ? '' : await photoField(e)}
         ${isPlace ? '' : `<div class="field"><label for="ea">Nome real</label><input id="ea" data-actor value="${esc(e.actor || '')}" placeholder="Quem faz"></div>${''}<label class="row small"><input type="checkbox" data-extra ${info.extra ? 'checked' : ''}> É figurante</label>`}
-        ${fields.map(([k, l, ph]) => `<div class="field"><label for="ei-${k}">${l}</label><textarea id="ei-${k}" data-info="${k}" rows="${k === 'notes' ? 4 : 2}" placeholder="${esc(ph)}">${esc(info[k] || '')}</textarea></div>`).join('')}
+        ${isPlace ? '' : '<div class="grid2">'}${fields.filter(([k]) => k === 'phone' || k === 'email').map(([k, l, ph]) => `<div class="field"><label for="ei-${k}">${l}</label><input id="ei-${k}" data-info="${k}" type="${k === 'phone' ? 'tel' : 'email'}" ${k === 'phone' ? 'inputmode="tel"' : ''} placeholder="${esc(ph)}" value="${esc(info[k] || '')}"></div>`).join('')}${isPlace ? '' : '</div>'}
+        ${fields.filter(([k]) => k !== 'phone' && k !== 'email').map(([k, l, ph]) => `<div class="field"><label for="ei-${k}">${l}</label><textarea id="ei-${k}" data-info="${k}" rows="${k === 'notes' ? 4 : 2}" placeholder="${esc(ph)}">${esc(info[k] || '')}</textarea></div>`).join('')}
       </section>
       <section class="panel"><h2 class="h3">Aparece em</h2>
         ${secs.length ? `<ul class="ent-secs">${secs.map((s) => { const i = f.scenes.indexOf(s); return `<li><a href="${base}/seguimento/${s.id}"><i class="seg-dot" style="--sc:${SEG_COLORS[i % SEG_COLORS.length]}"></i><span>${esc(s.heading || 'Sem nome')}</span><span class="muted small">${esc([s.starts_at, s.ends_at].filter(Boolean).join('–'))}</span></a></li>`; }).join('')}</ul>` : '<p class="muted small">Ainda em nenhuma secção. Junta-o dentro de uma secção do seguimento.</p>'}
