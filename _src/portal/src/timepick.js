@@ -12,13 +12,15 @@ export function normTime(v) {
   m = t.match(/^(\d{1,2})(\d{2})$/); if (m) { const h = Number(m[1]), mi = Number(m[2]); if (h < 24 && mi < 60) return `${pad(h)}:${pad(mi)}`; }
   return t;
 }
-function open(inp, set) {
+function open(inp, set, startH = null) {
   if (cur === inp && box) return;
   close(); cur = inp;
   box = document.createElement('div'); box.className = 'tp'; box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', 'Escolher hora');
   const [h0, m0] = (normTime(inp.value).match(/^(\d{2}):(\d{2})$/) || []).slice(1).map(Number);
   let hour = Number.isFinite(h0) ? h0 : null;
-  const hours = [...Array(19)].map((_, i) => i + 5).concat([0, 1, 2, 3, 4]);
+  // a lista começa às 5 da manhã, ou na hora pedida (ex: a hora de call, para as calls por departamento)
+  const first = Number.isFinite(startH) ? startH : 5;
+  const hours = [...Array(24)].map((_, i) => (first + i) % 24);
   const draw = (stage) => {
     box.innerHTML = stage === 'h'
       ? `<div class="tp-h">Hora</div><div class="tp-g h">${hours.map((h) => `<button type="button" data-h="${h}" class="${h === hour ? 'on' : ''}">${h}</button>`).join('')}</div>`
@@ -37,12 +39,13 @@ function open(inp, set) {
 }
 // set(input, valor): põe o valor e avisa a página (dispara "input")
 const defaultSet = (inp, v) => { inp.value = v; inp.dispatchEvent(new Event('input', { bubbles: true })); };
-export function bindTimes(inputs, set0 = defaultSet) {
+export function bindTimes(inputs, set0 = defaultSet, { start = null } = {}) {
   const set = (inp, v) => { setting = true; try { set0(inp, v); } finally { setting = false; } };
   inputs.forEach((inp) => {
     if (inp.dataset.tp) return; inp.dataset.tp = '1'; inp.setAttribute('autocomplete', 'off'); inp.setAttribute('inputmode', 'numeric');
-    inp.addEventListener('focus', () => open(inp, set));
-    inp.addEventListener('click', () => open(inp, set));
+    const st = () => { const v = typeof start === 'function' ? start(inp) : start; const m = normTime(v).match(/^(\d{2}):/); return m ? Number(m[1]) : null; };
+    inp.addEventListener('focus', () => open(inp, set, st()));
+    inp.addEventListener('click', () => open(inp, set, st()));
     inp.addEventListener('keydown', (e) => { if (e.key === 'Escape' || e.key === 'Tab') close(); if (e.key === 'Enter') { close(); inp.blur(); } });
     inp.addEventListener('input', () => { if (!setting && box && cur === inp && /\d/.test(inp.value)) close(); });
     inp.addEventListener('blur', () => { const n = normTime(inp.value); if (n !== inp.value) set(inp, n); setTimeout(() => { if (cur === inp && document.activeElement !== inp) close(); }, 150); });
