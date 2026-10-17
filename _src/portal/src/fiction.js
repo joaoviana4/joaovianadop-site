@@ -1,10 +1,11 @@
 import { sb, BUCKET, esc, toast, modal, confirmBox, ICON, signedUrl, signedUrls, uploadImage, fmtDate } from './lib.js';
-import { entMode, entUrls, modeToggle, bindMode, entItems, photoField, bindPhoto } from './entview.js';
+import { entMode, entUrls, modeToggle, bindMode, entItems, photoField, bindPhoto, bindEdits } from './entview.js';
 import { parseScript, fileToText, eighthsLabel } from './script.js';
 import { mountTasks } from './tasks.js';
 import { mountReader } from './scriptview.js';
 import { sceneInfo, placeProps } from './sceneinfo.js';
 import { moodboardPanel, bindMoodboard } from './moodboard.js';
+import { geoPanel } from './placegeo.js';
 import { analyzeScriptModal, applyBreakdown, quickBreakdown } from './scriptan.js';
 import { newLightmapData } from './lmdata.js';
 import { ensureModules } from './modules.js';
@@ -342,10 +343,11 @@ async function personagens(main, p, f, sub, base, cleanup) {
   const count = (id) => f.scenes.filter((s) => (s.character_ids || []).includes(id)).length;
   const urls = await entUrls([f.characters]);
   const mode = entMode('people');
-  const items = f.characters.map((c) => ({ e: c, href: `${base}/personagens/${c.id}`, title: c.name, sub: esc(c.actor || 'Sem ator ou atriz'), meta: `${count(c.id)} ${count(c.id) === 1 ? 'cena' : 'cenas'}` }));
+  const items = f.characters.map((c) => ({ e: c, href: `${base}/personagens/${c.id}`, title: c.name, sub: esc(c.actor || 'Sem ator ou atriz'), meta: `${count(c.id)} ${count(c.id) === 1 ? 'cena' : 'cenas'}`, edit: { table: 'characters', field: 'actor', placeholder: 'Ator ou atriz', label: 'Ator ou atriz' } }));
   main.innerHTML = `<div class="row between wrap-gap"><h1 class="h1 pm-title">Personagens</h1><div class="row">${f.characters.length ? modeToggle('people') : ''}<button type="button" class="btn ghost" data-add>${ICON.plus} Personagem</button></div></div>
     ${f.characters.length ? entItems(items, { mode, urls }) : '<p class="empty-note">Ainda não há personagens. Aparecem ao importar o guião.</p>'}`;
   bindMode(main, 'people', () => personagens(main, p, f, sub, base, cleanup));
+  bindEdits(main, items);
   main.querySelector('[data-add]').addEventListener('click', () => addNamed('characters', 'Nova personagem', p, f.characters, (id) => (location.hash = `${base}/personagens/${id}`)));
 }
 
@@ -401,10 +403,11 @@ async function decors(main, p, f, sub, base, cleanup) {
   const count = (id) => f.scenes.filter((s) => s.location_id === id).length;
   const urls = await entUrls([f.locations]);
   const mode = entMode('places');
-  const items = f.locations.map((l) => ({ e: l, href: `${base}/decors/${l.id}`, title: l.name, sub: esc(l.info?.morada || 'Sem morada'), meta: `${count(l.id)} ${count(l.id) === 1 ? 'cena' : 'cenas'}` }));
+  const items = f.locations.map((l) => ({ e: l, href: `${base}/decors/${l.id}`, title: l.name, sub: esc(l.info?.morada || 'Sem morada'), meta: `${count(l.id)} ${count(l.id) === 1 ? 'cena' : 'cenas'}`, edit: { table: 'locations', field: 'info.morada', placeholder: 'Morada ou link do Google Maps', label: 'Morada' } }));
   main.innerHTML = `<div class="row between wrap-gap"><h1 class="h1 pm-title">Décors</h1><div class="row">${f.locations.length ? modeToggle('places') : ''}<button type="button" class="btn ghost" data-add>${ICON.plus} Décor</button></div></div>
     ${f.locations.length ? entItems(items, { mode, urls, place: true }) : '<p class="empty-note">Ainda não há décors. Aparecem ao importar o guião.</p>'}`;
   bindMode(main, 'places', () => decors(main, p, f, sub, base, cleanup));
+  bindEdits(main, items);
   main.querySelector('[data-add]').addEventListener('click', () => addNamed('locations', 'Novo décor', p, f.locations, (id) => (location.hash = `${base}/decors/${id}`)));
 }
 
@@ -423,10 +426,11 @@ async function decor(main, p, f, id, base, cleanup) {
       <section class="panel"><div class="row between"><h2 class="h3">Mapas de luz da montagem base</h2><button type="button" class="btn ghost" data-newlm>${ICON.bulb} Mapa de luz</button></div><div data-lms class="muted small">A carregar…</div></section>
       <section class="panel dp-props" data-dprops><p class="muted small">A carregar adereços…</p></section>
       <section class="panel"><h2 class="h3">Tarefas</h2><div data-tasks></div></section>
-    </div><aside class="pm-side">${moodboardPanel(l)}<section class="panel"><h2 class="h3">Cenas neste décor (${scenes.length})</h2>${sceneLinks(scenes, f, base)}</section></aside></div>`;
+    </div><aside class="pm-side">${moodboardPanel(l)}<section class="panel geo-panel" data-geo></section><section class="panel"><h2 class="h3">Cenas neste décor (${scenes.length})</h2>${sceneLinks(scenes, f, base)}</section></aside></div>`;
   bindBlocks(main, 'locations', l);
   bindMoodboard(main, p, { table: 'locations', row: l, key: 'location_id', base });
   placeProps(main.querySelector('[data-dprops]'), p, l, scenes.map((s) => s.id), base);
+  geoPanel(main.querySelector('[data-geo]'), p, l);
   { const sv = debounce((v) => sb.from('locations').update({ name: v }).eq('id', l.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message))); main.querySelector('[data-ename]').addEventListener('input', (e) => { l.name = e.target.value; if (l.name.trim()) sv(l.name.trim()); }); }
   const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: 'location', id: l.id } }); cleanup(() => t.destroy());
   sb.from('boards').select('id, title').eq('project_id', p.id).eq('kind', 'lightmap').eq('data->>location_id', l.id).then(({ data }) => {

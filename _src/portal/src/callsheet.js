@@ -251,6 +251,40 @@ export function callsheetTool(main, p, tool) {
     all.sheets.push(copy); renumber(); save(); go(all.sheets.length - 1);
     toast(blank ? 'Dia novo, em branco.' : 'Dia novo com os mesmos contactos, horários e local (sem planos nem elenco).');
   };
+  // hospital, polícia, bombeiros, meteorologia e sol a partir do décor do dia (ou da morada escrita)
+  const geoTried = new Set();
+  const geoFill = async ({ hosp = false, wx = false, loud = false }) => {
+    if (!d.place && !d.address) { if (loud) toast('Escreve primeiro o local ou a morada.'); return; }
+    if (loud) toast('A procurar…', 6000);
+    try {
+      const { data: locs } = await sb.from('locations').select('id, name, info').eq('project_id', p.id);
+      const n = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+      let loc = (locs || []).find((l) => n(l.name) === n(d.place)) || (locs || []).find((l) => d.place && (n(l.name).includes(n(d.place)) || n(d.place).includes(n(l.name))));
+      if (loc && !(loc.info?.morada || loc.info?.address) && d.address) loc = null;
+      const { placeInfo } = await import('./placegeo.js');
+      const { geocode, nearby, weatherFor, weatherLine, pinUrl } = await import('./geo.js');
+      let info = loc ? await placeInfo(p, loc) : null;
+      if (!info && d.address) { const g = await geocode(d.address); if (g) { const nb = await nearby(g); info = { geo: g, hospital: nb.hospitals[0], police: nb.police[0], fire: nb.fire[0] }; } }
+      if (!info?.geo) { if (loud) toast('Não encontrei este local no mapa. Junta a morada no décor ou aqui.'); return; }
+      const sheet = d; let changed = false;
+      const put = (path, v, force) => { const cur0 = get(sheet, path); if (v && (force || !cur0)) { set(sheet, path, v); changed = true; } };
+      sheet.more ||= {};
+      if (info.hospital) { put('hospital.name', `${info.hospital.name}${info.hospital.min != null ? ` (${info.hospital.min} min)` : ''}`, hosp); put('hospital.url', info.hospital.url, hosp); }
+      if (info.police) put('more.police', `${info.police.name}${info.police.phone ? ` · ${info.police.phone}` : ''}`, hosp);
+      if (info.fire) put('more.fire', `${info.fire.name}${info.fire.phone ? ` · ${info.fire.phone}` : ''}`, hosp);
+      put('more.ambulance', '112', false);
+      if (sheet.date) {
+        const w = await weatherFor(info.geo, sheet.date);
+        sheet.weather ||= {};
+        put('weather.text', `${weatherLine(w)}${w.kind === 'estimativa' ? ' (estimativa)' : ''}`, wx);
+        if (w.min != null) { put('weather.min', `${w.min}°`, wx); put('weather.max', `${w.max}°`, wx); }
+        put('more.sunrise', w.sunrise, wx); put('more.sunset', w.sunset, wx);
+      }
+      if (changed && sheet === d) { save(); draw(); }
+      if (loud) toast(changed ? 'Folha preenchida com o hospital, o sol e o tempo. Confirma antes de enviar.' : 'Já estava tudo preenchido.');
+      void pinUrl;
+    } catch (e) { if (loud) toast(e.message || 'Não foi possível procurar agora.'); }
+  };
   const draw = () => {
     main.innerHTML = `<div class="cs-days" role="tablist" aria-label="Dias de rodagem">
         <button type="button" class="cs-dnav" data-go="-1" aria-label="Dia anterior" ${cur === 0 ? 'disabled' : ''}>${ICON.back}</button>
@@ -262,7 +296,8 @@ export function callsheetTool(main, p, tool) {
       </div>
       <div class="row between wrap-gap cs-bar">
         <div class="row wrap-gap"><label class="cs-acc" title="Cor de destaque"><input type="color" data-acc value="${esc(d.accent || '#C8382D')}"><span>Cor</span></label>
-          <button type="button" class="btn ghost" data-import>${ICON.open} Importar do Excel</button></div>
+          <button type="button" class="btn ghost" data-import>${ICON.open} Importar do Excel</button>
+          <button type="button" class="btn ghost" data-geofill title="Hospital mais perto, polícia, bombeiros, meteorologia e horas do sol, a partir do local e da data">☀︎ Hospital, sol e tempo</button></div>
         <button type="button" class="btn primary" data-export>${ICON.open} Exportar</button></div>
       ${studioHtml(d)}`;
     const auto = (t) => { if (t.tagName === 'TEXTAREA') { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; } };
@@ -293,6 +328,10 @@ export function callsheetTool(main, p, tool) {
       });
     }));
     peoplePicker(main, p, d, save);
+    main.querySelector('[data-geofill]')?.addEventListener('click', () => geoFill({ hosp: true, wx: true, loud: true }));
+    ['place', 'address'].forEach((k) => main.querySelector(`[data-p="${k}"]`)?.addEventListener('change', () => geoFill({ hosp: true })));
+    main.querySelector('[data-p="date"]')?.addEventListener('change', () => geoFill({ wx: true }));
+    { const k = `${cur}|${d.place}|${d.address}|${d.date}`; if (!geoTried.has(k) && (d.place || d.address) && (!d.hospital?.name || (d.date && !d.weather?.text))) { geoTried.add(k); geoFill({}); } }
     on('[data-addt]', () => d.times.push({ id: uid(), label: '', value: '' }));
     on('[data-addd]', () => d.depts.push({ id: uid(), name: '', time: '' }));
     on('[data-addcast]', () => d.cast.push({ id: uid(), name: '', role: '', scene: '', call: '', out: '', obs: '' }));
