@@ -1,4 +1,4 @@
-import { sb, esc, toast, modal, phaseOf } from './lib.js';
+import { sb, esc, toast, modal, phaseOf, ICON } from './lib.js';
 
 // Fases do projeto: Pré-produção, Produção e Pós-produção. O seletor em cima do banner mostra só as páginas e
 // ferramentas dessa fase (no menu do lado e na visão geral). Cada página/ferramenta tem fases por defeito e a equipa
@@ -6,6 +6,10 @@ import { sb, esc, toast, modal, phaseOf } from './lib.js';
 // A fase escolhida fica guardada só neste navegador, por projeto.
 
 export const PHASES = [['pre', 'Pré-produção'], ['prod', 'Produção'], ['pos', 'Pós-produção']];
+// a ficção tem uma quarta etapa: Distribuição (festivais, mostras, salas)
+export const hasDist = (kind) => kind === 'ficcao';
+export const phasesFor = (p) => (hasDist(p?.kind) ? [...PHASES, ['dist', 'Distribuição']] : PHASES);
+export const stageOptions = (kind) => (hasDist(kind) ? [...PHASES, ['dist', 'Distribuição']] : PHASES);
 const ALL = ['pre', 'prod', 'pos'];
 // Tudo o que existia até 17 out 2026 é de pré-produção (as ferramentas de produção e pós-produção vêm a seguir).
 const PRE = ['pre'];
@@ -20,13 +24,14 @@ export function phasesOf(p, key, kind) {
   return Array.isArray(o) ? o : defOf(key, kind);
 }
 const LS = (p) => `portal-phase:${p.id}`;
-export function selPhase(p) { try { const v = localStorage.getItem(LS(p)); return PHASES.some(([k]) => k === v) ? v : 'all'; } catch { return 'all'; } }
+export function selPhase(p) { try { const v = localStorage.getItem(LS(p)); return phasesFor(p).some(([k]) => k === v) ? v : 'all'; } catch { return 'all'; } }
 export function setSelPhase(p, v) { try { if (v === 'all') localStorage.removeItem(LS(p)); else localStorage.setItem(LS(p), v); } catch { /* sem memória do navegador */ } }
 export const shows = (p, key, kind) => { const s = selPhase(p); return s === 'all' || phasesOf(p, key, kind).includes(s); };
-export const phaseLabel = (k) => PHASES.find(([x]) => x === k)?.[1] || 'Tudo';
+export const phaseLabel = (k) => [...PHASES, ['dist', 'Distribuição']].find(([x]) => x === k)?.[1] || 'Tudo';
 
-// fase em que o projeto está agora (pelas datas do projeto)
+// fase em que o projeto está agora: a que foi escolhida (projects.stage) ou, sem isso, pelas datas do projeto
 export function currentPhase(p) {
+  if (p.stage && phasesFor(p).some(([k]) => k === p.stage)) return p.stage;
   const l = phaseOf(p).label;
   return l === 'Pré-produção' ? 'pre' : l === 'Produção' ? 'prod' : l.startsWith('Pós-produção') ? 'pos' : null;
 }
@@ -35,18 +40,29 @@ export function currentPhase(p) {
 const SPAN = { pre: [0, 1 / 3], prod: [1 / 3, 2 / 3], pos: [2 / 3, 1] };
 export function projectStrip(p, base) {
   const s = selPhase(p); const cur = currentPhase(p); const pct = phaseOf(p).pct || 0; const hasDates = !!(p.starts_on && p.ends_on);
-  const fill = (k) => { if (!hasDates) return 0; const [a, b] = SPAN[k]; return Math.max(0, Math.min(1, (pct - a) / (b - a))); };
+  const list = phasesFor(p); const ci = list.findIndex(([k]) => k === cur);
+  // com a fase escolhida: as anteriores ficam feitas, a atual a meio (ou pelas datas), as seguintes vazias
+  const fill = (k) => {
+    if (p.stage && ci >= 0) { const i = list.findIndex(([x]) => x === k); if (i < ci) return 1; if (i > ci) return 0; if (hasDates && SPAN[k]) { const [a, b] = SPAN[k]; return Math.max(0.08, Math.min(0.95, (pct - a) / (b - a))); } return 0.5; }
+    if (!hasDates || !SPAN[k]) return 0; const [a, b] = SPAN[k]; return Math.max(0, Math.min(1, (pct - a) / (b - a)));
+  };
   return `<div class="proj-strip" role="navigation" aria-label="Etapas do projeto"><div class="ps-in">
     <a class="ps-name" href="${base}" title="Visão geral">${esc(p.name)}</a>
-    <div class="ps-steps" role="tablist">${PHASES.map(([k, l], i) => { const f = fill(k); return `<button type="button" role="tab" class="ps-step ${k === cur ? 'now' : ''} ${f >= 1 ? 'done' : ''}" aria-selected="${s === k}" data-phase="${k}" title="${s === k ? 'Ver todas as fases' : `Ver só ${esc(l.toLowerCase())}`}">
+    <div class="ps-steps" role="tablist" style="--n:${list.length}">${list.map(([k, l], i) => { const f = fill(k); return `<button type="button" role="tab" class="ps-step ${k === cur ? 'now' : ''} ${f >= 1 ? 'done' : ''}" aria-selected="${s === k}" data-phase="${k}" title="${s === k ? 'Ver todas as fases' : `Ver só ${esc(l.toLowerCase())}`}">
         <span class="ps-l"><span class="ps-n">${f >= 1 ? '✓' : i + 1}</span>${esc(l)}${k === cur ? '<i class="phase-now" title="O projeto está nesta fase"></i>' : ''}</span>
         <span class="ps-bar"><i style="width:${Math.round(f * 100)}%"></i></span></button>`; }).join('')}</div>
-    <div class="ps-r">${s !== 'all' ? '<button type="button" class="link-btn small" data-phase="all">Ver tudo</button>' : ''}<button type="button" class="link-btn small" data-phaseorg>Organizar fases</button></div>
+    <div class="ps-r">${s !== 'all' ? '<button type="button" class="link-btn small" data-phase="all">Ver tudo</button>' : ''}${p.canEdit !== false ? `<label class="ps-stage" title="Em que fase o projeto está"><span>Está em</span><select data-stage aria-label="Fase atual do projeto"><option value="">${p.stage ? 'Pelas datas' : (cur ? `${esc(phaseLabel(cur))} (datas)` : 'Pelas datas')}</option>${list.map(([k, l]) => `<option value="${k}" ${p.stage === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label><button type="button" class="link-btn small" data-phaseorg>Organizar fases</button>` : ''}</div>
   </div></div>`;
 }
 export function bindStrip(root, p, { onChange, items }) {
   root.querySelectorAll('.proj-strip [data-phase]').forEach((b) => b.addEventListener('click', () => { const k = b.dataset.phase; setSelPhase(p, k !== 'all' && selPhase(p) === k ? 'all' : k); onChange(); }));
   root.querySelector('.proj-strip [data-phaseorg]')?.addEventListener('click', () => organizePhases(p, items(), onChange));
+  root.querySelector('.proj-strip [data-stage]')?.addEventListener('change', async (e) => {
+    const stage = e.target.value || null;
+    const { error } = await sb.from('projects').update({ stage }).eq('id', p.id);
+    if (error) return toast(error.message);
+    p.stage = stage; toast(stage ? `O projeto está em ${phaseLabel(stage).toLowerCase()}.` : 'A fase passa a vir das datas do projeto.'); onChange();
+  });
 }
 
 export function phaseBar(p) {
@@ -66,8 +82,8 @@ export function organizePhases(p, items, after) {
   const cur = Object.fromEntries(items.map((it) => [it.key, [...phasesOf(p, it.key, it.kind)]]));
   const groups = [...new Set(items.map((it) => it.group))];
   const m = modal(`<h2>Organizar fases</h2><p class="muted small">Escolhe em que fases aparece cada página e ferramenta. Vale para toda a equipa.</p>
-    <div class="phase-org-t"><div class="pot-h"><span></span>${PHASES.map(([, l]) => `<span>${esc(l)}</span>`).join('')}</div>
-    ${groups.map((g) => `<p class="pot-g">${esc(g)}</p>${items.filter((it) => it.group === g).map((it) => `<div class="pot-r" data-key="${esc(it.key)}"><span>${esc(it.label)}</span>${PHASES.map(([k]) => `<label><input type="checkbox" value="${k}" ${cur[it.key].includes(k) ? 'checked' : ''} aria-label="${esc(it.label)} em ${esc(phaseLabel(k))}"></label>`).join('')}</div>`).join('')}`).join('')}</div>
+    <div class="phase-org-t" style="--n:${phasesFor(p).length}"><div class="pot-h"><span></span>${phasesFor(p).map(([, l]) => `<span>${esc(l)}</span>`).join('')}</div>
+    ${groups.map((g) => `<p class="pot-g">${esc(g)}</p>${items.filter((it) => it.group === g).map((it) => `<div class="pot-r" data-key="${esc(it.key)}"><span>${esc(it.label)}</span>${phasesFor(p).map(([k]) => `<label><input type="checkbox" value="${k}" ${cur[it.key].includes(k) ? 'checked' : ''} aria-label="${esc(it.label)} em ${esc(phaseLabel(k))}"></label>`).join('')}</div>`).join('')}`).join('')}</div>
     <div class="row between wrap-gap"><button type="button" class="link-btn small" data-reset>Repor o que vem por defeito</button><div class="row"><button type="button" class="btn ghost" data-close>Cancelar</button><button type="button" class="btn primary" data-save>Guardar</button></div></div>`, { wide: true });
   m.el.querySelector('[data-reset]').addEventListener('click', async () => { await save(p, null); m.close(); after(); });
   m.el.querySelector('[data-save]').addEventListener('click', async () => {

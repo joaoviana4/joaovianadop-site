@@ -2498,3 +2498,19 @@ body.readonly .proj-main input[readonly]:focus, body.readonly .proj-main textare
 .pn-search { margin-bottom: 12px; }
 /* o menu do projeto rola; as linhas nunca encolhem (senão a pesquisa e "está aqui" ficam umas por cima das outras) */
 .proj-nav > * { flex-shrink: 0; }
+/* fase do projeto: escolha ao criar e na barra */
+.stage-pick { border: 0; padding: 0; margin: 0; }
+.stage-pick legend { font-size: 13px; font-weight: 600; margin-bottom: 6px; padding: 0; }
+.stage-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 6px; }
+.stage-o { cursor: pointer; }
+.stage-o input { position: absolute; opacity: 0; pointer-events: none; }
+.stage-o span { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--line2); border-radius: 10px; font-size: 13.5px; font-weight: 600; }
+.stage-o b { width: 20px; height: 20px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 11px; background: var(--panel2); color: var(--muted); flex: none; }
+.stage-o input:checked + span { border-color: var(--blue); background: color-mix(in srgb, var(--blue) 10%, transparent); }
+.stage-o input:checked + span b { background: var(--blue); color: #fff; }
+.stage-o input:focus-visible + span { outline: 2px solid var(--blue); outline-offset: 2px; }
+.ps-steps { grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr)); max-width: 900px; }
+.ps-stage { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.ps-stage select { width: auto; min-height: 30px; padding: 2px 26px 2px 8px; font-size: 12.5px; border-radius: 8px; }
+.phase-org-t .pot-h, .phase-org-t .pot-r { grid-template-columns: minmax(0, 1fr) repeat(var(--n, 3), 92px); }
+@media (max-width: 600px) { .phase-org-t .pot-h, .phase-org-t .pot-r { grid-template-columns: minmax(0, 1fr) repeat(var(--n, 3), 50px); } }

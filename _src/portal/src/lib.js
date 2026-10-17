@@ -133,7 +133,7 @@ export const isPlatformAdmin = () => state.profile?.role === 'admin';
 export const PERMS = { budget: ['Orçamentos', 'Vê e edita o orçamento e os valores de todos os projetos da comunidade'], finance: ['Finanças', 'Vê e edita as finanças da Central (movimentos, contas e despesas)'] };
 export const hasPerm = (k) => { const c = state.ctx?.comm; if (c) return c.my_role === 'admin' || (c.my_perms || []).includes(k); return state.ctx?.project ? ownsCtxProject() && k === 'budget' : false; };
 // colunas de projects que a app pode ler (os valores vivem em project_budgets, protegidos)
-export const PROJECT_COLS = 'id, community_id, name, client, kind, status, is_central, cover_path, departments, starts_on, ends_on, created_by, created_at, updated_at, done_at, music, layouts, modules, deleted_at, deleted_by, parent_id, lead_id, lead_ids, manager_id';
+export const PROJECT_COLS = 'id, community_id, name, client, kind, status, is_central, cover_path, departments, starts_on, ends_on, created_by, created_at, updated_at, done_at, music, layouts, modules, deleted_at, deleted_by, parent_id, lead_id, lead_ids, manager_id, stage';
 // líderes do projeto (vários); lead_id fica com o primeiro, para o que ainda o lê
 export const leadsOf = (p) => { const a = Array.isArray(p?.lead_ids) ? p.lead_ids.filter(Boolean) : []; return a.length ? a : p?.lead_id ? [p.lead_id] : []; };
 
