@@ -752,7 +752,7 @@ function newBoard(p, groupId = '', kind = 'board') {
     if (f.kind === 'lightmap') f.group_id = await ensureDept(p, 'imagem');
     else if (f.group_id === 'imagem' && !deptOf(p, 'imagem')) f.group_id = await ensureDept(p, 'imagem');
     else if (f.group_id === 'arte' && !deptOf(p, 'arte')) f.group_id = await ensureDept(p, 'arte');
-    const data = f.kind === 'table' ? await tableTemplate(p, f.tpl) : f.kind === 'lightmap' ? newLightmapData() : f.kind === 'callsheet' ? { sheets: [(await lazy.callsheet()).newCallsheet(p, 1)] } : f.kind === 'transport' ? (await lazy.transport()).newTransport(p) : {};
+    const data = f.kind === 'table' ? await tableTemplate(p, f.tpl) : f.kind === 'lightmap' ? newLightmapData() : f.kind === 'callsheet' ? { sheets: [(await lazy.callsheet()).newCallsheet(p, 1)] } : f.kind === 'transport' ? (await lazy.transport()).newTransport(p) : f.kind === 'distribution' ? (await import('./distribution.js')).newDistribution() : {};
     const { data: row, error } = await sb.from('boards').insert({ project_id: p.id, title: f.title.trim(), group_id: f.group_id || null, position: p._boards.length, kind: f.kind, data, visible_to: readVis(form) }).select().single();
     if (error) return toast(error.message);
     m.close(); go(toolHref(p, row));
@@ -789,6 +789,7 @@ async function toolPage(projectId, toolId) {
   if (tool.kind === 'media') mediaTool(box, p, tool);
   if (tool.kind === 'callsheet') (await lazy.callsheet()).callsheetTool(box, p, tool);
   if (tool.kind === 'transport') (await lazy.transport()).transportTool(box, p, tool);
+  if (tool.kind === 'distribution') (await import('./distribution.js')).distributionTool(box, p, tool);
   if (tool.kind === 'lightmap') {
     const { data: chars } = await sb.from('characters').select('name, actor').eq('project_id', p.id).order('position');
     const lm = (await lazy.lightmap()).lightmapTool(box, p, tool, { characters: (chars || []).map((c) => c.name), base: projBase(p) });
