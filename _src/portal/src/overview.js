@@ -9,7 +9,7 @@ import { hasMod } from './modules.js';
 // questões de produção por decidir, departamentos e cronograma. Sem valores (esses ficam no Orçamento).
 
 const READY = new Set(['pronto', 'comprado', 'alugado', 'emprestado', 'construido']);
-const PH = [['pre', 'Pré-produção', '#7C5CFF'], ['prod', 'Rodagem', '#F08A24'], ['post', 'Pós-produção', '#2FB67C']];
+const PH = [['pre', 'Pré-produção', '#7C5CFF'], ['prod', 'Rodagem', '#F08A24'], ['post', 'Pós-produção', '#2FB67C'], ['dist', 'Distribuição', '#1F8A8A']];
 const plural = (n, a, b) => `${n} ${n === 1 ? a : b}`;
 const av = (x) => (x ? `<span class="avatar sm" title="${esc(x.display_name)}" style="--c:${esc(x.color)}">${esc(initials(x.display_name))}</span>` : '<span class="avatar sm empty" title="Sem responsável"></span>');
 

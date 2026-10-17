@@ -671,7 +671,7 @@ async function loadProject(id, { fresh = false } = {}) {
 }
 async function loadProjectNow(id) {
   // tudo de uma vez (antes eram 4 idas à base de dados, uma atrás da outra)
-  const [{ data: p }, { data: fin }, { data: grant }, { count: nScripts }, { data: boards }, { data: canEdit }] = await Promise.all([
+  const [{ data: p }, { data: fin }, { data: grant }, { count: nScripts }, { data: boards }, { data: canEdit }, { data: tl }] = await Promise.all([
     // o projeto-pai (álbum) vem no mesmo pedido
     sb.from('projects').select(`${PROJECT_COLS}, parent:parent_id(id, name, kind, deleted_at)`).eq('id', id).maybeSingle()
       .then((r) => (r.error ? sb.from('projects').select(PROJECT_COLS).eq('id', id).maybeSingle() : r)),
@@ -681,9 +681,12 @@ async function loadProjectNow(id) {
     sb.from('scripts').select('id', { count: 'exact', head: true }).eq('project_id', id).neq('kind', 'tratamento'),
     sb.from('boards').select('id, parent_id, title, group_id, position, created_at, kind, visible_to, created_by').eq('project_id', id).order('position').order('created_at'),
     sb.rpc('can_edit_project', { p: id }),
+    // as fases e datas do cronograma de produção dizem em que etapa o projeto está
+    sb.from('boards').select('id, phases:data->phases').eq('project_id', id).eq('kind', 'timeline').order('position').limit(1),
   ]);
   if (!p || p.deleted_at) return null;
   p.canEdit = canEdit !== false;
+  { const t = (tl || [])[0]; const ph = t ? t.phases || t.data?.phases || null : null; p._tlPhases = ph && typeof ph === 'object' ? ph : null; p._tlHref = t ? `${p.is_central ? `#/c/${p.community_id}/central` : `#/p/${p.id}`}/f/${t.id}` : null; }
   // permissões do ecrã: as da comunidade do projeto, ou de dono/convidado num projeto pessoal
   if (p.community_id && !commById(p.community_id)) await loadComms();
   setCtx({ comm: p.community_id ? commById(p.community_id) : null, project: p });
