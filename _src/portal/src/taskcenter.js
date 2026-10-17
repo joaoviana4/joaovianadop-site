@@ -1,5 +1,5 @@
 import { DB_SCHEMA, sb, esc, state, dueInfo, fmtDate, STATUS, ICON, toast, initials } from './lib.js';
-import { loadPeople, deptOf, editTask } from './tasks.js';
+import { loadPeople, deptOf, editTask, addTaskModal } from './tasks.js';
 
 // Central de tarefas, como no Studio, em três partes:
 // 1. As minhas tarefas  2. Atribuir tarefas (com filtros)  3. Histórico das tarefas feitas.
@@ -111,9 +111,8 @@ export function mountTaskCenter(root, { projectId = null, communityId = null, mi
         <div class="panel">${mine.length ? `<ul class="task-list">${mine.map((t) => row(t, { showWho: false })).join('')}</ul>` : '<p class="empty-note">Não tens tarefas abertas.</p>'}</div>
       </section>
       <section class="tc-sec">
-        <div class="tc-h"><h2 class="h2">Atribuir tarefas</h2></div>
+        <div class="tc-h"><h2 class="h2">Atribuir tarefas</h2><button type="button" class="btn primary sm" data-newtask>${ICON.plus} Adicionar tarefa</button></div>
         <div class="panel stack">
-          ${addForm()}
           <div class="tasks-bar">
             ${sel('status', [['open', 'Abertas'], ['todo', 'Por fazer'], ['doing', 'Em curso']])}
             ${sel('who', [['all', 'Todos os responsáveis'], ['me', 'As minhas'], ['none', 'Sem responsável'], ...st.people.map((x) => ['p:' + x.id, x.display_name]), ...allDepts.map((d) => ['d:' + d.id, `Departamento: ${d.name}`])])}
@@ -136,27 +135,11 @@ export function mountTaskCenter(root, { projectId = null, communityId = null, mi
     const qi = root.querySelector('[data-q]');
     qi.addEventListener('input', () => { st.q = qi.value; const pos = qi.selectionStart; draw(); const n = root.querySelector('[data-q]'); n.focus(); n.setSelectionRange(pos, pos); });
     root.querySelector('[data-more]')?.addEventListener('click', () => { st.histLimit += 100; draw(); });
-    const form = root.querySelector('[data-add]');
-    form.querySelector('[data-proj]')?.addEventListener('change', (e) => {
-      const np = st.projects.get(e.target.value); const depts = np?.departments || [];
-      const asg = form.elements.assignee; const cur = asg.value;
-      asg.innerHTML = `<option value="">Responsável</option><optgroup label="Pessoas">${st.people.map((x) => `<option value="p:${x.id}">${esc(x.display_name)}</option>`).join('')}</optgroup>${depts.length ? `<optgroup label="Departamentos">${depts.map((d) => `<option value="d:${esc(d.id)}">${esc(d.name)}</option>`).join('')}</optgroup>` : ''}`;
-      asg.value = cur.startsWith('p:') ? cur : '';
-      const dsel = form.elements.department;
-      if (dsel) dsel.innerHTML = `<option value="">Departamento</option>${depts.map((d) => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}`;
-    });
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const f = Object.fromEntries(new FormData(form));
-      const a = f.assignee || '';
-      const row = { project_id: projectId || f.project_id, title: f.title.trim(), assignee_id: a.startsWith('p:') ? a.slice(2) : null, department: a.startsWith('d:') ? a.slice(2) : f.department || null, due: f.due || null };
-      if (!row.title || !row.project_id) return;
-      const { data, error } = await sb.from('tasks').insert(row).select().single();
-      if (error) return toast(error.message);
-      st.tasks.push(data); draw(); toast('Tarefa atribuída.');
-      root.querySelector('[data-add] input[name=title]')?.focus();
-    });
-  }
+    root.querySelector('[data-newtask]')?.addEventListener('click', () => {
+      const projs = [...st.projects.values()].filter((x) => x.status !== 'archived' && !x.deleted_at);
+      const pr = projectId ? st.projects.get(projectId) : null;
+      addTaskModal({ projectId: projectId || null, departments: pr?.departments || [], projects: projectId ? null : projs.map((x) => ({ id: x.id, name: projName(x), departments: x.departments || [] })) });
+    });  }
 
   root.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-act]'); if (!b) return;
@@ -174,7 +157,9 @@ export function mountTaskCenter(root, { projectId = null, communityId = null, mi
   const ch = sb.channel('tc-' + (projectId || 'all') + Math.random().toString(36).slice(2))
     .on('postgres_changes', { event: '*', schema: DB_SCHEMA, table: 'tasks', ...(projectId ? { filter: `project_id=eq.${projectId}` } : {}) }, () => { clearTimeout(ch._t); ch._t = setTimeout(load, 500); })
     .subscribe();
+  const onAdded = (e) => { if (st.dead) return; const t = e.detail; if (t && (!projectId || t.project_id === projectId) && st.projects.has(t.project_id) && !st.tasks.some((x) => x.id === t.id)) { st.tasks.push(t); draw(); } };
+  window.addEventListener('portal-task-added', onAdded);
   root.innerHTML = '<p class="muted">A carregar…</p>';
   load();
-  return { destroy() { st.dead = true; sb.removeChannel(ch); } };
+  return { destroy() { st.dead = true; sb.removeChannel(ch); window.removeEventListener('portal-task-added', onAdded); } };
 }

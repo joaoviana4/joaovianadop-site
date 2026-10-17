@@ -454,6 +454,29 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     if (it && (kind === 'note' || kind === 'title')) startEdit(it.id, world.querySelector(`[data-id="${it.id}"] .txt`));
   }
 
+  // capa de um board: carregar do computador ou escolher uma das imagens desse board (ou voltar à automática)
+  async function coverMenu(it) {
+    const d = it.data || {};
+    const m = modal(`<h2>Capa do board</h2>
+      <button type="button" class="btn primary bm-new" data-up>${ICON.open} Carregar do computador</button>
+      <p class="muted small">Ou escolhe uma imagem de dentro de "${esc(d.title || 'Board')}":</p>
+      <div class="im-grid" data-grid><p class="muted small">A carregar…</p></div>
+      <div class="row between"><button type="button" class="btn ghost" data-auto ${d.cover ? '' : 'disabled'}>Capa automática (a primeira imagem)</button><button type="button" class="btn ghost" data-close>Fechar</button></div>`, { wide: true });
+    const setCover = (path) => { it.data = { ...it.data, cover: path || null }; if (!path) delete it.data.cover; save(it, ['data']); cardEl(it); toast(path ? 'Capa mudada.' : 'Capa automática.'); };
+    m.el.querySelector('[data-up]').addEventListener('click', () => {
+      m.close();
+      const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+      inp.onchange = async () => { try { toast('A enviar a capa…'); const up = await uploadImage(projectId, 'board', inp.files[0]); urls = { ...urls, ...(await signedUrls([up.path])) }; setCover(up.path); } catch (e) { toast(e.message || String(e)); } };
+      inp.click();
+    });
+    m.el.querySelector('[data-auto]').addEventListener('click', () => { m.close(); setCover(null); });
+    const { data: imgs } = d.board_id ? await sb.from('board_items').select('data').eq('board_id', d.board_id).eq('kind', 'image').order('z') : { data: [] };
+    const paths = [...new Set((imgs || []).map((x) => x.data?.path).filter(Boolean))];
+    const u = await signedUrls(paths); urls = { ...urls, ...u };
+    const grid = m.el.querySelector('[data-grid]');
+    grid.innerHTML = paths.length ? paths.map((pth) => `<button type="button" class="im-t ${d.cover === pth ? 'on' : ''}" data-p="${esc(pth)}">${u[pth] ? `<img src="${esc(u[pth])}" alt="" loading="lazy">` : ''}</button>`).join('') : '<p class="muted small">Este board ainda não tem imagens. Carrega uma do computador.</p>';
+    grid.querySelectorAll('[data-p]').forEach((b) => b.addEventListener('click', () => { m.close(); setCover(b.dataset.p); }));
+  }
   // juntar imagens: do computador, ou uma que já está no projeto (boards, storyboard, elenco, décors, adereços, figurino)
   async function imageMenu() {
     const at0 = dropAt;
@@ -587,13 +610,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
         inp.click(); return;
       }
       case 'openboard': return d.board_id && onOpenBoard(d.board_id);
-      case 'cover': {
-        const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
-        inp.onchange = async () => {
-          try { toast('A enviar a capa…'); const up = await uploadImage(projectId, 'board', inp.files[0]); urls = { ...urls, ...(await signedUrls([up.path])) }; it.data = { ...it.data, cover: up.path }; save(it, ['data']); cardEl(it); toast('Capa mudada.'); } catch (e) { toast(e.message || String(e)); }
-        };
-        inp.click(); return;
-      }
+      case 'cover': return coverMenu(it);
       case 'link': case 'media': return;
       case 'play': st.playing = it.id; cardEl(it); return;
       default: return;

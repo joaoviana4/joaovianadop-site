@@ -842,10 +842,10 @@ async function projectPage(projectId, page, sub) {
   if (!p.is_central) app.querySelector('.topbar-r')?.insertAdjacentHTML('afterbegin', `<button type="button" class="btn ghost sm task-top" data-pagetask>${ICON.plus}<span>Adicionar tarefa</span></button>`);
   app.querySelector('[data-pagetask]')?.addEventListener('click', () => {
     const ENT = { cenas: 'scene', seguimento: 'scene', personagens: 'character', elenco: 'character', figurino: 'character', decors: 'location', plano: 'shot', aderecos: 'prop', marketing: 'marketing' };
-    const entity = sub && ENT[page] ? { type: ENT[page], id: sub } : { type: `page:${page}`, id: null };
+    const entity = sub && ENT[page] ? { type: ENT[page], id: sub } : ['tarefas', 'geral'].includes(page) ? null : { type: `page:${page}`, id: null };
     const label = (pageMeta(page)?.label || { geral: 'Visão geral', atividade: 'Atividade', equipa: 'Equipa', detalhes: 'Detalhes', plano: 'Plano' }[page] || page);
     const h = main.querySelector('h1, .title-in, .scene-h h1');
-    const where = sub ? `${label} · ${(h?.value || h?.textContent || '').trim()}` : label;
+    const where = !entity ? '' : sub ? `${label} · ${(h?.value || h?.textContent || '').trim()}` : label;
     addTaskModal({ projectId: p.id, departments: p.departments || [], entity, where });
   });
   const titles = { tarefas: 'Tarefas', equipa: p.is_central ? 'Equipa' : 'Equipa e convites', detalhes: 'Detalhes' };
