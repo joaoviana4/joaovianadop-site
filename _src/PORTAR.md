@@ -64,3 +64,9 @@ O resto deste ficheiro descreve como o Studio nasceu do código do byGrain (aind
 - Políticas RESTRICTIVE "só editores …" (insert/update/delete) em todas as tabelas de projeto e no storage `studio-files`. Leitores podem atualizar as tarefas que lhes estão atribuídas.
 - Frontend: `p.canEdit` (rpc), `setReadOnly` em studio.js esconde botões de criar/apagar, campos ficam readonly e `setWriteGuard` (undo.js) recusa escritas com aviso. Convites usam `create_invite_as(p_project, p_email, p_can_edit)`.
 - Ferramenta `distribution` (distribution.js + countries.js): boards.data = { links, rows }.
+
+## Grain (teste) no Studio — 17 out 2026
+- Backup novo do byGrain: esquema `backup_20261017` (32 tabelas + contas + lista de ficheiros), ao lado do `backup_20261016`. O ZIP fresco (dados + 25 ficheiros) também ficou no Studio em `studio-files/_backups/bygrain-2026-10-17.zip` (só o serviço lhe acede).
+- Comunidade `Grain (teste)` (`d5ce2f37-078d-4da0-aa64-0e034f977e21`, business) no Studio: cópia dos 16 projetos (9 na reciclagem, como no byGrain), Central, boards, tarefas, cenas, planos, orçamentos, finanças e ficheiros, com os mesmos ids. O João é o único membro (admin); Ruben, Tomás e Daniel ficaram como equipa sem conta e as tarefas deles sem responsável, com o nome nas notas.
+- O byGrain não foi alterado (só lido pela função `backup-export`, que expira a 18 out). A função `grain-import` do BlackCat foi usada uma vez e está desligada (410).
+- É uma fotografia de 17 out: o que a equipa fizer no byGrain depois disso não aparece aqui.
