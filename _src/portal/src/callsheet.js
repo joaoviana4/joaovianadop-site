@@ -64,7 +64,7 @@ function sheetHtml(d, edit) {
     <div class="cs-top">
       <table class="cs-box cs-contacts">${d.contacts.map((c, i) => `<tr><th>${f(`contacts.${i}.role`, 'Função')}</th><td>${f(`contacts.${i}.value`, 'Nome - telefone')}${x(`data-rm="contacts:${c.id}"`)}</td></tr>`).join('')}${edit ? `<tr><td colspan="2">${add('data-addc', 'contacto')} ${add('data-pickc', 'da equipa')}</td></tr>` : ''}</table>
       <div class="cs-box cs-call"><div class="cs-callh">CALL: ${f('call', '08:00', 'cs-num')}H - ${f('place', 'Local')}</div><div class="cs-addr"><b>MORADA:</b> ${link('address')}</div></div>
-      <div class="cs-box cs-weather"><div class="cs-h">METEOROLOGIA</div><div>${f('weather.text', 'ex: Nublado')}</div><div class="cs-temps"><span class="t-min">${f('weather.min', '12°', 'cs-num')}</span><span class="t-max">${f('weather.max', '20°', 'cs-num')}</span></div></div>
+      <div class="cs-box cs-weather"><div class="cs-h">METEOROLOGIA</div><div class="cs-wx">${wxIcon(d.weather?.text) ? `<span class="wx-ic" aria-hidden="true">${wxIcon(d.weather?.text)}</span>` : ''}${f('weather.text', 'ex: Nublado')}</div><div class="cs-temps"><span class="t-min">${f('weather.min', '12°', 'cs-num')}</span><span class="t-max">${f('weather.max', '20°', 'cs-num')}</span></div></div>
     </div>
     <div class="cs-mid">
       <div class="cs-box"><div class="cs-h">NOTAS DE PRODUÇÃO</div><div class="cs-notes">${ta('notes', 'ex: Base de produção - Bar do Teatro')}</div></div>
@@ -118,7 +118,7 @@ function studioHtml(d) {
         <div class="cst-times">${d.times.map((t, i) => `<div class="cst-time">${f(`times.${i}.label`, 'Hora')}${f(`times.${i}.value`, '00:00', 'cst-tv')}${x(`data-rm="times:${t.id}"`)}</div>`).join('')}</div>
         ${add('data-addt', 'Hora')}
         <h3 class="cst-sub">Meteorologia</h3>
-        <div class="cst-weather">${f('weather.text', 'ex: Nublado')}<span class="cst-temp min">${f('weather.min', 'mín.', 'cst-n')}</span><span class="cst-temp max">${f('weather.max', 'máx.', 'cst-n')}</span></div>
+        <div class="cst-weather"><span class="wx-ic" data-wxic aria-hidden="true">${wxIcon(d.weather?.text)}</span>${f('weather.text', 'ex: Nublado')}<span class="cst-temp min">${f('weather.min', 'mín.', 'cst-n')}</span><span class="cst-temp max">${f('weather.max', 'máx.', 'cst-n')}</span></div>
       </section>
       <section class="cst-card"><h3>Notas de produção</h3>
         ${ta('notes', 'ex: Base de produção - Bar do Teatro', 3)}
@@ -177,6 +177,37 @@ function studioHtml(d) {
 // Uma ferramenta guarda todos os dias de rodagem: { sheets: [folha do dia 1, dia 2, …] }.
 // (as folhas antigas, de um só dia, passam a ser o dia 1)
 const wrap = (data, p) => { const w = data?.sheets?.length ? data : { sheets: [data?.rows ? data : newCallsheet(p, 1)] }; w.sheets.forEach((sh, i) => { if (!sh.day) sh.day = String(i + 1); if (!sh.days) sh.days = String(w.sheets.length); sh.more = sh.more || {}; sh.vehicles = sh.vehicles || []; sh.deptNotes = sh.deptNotes || []; }); return w; };
+// ícone da meteorologia a partir do texto ("Nublado · chuva 35%" → ☁️)
+export function wxIcon(t) {
+  const x = String(t || '').toLowerCase(); if (!x.trim()) return '';
+  if (/trovoada|tempestade/.test(x)) return '⛈️';
+  if (/neve/.test(x)) return '🌨️';
+  if (/aguaceiro|chuva|chuvisco|chuvoso/.test(x)) return '🌧️';
+  if (/nevoeiro|neblina|bruma/.test(x)) return '🌫️';
+  if (/vento|ventoso/.test(x) && !/limpo|sol/.test(x)) return '💨';
+  if (/parcialmente|pouco nublado|abertas|nuvens e sol/.test(x)) return '⛅';
+  if (/nublado|encoberto|cinzento/.test(x)) return '☁️';
+  if (/limpo|sol|soalheiro|céu azul/.test(x)) return '☀️';
+  if (/noite/.test(x)) return '🌙';
+  return '🌡️';
+}
+// o que falta preencher antes de exportar
+function missing(d) {
+  const m = [];
+  const e = (v) => !String(v ?? '').trim();
+  if (e(d.date)) m.push('Data do dia');
+  if (e(d.call)) m.push('Hora de call');
+  if (e(d.place)) m.push('Local');
+  if (e(d.address)) m.push('Morada');
+  const c = (d.contacts || []).filter((x) => !e(x.role) && e(x.value)); if (c.length) m.push(`Contactos sem nome/telefone: ${c.map((x) => x.role).join(', ')}`);
+  if (e(d.weather?.text) && e(d.weather?.min)) m.push('Meteorologia');
+  if (e(d.hospital?.name)) m.push('Hospital mais próximo');
+  const t = (d.times || []).filter((x) => !e(x.label) && e(x.value)); if (t.length) m.push(`Horários sem hora: ${t.map((x) => x.label).join(', ')}`);
+  if (!(d.rows || []).some((r) => r.kind === 'shot')) m.push('Planos do dia');
+  const k = (d.cast || []).filter((x) => e(x.call)); if (k.length) m.push(`Elenco sem hora de chamada: ${k.map((x) => x.name || x.role).filter(Boolean).join(', ')}`);
+  const dp = (d.depts || []).filter((x) => !e(x.name) && e(x.time)); if (dp.length && dp.length < (d.depts || []).length) m.push(`Departamentos sem hora: ${dp.map((x) => x.name).join(', ')}`);
+  return m;
+}
 const shortDay = (iso) => { if (!iso) return ''; const d = new Date(iso + 'T00:00:00'); return d.toLocaleDateString('pt-PT', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, ''); };
 
 // Escolher a pessoa num menu, como os planos: ao clicar no campo "Nome - telefone" de um contacto aparece a
@@ -245,12 +276,24 @@ export function callsheetTool(main, p, tool) {
   // "DIA x DE y" acompanha os dias quando se junta ou tira um dia
   const renumber = () => { const n = all.sheets.length; all.sheets.forEach((sh, i) => { sh.day = String(i + 1); sh.days = String(n); }); };
   const used = () => { const m = new Map(); all.sheets.forEach((sh, i) => { if (i !== cur) sh.rows.forEach((r) => r.shot_id && m.set(r.shot_id, sh.day || i + 1)); }); return m; };
-  const addDay = (blank) => {
+  // ao juntar um dia pergunta a data (com o dia seguinte ao último já sugerido); fica a ser a data desse dia de rodagem
+  const askDate = (blank) => {
+    const last = all.sheets.map((x) => x.date).filter(Boolean).sort().pop();
+    let sug = ''; if (last) { const nx = new Date(last + 'T00:00:00'); nx.setDate(nx.getDate() + 1); sug = `${nx.getFullYear()}-${String(nx.getMonth() + 1).padStart(2, '0')}-${String(nx.getDate()).padStart(2, '0')}`; }
+    const n = all.sheets.length + 1;
+    const m = modal(`<h2>Dia ${n} de rodagem</h2><form class="stack"><div class="field"><label for="dd">Data</label><input id="dd" type="date" value="${sug}"></div>
+      <p class="muted small">${blank ? 'Folha em branco.' : 'Copia os contactos, horários e local do dia que estás a ver (sem planos nem elenco).'} A data fica a ser a do dia ${n} em todo o projeto: cronograma, sol e tempo dos décors.</p>
+      <div class="row between"><button type="button" class="btn ghost" data-nodate>Ainda sem data</button><div class="row"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Juntar dia ${n}</button></div></div></form>`);
+    m.el.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); const v = m.el.querySelector('#dd').value; m.close(); addDay(blank, v || ''); });
+    m.el.querySelector('[data-nodate]').addEventListener('click', () => { m.close(); addDay(blank, ''); });
+  };
+  const addDay = (blank, date = null) => {
     const copy = blank ? newCallsheet(p, 1) : JSON.parse(JSON.stringify(d));
     if (!blank) { copy.rows = copy.rows.filter((r) => r.kind === 'band'); copy.cast = []; copy.weather = { text: '', min: '', max: '' }; }
     copy.accent = d.accent; copy.title = d.title; copy.footer = d.footer;
     const last = all.sheets[all.sheets.length - 1]?.date;
-    if (last) { const nx = new Date(last + 'T00:00:00'); nx.setDate(nx.getDate() + 1); copy.date = `${nx.getFullYear()}-${String(nx.getMonth() + 1).padStart(2, '0')}-${String(nx.getDate()).padStart(2, '0')}`; } else copy.date = '';
+    if (date !== null) copy.date = date;
+    else if (last) { const nx = new Date(last + 'T00:00:00'); nx.setDate(nx.getDate() + 1); copy.date = `${nx.getFullYear()}-${String(nx.getMonth() + 1).padStart(2, '0')}-${String(nx.getDate()).padStart(2, '0')}`; } else copy.date = '';
     all.sheets.push(copy); renumber(); save(); go(all.sheets.length - 1);
     toast(blank ? 'Dia novo, em branco.' : 'Dia novo com os mesmos contactos, horários e local (sem planos nem elenco).');
   };
@@ -268,7 +311,7 @@ export function callsheetTool(main, p, tool) {
   })();
   const geoTried = new Set();
   const geoFill = async ({ hosp = false, wx = false, loud = false }) => {
-    if (!d.place && !d.address) { if (loud) toast('Escreve primeiro o local ou a morada.'); return; }
+    if (!d.place && !d.address) { if (loud) toast(`Falta ${d.date ? 'o local ou a morada' : 'o local ou a morada, e a data do dia'} para procurar o hospital, o sol e o tempo.`, 5000); return; }
     if (loud) toast('A procurar…', 6000);
     try {
       const { data: locs } = await sb.from('locations').select('id, name, info').eq('project_id', p.id);
@@ -295,7 +338,7 @@ export function callsheetTool(main, p, tool) {
         put('more.sunrise', w.sunrise, wx); put('more.sunset', w.sunset, wx);
       }
       if (changed && sheet === d) { save(); draw(); }
-      if (loud) toast(changed ? 'Folha preenchida com o hospital, o sol e o tempo. Confirma antes de enviar.' : 'Já estava tudo preenchido.');
+      if (loud) toast(!sheet.date ? `${changed ? 'Hospital preenchido. ' : ''}Para o sol e o tempo falta a data do dia.` : changed ? 'Folha preenchida com o hospital, o sol e o tempo. Confirma antes de enviar.' : 'Já estava tudo preenchido.', 5000);
       void pinUrl;
     } catch (e) { if (loud) toast(e.message || 'Não foi possível procurar agora.'); }
   };
@@ -316,13 +359,13 @@ export function callsheetTool(main, p, tool) {
       ${studioHtml(d)}`;
     const auto = (t) => { if (t.tagName === 'TEXTAREA') { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; } };
     main.querySelectorAll('.cst textarea').forEach(auto);
-    main.querySelectorAll('[data-p]').forEach((el) => el.addEventListener('input', () => { set(d, el.dataset.p, el.value); auto(el); save(); if (el.dataset.p === 'date') { const pd = main.querySelector('[data-prettydate]'); if (pd) pd.textContent = fmtDay(d.date) || 'Escolher a data'; }
+    main.querySelectorAll('[data-p]').forEach((el) => el.addEventListener('input', () => { set(d, el.dataset.p, el.value); auto(el); save(); if (el.dataset.p === 'weather.text') { const ic = main.querySelector('[data-wxic]'); if (ic) ic.textContent = wxIcon(el.value); } if (el.dataset.p === 'date') { const pd = main.querySelector('[data-prettydate]'); if (pd) pd.textContent = fmtDay(d.date) || 'Escolher a data'; }
       if (['date', 'day'].includes(el.dataset.p)) { const t = main.querySelector(`[data-day="${cur}"]`); if (t) t.innerHTML = `<b>Dia ${esc(d.day || cur + 1)}</b>${d.date ? `<small>${esc(shortDay(d.date))}</small>` : ''}<small class="muted">${d.rows.filter((r) => r.kind === 'shot').length} pl.</small>`; } }));
     main.querySelector('[data-acc]').addEventListener('input', (e) => { d.accent = e.target.value; main.querySelector('.cst').style.setProperty('--acc', d.accent); save(); });
     main.querySelectorAll('[data-day]').forEach((b) => b.addEventListener('click', () => go(Number(b.dataset.day))));
     main.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => go(cur + Number(b.dataset.go))));
-    main.querySelector('[data-addday]').addEventListener('click', () => addDay(false));
-    main.querySelector('[data-addblank]').addEventListener('click', () => addDay(true));
+    main.querySelector('[data-addday]').addEventListener('click', () => askDate(false));
+    main.querySelector('[data-addblank]').addEventListener('click', () => askDate(true));
     main.querySelector('[data-rmday]')?.addEventListener('click', async () => {
       if (!(await confirmBox(`Apagar o dia ${d.day || cur + 1} e tudo o que está nesta folha?`, 'Apagar dia'))) return;
       all.sheets.splice(cur, 1); renumber(); save(); go(Math.min(cur, all.sheets.length - 1));
@@ -366,7 +409,13 @@ export function callsheetTool(main, p, tool) {
       const c = d.cols.find((y) => y.id === b.dataset.rmcol); if (!(await confirmBox(`Tirar a coluna "${c.label}"?`, 'Tirar'))) return; d.cols = d.cols.filter((y) => y !== c); save(); draw();
     }));
     main.querySelector('[data-pick]').addEventListener('click', () => { const before = `${d.place}|${d.address}`; pickShots(p, d, () => { save(); draw(); if (`${d.place}|${d.address}` !== before) geoFill({ hosp: true }); }, used()); });
-    main.querySelector('[data-export]').addEventListener('click', () => exportDialog(all, cur, () => { save(); draw(); }));
+    main.querySelector('[data-export]').addEventListener('click', () => {
+      const go2 = () => exportDialog(all, cur, () => { save(); draw(); });
+      const miss = missing(d); if (!miss.length) return go2();
+      const m = modal(`<h2>Falta preencher</h2><p class="muted">Na folha do dia ${esc(d.day || cur + 1)}:</p><ul class="cs-miss">${miss.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
+        <div class="row end"><button type="button" class="btn ghost" data-close>Voltar e preencher</button><button type="button" class="btn primary" data-anyway>Exportar na mesma</button></div>`);
+      m.el.querySelector('[data-anyway]').addEventListener('click', () => { m.close(); go2(); });
+    });
     main.querySelector('[data-import]').addEventListener('click', () => importXlsx(d, (nd) => { all.sheets[cur] = nd; d = nd; save(); draw(); }));
   };
   draw();
@@ -627,7 +676,7 @@ async function exportXlsx(list) {
     span(rr, H + 2, N, `CALL: ${d.call || ''} H - ${d.place || ''}`, { bold: true, size: 12, fill: YEL }); height(rr, 26); rr++;
     span(rr, H + 2, N, link(d.address, d.address ? `MORADA: ${d.address}` : 'MORADA:'), { bold: false, color: d.address && inkOn(pal.box) === '#000000' ? 'FF1155CC' : undefined, link: !!d.address }); rr += 2;
     span(rr, H + 2, N, 'METEOROLOGIA', { bold: true, fill: YEL }); rr++;
-    span(rr, H + 2, N, [d.weather?.text, [d.weather?.min, d.weather?.max].filter(Boolean).join(' / ')].filter(Boolean).join(' · ')); rr++;
+    span(rr, H + 2, N, [[wxIcon(d.weather?.text), d.weather?.text].filter(Boolean).join(' '), [d.weather?.min, d.weather?.max].filter(Boolean).join(' / ')].filter(Boolean).join(' · ')); rr++;
     r = Math.max(top + d.contacts.length, rr) + 1;
     // notas, hospital, estacionamento (esquerda) | horários (direita)
     const mid = r; let lr = mid;
@@ -678,3 +727,5 @@ async function exportXlsx(list) {
   document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
   toast('Excel exportado.');
 }
+
+

@@ -1,6 +1,7 @@
 import { sb, esc, toast, ICON, todayISO } from './lib.js';
 import { geocode, nearby, weatherFor, pinUrl } from './geo.js';
 import { scriptMode } from './modules.js';
+import { shootDays } from './shootdays.js';
 
 // Painel "Perto daqui e sol" na página de um décor: hospital mais perto (com urgência, público/privado,
 // tempo de carro), polícia e bombeiros, e sol e tempo para um dia. Fica guardado em locations.info.geo / info.near.
@@ -11,6 +12,15 @@ export async function geoPanel(el, p, loc, { onChange } = {}) {
   if (!el) return;
   const save = async () => { const { error } = await sb.from('locations').update({ info: loc.info }).eq('id', loc.id); if (error) toast('Não foi possível guardar: ' + error.message); onChange?.(); };
   let date = el.dataset.date || todayISO();
+  // dia por omissão: o próximo dia de rodagem neste décor (ou o próximo dia de rodagem)
+  if (!el.dataset.date) {
+    try {
+      const days = (await shootDays(p)).filter((x) => x.date && x.date >= todayISO());
+      const n = (x) => String(x || '').trim().toLowerCase();
+      const here = days.find((x) => n(x.place) === n(loc.name)) || days[0];
+      if (here) { date = here.date; el.dataset.date = date; el.dataset.dayLabel = `Dia ${here.day} de rodagem`; }
+    } catch { /* fica hoje */ }
+  }
   const draw = (msg) => {
     const info = loc.info || {}; const near = info.near; const addr = placeAddr(p, loc);
     const stale = near && info.geo?.q !== addr;
@@ -27,7 +37,7 @@ export async function geoPanel(el, p, loc, { onChange } = {}) {
             <small>${[h.emergency ? '<span class="tag red">Urgência</span>' : '', h.kind ? `<span class="tag">${esc(h.kind)}</span>` : ''].join(' ')} ${h.min != null ? `${h.min} min de carro · ` : ''}${String(h.km).replace('.', ',')} km${h.phone ? ` · <a href="tel:${esc(h.phone)}">${esc(h.phone)}</a>` : ''}</small></span></li>`).join('') || '<li class="muted small">Não encontrei hospitais num raio de 40 km.</li>'}</ul>
         ${[['Polícia', near.police?.[0]], ['Bombeiros', near.fire?.[0]]].filter(([, x]) => x).map(([l, x]) => `<p class="geo-o small"><span class="muted">${l}</span> <a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name)}</a> · ${x.min != null ? `${x.min} min` : `${String(x.km).replace('.', ',')} km`}${x.phone ? ` · ${esc(x.phone)}` : ''}</p>`).join('')}
         <p class="muted small">Do OpenStreetMap: confirma antes da rodagem. O escolhido entra nas folhas de serviço deste décor.</p>`}
-      ${addr && info.geo ? `<div class="geo-sun"><div class="row between wrap-gap"><h3 class="h4">Sol e tempo</h3><input type="date" data-sdate value="${esc(date)}" aria-label="Dia"></div><div data-sun class="small muted">A ver…</div></div>` : ''}`;
+      ${addr && info.geo ? `<div class="geo-sun"><div class="row between wrap-gap"><h3 class="h4">Sol e tempo${el.dataset.dayLabel && el.dataset.date === date ? ` <span class="muted small">· ${esc(el.dataset.dayLabel)}</span>` : ''}</h3><input type="date" data-sdate value="${esc(date)}" aria-label="Dia"></div><div data-sun class="small muted">A ver…</div></div>` : ''}`;
     el.querySelector('[data-find]')?.addEventListener('click', find);
     el.querySelectorAll(`[name="hp-${loc.id}"]`).forEach((r) => r.addEventListener('change', async () => { loc.info = { ...(loc.info || {}), hospital_pick: Number(r.value) }; await save(); draw(); }));
     el.querySelector('[data-sdate]')?.addEventListener('change', (e) => { date = e.target.value || todayISO(); el.dataset.date = date; sun(); });
