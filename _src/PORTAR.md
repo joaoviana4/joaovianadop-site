@@ -3,6 +3,7 @@
 **Desde 16 out 2026 (tarde): códigos separados.**
 - `_src/bygrain` → byGrain (joaovianadop.com/bygrain). **Parado**: a equipa da Grain já o usa; não se reconstrói nem se publica sem o João pedir.
 - `_src/portal` → PØRTAL Studio (joaovianadop.com/studio). É aqui que se trabalha. Construir: `_src/portal/build.sh`.
+- 17 out 2026: a pedido do João, o byGrain recebeu as notificações de atividade (tabelas `public.activity` e `public.activity_seen`, gatilhos `zz_activity` em 16 tabelas, `src/activity.js`). Os gatilhos nunca impedem guardar (apanham qualquer erro).
 - Cópia de segurança do byGrain: esquema `backup_20261016` na própria base de dados do byGrain (todas as tabelas, lista de ficheiros e contas) e um ZIP descarregado pelo João.
 
 O resto deste ficheiro descreve como o Studio nasceu do código do byGrain (ainda válido para `_src/portal`).
