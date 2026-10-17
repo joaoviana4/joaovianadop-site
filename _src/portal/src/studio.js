@@ -3,9 +3,10 @@ import { daysUntil } from './lib.js';
 import { loadHidden, hideProject, unhideProject } from './lib.js';
 import { loadComms, commById, setCtx, CID, isPlatformAdmin, PERMS } from './lib.js';
 import { activityButton, bindActivity, activityPage } from './activity.js';
-import { IS_STUDIO, sb, BUCKET, state, esc, $, loadProfile, isStaff, isAdmin, toast, modal, confirmBox, ICON, LOGO, KINDS, ROLES, phaseOf, greeting, initials, signedUrls, uploadImage, callFn, authPw, MIN_PW, fmtDate, dueInfo, registerSW, BASE, PROJECT_COLS, hasPerm } from './lib.js';
+import { IS_STUDIO, sb, BUCKET, state, esc, $, loadProfile, isStaff, isAdmin, toast, modal, confirmBox, ICON, LOGO, KINDS, ROLES, phaseOf, greeting, initials, signedUrls, uploadImage, callFn, authPw, MIN_PW, fmtDate, dueInfo, registerSW, isInstalled, installApp, BASE, PROJECT_COLS, hasPerm } from './lib.js';
 import { renderAuth } from './auth.js';
 import { mountBoard } from './board.js';
+import { visField, bindVis, readVis } from './vis.js';
 import { mountTasks, loadPeople, clearPeopleCache } from './tasks.js';
 import { TOOL_KINDS, tableTool, timelineTool, tableTemplate } from './tools.js';
 import { isFolder, loadChildren, rollup, childrenSection, budgetChildrenPanel } from './folders.js';
@@ -131,10 +132,23 @@ function accountMenu() {
       <button type="button" data-a="name">${ICON.team} O meu nome e telefone</button>
       <button type="button" data-a="pw">${ICON.info} Mudar palavra-passe</button>
       <a href="${BASE}tasks/" target="_blank" rel="noopener">${ICON.task} Abrir a app de tarefas (telemóvel)</a>
+      ${isInstalled() ? '' : `<button type="button" data-a="install">${ICON.open} Instalar no computador</button>`}
       <button type="button" data-a="out">${ICON.logout} Sair</button>
     </div>
     <div class="row end"><button class="btn ghost" data-close>Fechar</button></div>`);
   m.el.querySelector('[data-a=out]').addEventListener('click', async () => { m.close(); await sb.auth.signOut(); });
+  m.el.querySelector('[data-a=install]')?.addEventListener('click', async () => {
+    const r = await installApp(); m.close();
+    if (r === 'ok') return toast('Pronto: o PØRTAL Studio ficou instalado como app.');
+    if (r === 'no') return;
+    const mac = /Mac/.test(navigator.platform) && !/Chrome|Edg/.test(navigator.userAgent);
+    modal(`<h2>Instalar no computador</h2>
+      ${mac ? `<p><b>Safari (Mac):</b> menu <b>Ficheiro › Adicionar à Dock</b>. A app fica na Dock e no Launchpad, numa janela própria.</p>` : ''}
+      <p><b>Chrome ou Edge (Windows e Mac):</b> carrega no ícone de instalar à direita da barra de endereço (um ecrã com uma seta), ou no menu ⋮ › <b>Transmitir, guardar e partilhar › Instalar página como app</b>.</p>
+      ${mac ? '' : `<p><b>Safari (Mac):</b> menu <b>Ficheiro › Adicionar à Dock</b>.</p>`}
+      <p class="muted small">Abre numa janela própria, com ícone na barra de tarefas ou na Dock, e atualiza-se sozinha.</p>
+      <div class="row end"><button type="button" class="btn primary" data-close>Percebi</button></div>`);
+  });
   m.el.querySelector('[data-a=pw]').addEventListener('click', () => { m.close(); changePassword(); });
   m.el.querySelector('[data-a=name]').addEventListener('click', () => {
     m.close();
@@ -591,7 +605,7 @@ async function loadProject(id) {
     sb.from('project_budgets').select('value, budget, updated_at, approved_at').eq('project_id', id).maybeSingle(),
     sb.from('budget_access').select('user_id').eq('project_id', id).eq('user_id', state.user.id).maybeSingle(),
     sb.from('scripts').select('id', { count: 'exact', head: true }).eq('project_id', id).neq('kind', 'tratamento'),
-    sb.from('boards').select('id, parent_id, title, group_id, position, created_at, kind').eq('project_id', id).order('position').order('created_at'),
+    sb.from('boards').select('id, parent_id, title, group_id, position, created_at, kind, visible_to, created_by').eq('project_id', id).order('position').order('created_at'),
   ]);
   if (!p || p.deleted_at) return null;
   // permissões do ecrã: as da comunidade do projeto, ou de dono/convidado num projeto pessoal
@@ -655,7 +669,7 @@ function projectNav(p, active) {
     ${boardGroups(p).map((g) => `<div class="pn-group" style="--g:${esc(g.color)}">
       <div class="pn-gh"><i></i><span>${esc(g.name)}</span>${g.id ? `<button type="button" class="icon-btn sm" data-newboard="${esc(g.id)}" aria-label="Novo board em ${esc(g.name)}">${ICON.plus}</button>` : ''}</div>
       ${(g.pages || []).map((k) => `<a class="side-a sub" href="${base}/${k}" ${active === k ? 'aria-current="page"' : ''}>${ICON[pageMeta(k).icon]}<span>${esc(pageMeta(k).label)}</span></a>`).join('')}
-      ${g.boards.map((b) => `<a class="side-a sub" href="${toolHref(p, b)}" ${active === b.id ? 'aria-current="page"' : ''}>${(TOOL_KINDS[b.kind] || TOOL_KINDS.board).icon}<span>${esc(b.title)}</span></a>`).join('')}
+      ${g.boards.map((b) => `<a class="side-a sub" href="${toolHref(p, b)}" ${active === b.id ? 'aria-current="page"' : ''}>${(TOOL_KINDS[b.kind] || TOOL_KINDS.board).icon}<span>${esc(b.title)}</span>${b.visible_to?.length ? `<i class="vis-lock" title="Só algumas pessoas veem">${ICON.lock}</i>` : ''}</a>`).join('')}
     </div>`).join('')}`;
 }
 const navState = { p: null, active: null };
@@ -690,9 +704,11 @@ function newBoard(p, groupId = '', kind = 'board') {
       <div class="field" data-tplf hidden><label for="bt">Modelo</label><select id="bt" name="tpl">${tpls.map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
       <div class="field"><label for="bg">Departamento</label><select id="bg" name="group_id"><option value="">Nenhum</option>${(p.departments || []).map((d) => `<option value="${esc(d.id)}" ${d.id === groupId ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}${groupId && FIXED_DEPTS[groupId] && !deptOf(p, groupId) ? `<option value="${groupId}" selected>${FIXED_DEPTS[groupId].name}</option>` : ''}</select></div>
       <p class="small muted" data-propsnote hidden>Os adereços têm uma página única por projeto, em Arte. ${hasMod(p, 'aderecos') ? `<a href="${projBase(p)}/aderecos">Abrir Adereços</a>` : '<button type="button" class="link-btn" data-addprops>Juntar a página de Adereços</button>'}</p>
+      <div data-vis></div>
       <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Criar e abrir</button></div>
     </form>`);
   const form = m.el.querySelector('form');
+  visField([]).then((h) => { const v = m.el.querySelector('[data-vis]'); if (v) { v.innerHTML = h; bindVis(form); } });
   const propsNote = () => { const g = form.elements.group_id.value; const arte = deptOf(p, 'arte'); m.el.querySelector('[data-propsnote]').hidden = !(g && (g === 'arte' || g === arte?.id)) && !/^\s*adere/i.test(form.elements.title.value); };
   form.elements.group_id.addEventListener('change', propsNote); form.elements.title.addEventListener('input', propsNote); setTimeout(propsNote);
   m.el.querySelector('[data-addprops]')?.addEventListener('click', async () => { await ensureModules(p, ['aderecos']); m.close(); go(`${projBase(p)}/aderecos`); });
@@ -714,7 +730,7 @@ function newBoard(p, groupId = '', kind = 'board') {
     else if (f.group_id === 'imagem' && !deptOf(p, 'imagem')) f.group_id = await ensureDept(p, 'imagem');
     else if (f.group_id === 'arte' && !deptOf(p, 'arte')) f.group_id = await ensureDept(p, 'arte');
     const data = f.kind === 'table' ? await tableTemplate(p, f.tpl) : f.kind === 'lightmap' ? newLightmapData() : f.kind === 'callsheet' ? { sheets: [(await lazy.callsheet()).newCallsheet(p, 1)] } : f.kind === 'transport' ? (await lazy.transport()).newTransport(p) : {};
-    const { data: row, error } = await sb.from('boards').insert({ project_id: p.id, title: f.title.trim(), group_id: f.group_id || null, position: p._boards.length, kind: f.kind, data }).select().single();
+    const { data: row, error } = await sb.from('boards').insert({ project_id: p.id, title: f.title.trim(), group_id: f.group_id || null, position: p._boards.length, kind: f.kind, data, visible_to: readVis(form) }).select().single();
     if (error) return toast(error.message);
     m.close(); go(toolHref(p, row));
   });
@@ -761,15 +777,19 @@ function boardOptions(p, b, after) {
     <form class="stack">
       <div class="field"><label for="bn">Nome</label><input id="bn" name="title" value="${esc(b.title)}" required></div>
       <div class="field"><label for="bg">Departamento</label><select id="bg" name="group_id" ${b.kind === 'lightmap' ? 'disabled title="Os mapas de luz ficam sempre em Imagem"' : ''}><option value="">Nenhum</option>${(p.departments || []).map((d) => `<option value="${esc(d.id)}" ${d.id === b.group_id ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></div>
+      <div data-vis></div>
       <div class="row between">
         <button type="button" class="btn ghost danger-text" data-del>${ICON.trash} Apagar</button>
         <div class="row"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Guardar</button></div>
       </div>
     </form>`);
+  const canVis = isStaff() || b.created_by === state.user?.id;
+  if (canVis) visField(b.visible_to || []).then((h) => { const v = m.el.querySelector('[data-vis]'); if (v) { v.innerHTML = h; bindVis(m.el.querySelector('form')); } });
   m.el.querySelector('form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target));
-    const { error } = await sb.from('boards').update({ title: f.title.trim(), ...(b.kind === 'lightmap' ? {} : { group_id: f.group_id || null }) }).eq('id', b.id);
+    const vis = canVis && e.target.querySelector('[name=vis]') ? { visible_to: readVis(e.target) } : {};
+    const { error } = await sb.from('boards').update({ title: f.title.trim(), ...(b.kind === 'lightmap' ? {} : { group_id: f.group_id || null }), ...vis }).eq('id', b.id);
     if (error) return toast(error.message);
     m.close(); after();
   });
@@ -888,7 +908,7 @@ async function projectOverview(main, p) {
           <article class="board-card" style="--g:${esc(d?.color || '#8A8A99')}">
             <a href="${toolHref(p, b)}" class="proj-link" aria-label="Abrir ${esc(b.title)}"></a>
             <div class="bc-cover" ${th ? `style="background-image:url('${esc(th)}')"` : ''}>${th ? '' : (TOOL_KINDS[b.kind] || TOOL_KINDS.board).icon}</div>
-            <div class="bc-body"><strong>${esc(b.title)}</strong><span class="small muted">${d ? `<i class="dot"></i>${esc(d.name)} · ` : ''}${(b.kind || 'board') === 'board' ? `${count(b.id)} ${count(b.id) === 1 ? 'cartão' : 'cartões'}` : esc((TOOL_KINDS[b.kind] || {}).label || '')}</span></div>
+            <div class="bc-body"><strong>${esc(b.title)}${b.visible_to?.length ? ` <i class="vis-lock" title="Visível só para ${b.visible_to.length} ${b.visible_to.length === 1 ? 'pessoa' : 'pessoas'}">${ICON.lock}</i>` : ''}</strong><span class="small muted">${d ? `<i class="dot"></i>${esc(d.name)} · ` : ''}${(b.kind || 'board') === 'board' ? `${count(b.id)} ${count(b.id) === 1 ? 'cartão' : 'cartões'}` : esc((TOOL_KINDS[b.kind] || {}).label || '')}</span></div>
             <button type="button" class="icon-btn bc-more" data-bopt="${b.id}" aria-label="Opções de ${esc(b.title)}">${ICON.dots}</button>
           </article>`; }).join('')}${nMaps ? `<article class="board-card" style="--g:${esc(deptOf(p, 'imagem')?.color || '#2FB67C')}"><a href="${base}/mapas" class="proj-link" aria-label="Abrir os mapas de luz"></a><div class="bc-cover">${ICON.bulb}</div><div class="bc-body"><strong>Mapas de luz</strong><span class="small muted"><i class="dot"></i>Imagem · ${nMaps} ${nMaps === 1 ? 'mapa' : 'mapas'}</span></div></article>` : ''}</div>`
         : `<div class="empty-box"><p>Ainda não há ferramentas neste projeto.</p><p class="muted small">Boards para o tratamento, o moodboard ou um brainstorm (abrem em ecrã inteiro), tabelas, cronograma e mapas de luz.</p><button type="button" class="btn primary" data-nb>${ICON.plus} Criar a primeira</button></div>`}

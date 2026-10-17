@@ -2122,3 +2122,14 @@ body.tool-dragging, body.tool-dragging * { cursor: grabbing !important; user-sel
 .cs-pp-i b { font-weight: 600; }
 .cs-pp-ph { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--muted); }
 .cs-pp-i.on, .cs-pp-i:hover { background: var(--panel2); }
+.vis-f { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px 12px; margin: 0; }
+.vis-f legend { padding: 0 4px; font-size: 13px; color: var(--muted); }
+.vis-opts { display: flex; gap: 16px; flex-wrap: wrap; }
+.vis-opts label { display: inline-flex; align-items: center; gap: 6px; }
+.vis-people { margin-top: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 4px 10px; max-height: 220px; overflow: auto; }
+.vis-people > p { grid-column: 1 / -1; margin: 6px 0 0; }
+.vis-p { display: flex; align-items: center; gap: 8px; padding: 4px; border-radius: 8px; }
+.vis-p:hover { background: var(--panel2); }
+.vis-lock { display: inline-flex; opacity: .6; margin-left: auto; }
+.vis-lock svg { width: 13px; height: 13px; }
+.bc-body .vis-lock { margin-left: 4px; vertical-align: -1px; }

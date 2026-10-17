@@ -202,6 +202,14 @@ export async function uploadImage(projectId, folder, file) {
   return { path, w, h };
 }
 
+// instalar a app no computador (Chrome/Edge guardam o pedido; Safari não tem pedido: mostram-se os passos)
+let installEvt = null;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; });
+export const isInstalled = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+export async function installApp() {
+  if (installEvt) { installEvt.prompt(); const r = await installEvt.userChoice.catch(() => null); installEvt = null; return r?.outcome === 'accepted' ? 'ok' : 'no'; }
+  return 'manual';
+}
 export function registerSW() {
   if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
     navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE }).catch(() => {});
