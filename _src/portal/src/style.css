@@ -2219,3 +2219,27 @@ body.tool-dragging, body.tool-dragging * { cursor: grabbing !important; user-sel
 .mk-chip.mk-char { background: rgba(43, 127, 255, .18); } .mk-chip.mk-loc { background: rgba(47, 182, 124, .2); } .mk-chip.mk-prop { background: rgba(240, 138, 36, .22); } .mk-chip.mk-wrd { background: rgba(224, 95, 168, .2); }
 .mk-chip[aria-pressed="false"] { background: transparent; opacity: .55; text-decoration: line-through; }
 .sr-legend { display: inline-flex !important; flex-direction: row !important; align-items: center; } .sr-legend .mk-chip { width: auto !important; flex: none; display: inline-block; min-height: 0; line-height: 1.4; }
+.bm-new { width: 100%; justify-content: center; margin-bottom: 12px; }
+.bm-list { list-style: none; margin: 8px 0 12px; padding: 0; max-height: 320px; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
+.bm-list button { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 8px 10px; border-radius: 8px; background: none; border: 0; color: var(--text); font: inherit; cursor: pointer; }
+.bm-list button:hover:not(:disabled) { background: var(--panel2); }
+.bm-list button:disabled { opacity: .5; cursor: default; }
+.im-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; max-height: 50vh; overflow: auto; margin: 8px 0 12px; }
+.im-grid > p { grid-column: 1 / -1; }
+.im-t { display: flex; flex-direction: column; gap: 4px; padding: 4px; border-radius: 10px; border: 2px solid transparent; background: var(--panel2); cursor: pointer; text-align: left; font: inherit; color: var(--text); }
+.im-t img { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: var(--deep2, #101017); border-radius: 7px; }
+.im-t small { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.im-t.on { border-color: var(--blue); }
+.im-t:hover { border-color: var(--line2); }
+.im-t.on:hover { border-color: var(--blue); }
+/* (afinado) sem contorno: o nome da coluna em cinzento claro já mostra que é para escrever */
+.table.budget td input, .cell-in { background: transparent !important; border-color: transparent !important; }
+.table.budget td input:placeholder-shown, .cell-in:placeholder-shown { background: transparent !important; }
+.table.budget td input:hover, .cell-in:hover { background: var(--panel2) !important; border-color: transparent !important; }
+.table.budget td input:focus, .cell-in:focus { background: var(--panel) !important; border-color: var(--blue) !important; }
+.table.budget td input::placeholder, .cell-in::placeholder { opacity: .4; }
+.ie-tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .04em; padding: 1px 6px; border-radius: 5px; background: var(--panel2); color: var(--text); margin-right: 4px; }
+.ie-tag.lg { font-size: 12px; padding: 3px 9px; }
+.ent-hl { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
+.ent-hl > span { align-self: flex-start; }
+.ent-tags { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } .ent-tags:empty { display: none; }

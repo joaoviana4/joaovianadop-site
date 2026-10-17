@@ -48,6 +48,9 @@ async function loadNow(pid) {
   return { scenes: sc.data || [], characters: ch.data || [], locations: lo.data || [], shots: sh.data || [], scripts: sp.data || [] };
 }
 
+// interior / exterior de um décor, a partir das cenas do guião que lá acontecem
+const ieOf = (locId, f) => { const v = new Set(f.scenes.filter((s) => s.location_id === locId).map((s) => s.int_ext).filter(Boolean).flatMap((x) => x.split('/'))); return v.has('INT') && v.has('EXT') ? 'INT/EXT' : v.has('INT') ? 'INT' : v.has('EXT') ? 'EXT' : ''; };
+const IE_LABEL = { INT: 'Interior', EXT: 'Exterior', 'INT/EXT': 'Interior e exterior' };
 const sceneTitle = (s, f) => { const loc = f.locations.find((l) => l.id === s.location_id); return [s.int_ext, loc?.name || s.heading].filter(Boolean).join('. '); };
 const nameList = (ids, f) => (ids || []).map((id) => f.characters.find((c) => c.id === id)?.name).filter(Boolean);
 
@@ -447,7 +450,7 @@ async function decors(main, p, f, sub, base, cleanup) {
   const count = (id) => f.scenes.filter((s) => s.location_id === id).length;
   const urls = await entUrls([f.locations]);
   const mode = entMode('places');
-  const items = f.locations.map((l) => ({ e: l, href: `${base}/decors/${l.id}`, title: l.name, sub: esc(l.info?.morada || 'Sem morada'), meta: `${count(l.id)} ${count(l.id) === 1 ? 'cena' : 'cenas'}`, edit: { table: 'locations', field: 'info.morada', placeholder: 'Morada ou link do Google Maps', label: 'Morada' } }));
+  const items = f.locations.map((l) => ({ e: l, href: `${base}/decors/${l.id}`, title: l.name, sub: esc(l.info?.morada || 'Sem morada'), meta: `${ieOf(l.id, f) ? `<span class="ie-tag">${ieOf(l.id, f)}</span> ` : ''}${count(l.id)} ${count(l.id) === 1 ? 'cena' : 'cenas'}`, edit: { table: 'locations', field: 'info.morada', placeholder: 'Morada ou link do Google Maps', label: 'Morada' } }));
   main.innerHTML = `<div class="row between wrap-gap"><h1 class="h1 pm-title">Décors</h1><div class="row">${f.locations.length ? modeToggle('places') : ''}<button type="button" class="btn ghost" data-add>${ICON.plus} Décor</button></div></div>
     ${f.locations.length ? entItems(items, { mode, urls, place: true }) : '<p class="empty-note">Ainda não há décors. Aparecem ao importar o guião.</p>'}`;
   bindMode(main, 'places', () => decors(main, p, f, sub, base, cleanup));
@@ -462,7 +465,7 @@ async function decor(main, p, f, id, base, cleanup) {
   const photos = l.photos || [];
   const urls = await signedUrls(photos.map((x) => x.path));
   main.innerHTML = `<a href="${base}/decors" class="link-btn">${ICON.back} Décors</a>
-    <header class="ent-h"><input class="title-in h1" data-ename value="${esc(l.name)}" aria-label="Nome do décor"><button type="button" class="icon-btn" data-delent aria-label="Apagar décor">${ICON.trash}</button></header>
+    <header class="ent-h"><div class="ent-hl"><input class="title-in h1" data-ename value="${esc(l.name)}" aria-label="Nome do décor"><div class="ent-tags">${ieOf(l.id, f) ? `<span class="ie-tag lg" title="Pelas cenas do guião">${IE_LABEL[ieOf(l.id, f)]}</span>` : ''}${(() => { const tods = [...new Set(scenes.map((x) => x.time_of_day).filter(Boolean))]; return tods.length ? `<span class="muted small">${esc(tods.join(' · '))}</span>` : ''; })()}</div></div><button type="button" class="icon-btn" data-delent aria-label="Apagar décor">${ICON.trash}</button></header>
     <div class="pm-grid"><div class="pm-boards stack">
       <section class="panel stack"><h2 class="h3">Ficha</h2><div class="grid2">${[['morada', 'Morada'], ['contacto', 'Contacto'], ['estacionamento', 'Estacionamento'], ['eletricidade', 'Eletricidade'], ['luz_natural', 'Luz natural'], ['notas', 'Notas']].map(([k, lab]) => `<div class="field"><label for="i-${k}">${lab}</label><textarea id="i-${k}" data-info="${k}" rows="2">${esc(l.info?.[k] || '')}</textarea></div>`).join('')}</div></section>
       <section class="panel"><div class="row between"><h2 class="h3">Fotos de repérage</h2><button type="button" class="btn ghost" data-addph>${ICON.plus} Fotos</button></div>
