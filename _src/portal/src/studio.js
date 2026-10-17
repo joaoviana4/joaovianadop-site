@@ -64,6 +64,9 @@ async function boot() {
 window.addEventListener('hashchange', () => state.user && route());
 boot();
 
+// logo da comunidade (guardado como imagem pequena em communities.logo_path) ou a cor com as iniciais
+const isLogo = (v) => typeof v === 'string' && /^data:image\//.test(v);
+const commMark = (c, cls = 'comm-dot') => (isLogo(c?.logo_path) ? `<span class="${cls} has-logo"><img src="${esc(c.logo_path)}" alt=""></span>` : `<span class="${cls}" style="background:${esc(c?.color || '#8A8A99')}">${cls === 'comm-dot' ? esc(initials(c?.name || '')) : ''}</span>`);
 function go(hash) { if (location.hash === hash) route(); else location.hash = hash; }
 
 async function route() {
@@ -106,7 +109,7 @@ function header(active) {
       <a href="#/" class="brand" aria-label="byGrain Studio, início">${LOGO('studio')}</a>
       <nav aria-label="Principal" class="nav">
         ${link('#/', 'Início', 'home')}
-        ${c ? `<span class="nav-sep" aria-hidden="true">/</span><a href="#/c/${c.id}" class="nav-a nav-comm" ${active === 'comm' ? 'aria-current="page"' : ''}><i style="background:${esc(c.color)}"></i>${esc(c.name)}</a>
+        ${c ? `<span class="nav-sep" aria-hidden="true">/</span><a href="#/c/${c.id}" class="nav-a nav-comm" ${active === 'comm' ? 'aria-current="page"' : ''}>${isLogo(c.logo_path) ? commMark(c, 'nav-logo') : `<i style="background:${esc(c.color)}"></i>`}${esc(c.name)}</a>
           ${c.business && isStaff() ? link(`#/c/${c.id}/central`, 'Central de Produção', 'central') : ''}
           ${isStaff() ? link(`#/c/${c.id}/tarefas`, 'Tarefas', 'tasks') : ''}
           ${isAdmin() ? link(`#/c/${c.id}/pessoas`, 'Pessoas', 'team') : ''}` : link('#/tarefas', 'As minhas tarefas', 'tasks')}
@@ -181,7 +184,7 @@ async function homePage(comm = null) {
   app.innerHTML = `<div class="page">${header(comm ? 'comm' : 'home')}
     <section class="hero"><div class="grain-layer" aria-hidden="true"></div>
       <div class="wrap hero-in">
-        <div>${comm ? `<p class="hero-kicker"><i style="background:${esc(comm.color)}"></i>Comunidade · ${esc(ROLES[comm.my_role])}</p><h1 class="hero-h">${esc(comm.name)}</h1>` : `<h1 class="hero-h">${greeting()}, ${esc(state.profile.display_name.split(' ')[0])}.</h1>`}<p class="hero-p" data-hero>&nbsp;</p></div>
+        <div>${comm ? `<div class="hero-comm">${isLogo(comm.logo_path) ? commMark(comm, 'hero-logo') : ''}<div><p class="hero-kicker">${isLogo(comm.logo_path) ? '' : `<i style="background:${esc(comm.color)}"></i>`}Comunidade · ${esc(ROLES[comm.my_role])}</p><h1 class="hero-h">${esc(comm.name)}</h1></div></div>` : `<h1 class="hero-h">${greeting()}, ${esc(state.profile.display_name.split(' ')[0])}.</h1>`}<p class="hero-p" data-hero>&nbsp;</p></div>
         ${staff ? `<button type="button" class="btn cream" data-new>${ICON.plus} Novo projeto</button>` : ''}
       </div>
     </section>
@@ -212,7 +215,7 @@ async function homePage(comm = null) {
         ${!staff ? '<section class="panel"><h2 class="h3">Acesso de convidado</h2><p class="muted">Vês apenas os projetos desta comunidade para os quais foste convidado.</p></section>' : ''}`
         : `<section class="panel">
           <div class="row between"><h2 class="h3">Comunidades</h2><button type="button" class="link-btn small" data-newcomm>${ICON.plus} Nova</button></div>
-          <div class="menu-list comm-list">${state.comms.length ? state.comms.map((c) => `<a href="#/c/${c.id}"><span class="comm-dot" style="background:${esc(c.color)}">${esc(initials(c.name))}</span><span><strong>${esc(c.name)}</strong><small>${esc(ROLES[c.my_role])}${c.business ? ' · com Central' : ''}</small></span>${ICON.chev}</a>`).join('') : '<p class="muted small">Uma comunidade é um espaço partilhado (uma produtora, um coletivo): pessoas próprias, projetos dela e, se quiseres, a parte business com a Central de Produção.</p>'}</div>
+          <div class="menu-list comm-list">${state.comms.length ? state.comms.map((c) => `<a href="#/c/${c.id}">${commMark(c)}<span><strong>${esc(c.name)}</strong><small>${esc(ROLES[c.my_role])}${c.business ? ' · com Central' : ''}</small></span>${ICON.chev}</a>`).join('') : '<p class="muted small">Uma comunidade é um espaço partilhado (uma produtora, um coletivo): pessoas próprias, projetos dela e, se quiseres, a parte business com a Central de Produção.</p>'}</div>
         </section>`}
         <section class="panel">
           <div class="row between"><h2 class="h3">As minhas tarefas</h2><a href="${comm ? `#/c/${comm.id}/tarefas` : '#/tarefas'}" class="small">Ver todas</a></div>
@@ -1385,6 +1388,7 @@ async function communityTeamPage(c) {
         <form class="stack" data-csettings>
           <div class="grid2"><div class="field"><label for="ccn">Nome</label><input id="ccn" name="name" value="${esc(c.name)}" required></div>
           <div class="field"><span class="label">Cor</span><div class="look-sw">${COMM_COLORS.map((col) => `<label class="look-c ${col === c.color ? 'on' : ''}" style="--c:${col}"><input type="radio" name="color" value="${col}" ${col === c.color ? 'checked' : ''} class="vh">&nbsp;</label>`).join('')}</div></div></div>
+          <div class="field"><span class="label">Logo</span><div class="row wrap-gap comm-logo-f">${commMark(c, 'comm-logo-pv')}<button type="button" class="btn ghost sm" data-logoup>${ICON.image || ICON.plus} ${isLogo(c.logo_path) ? 'Mudar o logo' : 'Carregar logo'}</button>${isLogo(c.logo_path) ? '<button type="button" class="link-btn small danger-text" data-logorm>Tirar o logo</button>' : ''}<small class="muted">Quadrado de preferência. Aparece no topo, no início e na lista de comunidades.</small></div></div>
           <label class="sc-opt"><input type="checkbox" name="business" ${c.business ? 'checked' : ''}><span><strong>Parte business</strong><small>Central de Produção com a visão geral, finanças e tarefas internas.</small></span></label>
           <div class="row between"><button type="button" class="btn ghost danger-text" data-leave>Sair da comunidade</button><button class="btn primary">Guardar</button></div>
         </form>
@@ -1426,6 +1430,28 @@ async function communityTeamPage(c) {
     try { clearPeopleCache(); await call({ action: 'delete', user_id: u.id }); toast('Saiu da comunidade.'); communityTeamPage(c); } catch (e) { toast(e.message); }
   }));
   const form = app.querySelector('[data-csettings]');
+  const saveLogo = async (logo_path) => {
+    const { error } = await sb.from('communities').update({ logo_path }).eq('id', c.id);
+    if (error) return toast(error.message);
+    await loadComms(); toast(logo_path ? 'Logo guardado.' : 'Logo tirado.'); setCtx({ comm: commById(c.id) }); communityTeamPage(commById(c.id));
+  };
+  form.querySelector('[data-logoup]')?.addEventListener('click', () => {
+    const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*';
+    i.onchange = async () => {
+      const f = i.files[0]; if (!f) return;
+      try {
+        // fica pequeno (256 px) e guardado na própria comunidade, para aparecer logo sem pedir mais nada
+        const bmp = await createImageBitmap(f); const k = Math.min(1, 256 / Math.max(bmp.width, bmp.height));
+        const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+        cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+        const url = cv.toDataURL('image/webp', 0.85);
+        if (url.length > 120000) return toast('A imagem é demasiado pesada. Experimenta uma mais simples.');
+        saveLogo(url);
+      } catch { toast('Não deu para ler essa imagem.'); }
+    };
+    i.click();
+  });
+  form.querySelector('[data-logorm]')?.addEventListener('click', () => saveLogo(null));
   form.querySelectorAll('input[name=color]').forEach((r) => r.addEventListener('change', () => form.querySelectorAll('.look-c').forEach((l) => l.classList.toggle('on', l.contains(r) && r.checked))));
   form.addEventListener('submit', async (e) => {
     e.preventDefault(); const f = new FormData(form);
