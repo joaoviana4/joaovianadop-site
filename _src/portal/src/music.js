@@ -1,3 +1,4 @@
+import { onWrite } from './undo.js';
 import { moodboardPanel, bindMoodboard } from './moodboard.js';
 import { placeProps } from './sceneinfo.js';
 import { geoPanel } from './placegeo.js';
@@ -24,7 +25,17 @@ export function parseT(v) {
 }
 export const fmtT = (n) => { if (n == null) return ''; n = Math.round(n); const m = Math.floor(n / 60), s = n % 60; return `${m}:${String(s).padStart(2, '0')}`; };
 
+// os dados da página ficam em memória enquanto ninguém grava nestas tabelas (navegar entre páginas fica imediato)
+const memo = new Map();
+onWrite((t) => { if (['scenes', 'characters', 'locations', 'shots', 'boards', 'shot_groups'].includes(t)) memo.clear(); });
 async function load(pid) {
+  const m = memo.get(pid);
+  if (m && Date.now() - m.t < 45000) return m.f;
+  const f = await loadNow(pid);
+  memo.set(pid, { t: Date.now(), f });
+  return f;
+}
+async function loadNow(pid) {
   const [sc, ch, lo, sh, gr] = await Promise.all([
     sb.from('scenes').select('*').eq('project_id', pid).order('position'),
     sb.from('characters').select('*').eq('project_id', pid).order('position'),

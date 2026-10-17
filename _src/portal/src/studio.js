@@ -7,6 +7,7 @@ import { IS_STUDIO, sb, BUCKET, state, esc, $, loadProfile, isStaff, isAdmin, to
 import { renderAuth } from './auth.js';
 import { mountBoard } from './board.js';
 import { visField, bindVis, readVis } from './vis.js';
+import { onWrite } from './undo.js';
 import { mountTasks, loadPeople, clearPeopleCache } from './tasks.js';
 import { TOOL_KINDS, tableTool, timelineTool, tableTemplate } from './tools.js';
 import { isFolder, loadChildren, rollup, childrenSection, budgetChildrenPanel } from './folders.js';
@@ -597,7 +598,22 @@ async function crewPanel(el, p, people, members, reload) {
 const projBase = (p) => (p.is_central ? `#/c/${p.community_id}/central` : `#/p/${p.id}`);
 const toolHref = (p, b) => `${projBase(p)}/${(b.kind || 'board') === 'board' ? 'b' : 'f'}/${b.id}`;
 
-async function loadProject(id) {
+// projetos já abertos ficam em memória 60 s: mudar de página dentro do projeto não volta a pedir tudo.
+// Qualquer gravação nas tabelas do projeto apaga esta memória; a página do orçamento pede sempre de novo.
+const projCache = new Map();
+onWrite((t) => { if (['projects', 'project_budgets', 'boards', 'scripts', 'budget_access', 'project_members', 'community_members', 'communities'].includes(t)) projCache.clear(); });
+async function loadProject(id, { fresh = false } = {}) {
+  const c = projCache.get(id);
+  if (!fresh && c && Date.now() - c.t < 60000) {
+    const p = c.p;
+    setCtx({ comm: p.community_id ? commById(p.community_id) : null, project: p });
+    return p;
+  }
+  const p = await loadProjectNow(id);
+  if (p) projCache.set(id, { t: Date.now(), p }); else projCache.delete(id);
+  return p;
+}
+async function loadProjectNow(id) {
   // tudo de uma vez (antes eram 4 idas à base de dados, uma atrás da outra)
   const [{ data: p }, { data: fin }, { data: grant }, { count: nScripts }, { data: boards }] = await Promise.all([
     sb.from('projects').select(PROJECT_COLS).eq('id', id).maybeSingle(),
@@ -803,7 +819,7 @@ function boardOptions(p, b, after) {
 }
 
 async function projectPage(projectId, page, sub) {
-  const p = await loadProject(projectId);
+  const p = await loadProject(projectId, { fresh: ['orcamento', 'detalhes', 'equipa'].includes(page) });
   if (!p) return notFound();
   if (page === 'detalhes' && !isStaff()) page = 'geral';
   if (page !== 'geral') setTimeout(() => autoModules(p), 0);

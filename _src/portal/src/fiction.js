@@ -1,3 +1,4 @@
+import { onWrite } from './undo.js';
 import { sb, BUCKET, esc, toast, modal, confirmBox, ICON, signedUrl, signedUrls, uploadImage, fmtDate } from './lib.js';
 import { entMode, entUrls, modeToggle, bindMode, entItems, photoField, bindPhoto, bindEdits } from './entview.js';
 import { parseScript, fileToText, eighthsLabel } from './script.js';
@@ -26,7 +27,17 @@ const MOVES = ['', 'Fixo', 'Panorâmica', 'Tilt', 'Travelling', 'Dolly in', 'Dol
 
 const debounce = (fn, ms = 600) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 
+// os dados da página ficam em memória enquanto ninguém grava nestas tabelas (navegar entre páginas fica imediato)
+const memo = new Map();
+onWrite((t) => { if (['scenes', 'characters', 'locations', 'shots', 'scripts'].includes(t)) memo.clear(); });
 async function load(pid) {
+  const m = memo.get(pid);
+  if (m && Date.now() - m.t < 45000) return m.f;
+  const f = await loadNow(pid);
+  memo.set(pid, { t: Date.now(), f });
+  return f;
+}
+async function loadNow(pid) {
   const [sc, ch, lo, sh, sp] = await Promise.all([
     sb.from('scenes').select('*').eq('project_id', pid).order('position'),
     sb.from('characters').select('*').eq('project_id', pid).order('position'),
