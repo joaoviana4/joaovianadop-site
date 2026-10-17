@@ -324,7 +324,7 @@ export function lightmapTool(main, p, tool, opts = {}) {
       head = cam ? `<p class="lm-gear"><b>${esc(gearName(cam))}</b><small>${esc(specLine(cam))}</small></p>` : '<p class="lm-warn">Esta câmara não está no equipamento. Escolhe uma da lista:</p>';
       const lenses = gear.filter((g) => g.category === 'lens');
       f = `<label class="mini">Câmara<select data-k="gear_id">${opt(gear.filter((g) => g.category === 'camera'), it.gear_id, cam ? null : '— escolher —')}</select></label>
-        ${fld('code', 'Plano / câmara', it.code, 'text', 'placeholder="ex: 5A ou A-cam"')}
+        ${fld('code', 'Plano / câmara', it.code, 'text', 'placeholder="ex: 5.1 ou A-cam"')}
         <label class="mini">Objetiva<select data-k="lens_id">${opt(lenses, it.lens_id, lenses.length ? '— escolher —' : 'Nenhuma no equipamento')}</select></label>
         ${focals && focals.length ? `<label class="mini">Focal<select data-k="focal">${focals.map((x) => `<option value="${x}" ${+x === +it.focal ? 'selected' : ''}>${x} mm</option>`).join('')}</select></label>`
           : fld('focal', `Focal (mm)${lens?.specs?.zoom ? ` · ${lens.specs.zoom[0]}–${lens.specs.zoom[1]}` : ''}`, it.focal, 'number', `min="${lens?.specs?.zoom?.[0] || 4}" max="${lens?.specs?.zoom?.[1] || 1200}"`)}

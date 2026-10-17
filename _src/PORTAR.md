@@ -34,7 +34,7 @@ O resto deste ficheiro descreve como o Studio nasceu do código do byGrain (aind
 ## Ligação ao Viewfinder e ao Lighthouse
 
 - Cada projeto do Studio tem um projeto espelho em `public.projects` (`studio.projects.vf_project_id`), e cada cena uma cena em `public.scenes` (`studio.scenes.vf_scene_id`). Criados e atualizados por gatilhos.
-- Fotografia tirada no Viewfinder → entra sozinha no plano do Studio (`shots.image_path = 'vf:<caminho>'`; o plano "1" da cena 3 é o 3A). O frontend lê `vf:` do balde `photos`.
+- Fotografia tirada no Viewfinder → entra sozinha no plano do Studio (`shots.image_path = 'vf:<caminho>'`; o plano "1" da cena 3 é o 3.1; os planos numeram-se cena.plano (1.1, 1.2…)). O frontend lê `vf:` do balde `photos`.
 - Apagar uma cena no Studio marca a cena do Viewfinder como apagada.
 
 ## Studio antigo

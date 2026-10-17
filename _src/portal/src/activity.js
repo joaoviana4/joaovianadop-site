@@ -8,7 +8,7 @@ import { sb, state, esc, ICON, modal, initials, DB_SCHEMA } from './lib.js';
 const st = { seen: null, unread: 0, ch: null, names: new Map(), projects: new Map(), listeners: new Set() };
 
 // ---------- texto e ligação de cada linha ----------
-const BOARD_NOUN = { board: 'o board', table: 'a tabela', timeline: 'o cronograma', lightmap: 'o mapa de luz', budget: 'o orçamento', media: 'a página de música e pre-vis', callsheet: 'a folha de serviço', transport: 'o mapa de transportes' };
+const BOARD_NOUN = { board: 'o board', wrd: 'o moodboard', mkt: 'o board', table: 'a tabela', timeline: 'o cronograma', lightmap: 'o mapa de luz', budget: 'o orçamento', media: 'a página de música e pre-vis', callsheet: 'a folha de serviço', transport: 'o mapa de transportes' };
 const q = (s) => (s ? `«${s}»` : '');
 export function describe(a) {
   const nm = q(a.name);
@@ -38,7 +38,7 @@ export function hrefOf(a, p) {
   const gone = a.action === 'delete';
   switch (a.t) {
     case 'budget': return `${base}/orcamento`;
-    case 'board': return gone || !a.board_id ? base : `${base}/${(a.board_kind || 'board') === 'board' ? 'b' : 'f'}/${a.board_id}`;
+    case 'board': return gone || !a.board_id ? base : `${base}/${['board', 'mkt', 'wrd'].includes(a.board_kind || 'board') ? 'b' : 'f'}/${a.board_id}`;
     case 'task': return `${base}/tarefas`;
     case 'scene': return `${base}/${fiction ? 'cenas' : 'seguimento'}${gone ? '' : `/${a.entity_id}`}`;
     case 'shot': return gone ? `${base}/storyboard` : `${base}/plano/${a.entity_id}`;

@@ -209,10 +209,12 @@ async function cena(main, p, f, sid, base, cleanup) {
 }
 
 function nextCode(scene, shots) {
-  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  // planos numerados 1.1, 1.2, 1.3… (cena.plano)
+  const pre = `${scene.number}.`;
   const used = new Set(shots.map((x) => x.code));
-  for (const l of letters) { const c = `${scene.number}${l}`; if (!used.has(c)) return c; }
-  return `${scene.number}-${shots.length + 1}`;
+  let n = shots.reduce((m, x) => { const k = String(x.code || '').startsWith(pre) ? parseInt(String(x.code).slice(pre.length), 10) : 0; return k > m ? k : m; }, 0) + 1;
+  while (used.has(pre + n)) n++;
+  return pre + n;
 }
 
 export function bindShots(main, p, f, s, shots, urls, base) {
