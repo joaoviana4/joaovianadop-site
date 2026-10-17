@@ -176,6 +176,62 @@ function studioHtml(d) {
 const wrap = (data, p) => { const w = data?.sheets?.length ? data : { sheets: [data?.rows ? data : newCallsheet(p, 1)] }; w.sheets.forEach((sh, i) => { if (!sh.day) sh.day = String(i + 1); if (!sh.days) sh.days = String(w.sheets.length); sh.more = sh.more || {}; sh.vehicles = sh.vehicles || []; sh.deptNotes = sh.deptNotes || []; }); return w; };
 const shortDay = (iso) => { if (!iso) return ''; const d = new Date(iso + 'T00:00:00'); return d.toLocaleDateString('pt-PT', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, ''); };
 
+// Escolher a pessoa num menu, como os planos: ao clicar no campo "Nome - telefone" de um contacto aparece a
+// equipa e o elenco do projeto; ao escolher entra o nome com o telefone (e a função, se estiver vazia).
+let peopleCache = null;
+function peoplePicker(main, p, d, save) {
+  if (!main.dataset.ppFresh) { main.dataset.ppFresh = '1'; peopleCache = null; } // lista acabada de ler cada vez que se abre a folha
+  const norm = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const words = (x) => norm(x).split(/[^a-z0-9]+/).filter((w) => w.length > 2 && !['de', 'da', 'do'].includes(w));
+  let box = null; let items = []; let sel = 0; let input = null;
+  const close = () => { box?.remove(); box = null; input = null; };
+  const pick = (c) => {
+    if (!input || !c) return;
+    const i = Number(input.dataset.p.split('.')[1]);
+    input.value = nameWithPhone(c); set(d, input.dataset.p, input.value);
+    const role = main.querySelector(`[data-p="contacts.${i}.role"]`);
+    if (role && !role.value.trim()) { role.value = c.kind === 'crew' ? (c.job || c.dept || '') : c.role || ''; set(d, `contacts.${i}.role`, role.value); }
+    save(); close();
+  };
+  const render = () => {
+    if (!box || !input) return;
+    const i = Number(input.dataset.p.split('.')[1]);
+    const role = words(d.contacts[i]?.role);
+    const q = norm(input.value).trim();
+    const score = (c) => { const j = words(`${c.job} ${c.dept} ${c.role}`); return role.filter((w) => j.some((x) => x.startsWith(w.slice(0, 5)))).length; };
+    items = peopleCache.list.filter((c) => !q || norm(`${c.name} ${c.job} ${c.role} ${c.phone}`).includes(q) || norm(nameWithPhone(c)) === q)
+      .map((c) => ({ c, s: score(c) })).sort((a, b) => b.s - a.s || (a.c.kind === 'crew' ? -1 : 1) - (b.c.kind === 'crew' ? -1 : 1)).map((x) => x.c);
+    sel = Math.min(sel, Math.max(0, items.length - 1));
+    box.innerHTML = items.length ? items.map((c, k) => `<button type="button" class="cs-pp-i ${k === sel ? 'on' : ''}" data-k="${k}"><span><b>${esc(c.name)}</b><small>${esc(c.kind === 'crew' ? (c.job || c.dept || 'Equipa') : c.role ? `${c.role}${c.kind === 'extra' ? ' · figurante' : ''}` : 'Elenco')}</small></span><span class="cs-pp-ph">${esc(c.phone || 'sem telefone')}</span></button>`).join('')
+      : `<p class="muted small">Ninguém com esse nome na equipa nem no elenco. Junta as pessoas em Equipa e convites.</p>`;
+    box.querySelectorAll('[data-k]').forEach((b) => b.addEventListener('mousedown', (e) => { e.preventDefault(); pick(items[+b.dataset.k]); }));
+  };
+  const open = async (el) => {
+    if (input === el && box) return;
+    close(); input = el;
+    if (peopleCache?.pid !== p.id) peopleCache = { pid: p.id, list: await projectContacts(p) };
+    if (input !== el) return;
+    box = document.createElement('div'); box.className = 'cs-pp'; box.setAttribute('role', 'listbox');
+    const r = el.getBoundingClientRect();
+    box.style.left = `${Math.max(8, Math.min(r.left + window.scrollX, window.innerWidth - 340))}px`; box.style.top = `${r.bottom + window.scrollY + 4}px`; box.style.minWidth = `${Math.max(280, r.width)}px`;
+    document.body.append(box); sel = 0; render();
+  };
+  main.querySelectorAll('[data-p^="contacts."][data-p$=".value"]').forEach((el) => {
+    el.setAttribute('autocomplete', 'off');
+    el.addEventListener('focus', () => open(el));
+    el.addEventListener('click', () => open(el));
+    el.addEventListener('input', () => { if (box && input === el) { sel = 0; render(); } });
+    el.addEventListener('blur', () => setTimeout(() => { if (input === el) close(); }, 120));
+    el.addEventListener('keydown', (e) => {
+      if (!box || input !== el) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(items.length - 1, sel + 1); render(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(0, sel - 1); render(); }
+      else if (e.key === 'Enter' && items[sel]) { e.preventDefault(); pick(items[sel]); }
+      else if (e.key === 'Escape') { close(); }
+    });
+  });
+}
+
 export function callsheetTool(main, p, tool) {
   const all = wrap(tool.data, p);
   const key = `bg-cs-day:${tool.id}`;
@@ -236,6 +292,7 @@ export function callsheetTool(main, p, tool) {
         m.close(); save(); draw();
       });
     }));
+    peoplePicker(main, p, d, save);
     on('[data-addt]', () => d.times.push({ id: uid(), label: '', value: '' }));
     on('[data-addd]', () => d.depts.push({ id: uid(), name: '', time: '' }));
     on('[data-addcast]', () => d.cast.push({ id: uid(), name: '', role: '', scene: '', call: '', out: '', obs: '' }));

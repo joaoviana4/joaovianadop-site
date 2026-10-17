@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { installUndo } from './undo.js';
 import { FLAVOR, IS_STUDIO } from './flavor.js';
 export { IS_STUDIO, FLAVOR };
 
@@ -11,6 +12,8 @@ export const sb = createClient(SUPABASE_URL, SUPABASE_ANON, {
   auth: { persistSession: true, autoRefreshToken: true, storageKey: FLAVOR.storageKey },
   db: { schema: FLAVOR.schema },
 });
+// Ctrl+Z em todas as páginas (undo.js)
+queueMicrotask(() => installUndo(sb, (m) => toast(m)));
 // ficheiros: sb.storage.from(BUCKET)
 export const BUCKET = FLAVOR.bucket;
 
