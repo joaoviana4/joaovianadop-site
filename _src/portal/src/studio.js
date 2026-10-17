@@ -590,7 +590,7 @@ async function loadProject(id) {
     // o orçamento só chega a quem tem acesso (a base de dados devolve vazio aos outros)
     sb.from('project_budgets').select('value, budget, updated_at, approved_at').eq('project_id', id).maybeSingle(),
     sb.from('budget_access').select('user_id').eq('project_id', id).eq('user_id', state.user.id).maybeSingle(),
-    sb.from('scripts').select('id', { count: 'exact', head: true }).eq('project_id', id),
+    sb.from('scripts').select('id', { count: 'exact', head: true }).eq('project_id', id).neq('kind', 'tratamento'),
     sb.from('boards').select('id, parent_id, title, group_id, position, created_at, kind').eq('project_id', id).order('position').order('created_at'),
   ]);
   if (!p || p.deleted_at) return null;
@@ -797,7 +797,7 @@ async function projectPage(projectId, page, sub) {
   const titles = { tarefas: 'Tarefas', equipa: p.is_central ? 'Equipa' : 'Equipa e convites', detalhes: 'Detalhes' };
   joinProject(p.id);
   // páginas de trabalho: só uma janela edita de cada vez (as outras ficam só a ver)
-  if (['orcamento', 'seguimento', 'decors', 'elenco', 'personagens', 'aderecos', 'cenas', 'guiao', 'planificacao', 'detalhes', 'shotlist', 'storyboard', 'financas', 'plano', 'equipamento', 'figurino'].includes(page)) {
+  if (['orcamento', 'seguimento', 'decors', 'elenco', 'personagens', 'aderecos', 'cenas', 'guiao', 'planificacao', 'detalhes', 'shotlist', 'storyboard', 'financas', 'plano', 'equipamento', 'figurino', 'tratamento'].includes(page)) {
     const lk = lockPage(`${p.id}:${page}:${sub || ''}`, main, { reopen: () => route() });
     onCleanup(() => lk.destroy());
   }
@@ -828,6 +828,7 @@ async function projectPage(projectId, page, sub) {
   if (['orcamento', 'financas'].includes(page)) { main.innerHTML = `<div class="empty-box"><p>${ICON.lock} Não tens acesso a esta parte.</p><p class="muted small">Pede a um administrador.</p></div>`; return; }
   if (page === 'aderecos' && !p.is_central) return (await lazy.props()).propsPage(main, p, sub, projBase(p), onCleanup);
   if (page === 'figurino' && !p.is_central) return (await lazy.wardrobe()).wardrobePage(main, p, sub, projBase(p), onCleanup);
+  if (page === 'tratamento' && !p.is_central) return (await import('./treatment.js')).treatmentPage(main, p, projBase(p), onCleanup);
   main.innerHTML = `<h1 class="h1 pm-title">${esc(titles[page] || '')}</h1><div class="panel" data-body></div>`;
   const body = main.querySelector('[data-body]');
   if (page === 'tarefas') { body.classList.remove('panel'); body.classList.add('tc'); const t = mountTaskCenter(body, { projectId: p.id }); onCleanup(() => t.destroy()); }

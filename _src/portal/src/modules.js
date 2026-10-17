@@ -8,6 +8,7 @@ import { sb, esc, toast, modal, ICON, KINDS } from './lib.js';
 export const MODULES = {
   orcamento: { label: 'Orçamento', icon: 'money', desc: 'Tabela de custos por secções, comparada com o orçamento geral. Só aparece a quem tem acesso.' },
   seguimento: { label: 'Seguimento', icon: 'music', desc: 'Parte a música ou o filme em secções, cada uma com décors, atores, figurantes e planos. Pre-vis e música no topo.' },
+  tratamento: { label: 'Tratamento', icon: 'note', desc: 'O tratamento ou dossiê do projeto em PDF, lido página a página, com versões.' },
   guiao: { label: 'Guião', icon: 'note', desc: 'Importa o guião (PDF, Final Draft, Fountain) e separa cenas, personagens e décors sozinho.' },
   cenas: { label: 'Cenas', icon: 'list', desc: 'Breakdown cena a cena, com planos, tarefas e notas.' },
   elenco: { label: 'Atores e figurantes', scriptLabel: 'Personagens', icon: 'team', desc: 'Uma página por pessoa: papel, contacto, notas e onde aparece.' },
@@ -22,7 +23,7 @@ export const MODULES = {
   tarefas: { label: 'Tarefas', icon: 'task', desc: 'Tarefas do projeto, por pessoa e departamento.' },
 };
 // ordem no menu
-export const ORDER = ['orcamento', 'seguimento', 'guiao', 'cenas', 'elenco', 'decors', 'storyboard', 'shotlist', 'planificacao', 'equipamento', 'aderecos', 'figurino', 'marketing', 'tarefas'];
+export const ORDER = ['orcamento', 'tratamento', 'seguimento', 'guiao', 'cenas', 'elenco', 'decors', 'storyboard', 'shotlist', 'planificacao', 'equipamento', 'aderecos', 'figurino', 'marketing', 'tarefas'];
 // o seguimento e as cenas usam a mesma lista de secções/cenas: um projeto usa um ou outro
 const SCRIPT = ['guiao', 'cenas', 'planificacao'];
 
@@ -31,7 +32,7 @@ export const TEMPLATES = {
   ficcao: ['orcamento', 'guiao', 'cenas', 'elenco', 'decors', 'storyboard', 'planificacao', 'equipamento', 'aderecos', 'figurino', 'tarefas'],
   campanha: ['orcamento', 'seguimento', 'elenco', 'decors', 'storyboard', 'shotlist', 'equipamento', 'aderecos', 'figurino', 'tarefas'],
   branded: ['orcamento', 'seguimento', 'decors', 'shotlist', 'equipamento', 'aderecos', 'tarefas'],
-  documentario: ['orcamento', 'elenco', 'decors', 'equipamento', 'tarefas'],
+  documentario: ['orcamento', 'tratamento', 'elenco', 'decors', 'equipamento', 'tarefas'],
   album: ['orcamento', 'marketing', 'tarefas'],
   default: ['orcamento', 'tarefas'],
 };

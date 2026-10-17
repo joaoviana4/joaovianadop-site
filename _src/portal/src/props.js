@@ -1,6 +1,7 @@
 import { sb, esc, toast, modal, confirmBox, ICON, signedUrls, uploadImage } from './lib.js';
 import { mountTasks } from './tasks.js';
 import { scriptMode } from './modules.js';
+import { analyzeScenes } from './breakdown.js';
 
 // Adereços (departamento de Arte), como no Studio: de ação e de cenário, estados com cores,
 // página própria com cenas, interações, continuidade e referências. Análise do guião no Claude (grátis) ou rápida.
@@ -17,7 +18,7 @@ async function load(pid) {
   const [pr, sc, ch, lo, bu] = await Promise.all([
     sb.from('props').select('*').eq('project_id', pid).order('name'),
     sb.from('scenes').select('id, number, heading, body, character_ids, location_id, position').eq('project_id', pid).order('position'),
-    sb.from('characters').select('id, name').eq('project_id', pid),
+    sb.from('characters').select('id, name, info').eq('project_id', pid),
     sb.from('locations').select('id, name').eq('project_id', pid),
     sb.from('prop_bundles').select('*').eq('project_id', pid).order('created_at'),
   ]);
@@ -419,14 +420,9 @@ async function mergeProps(p, f, list) {
   return added;
 }
 
-const COMMON = ['telemóvel', 'telefone', 'chávena', 'copo', 'garrafa', 'cigarro', 'isqueiro', 'fósforos', 'chave', 'chaves', 'carteira', 'mala', 'mochila', 'caixa', 'carta', 'cartas', 'envelope', 'livro', 'caderno', 'caneta', 'jornal', 'fotografia', 'foto', 'faca', 'garfo', 'prato', 'pistola', 'arma', 'relógio', 'anel', 'colar', 'óculos', 'chapéu', 'casaco', 'guarda-chuva', 'rádio', 'televisão', 'computador', 'portátil', 'câmara', 'disco', 'cassete', 'vela', 'lanterna', 'candeeiro', 'mesa', 'cadeira', 'sofá', 'cama', 'espelho', 'quadro', 'vaso', 'flores', 'bolo', 'pão', 'vinho', 'cerveja', 'café', 'bilhete', 'dinheiro', 'mapa', 'bicicleta', 'carro'];
-const ACTION = /\b(pega|segura|abre|fecha|dá|recebe|tira|pousa|examina|guarda|atira|bebe|come|acende|lê|escreve|liga|desliga|entrega|mostra|agarra)\b/i;
+// análise rápida: vocabulário grande de objetos com "de …", objetos em maiúsculas, implícitos e quem lhes mexe (breakdown.js)
 function quickAnalysis(f) {
-  const found = new Map();
-  f.scenes.forEach((s) => (s.body || '').split(/(?<=[.!?])\s+|\n/).forEach((sent) => {
-    COMMON.forEach((w) => { if (new RegExp(`\\b${w}\\b`, 'i').test(sent)) { const e = found.get(w) || { nome: w, tipo: 'cenario', cenas: [], personagens: [], interacoes: [] }; if (ACTION.test(sent)) e.tipo = 'acao'; if (!e.cenas.includes(s.number)) e.cenas.push(s.number); found.set(w, e); } });
-  }));
-  return [...found.values()];
+  return analyzeScenes(f.scenes, f.characters.filter((c) => !c.info?.extra).map((c) => c.name)).props;
 }
 
 function analyze(p, f, after) {
@@ -438,7 +434,7 @@ function analyze(p, f, after) {
   const intro = () => {
     box.innerHTML = `<h2>Analisar o guião</h2>
       <div class="an-opts"><button type="button" class="an-opt" data-claude><strong>Analisar no Claude</strong><span class="small">Grátis e a mais completa: percebe pronomes e quem faz o quê com cada objeto. Usa a tua conta do Claude.</span><span class="tag blue">Recomendada</span></button>
-      <button type="button" class="an-opt" data-quick><strong>Rápida, sem IA</strong><span class="small">Imediata, mas só procura objetos comuns e verbos de ação. Pode falhar ou apanhar palavras a mais.</span></button></div>
+      <button type="button" class="an-opt" data-quick><strong>Rápida, sem IA</strong><span class="small">Imediata. Procura centenas de objetos (com "de …": "óculos de sol de tartaruga"), os que estão em maiúsculas e os implícitos (fuma → cigarro), e quem lhes mexe.</span></button></div>
       <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button></div>`;
     box.querySelector('[data-close]').onclick = m.close;
     box.querySelector('[data-quick]').onclick = async () => { const n = await mergeProps(p, f, quickAnalysis(f)); m.close(); toast(`A lista de adereços está pronta (${n} novos).`); after(); };
