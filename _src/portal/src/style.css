@@ -2440,3 +2440,26 @@ body.readonly .proj-main input[readonly]:focus, body.readonly .proj-main textare
 .comm-logo-pv { width: 56px; height: 56px; border-radius: 14px; flex: none; display: inline-block; }
 .comm-logo-f { align-items: center; }
 .comm-logo-f small { flex-basis: 100%; }
+
+/* ---------- fases do projeto ---------- */
+.phase-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: -6px; }
+.phase-seg { display: inline-flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); flex-wrap: wrap; }
+.phase-seg button { position: relative; border: 0; background: none; color: var(--muted); font: inherit; font-size: 14px; font-weight: 600; padding: 9px 18px; border-radius: 999px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: background .12s, color .12s; }
+.phase-seg button:hover { color: var(--text); background: var(--panel2); }
+.phase-seg button[aria-selected="true"] { background: var(--blue); color: #fff; }
+.phase-now { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 25%, transparent); display: inline-block; }
+.phase-seg button[aria-selected="true"] .phase-now { background: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,.3); }
+.phase-org { white-space: nowrap; }
+@media (max-width: 600px) { .phase-seg { width: 100%; } .phase-seg button { flex: 1 1 auto; justify-content: center; padding: 8px 10px; font-size: 13px; } }
+.pn-phase { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 2px 0 6px; padding: 5px 6px 5px 12px; border-radius: 10px; background: color-mix(in srgb, var(--blue) 12%, transparent); color: var(--blue); font-size: 12.5px; }
+.pn-phase b { font-weight: 700; }
+.pn-phase .icon-btn { color: inherit; }
+.phase-org-t { display: flex; flex-direction: column; max-height: 60vh; overflow: auto; margin: 6px 0 12px; }
+.pot-h, .pot-r { display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, 96px); align-items: center; gap: 6px; }
+.pot-h { position: sticky; top: 0; background: var(--panel); padding: 6px 0; font-size: 12px; font-weight: 700; color: var(--muted); z-index: 1; }
+.pot-h span:not(:first-child), .pot-r label { text-align: center; }
+.pot-r { padding: 7px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.pot-r label { cursor: pointer; }
+.pot-r input { width: 18px; height: 18px; accent-color: var(--blue); }
+.pot-g { margin: 14px 0 2px; font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+@media (max-width: 600px) { .pot-h, .pot-r { grid-template-columns: minmax(0, 1fr) repeat(3, 56px); } .pot-h span { font-size: 10px; } }
