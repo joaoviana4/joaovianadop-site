@@ -1,0 +1,23 @@
+// Países (nome em português) e continente. Usado na Tabela Distribuição.
+export const CONTINENTS = ['Europa', 'África', 'Ásia', 'América do Norte', 'América Central e Caraíbas', 'América do Sul', 'Oceânia', 'Médio Oriente', 'Online'];
+const C = {
+  'Europa': 'Albânia, Alemanha, Andorra, Arménia, Áustria, Azerbaijão, Bélgica, Bielorrússia, Bósnia e Herzegovina, Bulgária, Chipre, Croácia, Dinamarca, Eslováquia, Eslovénia, Espanha, Estónia, Finlândia, França, Geórgia, Grécia, Hungria, Irlanda, Islândia, Itália, Kosovo, Letónia, Listenstaine, Lituânia, Luxemburgo, Macedónia do Norte, Malta, Moldávia, Mónaco, Montenegro, Noruega, Países Baixos, Polónia, Portugal, Reino Unido, Inglaterra, Escócia, País de Gales, Irlanda do Norte, República Checa, Roménia, Rússia, São Marinho, Sérvia, Suécia, Suíça, Ucrânia, Vaticano, Gibraltar, Ilhas Faroé',
+  'África': 'África do Sul, Angola, Argélia, Benim, Botsuana, Burquina Faso, Burundi, Cabo Verde, Camarões, Chade, Comores, Congo, Costa do Marfim, Djibuti, Egito, Eritreia, Essuatíni, Etiópia, Gabão, Gâmbia, Gana, Guiné, Guiné-Bissau, Guiné Equatorial, Lesoto, Libéria, Líbia, Madagáscar, Malawi, Mali, Marrocos, Maurícia, Mauritânia, Moçambique, Namíbia, Níger, Nigéria, Quénia, República Centro-Africana, República Democrática do Congo, Ruanda, São Tomé e Príncipe, Senegal, Serra Leoa, Seicheles, Somália, Sudão, Sudão do Sul, Tanzânia, Togo, Tunísia, Uganda, Zâmbia, Zimbabué',
+  'Ásia': 'Afeganistão, Bangladesh, Butão, Brunei, Camboja, Cazaquistão, China, Coreia do Norte, Coreia do Sul, Filipinas, Hong Kong, Índia, Indonésia, Japão, Laos, Macau, Malásia, Maldivas, Mongólia, Myanmar, Nepal, Paquistão, Quirguistão, Singapura, Sri Lanka, Tailândia, Taiwan, Tajiquistão, Timor-Leste, Turquemenistão, Usbequistão, Vietname',
+  'Médio Oriente': 'Arábia Saudita, Barém, Catar, Emirados Árabes Unidos, Iémen, Irão, Iraque, Israel, Jordânia, Kuwait, Líbano, Omã, Palestina, Síria, Turquia',
+  'América do Norte': 'Canadá, Estados Unidos, México, Gronelândia',
+  'América Central e Caraíbas': 'Antígua e Barbuda, Bahamas, Barbados, Belize, Costa Rica, Cuba, Domínica, El Salvador, Granada, Guatemala, Haiti, Honduras, Jamaica, Nicarágua, Panamá, Porto Rico, República Dominicana, Santa Lúcia, São Cristóvão e Neves, São Vicente e Granadinas, Trindade e Tobago',
+  'América do Sul': 'Argentina, Bolívia, Brasil, Chile, Colômbia, Equador, Guiana, Paraguai, Peru, Suriname, Uruguai, Venezuela',
+  'Oceânia': 'Austrália, Fiji, Ilhas Marshall, Ilhas Salomão, Kiribati, Micronésia, Nauru, Nova Zelândia, Palau, Papua-Nova Guiné, Samoa, Tonga, Tuvalu, Vanuatu',
+  'Online': 'Online, Internacional',
+};
+export const COUNTRIES = Object.entries(C).flatMap(([cont, list]) => list.split(', ').map((name) => ({ name, cont }))).sort((a, b) => a.name.localeCompare(b.name, 'pt'));
+const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+// alguns nomes em inglês ou formas comuns
+const ALIAS = { france: 'França', germany: 'Alemanha', spain: 'Espanha', italy: 'Itália', usa: 'Estados Unidos', 'united states': 'Estados Unidos', eua: 'Estados Unidos', uk: 'Reino Unido', 'united kingdom': 'Reino Unido', england: 'Inglaterra', holanda: 'Países Baixos', netherlands: 'Países Baixos', brazil: 'Brasil', canada: 'Canadá', mexico: 'México', japan: 'Japão', korea: 'Coreia do Sul', 'south korea': 'Coreia do Sul', estonia: 'Estónia', uruguay: 'Uruguai', switzerland: 'Suíça', belgium: 'Bélgica', greece: 'Grécia', poland: 'Polónia', 'czech republic': 'República Checa', chequia: 'República Checa', sweden: 'Suécia', denmark: 'Dinamarca', norway: 'Noruega', finland: 'Finlândia', ireland: 'Irlanda', austria: 'Áustria', argentina: 'Argentina', chile: 'Chile', colombia: 'Colômbia', china: 'China', india: 'Índia', australia: 'Austrália', 'new zealand': 'Nova Zelândia', 'south africa': 'África do Sul', egypt: 'Egito', morocco: 'Marrocos', turkey: 'Turquia', russia: 'Rússia', ukraine: 'Ucrânia', croatia: 'Croácia', serbia: 'Sérvia', romania: 'Roménia', hungary: 'Hungria', slovenia: 'Eslovénia', slovakia: 'Eslováquia', bulgaria: 'Bulgária', iceland: 'Islândia', luxembourg: 'Luxemburgo', cuba: 'Cuba', peru: 'Peru', iran: 'Irão', israel: 'Israel', lebanon: 'Líbano', 'cape verde': 'Cabo Verde', mozambique: 'Moçambique' };
+export function findCountry(v) {
+  const n = norm(v); if (!n) return null;
+  const a = ALIAS[n]; if (a) return COUNTRIES.find((c) => c.name === a);
+  return COUNTRIES.find((c) => norm(c.name) === n) || null;
+}
+export const searchCountries = (q) => { const n = norm(q); return COUNTRIES.filter((c) => !n || norm(c.name).includes(n) || Object.entries(ALIAS).some(([k, v]) => v === c.name && k.includes(n))); };

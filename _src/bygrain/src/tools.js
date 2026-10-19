@@ -13,6 +13,7 @@ export const TOOL_KINDS = {
   media: { label: 'Música e pre-vis', icon: ICON.music },
   callsheet: { label: 'Folha de serviço', icon: ICON.calendar },
   transport: { label: 'Mapa de transportes', icon: ICON.car },
+  distribution: { label: 'Tabela Distribuição', icon: ICON.globe },
 };
 const uid = () => Math.random().toString(36).slice(2, 10);
 const debounce = (fn, ms = 700) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
