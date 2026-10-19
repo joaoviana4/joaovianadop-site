@@ -2,7 +2,7 @@ import { onWrite } from './undo.js';
 import { moodboardPanel, bindMoodboard } from './moodboard.js';
 import { placeProps } from './sceneinfo.js';
 import { geoPanel } from './placegeo.js';
-import { sb, BUCKET, esc, toast, confirmBox, modal, ICON, signedUrls, signedUrl, uploadImage } from './lib.js';
+import { saveLater, sb, BUCKET, esc, toast, confirmBox, modal, ICON, signedUrls, signedUrl, uploadImage } from './lib.js';
 import { entMode, entUrls, modeToggle, bindMode, entItems, photoField, bindPhoto, bindEdits, placePhotos, bindPlacePhotos } from './entview.js';
 import { shotCard, bindShots, shotViewer } from './fiction.js';
 import { mountTasks } from './tasks.js';
@@ -15,7 +15,7 @@ import { ensureModules } from './modules.js';
 export const PARTS = ['Intro', 'Verso 1', 'Pré-refrão', 'Refrão', 'Verso 2', 'Refrão 2', 'Ponte', 'Refrão final', 'Outro'];
 const AUTO = ['Intro', 'Verso 1', 'Refrão', 'Verso 2', 'Refrão 2', 'Ponte', 'Refrão final', 'Outro'];
 export const SEG_COLORS = ['#8e6cdb', '#d6457a', '#d9822b', '#c9a227', '#2fa37a', '#4f8f9e', '#7fae3a', '#8a7563'];
-const debounce = (fn, ms = 600) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const debounce = (fn, ms = 600) => saveLater(fn, ms);
 
 // "1:20" → 80 · "80" → 80 · "1:02:03" → 3723
 export function parseT(v) {

@@ -6,7 +6,21 @@ import { sb, state, esc, initials, ICON } from './lib.js';
 // · Boards: várias pessoas ao mesmo tempo, mas cada cartão só pode ser mexido por uma de cada vez.
 // Cada separador conta como uma presença (duas janelas tuas também não se pisam).
 
-const TAB = Math.random().toString(36).slice(2, 10);
+// O separador guarda a sua identidade ao recarregar a página: assim a "presença" antiga (que o servidor ainda
+// mantém uns segundos) é reconhecida como sendo tua e não aparece "Tu, noutra janela" depois de atualizar.
+// Um separador duplicado copia essa identidade: os dois falam entre si e o mais novo passa a ter uma própria.
+const newTab = () => Math.random().toString(36).slice(2, 10);
+let TAB = (() => { try { let t = sessionStorage.getItem('portal-tab'); if (!t) { t = newTab(); sessionStorage.setItem('portal-tab', t); } return t; } catch { return newTab(); } })();
+try {
+  const bc = new BroadcastChannel('portal-tabs'); const born = Date.now();
+  bc.onmessage = (e) => {
+    if (e.data?.hello === TAB && e.data.born > born) bc.postMessage({ taken: TAB, to: e.data.born });
+    else if (e.data?.taken === TAB && e.data.to === born) { TAB = newTab(); try { sessionStorage.setItem('portal-tab', TAB); } catch { /* nada */ } if (room) { const pid = room.pid; leaveProject(); joinProject(pid); } }
+  };
+  bc.postMessage({ hello: TAB, born });
+} catch { /* sem BroadcastChannel */ }
+// ao sair ou recarregar, larga logo a presença
+if (typeof window !== 'undefined') window.addEventListener('pagehide', () => { try { room?.ch.untrack(); } catch { /* nada */ } });
 const IDLE_MS = 5 * 60 * 1000;
 let room = null; // { pid, ch, me, subs: Set, ready }
 

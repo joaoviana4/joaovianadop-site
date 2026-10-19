@@ -1,4 +1,4 @@
-import { sb, esc, toast, ICON } from './lib.js';
+import { sb, esc, toast, ICON, saveLater } from './lib.js';
 
 // Páginas organizáveis: cada bloco [data-blk] pode ir para a esquerda, para a direita ou ocupar a largura toda,
 // subir, descer, ser arrastado ou escondido. A arrumação fica guardada no projeto (igual para toda a equipa).
@@ -20,15 +20,13 @@ export function mountLayout(root, { project, key, blocks, title = 'página' }) {
     split: saved.split || '2:1',
   };
   const label = (id) => defs.find((b) => b.id === id)?.label || id;
-  let saveT;
-  const save = () => {
-    clearTimeout(saveT);
-    saveT = setTimeout(async () => {
+  const save = saveLater(async () => {
+    {
       const layouts = { ...(project.layouts || {}), [key]: { order: st.order, pos: st.pos, hidden: st.hidden, split: st.split } };
       const { error } = await sb.from('projects').update({ layouts }).eq('id', project.id);
       if (error) toast('Não foi possível guardar a arrumação: ' + error.message); else project.layouts = layouts;
-    }, 500);
-  };
+    }
+  }, 500);
 
   const bar = document.createElement('div');
   bar.className = 'lay-bar';

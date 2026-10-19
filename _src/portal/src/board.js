@@ -1,4 +1,4 @@
-import { DB_SCHEMA, sb, BUCKET, esc, signedUrl, signedUrls, uploadImage, toast, modal, confirmBox, ICON } from './lib.js';
+import { trackWrite, DB_SCHEMA, sb, BUCKET, esc, signedUrl, signedUrls, uploadImage, toast, modal, confirmBox, ICON } from './lib.js';
 import { ytId } from './music.js';
 
 // Board infinito à maneira do Milanote: cada cartão é uma linha própria na base de dados,
@@ -283,17 +283,22 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   }
 
   // ---------- gravar ----------
+  // um temporizador por cartão, mas os campos juntam-se: mexer no texto e logo a seguir no tamanho grava os dois
   const saveT = new Map();
   function save(it, fields, delay = 0) {
-    const run = async () => {
+    const cur = saveT.get(it.id) || { fields: new Set() };
+    fields.forEach((f) => cur.fields.add(f));
+    clearTimeout(cur.t);
+    const run = () => {
+      if (saveT.get(it.id) !== cur) return;
       saveT.delete(it.id);
-      const patch = {}; fields.forEach((f) => (patch[f] = it[f]));
-      const { error } = await sb.from('board_items').update(patch).eq('id', it.id);
-      if (error) toast('Não foi possível guardar: ' + error.message);
+      const patch = {}; cur.fields.forEach((f) => (patch[f] = it[f]));
+      return trackWrite(sb.from('board_items').update(patch).eq('id', it.id).then(({ error }) => { if (error) toast('Não foi possível guardar: ' + error.message); }));
     };
-    clearTimeout(saveT.get(it.id));
-    if (delay) saveT.set(it.id, setTimeout(run, delay)); else run();
+    saveT.set(it.id, cur);
+    if (delay) { cur.t = setTimeout(run, delay); cur.flush = run; } else run();
   }
+  const flushItems = () => [...saveT.values()].forEach((c) => { clearTimeout(c.t); c.flush?.(); });
   const maxZ = () => Math.max(0, ...[...items.values()].map((i) => i.z));
 
   // ---------- desfazer / refazer (Ctrl+Z, Ctrl+Shift+Z ou Ctrl+Y) ----------
@@ -851,7 +856,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     setColor: (c, delay) => setBg(c, delay),
     get zoom() { return st.view.k; },
     destroy() {
-      st.dead = true; commitEdit();
+      st.dead = true; commitEdit(); flushItems();
       pending.forEach((it) => cleanupFiles(it)); pending.clear(); offLocks && offLocks(); presence?.setCard(null);
       document.removeEventListener('keydown', onKey); document.removeEventListener('paste', onPaste); document.removeEventListener('selectionchange', onSelChange);
       window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end);

@@ -1,5 +1,5 @@
 import { onWrite } from './undo.js';
-import { sb, BUCKET, esc, toast, modal, confirmBox, ICON, signedUrl, signedUrls, uploadImage, fmtDate } from './lib.js';
+import { saveLater, sb, BUCKET, esc, toast, modal, confirmBox, ICON, signedUrl, signedUrls, uploadImage, fmtDate } from './lib.js';
 import { entMode, entUrls, modeToggle, bindMode, entItems, photoField, bindPhoto, bindEdits } from './entview.js';
 import { parseScript, fileToText, eighthsLabel } from './script.js';
 import { mountTasks } from './tasks.js';
@@ -25,7 +25,7 @@ export const FICTION_DEPTS = [
 const FRAMINGS = ['', 'Plano geral', 'Plano de conjunto', 'Plano americano', 'Plano médio', 'Plano próximo', 'Grande plano', 'Muito grande plano', 'Plano de pormenor', 'Contraplano', 'Plano subjetivo (POV)', 'Over the shoulder', 'Two-shot', 'Insert'];
 const MOVES = ['', 'Fixo', 'Panorâmica', 'Tilt', 'Travelling', 'Dolly in', 'Dolly out', 'Steadicam', 'Câmara à mão', 'Gimbal', 'Grua', 'Drone', 'Zoom', 'Plano-sequência'];
 
-const debounce = (fn, ms = 600) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const debounce = (fn, ms = 600) => saveLater(fn, ms);
 
 // os dados da página ficam em memória enquanto ninguém grava nestas tabelas (navegar entre páginas fica imediato)
 const memo = new Map();

@@ -1,4 +1,4 @@
-import { sb, esc, toast, modal, confirmBox, ICON, fmtDate, todayISO, daysUntil } from './lib.js';
+import { saveLater, sb, esc, toast, modal, confirmBox, ICON, fmtDate, todayISO, daysUntil } from './lib.js';
 import { loadPeople, editTask } from './tasks.js';
 import { shootDays } from './shootdays.js';
 
@@ -16,7 +16,7 @@ export const TOOL_KINDS = {
   distribution: { label: 'Tabela Distribuição', icon: ICON.globe },
 };
 const uid = () => Math.random().toString(36).slice(2, 10);
-const debounce = (fn, ms = 700) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const debounce = (fn, ms = 700) => saveLater(fn, ms);
 
 import { projectContacts } from './contacts.js';
 // ---------- modelos de tabela ----------

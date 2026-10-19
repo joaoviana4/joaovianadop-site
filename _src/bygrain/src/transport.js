@@ -1,5 +1,5 @@
 import { bindTimes } from './timepick.js';
-import { sb, esc, toast, modal, confirmBox, ICON } from './lib.js';
+import { saveLater, sb, esc, toast, modal, confirmBox, ICON } from './lib.js';
 import { projectContacts, phoneFor } from './contacts.js';
 
 // Mapa de transportes (ferramenta de produção).
@@ -9,7 +9,7 @@ import { projectContacts, phoneFor } from './contacts.js';
 // Traz o elenco de uma folha de serviço (recolha 30 min antes do call). Exporta para PDF em dois modelos e para Excel.
 
 const uid = () => Math.random().toString(36).slice(2, 10);
-const debounce = (fn, ms = 600) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const debounce = (fn, ms = 600) => saveLater(fn, ms);
 const COLORS = ['#C8382D', '#1E2AD4', '#2FB67C', '#F08A24', '#7C5CFF', '#2AA8C9', '#E5579B', '#8A8A99'];
 const v = (x) => (x == null ? '' : String(x));
 const has = (x) => v(x).trim() !== '';

@@ -83,3 +83,6 @@ O resto deste ficheiro descreve como o Studio nasceu do código do byGrain (aind
 - Fórmulas (`formula.js`, igual nos dois): Tabelas e Orçamento aceitam =B2*C2, =SOMA(), =SE(), =PROCV()… (nomes PT e EN). Colunas A, B, C…, linhas 1, 2, 3… (no orçamento as secções contam como linha). Totais do orçamento, fee e Ganhos (folders.js) já usam os valores calculados.
 - Apagar ferramenta: botão de lixo no topo da ferramenta e em Opções; aviso diz o que se perde e pede visto quando há conteúdo; confirma que apagou mesmo (RLS).
 - byGrain: os 6 ganhos órfãos do Milanote ficam arquivados (fin_earnings.archived_at) e já não contam em Ganhos, Resumo nem Pessoas (o DELETE continua bloqueado; cópia em fin_earnings_backup).
+- Gravações seguras (nos dois): escritas na mesma linha vão por ordem (undo.js), `saveLater` em lib.js regista as gravações com atraso e `route()` envia-as e espera antes de mudar de página; aviso ao fechar a janela; pastilha "A guardar…/Guardado". Orçamento grava uma vez de cada vez (já não dá falso "mudado noutra janela"). Board junta campos do mesmo cartão; adereços com um temporizador por campo.
+- Presença: o separador mantém a identidade ao recarregar (sessionStorage) e larga a presença ao sair; já não aparece "Tu, noutra janela" depois de atualizar.
+- ⋯ ao lado de cada ferramenta na barra lateral: nome/departamento e apagar.

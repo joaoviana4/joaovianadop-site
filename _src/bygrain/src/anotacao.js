@@ -1,4 +1,4 @@
-import { sb, esc, toast, modal, ICON, uploadImage, signedUrls, confirmBox, BUCKET } from './lib.js';
+import { sb, esc, toast, modal, ICON, uploadImage, signedUrls, confirmBox, BUCKET, saveLater } from './lib.js';
 import { shootDays } from './shootdays.js';
 
 // Folhas de Anotação (etapa Produção). A anotadora carrega as fotos (ou PDFs) das folhas de cada dia; o studio
@@ -114,12 +114,14 @@ function sheetView(main, p, home, sheets, urls, s) {
 function sheetEditor(box, p, s, urls, home, redraw) {
   const d = s.data || (s.data = {});
   d.takes ||= [];
-  let timer;
-  const save = (patch = {}) => { clearTimeout(timer); timer = setTimeout(async () => {
-    const row = { data: s.data, updated_at: new Date().toISOString(), ...patch };
+  let extra = {};
+  const later = saveLater(async () => {
+    const patch = extra; extra = {};
+    const row = { data: JSON.parse(JSON.stringify(s.data)), updated_at: new Date().toISOString(), ...patch };
     const { error } = await sb.from('annotation_sheets').update(row).eq('id', s.id);
     if (error) toast('Não foi possível guardar: ' + error.message); else Object.assign(s, patch);
-  }, patch.status ? 0 : 600); };
+  }, 600);
+  const save = (patch = {}) => { Object.assign(extra, patch); return patch.status ? later.now() : later(); };
   const img = urls[s.image_path];
   const draw = () => {
     box.innerHTML = `<section class="an-sheet">

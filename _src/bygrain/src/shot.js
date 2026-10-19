@@ -1,4 +1,4 @@
-import { sb, esc, toast, confirmBox, ICON, signedUrl, uploadImage } from './lib.js';
+import { saveLater, sb, esc, toast, confirmBox, ICON, signedUrl, uploadImage } from './lib.js';
 import { mountTasks } from './tasks.js';
 
 // Página de um plano: imagem em grande, tudo o que se sabe dele, secção/cena e grupo da shotlist, tarefas.
@@ -11,7 +11,7 @@ const SMALL = [['framing', 'Enquadramento'], ['movement', 'Movimento'], ['lens',
 // campos que só aparecem quando têm valor ou quando se juntam ("+ Campo")
 const OPTIONAL = [['rig', 'Rig'], ['car', 'Carro'], ['prop', 'Prop / adereço (texto)']];
 const uid = () => Math.random().toString(36).slice(2, 10);
-const debounce = (fn, ms = 500) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const debounce = (fn, ms = 500) => saveLater(fn, ms);
 
 export async function shotPage(main, p, id, base, cleanup) {
   main.innerHTML = '<p class="muted">A carregar…</p>';

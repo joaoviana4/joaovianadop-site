@@ -1,4 +1,4 @@
-import { sb, esc, toast, ICON, signedUrls, uploadImage, confirmBox } from './lib.js';
+import { saveLater, sb, esc, toast, ICON, signedUrls, uploadImage, confirmBox } from './lib.js';
 import { entMode, entUrls, modeToggle, bindMode, entItems } from './entview.js';
 
 // Figurino (departamento de Arte): cada ator/personagem tem uma página com
@@ -14,7 +14,7 @@ const MEASURES = [
   ['camisola', 'Tamanho de camisola'], ['calcas', 'Tamanho de calças'], ['vestido', 'Tamanho de vestido'], ['sapato', 'Número de sapato'],
 ];
 const uid = () => Math.random().toString(36).slice(2, 10);
-const debounce = (fn, ms = 600) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const debounce = (fn, ms = 600) => saveLater(fn, ms);
 const W = (c) => ({ measures: {}, costumes: [], fittings: [], ...(c.info?.wardrobe || {}) });
 
 export async function wardrobePage(main, p, sub, base, cleanup) {

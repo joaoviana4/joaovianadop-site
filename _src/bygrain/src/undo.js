@@ -15,6 +15,22 @@ let paused = 0; let toastFn = () => {}; let origFrom = null;
 const cache = new Map(); const CACHE_MAX = 5000;
 const listeners = new Set();
 export const onWrite = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
+// Escritas na mesma linha vão por ordem (uma de cada vez): uma gravação mais antiga nunca chega depois de uma mais nova.
+// Também se sabe quantas estão a caminho, para não sair da página nem fechar a janela a meio.
+const chains = new Map(); const inflight = new Set();
+const rowKey = (table, fb) => { const q = []; fb.url.searchParams.forEach((v, k) => { if (!['select', 'columns', 'on_conflict', 'updated_at'].includes(k)) q.push(`${k}=${v}`); }); return `${table}?${q.sort().join('&')}`; };
+export const writesPending = () => inflight.size;
+// escritas feitas fora deste registo (cartões do board) também contam como "a guardar"
+export function trackWrite(p) { const x = Promise.resolve(p); inflight.add(x); pillState(); x.finally(() => { inflight.delete(x); pillState(); }).catch(() => {}); return x; }
+export function waitWrites(ms = 6000) { if (!inflight.size) return Promise.resolve(); return Promise.race([Promise.allSettled([...inflight]), new Promise((r) => setTimeout(r, ms))]); }
+let pill = null, pillT = null, pillShown = false;
+function pillState() {
+  if (typeof document === 'undefined') return;
+  if (!pill) { pill = document.createElement('div'); pill.className = 'save-pill'; pill.setAttribute('role', 'status'); pill.setAttribute('aria-live', 'polite'); pill.hidden = true; document.body.append(pill); }
+  clearTimeout(pillT);
+  if (inflight.size) { pillT = setTimeout(() => { pill.textContent = 'A guardar…'; pill.className = 'save-pill'; pill.hidden = false; pillShown = true; }, 500); }
+  else if (pillShown) { pill.textContent = 'Guardado'; pill.className = 'save-pill ok'; pillT = setTimeout(() => { pill.hidden = true; pillShown = false; }, 1400); }
+}
 // guarda de escrita (leitores): fn(tabela, operação) devolve uma mensagem para impedir, ou nada
 let guard = null; let guardToast = 0;
 export const setWriteGuard = (fn) => { guard = fn; };
@@ -66,7 +82,16 @@ function hook(fb, table, kind, values) {
   const run = fb.then.bind(fb);
   let started = null;
   fb.then = (ok, ko) => {
-    if (!started) started = (async () => {
+    if (!started) {
+      const key = rowKey(table, fb); const prev = chains.get(key);
+      started = (prev ? prev.catch(() => {}) : Promise.resolve()).then(() => go());
+      chains.set(key, started); inflight.add(started); pillState();
+      started.finally(() => { if (chains.get(key) === started) chains.delete(key); inflight.delete(started); pillState(); }).catch(() => {});
+    }
+    return started.then(ok, ko);
+  };
+  const go = async () => {
+    {
       let before = null; let cols = null;
       try {
         if (kind === 'update') {
@@ -94,8 +119,7 @@ function hook(fb, table, kind, values) {
         }
       } catch { /* nada */ }
       return res;
-    })();
-    return started.then(ok, ko);
+    }
   };
   return fb;
 }

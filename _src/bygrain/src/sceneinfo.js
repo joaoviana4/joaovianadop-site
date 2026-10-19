@@ -1,4 +1,4 @@
-import { sb, esc, toast, ICON, signedUrls, initials } from './lib.js';
+import { saveLater, sb, esc, toast, ICON, signedUrls, initials } from './lib.js';
 import { entPhoto } from './entview.js';
 import { PROP_STATUS } from './propstatus.js';
 
@@ -6,7 +6,7 @@ import { PROP_STATUS } from './propstatus.js';
 // O figurino da cena fica em scenes.info.wardrobe = { [character_id]: { costume, notes } }
 // (costume = id de um figurino em characters.info.wardrobe.costumes).
 
-const debounce = (fn, ms = 600) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const debounce = (fn, ms = 600) => saveLater(fn, ms);
 
 export async function sceneInfo(el, p, f, s, base) {
   const { data: props } = await sb.from('props').select('id, name, type, status, category, scene_ids, interactions, removed, refs').eq('project_id', p.id).order('name');

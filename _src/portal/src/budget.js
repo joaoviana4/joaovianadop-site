@@ -1,4 +1,4 @@
-import { sb, esc, toast, modal, confirmBox, ICON } from './lib.js';
+import { sb, esc, toast, modal, confirmBox, ICON, saveLater } from './lib.js';
 import { exportPdf } from './pdf.js';
 import { GRAIN_FEE, feeRowSum } from './folders.js';
 import { budgetSheet, isFormula, show, colName, HELP } from './formula.js';
@@ -65,7 +65,11 @@ export async function budgetPage(main, p) {
   // Guardar com proteção: só grava se ninguém (outra janela, outra pessoa) mudou o orçamento entretanto.
   // Cada versão anterior fica guardada na base de dados (project_budget_history).
   let blocked = false;
-  async function write(patch) {
+  // uma gravação de cada vez: a seguinte só parte quando a anterior respondeu (com a nova marca de tempo),
+  // senão a segunda parecia "outra pessoa mudou o orçamento" e a janela deixava de guardar
+  let chain = Promise.resolve();
+  function write(patch) { const r = chain.then(() => writeNow(patch)); chain = r.catch(() => false); return r; }
+  async function writeNow(patch) {
     if (blocked) return false;
     if (p._store) { const ok = await p._store(patch); if (ok === 'conflict') { blocked = true; conflict(); return false; } return ok; }
     const now = new Date().toISOString();
@@ -83,14 +87,13 @@ export async function budgetPage(main, p) {
     bar.querySelector('button').onclick = () => location.reload();
     main.prepend(bar);
   }
-  const save = (delay = 600) => {
-    clearTimeout(saveT);
-    saveT = setTimeout(async () => { if (await write({ budget: b })) p.budget = b; }, delay);
-  };
+  const later = saveLater(async () => { const snap = JSON.parse(JSON.stringify(b)); if (await write({ budget: snap })) p.budget = snap; }, 600);
+  const save = (delay = 600) => (delay === 0 ? later.now() : later());
   // nome do orçamento e do valor geral: personalizáveis (ficam guardados com a tabela)
   p._renameBudget = (name) => { if (!b) b = baseBudget(); b.title = name; save(0); };
   const capName = () => b?.capName || p._capLabel || 'Orçamento geral do projeto';
   const saveTotal = async () => { if (await write({ value: total })) p.value = total; };
+  const totalLater = saveLater(saveTotal, 600);
   async function history() {
     const { data, error } = await sb.from('project_budget_history').select('id, value, budget, saved_at').eq('project_id', p.id).order('saved_at', { ascending: false }).limit(30);
     if (error) return toast(error.message);
@@ -202,7 +205,7 @@ export async function budgetPage(main, p) {
 
   function bind() {
     const totalIn = main.querySelector('[data-total]');
-    totalIn.addEventListener('input', () => { total = num(totalIn.value); refreshSums(); clearTimeout(totalIn._t); totalIn._t = setTimeout(saveTotal, 600); });
+    totalIn.addEventListener('input', () => { total = num(totalIn.value); refreshSums(); totalLater(); });
     totalIn.addEventListener('blur', () => { if (total != null) totalIn.value = fmtIn({ type: 'money' }, total); });
     const setAppr = async (on) => {
       if (on && !(await confirmBox(`Marcar o orçamento de "${p.name}" como aprovado? Passa a contar nos ganhos e no resumo das Finanças como “Aceite”.`, 'Aprovar'))) return;

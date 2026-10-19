@@ -1,5 +1,5 @@
 import './style.css';
-import { daysUntil } from './lib.js';
+import { settleSaves, daysUntil } from './lib.js';
 import { loadHidden, hideProject, unhideProject } from './lib.js';
 import { loadComms, commById, setCtx, CID, isPlatformAdmin, PERMS } from './lib.js';
 import { activityButton, bindActivity, activityPage } from './activity.js';
@@ -71,6 +71,9 @@ const commMark = (c, cls = 'comm-dot') => (isLogo(c?.logo_path) ? `<span class="
 function go(hash) { if (location.hash === hash) route(); else location.hash = hash; }
 
 async function route() {
+  // antes de mudar de página: envia o que ainda estava por guardar e espera que chegue à base de dados,
+  // para a página seguinte (ou a mesma, ao voltar) já mostrar os dados novos
+  await settleSaves();
   teardown();
   setReadOnly(null);
   const h = location.hash.replace(/^#\/?/, '');
@@ -762,7 +765,7 @@ function projectNav(p, active) {
     ${boardGroups(p).map((g) => ({ ...g, pages: p.is_central ? g.pages || [] : (g.pages || []).filter((k) => shows(p, modKey(k))), boards: p.is_central ? g.boards : g.boards.filter((b) => shows(p, toolKey(b), b.kind)) })).filter((g) => ph === 'all' || g.pages.length || g.boards.length).map((g) => `<div class="pn-group" style="--g:${esc(g.color)}">
       <div class="pn-gh"><i></i><span>${esc(g.name)}</span>${g.id && p.canEdit !== false ? `<button type="button" class="icon-btn sm" data-newboard="${esc(g.id)}" aria-label="Novo board em ${esc(g.name)}">${ICON.plus}</button>` : ''}</div>
       ${(g.pages || []).map((k) => `<a class="side-a sub" href="${base}/${k}" ${active === k ? 'aria-current="page"' : ''}>${ICON[pageMeta(k).icon]}<span>${esc(pageMeta(k).label)}</span></a>`).join('')}
-      ${g.boards.map((b) => `<a class="side-a sub" href="${toolHref(p, b)}" ${active === b.id ? 'aria-current="page"' : ''}>${(TOOL_KINDS[b.kind] || TOOL_KINDS.board).icon}<span>${esc(b.title)}</span>${b.visible_to?.length ? `<i class="vis-lock" title="Só algumas pessoas veem">${ICON.lock}</i>` : ''}</a>`).join('')}
+      ${g.boards.map((b) => `<div class="side-row"><a class="side-a sub" href="${toolHref(p, b)}" ${active === b.id ? 'aria-current="page"' : ''}>${(TOOL_KINDS[b.kind] || TOOL_KINDS.board).icon}<span>${esc(b.title)}</span>${b.visible_to?.length ? `<i class="vis-lock" title="Só algumas pessoas veem">${ICON.lock}</i>` : ''}</a>${p.canEdit !== false ? `<button type="button" class="side-more" data-smore="${b.id}" aria-label="Mais opções de ${esc(b.title)}" title="Mudar o nome ou apagar">${ICON.dots}</button>` : ''}</div>`).join('')}
     </div>`).join('')}`;
 }
 const navState = { p: null, active: null };
@@ -790,6 +793,25 @@ function bindProjectNav(root, p) {
   root.querySelector('[data-mods]')?.addEventListener('click', () => modulesModal(p));
   if (!p.is_central) bindStrip(root, p, { onChange: () => route(), onPhase: () => go(projBase(p)), items: () => phaseItems(p) });
   root.querySelectorAll('[data-newboard]').forEach((b) => b.addEventListener('click', () => newBoard(p, b.dataset.newboard)));
+  // ⋯ ao lado de cada ferramenta: mudar o nome e o departamento, ou apagar
+  root.querySelectorAll('[data-smore]').forEach((btn) => btn.addEventListener('click', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    const b = p._boards.find((x) => x.id === btn.dataset.smore); if (!b) return;
+    document.querySelector('.side-pop')?.remove();
+    const pop = document.createElement('div'); pop.className = 'side-pop'; pop.setAttribute('role', 'menu');
+    pop.innerHTML = `<button type="button" role="menuitem" data-a="opt">${ICON.edit} Nome e departamento</button><button type="button" role="menuitem" class="danger-text" data-a="del">${ICON.trash} Apagar ferramenta</button>`;
+    document.body.append(pop);
+    const r = btn.getBoundingClientRect();
+    pop.style.top = `${Math.min(window.innerHeight - pop.offsetHeight - 8, r.bottom + 4)}px`; pop.style.left = `${Math.min(window.innerWidth - pop.offsetWidth - 8, r.left)}px`;
+    const close = () => { pop.remove(); document.removeEventListener('pointerdown', out, true); document.removeEventListener('keydown', esc1, true); };
+    const out = (ev) => { if (!pop.contains(ev.target) && ev.target !== btn) close(); };
+    const esc1 = (ev) => { if (ev.key === 'Escape') close(); };
+    setTimeout(() => { document.addEventListener('pointerdown', out, true); document.addEventListener('keydown', esc1, true); });
+    const after = () => route();
+    pop.querySelector('[data-a="opt"]').addEventListener('click', () => { close(); boardOptions(p, b, after); });
+    pop.querySelector('[data-a="del"]').addEventListener('click', () => { close(); deleteTool(p, b, after); });
+    pop.querySelector('button').focus();
+  }));
 }
 
 const TOOL_HINTS = { board: 'moodboard quadro referencias cartoes imagens', table: 'folha lista contactos entregas elenco', timeline: 'calendario datas prazos plano', lightmap: 'luz iluminacao planta', budget: 'custos dinheiro valores', media: 'musica previs video audio', callsheet: 'folha de servico dia de rodagem horarios', transport: 'carros viagens boleias', distribution: 'festivais mostras submissoes premios trailer filme links' };

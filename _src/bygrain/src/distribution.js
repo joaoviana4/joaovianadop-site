@@ -1,4 +1,4 @@
-import { sb, esc, toast, ICON, confirmBox, modal } from './lib.js';
+import { saveLater, sb, esc, toast, ICON, confirmBox, modal } from './lib.js';
 import { COUNTRIES, CONTINENTS, findCountry } from './countries.js';
 import { fullscreenButton } from './layout.js';
 
@@ -7,7 +7,7 @@ import { fullscreenButton } from './layout.js';
 // Fica tudo em boards.data = { links: [{ id, label, url }], rows: [{ … }] }.
 
 const uid = () => Math.random().toString(36).slice(2, 10);
-const debounce = (fn, ms = 600) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const debounce = (fn, ms = 600) => saveLater(fn, ms);
 const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 const eur = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' });
 const TYPES = ['Festival', 'Mostra', 'Prémio', 'Cineclube', 'Cinema', 'Plataforma', 'Outro'];

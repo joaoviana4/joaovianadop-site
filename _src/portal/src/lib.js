@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
-import { installUndo } from './undo.js';
+import { installUndo, waitWrites, writesPending, trackWrite } from './undo.js';
+export { trackWrite };
 import { FLAVOR, IS_STUDIO } from './flavor.js';
 export { IS_STUDIO, FLAVOR };
 
@@ -14,6 +15,27 @@ export const sb = createClient(SUPABASE_URL, SUPABASE_ANON, {
 });
 // Ctrl+Z em todas as páginas (undo.js)
 queueMicrotask(() => installUndo(sb, (m) => toast(m)));
+
+// Gravações com pequeno atraso (enquanto se escreve). Ficam registadas para serem enviadas logo
+// ao mudar de página, e a janela avisa antes de fechar se ainda houver alguma por guardar.
+const pendingSaves = new Set();
+export function saveLater(fn, ms = 600) {
+  let t = null, args = [];
+  const entry = { flush: () => { if (!t) return null; clearTimeout(t); t = null; pendingSaves.delete(entry); try { return fn(...args); } catch { return null; } } };
+  const f = (...a) => { args = a; clearTimeout(t); pendingSaves.add(entry); t = setTimeout(entry.flush, ms); };
+  f.now = (...a) => { if (a.length) args = a; clearTimeout(t); t = -1; pendingSaves.add(entry); return entry.flush(); };
+  return f;
+}
+export async function settleSaves(ms = 6000) {
+  const out = [...pendingSaves].map((e) => e.flush());
+  await Promise.race([Promise.allSettled(out), new Promise((r) => setTimeout(r, ms))]);
+  await waitWrites(ms);
+}
+window.addEventListener('beforeunload', (e) => {
+  if (!pendingSaves.size && !writesPending()) return;
+  [...pendingSaves].forEach((x) => x.flush());
+  e.preventDefault(); e.returnValue = '';
+});
 // ficheiros: sb.storage.from(BUCKET)
 export const BUCKET = FLAVOR.bucket;
 

@@ -1,5 +1,5 @@
 import { onWrite } from './undo.js';
-import { sb, esc, toast, modal, confirmBox, ICON, signedUrls, uploadImage } from './lib.js';
+import { saveLater, sb, esc, toast, modal, confirmBox, ICON, signedUrls, uploadImage } from './lib.js';
 import { mountTasks } from './tasks.js';
 import { scriptMode } from './modules.js';
 import { analyzeScenes } from './breakdown.js';
@@ -11,7 +11,7 @@ import { PROP_STATUS } from './propstatus.js';
 export { PROP_STATUS };
 const statusOf = (k) => PROP_STATUS.find((s) => s[0] === k) || PROP_STATUS[0];
 const st = { tab: 'acao', sort: 'scene', filter: '', q: '', view: (() => { try { return localStorage.getItem('bg-props-view') || 'list'; } catch { return 'list'; } })() };
-const debounce = (fn, ms = 600) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const debounce = (fn, ms = 600) => saveLater(fn, ms);
 const eur = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 });
 export const RENTED = new Set(['alugado', 'emprestado']);
 
@@ -350,9 +350,10 @@ function acquisition(box, p, f, x) {
           <label class="sel"><span class="vh">Mudar de pacote</span><select data-pickb><option value="">Mudar para outro pacote…</option>${f.bundles.filter((b) => b.id !== bu.id).map((b) => `<option value="${b.id}">${esc(b.name)}${b.supplier ? ` · ${esc(b.supplier)}` : ''}</option>`).join('')}<option value="__new">+ Novo pacote</option></select></label>
         </div>` : ''}
     </div>` : ''}`;
-  const save = debounce((k, v) => sb.from('props').update({ [k]: v }).eq('id', x.id).then(({ error }) => error && toast(error.message)), 500);
+  // um temporizador por campo: mudar dois campos seguidos não pode deitar fora o primeiro
+  const svK = {}; const save = (k, v) => (svK[k] ||= debounce((val) => sb.from('props').update({ [k]: val }).eq('id', x.id).then(({ error }) => error && toast(error.message)), 500))(v);
   box.querySelectorAll('[data-acqk]').forEach((el) => el.addEventListener('input', () => { const k = el.dataset.acqk; const v = el.value === '' ? null : el.type === 'number' ? Number(el.value) : el.value; x[k] = v; save(k, v); }));
-  const saveB = debounce((k, v) => sb.from('prop_bundles').update({ [k]: v }).eq('id', bu.id).then(({ error }) => error && toast(error.message)), 500);
+  const svB = {}; const saveB = (k, v) => (svB[k] ||= debounce((val) => sb.from('prop_bundles').update({ [k]: val }).eq('id', bu.id).then(({ error }) => error && toast(error.message)), 500))(v);
   box.querySelectorAll('[data-bk]').forEach((el) => el.addEventListener('input', () => { const k = el.dataset.bk; const v = el.type === 'number' ? (el.value === '' ? null : Number(el.value)) : el.value; bu[k] = v; saveB(k, v); }));
   const setBundle = async (id) => { const { error } = await sb.from('props').update({ bundle_id: id }).eq('id', x.id); if (error) return toast(error.message); x.bundle_id = id; acquisition(box, p, f, x); };
   const newBundle = () => {

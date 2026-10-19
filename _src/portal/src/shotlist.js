@@ -1,4 +1,4 @@
-import { sb, esc, toast, confirmBox, ICON } from './lib.js';
+import { saveLater, sb, esc, toast, confirmBox, ICON } from './lib.js';
 import { exportPdf } from './pdf.js';
 import { ensureModules } from './modules.js';
 import { fullscreenButton } from './layout.js';
@@ -14,7 +14,7 @@ const COLS = [
 ];
 const PALETTE = ['#C8382D', '#FF8A3D', '#E3B341', '#2FB67C', '#2AA8C9', '#4F7BFF', '#7C5CFF', '#F06BD0', '#F05252', '#8A8A99'];
 const SEG = ['#8e6cdb', '#d6457a', '#d9822b', '#c9a227', '#2fa37a', '#4f8f9e', '#7fae3a', '#8a7563'];
-const debounce = (fn, ms = 600) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const debounce = (fn, ms = 600) => saveLater(fn, ms);
 
 export async function shotlistPage(main, p, base) {
   main.innerHTML = '<p class="muted">A carregar…</p>';

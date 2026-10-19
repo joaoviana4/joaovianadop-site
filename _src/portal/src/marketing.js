@@ -1,4 +1,4 @@
-import { sb, esc, toast, modal, confirmBox, ICON, KINDS, fmtDate, initials, isStaff } from './lib.js';
+import { sb, esc, toast, modal, confirmBox, ICON, KINDS, fmtDate, initials, isStaff, saveLater } from './lib.js';
 import { loadPeople } from './tasks.js';
 import { isFolder } from './folders.js';
 
@@ -228,8 +228,8 @@ async function itemPage(main, p, id, base) {
     ti.addEventListener('change', () => { const v = ti.value.trim(); if (v && v !== it.title) save({ title: v }); });
     main.querySelectorAll('[data-k]').forEach((el) => el.addEventListener('change', () => { save({ [el.dataset.k]: el.value || null }); if (el.dataset.k === 'kind') draw(); }));
     main.querySelectorAll('[data-pl]').forEach((el) => el.addEventListener('change', () => save({ platforms: [...main.querySelectorAll('[data-pl]:checked')].map((x) => x.value) })));
-    let nt; const na = main.querySelector('[data-notes]');
-    na.addEventListener('input', () => { clearTimeout(nt); nt = setTimeout(() => save({ notes: na.value }), 600); });
+    const na = main.querySelector('[data-notes]'); const nl = saveLater(() => save({ notes: na.value }), 600);
+    na.addEventListener('input', () => nl());
     main.querySelectorAll('[data-ci]').forEach((el) => el.addEventListener('change', () => { const cl = [...(it.checklist || [])]; cl[+el.dataset.ci] = { ...cl[+el.dataset.ci], done: el.checked }; save({ checklist: cl }); draw(); }));
     main.querySelectorAll('[data-cx]').forEach((el) => el.addEventListener('click', () => { const cl = [...(it.checklist || [])]; cl.splice(+el.dataset.cx, 1); save({ checklist: cl }); draw(); }));
     main.querySelector('[data-cadd]').addEventListener('submit', (e) => { e.preventDefault(); const t = e.target.t.value.trim(); if (!t) return; save({ checklist: [...(it.checklist || []), { t, done: false }] }); draw(); main.querySelector('[data-cadd] input')?.focus(); });

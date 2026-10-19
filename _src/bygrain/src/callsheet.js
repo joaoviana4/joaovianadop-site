@@ -1,5 +1,5 @@
 import { selPhase } from './phases.js';
-import { sb, esc, toast, modal, confirmBox, ICON, signedUrl } from './lib.js';
+import { saveLater, sb, esc, toast, modal, confirmBox, ICON, signedUrl } from './lib.js';
 import { projectContacts, nameWithPhone } from './contacts.js';
 import { placeAddr } from './placegeo.js';
 import { bindTimes } from './timepick.js';
@@ -13,7 +13,7 @@ import { CS_MODELS } from './csmodels.js';
 // Importa folhas feitas no Excel / Google Sheets e exporta para PDF.
 
 const uid = () => Math.random().toString(36).slice(2, 10);
-const debounce = (fn, ms = 700) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const debounce = (fn, ms = 700) => saveLater(fn, ms);
 const DEPTS = ['Realização', 'Produção', 'DF', 'Imagem', 'Iluminação', 'Arte', 'Som', 'Guarda-roupa', 'Make-up/Cabelos'];
 const COLS = [['cena', 'Cena'], ['efeito', 'Efeito'], ['crono', 'Crono'], ['actor', 'Actor nº'], ['resumo', 'Resumo da ação'], ['cam', 'Cam'], ['tecnico', 'Técnico'], ['paf', 'PAF']];
 
