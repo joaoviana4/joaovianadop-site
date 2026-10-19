@@ -1255,7 +1255,7 @@ async function lightmapView(p, tool) {
   app.innerHTML = `<div class="pv lmv">
     <div class="lmv-stage" data-main></div>
     <div class="pv-top">
-      <button type="button" class="pv-mark" data-side aria-label="Abrir o menu do projeto">${LOGO('studio')}</button>
+      <a class="pv-mark" href="${base}" aria-label="Voltar à visão geral do projeto" title="Visão geral do projeto">${LOGO('studio')}</a><button type="button" class="pv-menu" data-side aria-label="Abrir as páginas do projeto" title="Páginas do projeto">${ICON.list}</button>
       <nav class="crumbs" aria-label="Caminho"><a href="${base}">${esc(p.name)}</a><span>/</span><a href="${base}/mapas">Mapas de luz</a><span>/</span><span aria-current="page">${esc(tool.title)}</span></nav>
     </div>
     <div class="pv-edge" data-edge aria-hidden="true"></div>
@@ -1302,7 +1302,7 @@ async function boardView(projectId, boardId) {
   app.innerHTML = `<div class="pv">
     <div class="pv-board"></div>
     <div class="pv-top">
-      <button type="button" class="pv-mark" data-side aria-label="Abrir o menu do projeto">${LOGO('studio')}</button>
+      <a class="pv-mark" href="${base}" aria-label="Voltar à visão geral do projeto" title="Visão geral do projeto">${LOGO('studio')}</a><button type="button" class="pv-menu" data-side aria-label="Abrir as páginas do projeto" title="Páginas do projeto">${ICON.list}</button>
       <nav class="crumbs" aria-label="Caminho">
         <a href="${base}">${esc(p.name)}</a>
         ${chain.map((c, i) => `<span>/</span>${i === chain.length - 1 ? `<span aria-current="page">${esc(c.title)}</span>` : `<a href="${base}/b/${c.id}">${esc(c.title)}</a>`}`).join('')}

@@ -2644,3 +2644,9 @@ input.is-f:focus { color: var(--text); font-family: ui-monospace, Menlo, monospa
 .side-pop button.danger-text { color: var(--late); }
 .side-pop svg { width: 16px; height: 16px; }
 .bconflict { position: sticky; top: 72px; z-index: 30; }
+
+/* board em ecrã inteiro: o logo volta à visão geral; o botão ao lado abre as páginas */
+a.pv-mark { text-decoration: none; display: inline-flex; }
+.pv-menu { width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 8px; background: none; color: var(--text); cursor: pointer; }
+.pv-menu:hover, .pv-menu:focus-visible { background: rgba(127, 127, 127, .2); }
+.pv-menu svg { width: 18px; height: 18px; }
