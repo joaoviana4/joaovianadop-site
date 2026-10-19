@@ -447,6 +447,7 @@ async function entityPage(main, p, f, kind, id, base, cleanup) {
         ${secs.length ? `<ul class="ent-secs">${secs.map((s) => { const i = f.scenes.indexOf(s); return `<li><a href="${base}/seguimento/${s.id}"><i class="seg-dot" style="--sc:${SEG_COLORS[i % SEG_COLORS.length]}"></i><span>${esc(s.heading || 'Sem nome')}</span><span class="muted small">${esc([s.starts_at, s.ends_at].filter(Boolean).join('–'))}</span></a></li>`; }).join('')}</ul>` : '<p class="muted small">Ainda em nenhuma secção. Junta-o dentro de uma secção do seguimento.</p>'}
       </section>
     </div>
+    ${!isPlace && !info.extra ? '<section class="panel" data-wsum></section>' : ''}
     ${isPlace ? moodboardPanel(e) : ''}
     ${isPlace ? '<section class="panel geo-panel" data-geo></section>' : ''}
     ${isPlace ? '<section class="panel dp-props" data-dprops><p class="muted small">A carregar adereços…</p></section>' : ''}
@@ -454,6 +455,7 @@ async function entityPage(main, p, f, kind, id, base, cleanup) {
     <section class="panel"><h2 class="h3">Tarefas</h2><div data-tasks></div></section>`;
   const table = isPlace ? 'locations' : 'characters';
   if (isPlace) bindPlacePhotos(main, p, e, redrawPage); else bindPhoto(main, p, 'characters', e, redrawPage);
+  if (!isPlace && !info.extra) import('./wardrobe.js').then(({ wardrobeSummary }) => wardrobeSummary(main.querySelector('[data-wsum]'), p, e, base, []));
   if (isPlace) { bindMoodboard(main, p, { table: 'locations', row: e, key: 'location_id', base }); placeProps(main.querySelector('[data-dprops]'), p, e, secs.map((s) => s.id), base); geoPanel(main.querySelector('[data-geo]'), p, e); }
   // junta tudo o que mudou (nome, ator, campos) e grava de uma vez: antes só ficava a última alteração
   let pending = {};

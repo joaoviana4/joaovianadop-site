@@ -8,7 +8,7 @@ import { mountBoard } from './board.js';
 import { visField, bindVis, readVis } from './vis.js';
 import { onWrite } from './undo.js';
 import { projectSearch } from './psearch.js';
-import { mountTasks, loadPeople, clearPeopleCache } from './tasks.js';
+import { mountTasks, loadPeople, clearPeopleCache, addTaskModal } from './tasks.js';
 import { TOOL_KINDS, tableTool, timelineTool, tableTemplate } from './tools.js';
 import { isFolder, loadChildren, rollup, childrenSection, budgetChildrenPanel } from './folders.js';
 import { mountTaskCenter } from './taskcenter.js';
@@ -725,12 +725,13 @@ async function toolPage(projectId, toolId) {
       <nav class="proj-nav" aria-label="Projeto">${projectNav(p, tool.id)}</nav>
       <main class="proj-main" data-main>
         <div class="row between wrap-gap"><div><span class="small muted">${(TOOL_KINDS[tool.kind] || {}).label || ''}${d ? ` · ${esc(d.name)}` : ''}</span><h1 class="h1">${esc(tool.title)}</h1></div>
-          <button type="button" class="btn ghost" data-topt>${ICON.dots} Opções</button></div>
+          <div class="row wrap-gap"><button type="button" class="btn ghost" data-tooltask>${ICON.plus} Adicionar tarefa</button><button type="button" class="btn ghost" data-topt>${ICON.dots} Opções</button></div></div>
         <div data-tool></div>
       </main>
     </div></div>`;
   bindHeader(app); bindProjectNav(app, p);
   app.querySelector('[data-topt]').addEventListener('click', () => boardOptions(p, tool, () => toolPage(projectId, toolId)));
+  app.querySelector('[data-tooltask]')?.addEventListener('click', () => addTaskModal({ projectId: p.id, departments: p.departments || [], entity: { type: 'board', id: tool.id }, where: tool.title }));
   const box = app.querySelector('[data-tool]');
   joinProject(p.id);
   { const lk = lockPage(`${p.id}:f:${tool.id}`, app.querySelector('[data-main]'), { reopen: () => route() }); onCleanup(() => lk.destroy()); }
@@ -786,10 +787,20 @@ async function projectPage(projectId, page, sub) {
   app.innerHTML = `<div class="page">${header(p.is_central ? 'central' : '')}
     <div class="proj-layout">
       <nav class="proj-nav" aria-label="Projeto">${projectNav(p, page)}</nav>
-      <main class="proj-main" data-main></main>
+      <main class="proj-main"><div data-main></div></main>
     </div></div>`;
   bindHeader(app); bindProjectNav(app, p);
   const main = app.querySelector('[data-main]');
+  // tarefa ligada a esta página (ou à cena / pessoa / décor / plano / adereço aberto): botão no canto superior direito
+  if (!p.is_central) app.querySelector('.topbar-r')?.insertAdjacentHTML('afterbegin', `<button type="button" class="btn ghost sm task-top" data-pagetask>${ICON.plus}<span>Adicionar tarefa</span></button>`);
+  app.querySelector('[data-pagetask]')?.addEventListener('click', () => {
+    const ENT = { cenas: 'scene', seguimento: 'scene', personagens: 'character', elenco: 'character', figurino: 'character', decors: 'location', plano: 'shot', aderecos: 'prop', marketing: 'marketing' };
+    const entity = sub && ENT[page] ? { type: ENT[page], id: sub } : { type: `page:${page}`, id: null };
+    const label = (pageMeta(page)?.label || { geral: 'Visão geral', atividade: 'Atividade', equipa: 'Equipa', detalhes: 'Detalhes', plano: 'Plano' }[page] || page);
+    const h = main.querySelector('h1, .title-in, .scene-h h1');
+    const where = sub ? `${label} · ${(h?.value || h?.textContent || '').trim()}` : label;
+    addTaskModal({ projectId: p.id, departments: p.departments || [], entity, where });
+  });
   const titles = { tarefas: 'Tarefas', equipa: p.is_central ? 'Equipa' : 'Equipa e convites', detalhes: 'Detalhes' };
   joinProject(p.id);
   // páginas de trabalho: só uma janela edita de cada vez (as outras ficam só a ver)
