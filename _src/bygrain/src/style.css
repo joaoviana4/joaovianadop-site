@@ -2500,3 +2500,15 @@ body.readonly .proj-main input[readonly]:focus, body.readonly .proj-main textare
 .ps-head .ps-name { max-width: 240px; }
 /* sem o nome do projeto no menu do lado, a pesquisa sobe */
 .page.has-strip .proj-nav { padding-top: 14px; }
+
+/* ---------- etapas ligadas: só as que o projeto usa + botão para juntar ---------- */
+.ps-steps { grid-template-columns: repeat(var(--n, 3), minmax(0, 220px)) auto; justify-content: start; }
+.ps-add { align-self: center; border: 1px dashed var(--line2, var(--line)); background: none; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; padding: 7px 12px; border-radius: 10px; cursor: pointer; white-space: nowrap; }
+.ps-add:hover { color: var(--text); border-color: var(--blue); }
+.stg-list { display: grid; gap: 8px; margin: 12px 0 16px; }
+.stg-o { display: grid; grid-template-columns: auto auto 1fr; align-items: start; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; }
+.stg-o:has(input:checked) { border-color: var(--blue); background: color-mix(in srgb, var(--blue) 7%, transparent); }
+.stg-o input { margin-top: 4px; accent-color: var(--blue); }
+.stg-n { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: var(--panel2, var(--line)); }
+.stg-o b { display: block; }
+.stg-o small { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
