@@ -1,6 +1,8 @@
 import { saveLater, sb, esc, toast, ICON, signedUrls, uploadImage, confirmBox } from './lib.js';
 import { entMode, entUrls, modeToggle, bindMode, entItems, bindPhoto } from './entview.js';
 import { quickInfo, heroPhoto } from './quickinfo.js';
+import { pageButtons } from './pagenotes.js';
+import { offerActions } from './canvas.js';
 
 // Figurino (departamento de Arte): cada ator/personagem tem uma página com
 //  · o moodboard "Moodboard (nome)" — um board normal, que se abre em ecrã inteiro
@@ -59,12 +61,14 @@ async function personPage(main, p, c, base, cleanup) {
   const img = (ph, i, attr) => `<figure>${urls[ph.path] ? `<img src="${esc(urls[ph.path])}" alt="" loading="lazy">` : '<span class="muted small">a carregar…</span>'}<button type="button" class="icon-btn sm" ${attr}="${i}" aria-label="Tirar foto">${ICON.close}</button></figure>`;
 
   // página limpa: em cima a foto, o nome e só o que está preenchido; o resto abre-se com botões
-  main.innerHTML = `<a href="${base}/figurino" class="link-btn">${ICON.back} Figurino</a>
+  main.innerHTML = `<nav class="row between"><a href="${base}/figurino" class="link-btn">${ICON.back} Figurino</a><span data-pp></span></nav>
     <header class="qi-hero">
       ${heroPhoto(urls[c.info?.photo], 'Foto')}
       <div class="qi-main"><span class="small muted">${c.info?.extra ? 'Figurante' : c.actor ? esc(c.name) : 'Personagem'}</span><h1 class="h1">${esc(title)}</h1>
-        <div data-qi></div></div>
+        <div data-qi></div><div data-acts></div></div>
     </header>
+    <span hidden><button type="button" data-cadd></button><button type="button" data-fadd2></button></span>
+    <section class="panel bp-wrap" data-mb hidden></section>
     <section class="stack wr-costumes">
       ${w.costumes.length ? `<div class="row between"><h2 class="h3">Figurinos</h2></div>` : ''}
       ${w.costumes.map((x, i) => `<article class="panel stack wr-cost" data-ci="${i}">
@@ -88,23 +92,36 @@ async function personPage(main, p, c, base, cleanup) {
     ],
     get: (k) => w.measures[k],
     save: async (patch) => { Object.assign(w.measures, patch); await saveNow(); },
-    actions: `<button type="button" class="qi-btn" data-cadd>${ICON.plus}<span>Figurino</span></button><button type="button" class="qi-btn" data-fadd2>${ICON.plus}<span>Provas de guarda-roupa</span></button><button type="button" class="qi-btn strong" data-mood>${ICON.board}<span>Moodboard</span></button>`,
   });
   void qi;
   bindPhoto(main, p, 'characters', c, redraw);
+  pageButtons(main.querySelector('[data-pp]'), p, { type: 'character', id: c.id, label: title });
 
-  // moodboard: cria-se na primeira vez (um board próprio, fora da lista de ferramentas)
-  main.querySelector('[data-mood]')?.addEventListener('click', async () => {
+  // moodboard: aparece na página (pré-visualização) quando existe; cria-se pela barra da direita
+  const showMood = async () => {
+    const el = main.querySelector('[data-mb]'); if (!el || !w.board_id) return;
+    el.hidden = false;
+    const { boardPreview } = await import('./boardview.js');
+    const h = boardPreview(el, p, { boardId: w.board_id, title: 'Moodboard', href: `${base}/b/${w.board_id}`, base }); if (h) cleanup(() => h.destroy());
+  };
+  const createMood = async () => {
     let bid = w.board_id;
     if (bid) { const { data: ex } = await sb.from('boards').select('id').eq('id', bid).maybeSingle(); if (!ex) bid = null; }
     if (!bid) {
       const grp = (p.departments || []).find((d) => d.id === 'arte') ? 'arte' : null;
       const { data: b, error } = await sb.from('boards').insert({ project_id: p.id, kind: 'wrd', title: `Moodboard (${title})`, group_id: grp, data: { character_id: c.id } }).select('id').single();
       if (error) return toast(error.message);
-      w.board_id = b.id; await saveNow(); bid = b.id;
+      w.board_id = b.id; await saveNow();
     }
-    location.hash = `${base}/b/${bid}`;
-  });
+    await showMood(); main.querySelector('[data-mb]')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); offer();
+  };
+  const offer = () => offerActions(main, main.querySelector('[data-acts]'), [
+    { label: 'Figurino', icon: ICON.hanger || ICON.plus, title: 'Juntar um figurino', run: () => main.querySelector('[data-cadd]').click() },
+    { label: 'Provas', icon: ICON.image, title: 'Juntar fotos das provas de guarda-roupa', run: () => main.querySelector('[data-fadd2]').click() },
+    ...(!w.board_id ? [{ label: 'Moodboard', icon: ICON.board, title: 'Criar o moodboard (aparece aqui na página)', run: createMood }] : []),
+  ]);
+  offer();
+  showMood();
   // board de cada figurino
   main.querySelectorAll('[data-cboard]').forEach((btn) => btn.addEventListener('click', async () => {
     const x = w.costumes[+btn.dataset.cboard];

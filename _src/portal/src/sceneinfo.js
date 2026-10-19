@@ -95,4 +95,5 @@ export async function placeProps(el, p, loc, sceneIds, base) {
       <span class="si-pimg">${ref ? `<img src="${esc(ref)}" alt="">` : ''}</span>
       <span class="si-pn"><strong>${esc(x.name)}</strong><small class="muted">${[x.category, n ? `${n} ${n === 1 ? 'cena' : 'cenas'} aqui` : ''].filter(Boolean).map(esc).join(' · ')}</small></span>
       <span class="si-st"><i></i>${esc(lbl)}</span></a></li>`; }).join('')}</ul>`).join('') : '<p class="muted small">Ainda não há adereços ligados a este décor nem às cenas que cá acontecem.</p>'}`;
+  return list.length;
 }

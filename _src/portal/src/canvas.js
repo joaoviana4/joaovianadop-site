@@ -17,6 +17,18 @@ export function copyRef(p, ref, title) {
 }
 export function readClip(p) { try { const c = JSON.parse(localStorage.getItem(CLIP) || 'null'); return c && c.project === p.id ? c : null; } catch { return null; } }
 
+// Ações recomendadas de uma página (Moodboard, Mapa de luz, Fotos…): a página diz o que se pode juntar e a barra
+// da direita mostra-as em cima. Se a página não estiver numa grelha (ex.: colada noutra), aparecem em box.
+// acts: [{ label, icon, title?, run }]
+export function offerActions(el, box, acts) {
+  const ev = new CustomEvent('cv-actions', { bubbles: true, detail: { list: acts, handled: false } });
+  el.dispatchEvent(ev);
+  if (!box) return;
+  if (ev.detail.handled || !acts.length) { box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="qi-add">${acts.map((a, i) => `<button type="button" class="qi-btn" data-cva="${i}" title="${esc(a.title || a.label)}">${a.icon || ICON.plus}<span>${esc(a.label)}</span></button>`).join('')}</div>`;
+  box.querySelectorAll('[data-cva]').forEach((b) => b.addEventListener('click', () => acts[+b.dataset.cva].run()));
+}
+
 // nota partilhada (a mesma em todas as páginas onde estiver colada)
 function noteEl(p, id) {
   const n = p.layouts?.notes?.[id] || { title: '', text: '' };
@@ -39,6 +51,7 @@ export function mountCanvas(main, p, { key, native, render, here, pageLabel = 'p
   main.innerHTML = `<div class="cv"><div class="cv-grid" data-cvgrid></div><aside class="cv-tools" data-cvtools aria-label="Elementos desta ${esc(pageLabel)}"></aside></div>`;
   const root = main.querySelector('[data-cvgrid]'), tools = main.querySelector('[data-cvtools]');
   const saved = p.layouts?.[key] || {};
+  let acts = [];
   const extra = () => p.layouts?.[key]?.extra || [];
   const saveExtra = async (list) => {
     const layouts = { ...(p.layouts || {}), [key]: { ...(p.layouts?.[key] || {}), extra: list } }; p.layouts = layouts;
@@ -60,17 +73,25 @@ export function mountCanvas(main, p, { key, native, render, here, pageLabel = 'p
     onRemove: (it) => { if (!it.id.startsWith('x:')) return false; saveExtra(extra().filter((x) => `x:${x.id}` !== it.id)); toast('Tirado desta página. O original continua onde estava.'); return true; },
     onChange: () => drawTools(),
   });
+  // ações que a página em si (o elemento próprio) oferece
+  root.addEventListener('cv-actions', (e) => {
+    const gi = e.target.closest?.('[data-gi]'); if (!gi) return;
+    e.detail.handled = true;
+    if (gi.dataset.gi.startsWith('x:')) return; // páginas coladas: as ações ficam na página original
+    acts = e.detail.list || []; drawTools();
+  });
   const addExtra = (ref, title, w) => { const x = { id: newId(), ref, title, w }; saveExtra([...extra(), x]); grid.add(extraItem(x)); };
 
   function drawTools() {
     const clip = readClip(p);
     const own = native.filter((n) => n.label);
-    tools.innerHTML = `${own.length > 1 || own.some((n) => grid.isHidden(n.id)) ? `<p class="cvt-h">Desta ${esc(pageLabel)}</p>${own.map((n) => { const on = !grid.isHidden(n.id); return `<button type="button" class="${on ? 'on' : ''}" data-own="${esc(n.id)}" title="${on ? `${esc(n.label)}: está na página` : `Juntar ${esc(n.label)}`}">${n.icon || ICON.board}<span>${esc(n.label)}</span>${on ? '' : '<i>+</i>'}</button>`; }).join('')}<hr>` : ''}
-      <p class="cvt-h">Juntar</p>
-      <button type="button" data-note>${ICON.note}<span>Nota</span><i>+</i></button>
-      <button type="button" class="paste ${clip ? '' : 'off'}" data-paste ${clip ? '' : 'disabled'} title="${clip ? `Colar ${esc(clip.title)}` : 'Copia um elemento noutra página (botão de copiar no canto dele) e cola-o aqui'}">${ICON.copy}<span>${clip ? `Colar «${esc(clip.title)}»` : 'Colar'}</span></button>
-      <p class="cvt-tip muted">Passa o rato por um elemento: ⠿ para mover, canto de baixo para redimensionar, copiar para levar para outra página.</p>`;
-    tools.querySelectorAll('[data-own]').forEach((b) => b.addEventListener('click', () => { const id = b.dataset.own; if (grid.isHidden(id)) grid.show(id); else root.querySelector(`[data-gi="${CSS.escape(id)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }));
+    // barra limpa, como a do board: ícone grande e o nome por baixo. Os elementos próprios só aparecem se foram tirados (para os voltar a pôr).
+    const gone = own.filter((n) => grid.isHidden(n.id));
+    tools.innerHTML = `${acts.map((a, i) => `<button type="button" data-cva="${i}" title="${esc(a.title || a.label)}">${a.icon || ICON.plus}<span>${esc(a.label)}</span></button>`).join('')}${acts.length ? '<hr>' : ''}<button type="button" data-note title="Juntar uma nota a esta ${esc(pageLabel)}">${ICON.note}<span>Nota</span></button>
+      <button type="button" class="${clip ? '' : 'off'}" data-paste ${clip ? '' : 'disabled'} title="${clip ? `Colar «${esc(clip.title)}» aqui (Ctrl+V)` : 'Para colar: copia um elemento noutra página (botão de copiar no canto dele)'}">${ICON.copy}<span>Colar</span></button>
+      ${gone.length ? `<hr>${gone.map((n) => `<button type="button" data-own="${esc(n.id)}" title="Voltar a pôr ${esc(n.label)} na página">${n.icon || ICON.board}<span>${esc(n.label)}</span></button>`).join('')}` : ''}`;
+    tools.querySelectorAll('[data-cva]').forEach((b) => b.addEventListener('click', () => acts[+b.dataset.cva]?.run()));
+    tools.querySelectorAll('[data-own]').forEach((b) => b.addEventListener('click', () => grid.show(b.dataset.own)));
     tools.querySelector('[data-note]').addEventListener('click', () => addExtra({ kind: 'note', id: newId() }, 'Nota', 6));
     tools.querySelector('[data-paste]').addEventListener('click', () => paste());
   }
@@ -84,8 +105,8 @@ export function mountCanvas(main, p, { key, native, render, here, pageLabel = 'p
   root.addEventListener('pointerover', (e) => { hover = e.target.closest?.('[data-gi]')?.dataset.gi || null; });
   root.addEventListener('pointerleave', () => { hover = null; });
   const typing = (e) => e.target.closest?.('input, textarea, select, [contenteditable="true"]') || (window.getSelection && String(window.getSelection()).length);
-  const onPaste = (e) => { if (!document.body.contains(root)) return off(); if (typing(e) || document.querySelector('#modal.open')) return; if (paste()) e.preventDefault(); };
-  const onCopy = (e) => { if (!document.body.contains(root)) return off(); if (!hover || typing(e)) return; const it = grid.items().find((x) => x.id === hover); if (it?.copy) { e.preventDefault(); it.copy(); } };
+  const onPaste = (e) => { if (!document.body.contains(root)) return off(); if (typing(e) || document.querySelector('#modal.open, .pp-over, .bp-active')) return; if (paste()) e.preventDefault(); };
+  const onCopy = (e) => { if (!document.body.contains(root)) return off(); if (!hover || typing(e) || document.querySelector('.bp-active')) return; const it = grid.items().find((x) => x.id === hover); if (it?.copy) { e.preventDefault(); it.copy(); } };
   const onClip = () => { if (!document.body.contains(root)) return off(); drawTools(); };
   const off = () => { document.removeEventListener('paste', onPaste); document.removeEventListener('copy', onCopy); window.removeEventListener('portal-clip', onClip); window.removeEventListener('storage', onClip); };
   document.addEventListener('paste', onPaste); document.addEventListener('copy', onCopy); window.addEventListener('portal-clip', onClip); window.addEventListener('storage', onClip);

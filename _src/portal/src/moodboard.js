@@ -25,3 +25,25 @@ export function bindMoodboard(root, p, { table, row, key, base, group = 'arte' }
     location.hash = `${base}/b/${bid}`;
   });
 }
+
+// Studio: o moodboard aparece dentro da página (pré-visualização do board) só quando existe.
+// Criar: pela barra da direita ("Moodboard"), que chama createMoodboard e volta a desenhar este espaço.
+export async function createMoodboard(p, { table, row, key, group = 'arte' }) {
+  let bid = row.info?.moodboard_id;
+  if (bid) { const { data: ex } = await sb.from('boards').select('id').eq('id', bid).maybeSingle(); if (ex) return bid; }
+  const grp = (p.departments || []).find((d) => d.id === group) ? group : null;
+  const { data: b, error } = await sb.from('boards').insert({ project_id: p.id, kind: 'wrd', title: `Moodboard (${row.name || 'sem nome'})`, group_id: grp, data: { [key]: row.id } }).select('id').single();
+  if (error) { toast(error.message); return null; }
+  row.info = { ...(row.info || {}), moodboard_id: b.id };
+  const { error: e2 } = await sb.from(table).update({ info: row.info }).eq('id', row.id);
+  if (e2) toast('Não foi possível guardar: ' + e2.message);
+  return b.id;
+}
+export async function moodboardView(el, p, { row, base }) {
+  if (!el) return null;
+  const bid = row.info?.moodboard_id;
+  if (!bid) { el.hidden = true; el.innerHTML = ''; return null; }
+  el.hidden = false;
+  const { boardPreview } = await import('./boardview.js');
+  return boardPreview(el, p, { boardId: bid, title: 'Moodboard', href: `${base}/b/${bid}`, base });
+}

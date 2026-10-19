@@ -2,10 +2,11 @@ import { onWrite } from './undo.js';
 import { saveLater, sb, BUCKET, esc, toast, modal, confirmBox, ICON, signedUrl, signedUrls, uploadImage, fmtDate } from './lib.js';
 import { entMode, entUrls, modeToggle, bindMode, entItems, photoField, bindPhoto, bindEdits } from './entview.js';
 import { parseScript, fileToText, eighthsLabel } from './script.js';
-import { mountTasks } from './tasks.js';
 import { mountReader } from './scriptview.js';
 import { sceneInfo, placeProps } from './sceneinfo.js';
-import { moodboardPanel, bindMoodboard } from './moodboard.js';
+import { createMoodboard, moodboardView } from './moodboard.js';
+import { pageButtons, sceneNums, bindSceneNums } from './pagenotes.js';
+import { offerActions } from './canvas.js';
 import { geoPanel } from './placegeo.js';
 import { analyzeScriptModal, applyBreakdown, quickBreakdown } from './scriptan.js';
 import { newLightmapData } from './lmdata.js';
@@ -232,7 +233,7 @@ async function cena(main, p, f, sid, base, cleanup) {
   const loc = f.locations.find((l) => l.id === s.location_id);
   main.innerHTML = `
     <nav class="row between wrap-gap"><a href="${base}/cenas" class="link-btn">${ICON.back} Cenas</a>
-      <span class="row">${prev ? `<a class="btn ghost" href="${base}/cenas/${prev.id}" aria-label="Cena anterior">${ICON.back} ${esc(prev.number)}</a>` : ''}${next ? `<a class="btn ghost" href="${base}/cenas/${next.id}" aria-label="Cena seguinte">${esc(next.number)} ${ICON.chev}</a>` : ''}</span></nav>
+      <span class="row"><span data-pp></span>${prev ? `<a class="btn ghost" href="${base}/cenas/${prev.id}" aria-label="Cena anterior">${ICON.back} ${esc(prev.number)}</a>` : ''}${next ? `<a class="btn ghost" href="${base}/cenas/${next.id}" aria-label="Cena seguinte">${esc(next.number)} ${ICON.chev}</a>` : ''}</span></nav>
     <header class="scene-h"><span class="scene-n">${esc(s.number)}</span><div><h1 class="h2">${esc(s.heading || sceneTitle(s, f))}</h1>
       <div class="chips">${loc ? `<a class="chip" href="${base}/decors/${loc.id}">${ICON.home}${esc(loc.name)}</a>` : ''}${s.time_of_day ? `<span class="chip">${esc(s.time_of_day)}</span>` : ''}${s.eighths ? `<span class="chip">${eighthsLabel(s.eighths)} pág.</span>` : ''}
 </div></div></header>
@@ -240,11 +241,10 @@ async function cena(main, p, f, sid, base, cleanup) {
       <div class="shots" data-shots>${shots.map((x) => shotCard(x, urls[x.image_path], base)).join('')}<button type="button" class="shot-add" data-addshot>${ICON.plus}<span>Plano</span></button></div></section>
     <div data-sinfo class="si"></div>
     <section class="panel"><div class="row between"><h2 class="h3">Texto da cena</h2><a class="link-btn small" href="${base}/guiao">Abrir o guião ${ICON.chev}</a></div><div data-scenetext class="sr-wrap"><p class="muted small">A abrir…</p></div></section>
-    <section class="panel"><h2 class="h3">Tarefas da cena</h2><div data-tasks></div></section>
-    <section class="panel"><h2 class="h3">Notas</h2><textarea data-notes rows="4" placeholder="Notas de realização, produção, continuidade…">${esc(s.notes)}</textarea></section>`;
-  const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: 'scene', id: s.id } }); cleanup(() => t.destroy());
-  const saveNotes = debounce((v) => sb.from('scenes').update({ notes: v }).eq('id', s.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message)));
-  main.querySelector('[data-notes]').addEventListener('input', (e) => saveNotes(e.target.value));
+`;
+  // tarefas e notas: botões no topo, abrem uma janela ao centro
+  pageButtons(main.querySelector('[data-pp]'), p, { type: 'scene', id: s.id, label: `Cena ${s.number}`,
+    legacy: { get: () => s.notes, save: (v) => { s.notes = v; return sb.from('scenes').update({ notes: v }).eq('id', s.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message)); } } });
   sceneInfo(main.querySelector('[data-sinfo]'), p, f, s, base);
   // a cena tal como está no guião: as páginas do PDF desta cena, ou o texto paginado como guião
   (async () => {
@@ -419,22 +419,21 @@ function bindBlocks(main, table, ent) {
   const save = debounce(() => sb.from(table).update({ info: ent.info }).eq('id', ent.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message)), 600);
   main.querySelectorAll('[data-info]').forEach((t) => t.addEventListener('input', () => { ent.info = { ...(ent.info || {}), [t.dataset.info]: t.value }; save(); }));
 }
-function sceneLinks(list, f, base) {
-  return list.length ? `<ul class="scene-links">${list.map((s) => `<li><a href="${base}/cenas/${s.id}"><strong>${esc(s.number)}</strong><span>${esc(sceneTitle(s, f))}</span><span class="muted small">${esc(s.time_of_day)}</span></a></li>`).join('')}</ul>` : '<p class="muted small">Ainda não entra em nenhuma cena.</p>';
-}
+
+const sceneList = (list, f, base) => list.map((s) => ({ id: s.id, number: s.number, title: sceneTitle(s, f), sub: s.time_of_day || '', href: `${base}/cenas/${s.id}` }));
 
 async function personagem(main, p, f, id, base, cleanup) {
   const c = f.characters.find((x) => x.id === id);
   if (!c) { main.innerHTML = '<p class="empty-note">Esta personagem já não existe.</p>'; return; }
   const scenes = f.scenes.filter((s) => (s.character_ids || []).includes(c.id));
   const photoUrl = c.info?.photo ? await signedUrl(c.info.photo) : null;
-  main.innerHTML = `<nav class="row between"><a href="${base}/personagens" class="link-btn">${ICON.back} Personagens</a><button type="button" class="icon-btn" data-delent title="Apagar personagem" aria-label="Apagar personagem">${ICON.trash}</button></nav>
+  const sl = sceneList(scenes, f, base);
+  main.innerHTML = `<nav class="row between"><a href="${base}/personagens" class="link-btn">${ICON.back} Personagens</a><span class="row"><span data-pp></span><button type="button" class="icon-btn" data-delent title="Apagar personagem" aria-label="Apagar personagem">${ICON.trash}</button></span></nav>
     <header class="qi-hero">${heroPhoto(photoUrl, 'Foto')}
-      <div class="qi-main"><span class="small muted">Personagem</span><input class="title-in h1" data-ename value="${esc(c.name)}" aria-label="Nome da personagem"><div data-qi></div></div></header>
-    <div class="pm-grid"><div class="pm-boards stack">
-      <section class="panel" data-wsum><p class="muted small">A carregar o figurino…</p></section>
-      <section class="panel"><h2 class="h3">Tarefas</h2><div data-tasks></div></section>
-    </div><aside class="pm-side"><section class="panel"><h2 class="h3">Onde entra (${scenes.length})</h2>${sceneLinks(scenes, f, base)}</section></aside></div>`;
+      <div class="qi-main"><span class="small muted">Personagem</span><input class="title-in h1" data-ename value="${esc(c.name)}" aria-label="Nome da personagem"><div data-qi></div>${sceneNums(sl, { what: 'Entra nas cenas', empty: 'Ainda não entra em nenhuma cena.' })}</div></header>
+    <section class="panel" data-wsum><p class="muted small">A carregar o figurino…</p></section>`;
+  bindSceneNums(main, sl, { title: `Cenas com ${c.name}` });
+  pageButtons(main.querySelector('[data-pp]'), p, { type: 'character', id: c.id, label: c.name });
   quickInfo(main.querySelector('[data-qi]'), {
     groups: [
       { key: 'actor', label: 'Ator ou atriz', fields: [{ k: 'actor', label: 'Ator ou atriz' }] },
@@ -455,7 +454,6 @@ async function personagem(main, p, f, id, base, cleanup) {
   { const saveI = debounce(() => sb.from('characters').update({ info: c.info }).eq('id', c.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message)), 600); main.querySelectorAll('[data-cinfo-x]').forEach((t) => t.addEventListener('input', () => { c.info = { ...(c.info || {}), [t.dataset.cinfo]: t.value.trim() }; saveI(); })); }
   bindPhoto(main, p, 'characters', c, () => personagem(main, p, f, id, base, cleanup));
   import('./wardrobe.js').then(({ wardrobeSummary }) => wardrobeSummary(main.querySelector('[data-wsum]'), p, c, base, scenes));
-  const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: 'character', id: c.id } }); cleanup(() => t.destroy());
   main.querySelector('[data-delent]').addEventListener('click', async () => {
     if (!(await confirmBox(`Apagar a personagem ${c.name}?`, 'Apagar'))) return;
     await sb.from('characters').delete().eq('id', c.id); location.hash = `${base}/personagens`;
@@ -482,35 +480,46 @@ async function decor(main, p, f, id, base, cleanup) {
   const scenes = f.scenes.filter((s) => s.location_id === l.id);
   const photos = l.photos || [];
   const urls = await signedUrls(photos.map((x) => x.path));
-  main.innerHTML = `<nav class="row between"><a href="${base}/decors" class="link-btn">${ICON.back} Décors</a><button type="button" class="icon-btn" data-delent title="Apagar décor" aria-label="Apagar décor">${ICON.trash}</button></nav>
-    <header class="qi-hero no-photo"><div class="qi-main"><span class="small muted">Décor</span><input class="title-in h1" data-ename value="${esc(l.name)}" aria-label="Nome do décor"><div class="ent-tags">${ieOf(l.id, f) ? `<span class="ie-tag lg" title="Pelas cenas do guião">${IE_LABEL[ieOf(l.id, f)]}</span>` : ''}${(() => { const tods = [...new Set(scenes.map((x) => x.time_of_day).filter(Boolean))]; return tods.length ? `<span class="muted small">${esc(tods.join(' · '))}</span>` : ''; })()}</div><div data-qi></div></div></header>
-    <div class="pm-grid"><div class="pm-boards stack">
-      <section class="panel" ${photos.length ? '' : 'hidden'} data-phsec><div class="row between"><h2 class="h3">Fotos de repérage</h2><button type="button" class="btn ghost sm" data-addph>${ICON.plus} Fotos</button></div>
-        <div class="photo-grid" data-photos>${photos.map((ph, i) => `<figure><img src="${esc(urls[ph.path] || '')}" alt=""><button type="button" class="icon-btn sm" data-rmph="${i}" aria-label="Tirar foto">${ICON.close}</button></figure>`).join('') || '<p class="muted small">Ainda sem fotos. Também podes largá-las aqui ou colar com Ctrl+V.</p>'}</div></section>
-      <section class="panel"><div class="row between"><h2 class="h3">Mapas de luz da montagem base</h2><button type="button" class="btn ghost" data-newlm>${ICON.bulb} Mapa de luz</button></div><div data-lms class="muted small">A carregar…</div></section>
-      <section class="panel dp-props" data-dprops><p class="muted small">A carregar adereços…</p></section>
-      <section class="panel"><h2 class="h3">Tarefas</h2><div data-tasks></div></section>
-    </div><aside class="pm-side">${moodboardPanel(l)}<section class="panel geo-panel" data-geo></section><section class="panel"><h2 class="h3">Cenas neste décor (${scenes.length})</h2>${sceneLinks(scenes, f, base)}</section></aside></div>`;
+  const sl = sceneList(scenes, f, base);
+  main.innerHTML = `<nav class="row between"><a href="${base}/decors" class="link-btn">${ICON.back} Décors</a><span class="row"><span data-pp></span><button type="button" class="icon-btn" data-delent title="Apagar décor" aria-label="Apagar décor">${ICON.trash}</button></span></nav>
+    <header class="qi-hero no-photo"><div class="qi-main"><span class="small muted">Décor</span><input class="title-in h1" data-ename value="${esc(l.name)}" aria-label="Nome do décor"><div class="ent-tags">${ieOf(l.id, f) ? `<span class="ie-tag lg" title="Pelas cenas do guião">${IE_LABEL[ieOf(l.id, f)]}</span>` : ''}${(() => { const tods = [...new Set(scenes.map((x) => x.time_of_day).filter(Boolean))]; return tods.length ? `<span class="muted small">${esc(tods.join(' · '))}</span>` : ''; })()}</div><div data-qi></div>${sceneNums(sl, { what: 'Cenas aqui', empty: 'Ainda não há cenas neste décor.' })}<div data-acts></div></div></header>
+    <section class="panel" ${photos.length ? '' : 'hidden'} data-phsec><div class="row between"><h2 class="h3">Fotos de repérage</h2><button type="button" class="btn ghost sm" data-addph>${ICON.plus} Fotos</button></div>
+      <div class="photo-grid" data-photos>${photos.map((ph, i) => `<figure><img src="${esc(urls[ph.path] || '')}" alt=""><button type="button" class="icon-btn sm" data-rmph="${i}" aria-label="Tirar foto">${ICON.close}</button></figure>`).join('') || '<p class="muted small">Ainda sem fotos. Também podes largá-las aqui ou colar com Ctrl+V.</p>'}</div></section>
+    <section class="panel bp-wrap" data-mb hidden></section>
+    <section class="panel" data-lmsec hidden><div class="row between"><h2 class="h3">Mapas de luz</h2><button type="button" class="btn ghost sm" data-newlm>${ICON.plus} Mapa de luz</button></div><div data-lms></div></section>
+    <section class="panel dp-props" data-dprops hidden></section>
+    <section class="panel geo-panel" data-geo ${l.info?.near ? '' : 'hidden'}></section>`;
+  bindSceneNums(main, sl, { title: `Cenas em ${l.name}` });
+  pageButtons(main.querySelector('[data-pp]'), p, { type: 'location', id: l.id, label: l.name,
+    legacy: { get: () => l.info?.notas, save: async (v) => { l.info = { ...(l.info || {}), notas: v }; const { error } = await sb.from('locations').update({ info: l.info }).eq('id', l.id); if (error) toast('Não foi possível guardar: ' + error.message); } } });
+  // o que ainda não existe fica na barra da direita (recomendado): ao clicar cria o espaço na página
+  let lmCount = 0;
+  const offer = () => offerActions(main, main.querySelector('[data-acts]'), [
+    ...(!(l.photos || []).length ? [{ label: 'Fotos', icon: ICON.image, title: 'Juntar fotos de repérage', run: () => main.querySelector('[data-addph]').click() }] : []),
+    ...(!l.info?.moodboard_id ? [{ label: 'Moodboard', icon: ICON.board, title: 'Criar o moodboard deste décor (aparece aqui na página)', run: async () => { const bid = await createMoodboard(p, { table: 'locations', row: l, key: 'location_id' }); if (!bid) return; await moodboardView(main.querySelector('[data-mb]'), p, { row: l, base }); main.querySelector('[data-mb]').scrollIntoView({ behavior: 'smooth', block: 'center' }); offer(); } }] : []),
+    ...(!lmCount ? [{ label: 'Mapa de luz', icon: ICON.bulb, title: 'Criar um mapa de luz para este décor', run: () => main.querySelector('[data-newlm]').click() }] : []),
+    ...(main.querySelector('[data-geo]').hidden ? [{ label: 'Perto daqui', icon: ICON.search, title: 'Hospital, polícia, bombeiros e horas do sol', run: () => { const g = main.querySelector('[data-geo]'); g.hidden = false; geoPanel(g, p, l, { onChange: offer }); g.scrollIntoView({ behavior: 'smooth', block: 'center' }); offer(); } }] : []),
+  ]);
+  offer();
+  moodboardView(main.querySelector('[data-mb]'), p, { row: l, base }).then((h) => h && cleanup(() => h.destroy()));
   quickInfo(main.querySelector('[data-qi]'), {
     groups: [
       { key: 'morada', label: 'Morada', fields: [{ k: 'morada', label: 'Morada', type: 'textarea', rows: 2 }] },
       { key: 'contacto', label: 'Contacto', fields: [{ k: 'contacto', label: 'Contacto do local (nome, telefone)' }] },
       { key: 'logistica', label: 'Logística', fields: [{ k: 'estacionamento', label: 'Estacionamento', type: 'textarea', rows: 2 }, { k: 'eletricidade', label: 'Eletricidade', type: 'textarea', rows: 2 }] },
       { key: 'luz_natural', label: 'Luz natural', fields: [{ k: 'luz_natural', label: 'Luz natural', type: 'textarea', rows: 2 }] },
-      { key: 'notas', label: 'Notas', fields: [{ k: 'notas', label: 'Notas', type: 'textarea' }] },
     ],
-    actions: photos.length ? '' : `<button type="button" class="qi-btn" data-addph2>${ICON.image}<span>Fotos de repérage</span></button>`,
     get: (k) => l.info?.[k],
     save: async (patch) => { l.info = { ...(l.info || {}), ...patch }; const { error } = await sb.from('locations').update({ info: l.info }).eq('id', l.id); if (error) toast('Não foi possível guardar: ' + error.message); },
   });
-  bindMoodboard(main, p, { table: 'locations', row: l, key: 'location_id', base });
-  placeProps(main.querySelector('[data-dprops]'), p, l, scenes.map((s) => s.id), base);
-  geoPanel(main.querySelector('[data-geo]'), p, l);
+  placeProps(main.querySelector('[data-dprops]'), p, l, scenes.map((s) => s.id), base).then((n) => { const el = main.querySelector('[data-dprops]'); if (el) el.hidden = !n; });
+  if (!main.querySelector('[data-geo]').hidden) geoPanel(main.querySelector('[data-geo]'), p, l);
   { const sv = debounce((v) => sb.from('locations').update({ name: v }).eq('id', l.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message))); main.querySelector('[data-ename]').addEventListener('input', (e) => { l.name = e.target.value; if (l.name.trim()) sv(l.name.trim()); }); }
-  const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: 'location', id: l.id } }); cleanup(() => t.destroy());
   sb.from('boards').select('id, title').eq('project_id', p.id).eq('kind', 'lightmap').eq('data->>location_id', l.id).then(({ data }) => {
     const box = main.querySelector('[data-lms]'); if (!box) return;
-    box.innerHTML = (data || []).length ? `<ul class="links">${data.map((b) => `<li><a href="${base}/f/${b.id}">${ICON.bulb} ${esc(b.title)}</a></li>`).join('')}</ul>` : 'Ainda sem mapas de luz para este décor.';
+    lmCount = (data || []).length; main.querySelector('[data-lmsec]').hidden = !lmCount;
+    box.innerHTML = lmCount ? `<ul class="links">${data.map((b) => `<li><a href="${base}/f/${b.id}">${ICON.bulb} ${esc(b.title)}</a></li>`).join('')}</ul>` : '';
+    offer();
   });
   main.querySelector('[data-newlm]').addEventListener('click', async () => {
     const grp = (p.departments || []).find((d) => d.id === 'imagem') ? 'imagem' : null;
@@ -524,7 +533,7 @@ async function decor(main, p, f, id, base, cleanup) {
     for (const file of imgs) { try { const up = await uploadImage(p.id, 'decors', file); l.photos = [...(l.photos || []), { path: up.path }]; } catch (e) { toast(e.message); } }
     await sb.from('locations').update({ photos: l.photos }).eq('id', l.id); decor(main, p, f, id, base, cleanup);
   };
-  main.querySelectorAll('[data-addph], [data-addph2]').forEach((b) => b.addEventListener('click', () => { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = true; inp.onchange = () => add(inp.files); inp.click(); }));
+  main.querySelectorAll('[data-addph]').forEach((b) => b.addEventListener('click', () => { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = true; inp.onchange = () => add(inp.files); inp.click(); }));
   const grid = main.querySelector('[data-photos]');
   grid.addEventListener('dragover', (e) => e.preventDefault());
   grid.addEventListener('drop', (e) => { e.preventDefault(); add(e.dataTransfer.files); });

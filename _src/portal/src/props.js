@@ -1,6 +1,7 @@
 import { onWrite } from './undo.js';
 import { saveLater, sb, esc, toast, modal, confirmBox, ICON, signedUrls, uploadImage } from './lib.js';
-import { mountTasks } from './tasks.js';
+import { pageButtons } from './pagenotes.js';
+import { offerActions } from './canvas.js';
 import { scriptMode } from './modules.js';
 import { quickInfo } from './quickinfo.js';
 import { analyzeScenes } from './breakdown.js';
@@ -264,15 +265,15 @@ async function propPage(main, p, f, id, base, cleanup) {
   const excerpt = (s) => { const lines = (s.body || '').split('\n').filter((l) => l.toLowerCase().includes(x.name.toLowerCase().split(' ')[0])); return lines.slice(0, 2).join(' … '); };
   const chips = (ids, list, key) => `<div class="chips">${(ids || []).map((i) => { const e = list.find((y) => y.id === i); return e ? `<span class="chip">${esc(e.name)}<button type="button" class="chip-x" data-rm="${key}:${i}" aria-label="Tirar ${esc(e.name)}">${ICON.close}</button></span>` : ''; }).join('')}
     <label class="sel chip-add"><span class="vh">Juntar</span><select data-addrel="${key}"><option value="">+ Juntar</option>${list.filter((e) => !(ids || []).includes(e.id)).map((e) => `<option value="${e.id}">${esc(e.name)}</option>`).join('')}</select></label></div>`;
-  main.innerHTML = `<a href="${base}/aderecos" class="link-btn">${ICON.back} Adereços</a>
+  main.innerHTML = `<nav class="row between"><a href="${base}/aderecos" class="link-btn">${ICON.back} Adereços</a><span class="row"><span data-pp></span><button type="button" class="icon-btn" data-delprop title="Apagar adereço" aria-label="Apagar adereço">${ICON.trash}</button></span></nav>
     <header class="qi-hero no-photo"><div class="qi-main">
-      <div class="row between wrap-gap"><span class="small muted">Adereço</span><button type="button" class="icon-btn" data-delprop title="Apagar adereço" aria-label="Apagar adereço">${ICON.trash}</button></div>
+      <span class="small muted">Adereço</span>
       <h1 class="h1">${esc(x.name)}</h1>
       <div class="row wrap-gap prop-pills">
         <label class="pill-sel"><span class="vh">Estado</span><select id="pst" data-k="status">${PROP_STATUS.map(([k, l]) => `<option value="${k}" ${x.status === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="pill-sel"><span class="vh">Tipo</span><select id="pty" data-k="type"><option value="acao" ${x.type === 'acao' ? 'selected' : ''}>De ação</option><option value="cenario" ${x.type === 'cenario' ? 'selected' : ''}>De cenário</option></select></label>
       </div>
-      <div data-qi></div></div></header>
+      <div data-qi></div><div data-acts></div></div></header>
     <div class="pm-grid"><div class="pm-boards stack">
       <section class="panel stack" data-acq></section>
       <section class="panel" ${(x.interactions || []).length ? '' : 'hidden'}><h2 class="h3">Interações</h2>${(x.interactions || []).length ? `<ul class="inter">${x.interactions.map((it) => `<li><strong>${esc(it.character || '—')}</strong> · ${esc(it.action || '')}${it.scene ? ` <span class="muted small">(cena ${esc(it.scene)})</span>` : ''}</li>`).join('')}</ul>` : '<p class="muted small">Sem interações registadas.</p>'}</section>
@@ -280,7 +281,6 @@ async function propPage(main, p, f, id, base, cleanup) {
         ${imgs.length ? `<div class="photo-grid">${imgs.map((r, i) => `<figure><img src="${esc(urls[r.path] || '')}" alt=""><button type="button" class="icon-btn sm" data-rmimg="${i}" aria-label="Tirar imagem">${ICON.close}</button></figure>`).join('')}</div>` : ''}
         ${links.length ? `<ul class="links">${links.map((r, i) => `<li><a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${esc(r.title || r.url)}</a><button type="button" class="icon-btn sm" data-rmlink="${i}" aria-label="Tirar link">${ICON.close}</button></li>`).join('')}</ul>` : ''}
         ${!imgs.length && !links.length ? '<p class="muted small">Imagens e links para produtos.</p>' : ''}</section>
-      <section class="panel"><h2 class="h3">Tarefas</h2><div data-tasks></div></section>
     </div><aside class="pm-side stack">
       ${f.scenes.length ? `<section class="panel"><h2 class="h3">${!scriptMode(p) ? 'Secções' : 'Cenas'} (${scenes.length})</h2>${scenes.map((s) => `<a class="scene-ex" href="${base}/${!scriptMode(p) ? 'seguimento' : 'cenas'}/${s.id}"><span class="scene-n sm">${esc(s.number)}</span><span><span class="small">${esc(s.heading)}</span>${excerpt(s) ? `<span class="small muted mono">${esc(excerpt(s))}</span>` : ''}</span></a>`).join('')}${chips(x.scene_ids, f.scenes.map((s) => ({ id: s.id, name: !scriptMode(p) ? s.heading : `Cena ${s.number}` })), 'scene_ids')}</section>` : ''}
       ${f.characters.length ? `<section class="panel"><h2 class="h3">${!scriptMode(p) ? 'Atores e figurantes' : 'Personagens'}</h2>${chips(x.character_ids, f.characters, 'character_ids')}</section>` : ''}
@@ -294,10 +294,13 @@ async function propPage(main, p, f, id, base, cleanup) {
     ],
     get: (k) => (k === 'quantity' ? (Number(x.quantity) > 1 ? x.quantity : '') : x[k]),
     save: async (patch) => { if ('quantity' in patch) patch.quantity = Number(patch.quantity) || 1; Object.assign(x, patch); const { error } = await sb.from('props').update(patch).eq('id', x.id); if (error) toast('Não foi possível guardar: ' + error.message); },
-    actions: imgs.length || links.length ? '' : `<button type="button" class="qi-btn" data-addimg2>${ICON.image}<span>Imagens de referência</span></button><button type="button" class="qi-btn" data-addlink2>${ICON.link || ICON.plus}<span>Link para produto</span></button>`,
   });
-  main.querySelector('[data-addimg2]')?.addEventListener('click', () => main.querySelector('[data-addimg]').click());
-  main.querySelector('[data-addlink2]')?.addEventListener('click', () => main.querySelector('[data-addlink]').click());
+  pageButtons(main.querySelector('[data-pp]'), p, { type: 'prop', id: x.id, label: x.name });
+  // referências: na barra da direita até haver alguma
+  offerActions(main, main.querySelector('[data-acts]'), imgs.length || links.length ? [] : [
+    { label: 'Imagens', icon: ICON.image, title: 'Juntar imagens de referência (ou cola com Ctrl+V)', run: () => main.querySelector('[data-addimg]').click() },
+    { label: 'Link', icon: ICON.link || ICON.plus, title: 'Juntar um link para o produto', run: () => main.querySelector('[data-addlink]').click() },
+  ]);
   const savers = {};
   main.querySelectorAll('[data-k]').forEach((el) => el.addEventListener('input', () => {
     const k = el.dataset.k; x[k] = el.type === 'number' ? Number(el.value) || 1 : el.value;
@@ -335,7 +338,6 @@ async function propPage(main, p, f, id, base, cleanup) {
     if (!(await confirmBox(`Apagar "${x.name}"? Sai da lista e não volta numa nova análise do guião.`, 'Apagar adereço'))) return;
     await sb.from('props').update({ removed: true }).eq('id', x.id); location.hash = `${base}/aderecos`;
   });
-  const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: 'prop', id: x.id } }); cleanup(() => t.destroy());
   acquisition(main.querySelector('[data-acq]'), p, f, x);
   main.querySelector('#pst').addEventListener('change', () => { acquisition(main.querySelector('[data-acq]'), p, f, x); if (ASK.has(x.status)) setTimeout(() => askCost(p, f, x, () => acquisition(main.querySelector('[data-acq]'), p, f, x)), 50); });
 }

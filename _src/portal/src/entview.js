@@ -75,7 +75,7 @@ export function bindPhoto(root, p, table, e, redraw) {
 // Fotos de um décor (locations.photos = [{ path }]); a primeira é a que aparece na grelha
 export async function placePhotos(l) {
   const photos = l.photos || []; const urls = await signedUrls(photos.map((x) => x.path));
-  return `<section class="panel"><div class="row between"><h2 class="h3">Fotos do décor</h2><button type="button" class="btn ghost" data-addph>${ICON.plus} Fotos</button></div>
+  return `<section class="panel" data-phsec ${photos.length ? '' : 'hidden'}><div class="row between"><h2 class="h3">Fotos do décor</h2><button type="button" class="btn ghost" data-addph>${ICON.plus} Fotos</button></div>
     <div class="photo-grid" data-photos>${photos.map((ph, i) => `<figure><img src="${esc(urls[ph.path] || '')}" alt="">${i === 0 ? '<figcaption class="small muted">Capa</figcaption>' : `<button type="button" class="link-btn small" data-coverph="${i}">Usar como capa</button>`}<button type="button" class="icon-btn sm" data-rmph="${i}" aria-label="Tirar foto">${ICON.close}</button></figure>`).join('') || '<p class="muted small">Ainda sem fotos. Também podes largá-las aqui ou colar com Ctrl+V.</p>'}</div></section>`;
 }
 export function bindPlacePhotos(root, p, l, redraw) {

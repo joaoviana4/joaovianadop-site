@@ -62,7 +62,12 @@ const fmtStyle = (kind, f = {}) => {
   return [f.align ? `text-align:${f.align}` : '', f.font ? `font-family:'${f.font}',var(--sans)` : '', f.size && BASE[kind] ? `font-size:${Math.round(BASE[kind] * k)}px` : '', f.color ? `color:${f.color}` : '', f.b ? 'font-weight:700' : '', f.i ? 'font-style:italic' : '', f.u ? 'text-decoration:underline' : ''].filter(Boolean).join(';');
 };
 
-export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom, onSelect, presence }) {
+export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom, onSelect, presence, embedded = false }) {
+  // embedded: o board dentro de uma página (pré-visualização). Só responde ao teclado, ao colar e à roda do rato
+  // depois de se clicar dentro dele; fora disso a página faz scroll e cola normalmente.
+  let active = !embedded;
+  const onDocDown = (e) => { active = root.contains(e.target); root.classList.toggle('bp-active', active); };
+  if (embedded) document.addEventListener('pointerdown', onDocDown, true);
   // cartões que outras pessoas estão a mexer agora (não se podem tocar até largarem)
   let locked = new Map();
   const lockedBy = (id) => locked.get(id);
@@ -710,6 +715,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   }
 
   stage.addEventListener('wheel', (e) => {
+    if (!active && !(e.ctrlKey || e.metaKey)) return;
     e.preventDefault();
     if (e.ctrlKey || e.metaKey) smoothZoom(e);
     else { st.view.x -= e.deltaX; st.view.y -= e.deltaY; applyView(); }
@@ -720,6 +726,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   stage.addEventListener('dragleave', (e) => { if (e.target === stage) root.querySelector('.drop-hint').hidden = true; });
   stage.addEventListener('drop', (e) => { e.preventDefault(); root.querySelector('.drop-hint').hidden = true; addImages([...e.dataTransfer.files], toWorld(e.clientX, e.clientY)); });
   const onPaste = (e) => {
+    if (!active) return;
     if (st.editing || /INPUT|TEXTAREA/.test(document.activeElement?.tagName) || document.querySelector('#modal.open')) return;
     // cartão copiado com Ctrl+C (neste board ou noutro): cola uma cópia igual, com a mesma imagem
     const mark = e.clipboardData?.getData('text/plain')?.trim();
@@ -740,7 +747,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
 
   // teclado
   const onKey = async (e) => {
-    if (document.querySelector('#modal.open')) return;
+    if (!active || document.querySelector('#modal.open')) return;
     const typing = st.editing || /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName) || document.activeElement?.isContentEditable;
     if (st.editing && e.key === 'Escape') { e.preventDefault(); commitEdit(); return; }
     if (st.editing && e.key === 'Enter' && st.editing.el.dataset.field === 'item' && !e.shiftKey) {
@@ -837,7 +844,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     if (saved && Number.isFinite(saved.k)) { st.view = saved; applyView(); } else fit();
   })();
   applyView();
-  stage.focus({ preventScroll: true });
+  if (!embedded) stage.focus({ preventScroll: true });
   // marcar os cartões em uso por outras pessoas (sem redesenhar o conteúdo)
   const offLocks = presence?.onCards((m) => {
     locked = m;
@@ -858,7 +865,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     destroy() {
       st.dead = true; commitEdit(); flushItems();
       pending.forEach((it) => cleanupFiles(it)); pending.clear(); offLocks && offLocks(); presence?.setCard(null);
-      document.removeEventListener('keydown', onKey); document.removeEventListener('paste', onPaste); document.removeEventListener('selectionchange', onSelChange);
+      document.removeEventListener('keydown', onKey); document.removeEventListener('paste', onPaste); document.removeEventListener('pointerdown', onDocDown, true); document.removeEventListener('selectionchange', onSelChange);
       window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end);
       sb.removeChannel(ch);
     },

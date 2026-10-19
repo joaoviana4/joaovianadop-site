@@ -1055,7 +1055,7 @@ async function projectPage(projectId, page, sub) {
   if (IS_STUDIO && !p.is_central && !['detalhes', 'equipa'].includes(page)) {
     if (page === 'geral') return projectOverview(main, p);
     const el = document.createElement('div'); el.className = 'cv-page';
-    const label = pageMeta(page)?.label || { atividade: 'Atividade', tarefas: 'Tarefas', plano: 'Plano', rodagem: 'Rodagem', anotacao: 'Folhas de Anotação' }[page] || page;
+    const label = pageMeta(page)?.label || { atividade: 'Atividade', tarefas: 'Tarefas', plano: 'Plano', rodagem: 'Rodagem', anotacao: 'Folhas de Anotação', personagens: 'Personagens' }[page] || page;
     mountCanvas(main, p, { key: `pg:${page}${sub ? ':' + sub : ''}`, pageLabel: 'página', here: { kind: 'page', page, sub: sub || null },
       native: [{ id: 'page', label, el, ref: { kind: 'page', page, sub: sub || null }, removable: false }], render: (box, ref) => renderRef(box, p, ref) });
     return renderPage(el, p, page, sub);
@@ -1071,7 +1071,8 @@ async function renderRef(box, p, ref) {
     const { data: tool } = await sb.from('boards').select('*').eq('id', ref.id).maybeSingle();
     if (!tool) { box.innerHTML = '<p class="muted small">Esta ferramenta já não existe. Podes tirá-la daqui.</p>'; return; }
     box.innerHTML = `<div class="row between cv-th"><a href="${toolHref(p, tool)}"><strong>${esc(tool.title)}</strong></a><a class="small" href="${toolHref(p, tool)}">Abrir</a></div><div data-tb></div>`;
-    if (tool.kind === 'board' || tool.kind === 'lightmap') { box.querySelector('[data-tb]').innerHTML = `<a class="btn ghost" href="${toolHref(p, tool)}">${ICON.open} Abrir ${esc(tool.title)}</a>`; return; }
+    if (tool.kind === 'board' || tool.kind === 'wrd') { const { boardPreview } = await import('./boardview.js'); box.innerHTML = ''; boardPreview(box, p, { boardId: tool.id, title: tool.title, href: toolHref(p, tool), base: projBase(p) }); return; }
+    if (tool.kind === 'lightmap') { box.querySelector('[data-tb]').innerHTML = `<a class="btn ghost" href="${toolHref(p, tool)}">${ICON.open} Abrir ${esc(tool.title)}</a>`; return; }
     return renderToolBody(box.querySelector('[data-tb]'), p, tool);
   }
 }
