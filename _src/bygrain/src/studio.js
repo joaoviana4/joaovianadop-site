@@ -537,7 +537,7 @@ async function crewPanel(el, p, people, members, reload, crewP) {
       ${isNew || x.t === 'm' ? `<fieldset class="acc-pick" ${isNew ? 'data-for="m"' : ''}><legend>Acesso ao projeto</legend>
         <label><input type="radio" name="acc" value="1" ${!x || x.canEdit ? 'checked' : ''}><span><b>Pode editar</b><small>Cria, muda e apaga nas páginas que vê.</small></span></label>
         <label><input type="radio" name="acc" value="0" ${x && !x.canEdit ? 'checked' : ''}><span><b>Só leitura</b><small>Vê as páginas que lhe estão abertas, sem mudar nada. Pode marcar as tarefas que são dele.</small></span></label>
-        ${p.community_id ? '<small class="muted">Os administradores da comunidade e os líderes do projeto podem sempre editar.</small>' : ''}</fieldset>` : ''}
+        <small class="muted">Os administradores da Grain e os líderes do projeto podem sempre editar.</small></fieldset>` : ''}
       <fieldset class="dpick"><legend>Departamentos</legend>${depts.length ? depts.map((d) => `<label><input type="checkbox" name="dept" value="${esc(d.id)}" ${x?.depts.includes(d.id) || (isNew && preDept === d.id) ? 'checked' : ''}><span style="--dc:${esc(d.color)}">${esc(d.name)}</span></label>`).join('') : '<p class="muted small">Este projeto ainda não tem departamentos (Detalhes → Departamentos e cores).</p>'}</fieldset>
       <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">${isNew ? 'Adicionar' : 'Guardar'}</button></div></form>
       <datalist id="crew-jobs">${['Realização', 'Produção', 'Direção de fotografia', '1.º assistente de câmara', '2.º assistente de câmara', 'Gaffer', 'Eletricista', 'Maquinista', 'Direção de arte', 'Adereços', 'Guarda-roupa', 'Cabelos e maquilhagem', 'Som direto', 'Montagem', 'Cor', 'Assistente de produção', 'Making of'].map((j) => `<option value="${j}">`).join('')}</datalist>`, { wide: true });
@@ -613,7 +613,7 @@ async function loadProject(id, { fresh = false } = {}) {
   const c = projCache.get(id);
   if (!fresh && c && Date.now() - c.t < 60000) {
     const p = c.p;
-    setCtx({ comm: p.community_id ? commById(p.community_id) : null, project: p });
+    state.ctx = { project: p };
     setReadOnly(p);
     return p;
   }
