@@ -458,7 +458,7 @@ async function entityPage(main, p, f, kind, id, base, cleanup) {
   if (isPlace) {
     const offer = () => offerActions(main, main.querySelector('[data-acts]'), [
       ...(!(e.photos || []).length ? [{ label: 'Fotos', icon: ICON.image, title: 'Juntar fotos do décor', run: () => main.querySelector('[data-addph]').click() }] : []),
-      ...(!e.info?.moodboard_id ? [{ label: 'Moodboard', icon: ICON.board, title: 'Criar o moodboard deste décor (aparece aqui na página)', run: async () => { const bid = await createMoodboard(p, { table: 'locations', row: e, key: 'location_id' }); if (!bid) return; Object.assign(info, { moodboard_id: bid }); await moodboardView(main.querySelector('[data-mb]'), p, { row: e, base }); main.querySelector('[data-mb]').scrollIntoView({ behavior: 'smooth', block: 'center' }); offer(); } }] : []),
+      ...(!e.info?.moodboard_id ? [{ label: 'Moodboard', icon: ICON.board, title: 'Criar o moodboard deste décor (aparece aqui na página)', run: async () => { const bid = await createMoodboard(p, { table: 'locations', row: e, key: 'location_id' }); if (!bid) return; Object.assign(info, { moodboard_id: bid }); await moodboardView(main.querySelector('[data-mb]'), p, { row: e, base, after: () => offer() }); main.querySelector('[data-mb]').scrollIntoView({ behavior: 'smooth', block: 'center' }); offer(); } }] : []),
       ...(!lmCount ? [{ label: 'Mapa de luz', icon: ICON.bulb, title: 'Criar um mapa de luz para este décor', run: () => main.querySelector('[data-newlm]').click() }] : []),
       ...(main.querySelector('[data-geo]').hidden ? [{ label: 'Perto daqui', icon: ICON.search, title: 'Hospital, polícia, bombeiros e horas do sol', run: () => { const g = main.querySelector('[data-geo]'); g.hidden = false; geoPanel(g, p, e); g.scrollIntoView({ behavior: 'smooth', block: 'center' }); offer(); } }] : []),
     ]);
@@ -478,7 +478,7 @@ async function entityPage(main, p, f, kind, id, base, cleanup) {
       if (error) return toast(error.message);
       location.hash = `${base}/f/${tool.id}`;
     });
-    moodboardView(main.querySelector('[data-mb]'), p, { row: e, base }).then((h) => h && cleanup(() => h.destroy()));
+    moodboardView(main.querySelector('[data-mb]'), p, { row: e, base, after: () => offer() }).then((h) => h && cleanup(() => h.destroy()));
   } else offerActions(main, main.querySelector('[data-acts]'), []);
   if (isPlace) bindPlacePhotos(main, p, e, redrawPage); else bindPhoto(main, p, 'characters', e, redrawPage);
   if (!isPlace && !info.extra) import('./wardrobe.js').then(({ wardrobeSummary }) => wardrobeSummary(main.querySelector('[data-wsum]'), p, e, base, []));

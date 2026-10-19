@@ -1,4 +1,4 @@
-import { sb, esc, toast, ICON } from './lib.js';
+import { sb, esc, toast, ICON, confirmBox } from './lib.js';
 
 // Moodboard de uma coisa do projeto (décor, …): um board próprio, "Moodboard (nome)", fora da lista de
 // ferramentas. Cria-se na primeira vez; o id fica em <tabela>.info.moodboard_id e o board guarda
@@ -39,11 +39,20 @@ export async function createMoodboard(p, { table, row, key, group = 'arte' }) {
   if (e2) toast('Não foi possível guardar: ' + e2.message);
   return b.id;
 }
-export async function moodboardView(el, p, { row, base }) {
+export async function moodboardView(el, p, { row, base, table = 'locations', after }) {
   if (!el) return null;
   const bid = row.info?.moodboard_id;
   if (!bid) { el.hidden = true; el.innerHTML = ''; return null; }
   el.hidden = false;
   const { boardPreview } = await import('./boardview.js');
-  return boardPreview(el, p, { boardId: bid, title: 'Moodboard', href: `${base}/b/${bid}`, base });
+  let h = null;
+  const onRemove = async () => {
+    if (!(await confirmBox('Apagar o moodboard? As imagens e notas que tem também se apagam.', 'Apagar'))) return;
+    const { error } = await sb.from('boards').delete().eq('id', bid); if (error) return toast(error.message);
+    row.info = { ...(row.info || {}) }; delete row.info.moodboard_id;
+    const { error: e2 } = await sb.from(table).update({ info: row.info }).eq('id', row.id); if (e2) toast('Não foi possível guardar: ' + e2.message);
+    h?.destroy(); el.hidden = true; el.innerHTML = ''; toast('Moodboard apagado.'); after && after();
+  };
+  h = boardPreview(el, p, { boardId: bid, title: 'Moodboard', href: `${base}/b/${bid}`, base, onRemove });
+  return h;
 }

@@ -496,12 +496,12 @@ async function decor(main, p, f, id, base, cleanup) {
   let lmCount = 0;
   const offer = () => offerActions(main, main.querySelector('[data-acts]'), [
     ...(!(l.photos || []).length ? [{ label: 'Fotos', icon: ICON.image, title: 'Juntar fotos de repérage', run: () => main.querySelector('[data-addph]').click() }] : []),
-    ...(!l.info?.moodboard_id ? [{ label: 'Moodboard', icon: ICON.board, title: 'Criar o moodboard deste décor (aparece aqui na página)', run: async () => { const bid = await createMoodboard(p, { table: 'locations', row: l, key: 'location_id' }); if (!bid) return; await moodboardView(main.querySelector('[data-mb]'), p, { row: l, base }); main.querySelector('[data-mb]').scrollIntoView({ behavior: 'smooth', block: 'center' }); offer(); } }] : []),
+    ...(!l.info?.moodboard_id ? [{ label: 'Moodboard', icon: ICON.board, title: 'Criar o moodboard deste décor (aparece aqui na página)', run: async () => { const bid = await createMoodboard(p, { table: 'locations', row: l, key: 'location_id' }); if (!bid) return; await moodboardView(main.querySelector('[data-mb]'), p, { row: l, base, after: () => offer() }); main.querySelector('[data-mb]').scrollIntoView({ behavior: 'smooth', block: 'center' }); offer(); } }] : []),
     ...(!lmCount ? [{ label: 'Mapa de luz', icon: ICON.bulb, title: 'Criar um mapa de luz para este décor', run: () => main.querySelector('[data-newlm]').click() }] : []),
     ...(main.querySelector('[data-geo]').hidden ? [{ label: 'Perto daqui', icon: ICON.search, title: 'Hospital, polícia, bombeiros e horas do sol', run: () => { const g = main.querySelector('[data-geo]'); g.hidden = false; geoPanel(g, p, l, { onChange: offer }); g.scrollIntoView({ behavior: 'smooth', block: 'center' }); offer(); } }] : []),
   ]);
   offer();
-  moodboardView(main.querySelector('[data-mb]'), p, { row: l, base }).then((h) => h && cleanup(() => h.destroy()));
+  moodboardView(main.querySelector('[data-mb]'), p, { row: l, base, after: () => offer() }).then((h) => h && cleanup(() => h.destroy()));
   quickInfo(main.querySelector('[data-qi]'), {
     groups: [
       { key: 'morada', label: 'Morada', fields: [{ k: 'morada', label: 'Morada', type: 'textarea', rows: 2 }] },

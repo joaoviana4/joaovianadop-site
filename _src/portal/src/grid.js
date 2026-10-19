@@ -37,7 +37,7 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
     g.innerHTML = `<div class="gi-bar" role="toolbar" aria-label="${esc(it.label || 'Elemento')}">
         <span class="gi-grip" title="Arrasta para mudar de sítio" aria-hidden="true">⠿</span><span class="gi-l">${esc(it.label || '')}</span>
         ${it.copy ? `<button type="button" class="gi-b" data-gcopy title="Copiar (depois cola noutra página com Ctrl+V)" aria-label="Copiar ${esc(it.label || '')}">${ICON.copy}</button>` : ''}
-        ${it.removable !== false ? `<button type="button" class="gi-b" data-grm title="Tirar desta página" aria-label="Tirar ${esc(it.label || '')} desta página">${ICON.close}</button>` : ''}
+        ${it.removable !== false ? `<button type="button" class="gi-b" data-grm title="${it.id.startsWith('x:') ? 'Apagar desta página' : 'Tirar desta página (volta pela barra da direita)'}" aria-label="Tirar ${esc(it.label || '')} desta página">${ICON.trash}</button>` : ''}
       </div><div class="gi-c"></div><span class="gi-rs" title="Arrasta para redimensionar · duplo clique: altura automática" aria-hidden="true"></span>`;
     g.querySelector('.gi-c').append(it.el);
     it.g = g;

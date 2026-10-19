@@ -9,6 +9,8 @@ import { mountGrid, COLS } from './grid.js';
 // Tudo o que se cola fica em layouts[key].extra = [{ id, ref, title }]; ref = { kind: 'page'|'block'|'tool'|'note', ... }.
 
 const CLIP = 'portal-clip2';
+const UNDO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>';
+const REDO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>';
 export const newId = () => Math.random().toString(36).slice(2, 10);
 export function copyRef(p, ref, title) {
   try { localStorage.setItem(CLIP, JSON.stringify({ project: p.id, ref, title, at: Date.now() })); } catch { /* nada */ }
@@ -70,7 +72,7 @@ export function mountCanvas(main, p, { key, native, render, here, pageLabel = 'p
   if (!saved.grid) { const off = native.filter((n) => n.off).map((n) => n.id); if (off.length) p.layouts = { ...(p.layouts || {}), [key]: { ...(p.layouts?.[key] || {}), hidden: [...new Set([...(saved.hidden || []), ...off])] } }; }
   const grid = mountGrid(root, {
     project: p, key, items: [...nativeItems, ...extra().map(extraItem)],
-    onRemove: (it) => { if (!it.id.startsWith('x:')) return false; saveExtra(extra().filter((x) => `x:${x.id}` !== it.id)); toast('Tirado desta página. O original continua onde estava.'); return true; },
+    onRemove: (it) => { if (!it.id.startsWith('x:')) return false; saveExtra(extra().filter((x) => `x:${x.id}` !== it.id)); toast(it.ref?.kind === 'note' ? 'Nota apagada desta página.' : 'Tirado desta página. O original continua onde estava.'); return true; },
     onChange: () => drawTools(),
   });
   // ações que a página em si (o elemento próprio) oferece
@@ -89,7 +91,12 @@ export function mountCanvas(main, p, { key, native, render, here, pageLabel = 'p
     const gone = own.filter((n) => grid.isHidden(n.id));
     tools.innerHTML = `${acts.map((a, i) => `<button type="button" data-cva="${i}" title="${esc(a.title || a.label)}">${a.icon || ICON.plus}<span>${esc(a.label)}</span></button>`).join('')}${acts.length ? '<hr>' : ''}<button type="button" data-note title="Juntar uma nota a esta ${esc(pageLabel)}">${ICON.note}<span>Nota</span></button>
       <button type="button" class="${clip ? '' : 'off'}" data-paste ${clip ? '' : 'disabled'} title="${clip ? `Colar «${esc(clip.title)}» aqui (Ctrl+V)` : 'Para colar: copia um elemento noutra página (botão de copiar no canto dele)'}">${ICON.copy}<span>Colar</span></button>
+      <hr><button type="button" data-undo title="Desfazer a última alteração (Ctrl+Z)">${UNDO}<span>Desfazer</span></button><button type="button" data-redo title="Refazer (Ctrl+Shift+Z)">${REDO}<span>Refazer</span></button>
       ${gone.length ? `<hr>${gone.map((n) => `<button type="button" data-own="${esc(n.id)}" title="Voltar a pôr ${esc(n.label)} na página">${n.icon || ICON.board}<span>${esc(n.label)}</span></button>`).join('')}` : ''}`;
+    // desfazer/refazer: o mesmo que Ctrl+Z. Primeiro tenta o da tabela ou do board desta página, senão o geral.
+    const key = (redo) => document.dispatchEvent(new KeyboardEvent('keydown', { key: redo ? 'z' : 'z', shiftKey: redo, ctrlKey: true, bubbles: true, cancelable: true }));
+    tools.querySelector('[data-undo]').addEventListener('click', () => key(false));
+    tools.querySelector('[data-redo]').addEventListener('click', () => key(true));
     tools.querySelectorAll('[data-cva]').forEach((b) => b.addEventListener('click', () => acts[+b.dataset.cva]?.run()));
     tools.querySelectorAll('[data-own]').forEach((b) => b.addEventListener('click', () => grid.show(b.dataset.own)));
     tools.querySelector('[data-note]').addEventListener('click', () => addExtra({ kind: 'note', id: newId() }, 'Nota', 6));

@@ -218,9 +218,10 @@ function peoplePicker(main, p, d, save) {
   if (!main.dataset.ppFresh) { main.dataset.ppFresh = '1'; peopleCache = null; } // lista acabada de ler cada vez que se abre a folha
   const norm = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const words = (x) => norm(x).split(/[^a-z0-9]+/).filter((w) => w.length > 2 && !['de', 'da', 'do'].includes(w));
-  let box = null; let items = []; let sel = 0; let input = null;
+  let box = null; let items = []; let sel = 0; let input = null; let opening = null;
   const outside = (e) => { if (box && !box.contains(e.target) && e.target !== input) close(); };
-  const close = () => { box?.remove(); box = null; input = null; document.removeEventListener('mousedown', outside, true); };
+  // fecha sempre tudo (também listas que tenham ficado abertas de antes)
+  const close = () => { box?.remove(); box = null; input = null; opening = null; document.querySelectorAll('.cs-pp').forEach((x) => x.remove()); document.removeEventListener('mousedown', outside, true); };
   const pick = (c) => {
     if (!input || !c) return;
     const i = Number(input.dataset.p.split('.')[1]);
@@ -248,15 +249,18 @@ function peoplePicker(main, p, d, save) {
     items = peopleCache.list.filter((c) => !q || norm(`${c.name} ${c.job} ${c.role} ${c.phone}`).includes(q) || norm(nameWithPhone(c)) === q)
       .map((c) => ({ c, s: score(c) })).sort((a, b) => b.s - a.s || a.c.name.localeCompare(b.c.name, 'pt')).map((x) => x.c);
     sel = Math.min(sel, Math.max(0, items.length - 1));
-    box.innerHTML = items.length ? items.map((c, k) => `<button type="button" class="cs-pp-i ${k === sel ? 'on' : ''}" data-k="${k}"><span><b>${esc(c.name)}</b><small>${esc(c.kind === 'crew' ? (c.job || c.dept || 'Equipa') : c.role ? `${c.role}${c.kind === 'extra' ? ' · figurante' : ''}` : 'Elenco')}</small></span><span class="cs-pp-ph">${esc(c.phone || 'sem telefone')}</span></button>`).join('')
-      : `<p class="muted small">Ninguém com esse nome na equipa nem no elenco. Junta as pessoas em Equipa e convites.</p>`;
+    box.innerHTML = `<div class="cs-pp-h"><span>Escolhe uma pessoa (ou escreve o nome)</span><button type="button" class="icon-btn sm" data-ppx title="Fechar a lista (Esc)" aria-label="Fechar a lista">${ICON.close}</button></div>` + (items.length ? items.map((c, k) => `<button type="button" class="cs-pp-i ${k === sel ? 'on' : ''}" data-k="${k}"><span><b>${esc(c.name)}</b><small>${esc(c.kind === 'crew' ? (c.job || c.dept || 'Equipa') : c.role ? `${c.role}${c.kind === 'extra' ? ' · figurante' : ''}` : 'Elenco')}</small></span><span class="cs-pp-ph">${esc(c.phone || 'sem telefone')}</span></button>`).join('')
+      : `<p class="muted small">Ninguém com esse nome na equipa nem no elenco. Junta as pessoas em Equipa e convites.</p>`);
+    box.querySelector('[data-ppx]').addEventListener('mousedown', (e) => { e.preventDefault(); close(); });
     box.querySelectorAll('[data-k]').forEach((b) => b.addEventListener('mousedown', (e) => { e.preventDefault(); pick(items[+b.dataset.k]); }));
   };
   const open = async (el) => {
-    if (input === el && box) return;
-    close(); input = el;
+    // focar e clicar chamam isto duas vezes seguidas: só abre uma lista
+    if (input === el && (box || opening)) return;
+    close(); input = el; const tok = {}; opening = tok;
     if (peopleCache?.pid !== p.id) peopleCache = { pid: p.id, list: await projectContacts(p) };
-    if (input !== el) return;
+    if (input !== el || opening !== tok) return;
+    opening = null;
     box = document.createElement('div'); box.className = 'cs-pp'; box.setAttribute('role', 'listbox');
     const r = el.getBoundingClientRect();
     box.style.left = `${Math.max(8, Math.min(r.left + window.scrollX, window.innerWidth - 340))}px`; box.style.top = `${r.bottom + window.scrollY + 4}px`; box.style.minWidth = `${Math.max(280, r.width)}px`;

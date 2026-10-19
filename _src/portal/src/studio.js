@@ -1241,9 +1241,12 @@ async function projectOverview(main, p, { plain = false } = {}) {
     const head = document.createElement('div'); head.className = 'cv-headblk';
     [...main.children].forEach((c) => { if (c !== sit && !c.matches('.pm-grid[hidden]')) head.append(c); });
     sit.innerHTML = '<p class="muted">A preparar a visão geral…</p>';
+    // projetos novos: a visão geral começa só com o que é das tarefas; o resto junta-se pela barra da direita
+    const fresh = !p.layouts?.['pg:geral']?.grid && String(p.created_at || '') >= '2026-10-19';
+    const TASKY = new Set(['who', 'depts']);
     await mountSituation(sit, p, base, { onBlocks: (blocks) => {
       mountCanvas(main, p, { key: 'pg:geral', pageLabel: 'visão geral', here: { kind: 'page', page: 'geral', sub: null },
-        native: [{ id: 'head', label: 'Banner do projeto', el: head, removable: false }, ...blocks.map((b) => ({ id: b.id, label: b.label, el: b.el, w: b.w, x: b.x, off: b.off, icon: b.icon, ref: { kind: 'block', block: b.id } }))],
+        native: [{ id: 'head', label: 'Banner do projeto', el: head, removable: false }, ...blocks.map((b) => ({ id: b.id, label: b.label, el: b.el, w: fresh && b.id === 'who' ? 12 : b.w, x: fresh && b.id === 'who' ? 0 : b.x, off: fresh && !TASKY.has(b.id) ? true : b.off, icon: b.icon, ref: { kind: 'block', block: b.id } }))],
         render: (bx, ref) => renderRef(bx, p, ref) });
     } });
   }

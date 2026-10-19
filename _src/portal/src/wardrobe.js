@@ -102,7 +102,14 @@ async function personPage(main, p, c, base, cleanup) {
     const el = main.querySelector('[data-mb]'); if (!el || !w.board_id) return;
     el.hidden = false;
     const { boardPreview } = await import('./boardview.js');
-    const h = boardPreview(el, p, { boardId: w.board_id, title: 'Moodboard', href: `${base}/b/${w.board_id}`, base }); if (h) cleanup(() => h.destroy());
+    const bid = w.board_id;
+    const h = boardPreview(el, p, { boardId: bid, title: 'Moodboard', href: `${base}/b/${bid}`, base,
+      onRemove: async () => {
+        if (!(await confirmBox('Apagar o moodboard? As imagens e notas que tem também se apagam.', 'Apagar'))) return;
+        const { error } = await sb.from('boards').delete().eq('id', bid); if (error) return toast(error.message);
+        delete w.board_id; await saveNow(); h?.destroy(); el.hidden = true; el.innerHTML = ''; toast('Moodboard apagado.'); offer();
+      } });
+    if (h) cleanup(() => h.destroy());
   };
   const createMood = async () => {
     let bid = w.board_id;
