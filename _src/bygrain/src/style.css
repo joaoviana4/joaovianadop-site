@@ -2168,3 +2168,4 @@ body.tool-dragging, body.tool-dragging * { cursor: grabbing !important; user-sel
 .cp.set { border-style: dashed; border-color: #E3B341; }
 .cp.set .cp-s { color: #B8860B; }
 .cp-bar { margin-top: 10px; align-items: center; }
+.act-filters { margin: 4px 0 12px; } .act-filters select { width: auto; min-width: 200px; }
