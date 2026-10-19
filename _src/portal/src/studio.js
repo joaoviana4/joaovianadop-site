@@ -942,6 +942,7 @@ async function toolPage(projectId, toolId) {
   app.querySelector('[data-tooltask]')?.addEventListener('click', () => addTaskModal({ projectId: p.id, departments: p.departments || [], entity: { type: 'board', id: tool.id }, where: tool.title }));
   const box = app.querySelector('[data-tool]');
   joinProject(p.id);
+  if (IS_STUDIO) import('./miniplayer.js').then((m) => m.miniPlayer(p, { page: 'f', sub: toolId, base: projBase(p) })).catch(() => {});
   { const lk = lockPage(`${p.id}:f:${tool.id}`, app.querySelector('[data-main]'), { reopen: () => route() }); onCleanup(() => lk.destroy()); }
   if (IS_STUDIO && !p.is_central && !['lightmap'].includes(tool.kind)) {
     const el = document.createElement('div'); el.className = 'cv-page';
@@ -1046,6 +1047,8 @@ async function projectPage(projectId, page, sub) {
     addTaskModal({ projectId: p.id, departments: p.departments || [], entity, where });
   });
   joinProject(p.id);
+  // videoclipes com música: mini leitor que acompanha as páginas do projeto
+  if (IS_STUDIO) import('./miniplayer.js').then((m) => m.miniPlayer(p, { page, sub, base: projBase(p) })).catch(() => {});
   // páginas de trabalho: só uma janela edita de cada vez (as outras ficam só a ver)
   if (['orcamento', 'seguimento', 'decors', 'elenco', 'personagens', 'aderecos', 'cenas', 'guiao', 'planificacao', 'detalhes', 'shotlist', 'storyboard', 'financas', 'plano', 'equipamento', 'figurino', 'tratamento'].includes(page)) {
     const lk = lockPage(`${p.id}:${page}:${sub || ''}`, main, { reopen: () => route() });
@@ -1422,6 +1425,7 @@ async function boardView(projectId, boardId) {
 
   const pct = app.querySelector('.pct');
   joinProject(p.id);
+  if (IS_STUDIO) import('./miniplayer.js').then((m) => m.miniPlayer(p, { page: 'b', sub: boardId, base: projBase(p) })).catch(() => {});
   const bp = boardPresence(cur.id);
   onCleanup(() => bp.leave());
   const { mountBoard } = await boardMod;
