@@ -2175,3 +2175,13 @@ body.tool-dragging, body.tool-dragging * { cursor: grabbing !important; user-sel
 .cst-weather { align-items: center; }
 .cs-wx { display: flex; align-items: center; }
 .cs-miss { margin: 6px 0 14px; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+
+/* campos das tabelas (orçamento e tabelas): sempre com ar de campo para escrever */
+.table.budget td input, .cell-in { background: color-mix(in srgb, var(--panel2) 70%, transparent) !important; border: 1px solid var(--line) !important; border-radius: 7px; cursor: text; transition: border-color .12s, background .12s, box-shadow .12s; }
+.table.budget td input:hover, .cell-in:hover { border-color: var(--line2) !important; background: var(--panel2) !important; }
+.table.budget td input:focus, .cell-in:focus { border-color: var(--blue) !important; background: var(--panel) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 18%, transparent); outline: none; }
+.table.budget td input:placeholder-shown, .cell-in:placeholder-shown { background: color-mix(in srgb, var(--panel2) 45%, transparent) !important; }
+.table.budget tr.bsec .sec-in { border: 1px dashed transparent; border-radius: 7px; cursor: text; }
+.table.budget tr.bsec .sec-in:hover { border-color: currentColor; }
+.table.budget td input::placeholder { color: var(--muted); opacity: .45; }
+.table.budget tr.bsec td input.sec-in { background: transparent !important; border-color: transparent !important; box-shadow: none !important; } .table.budget tr.bsec td input.sec-in:hover { border-color: currentColor !important; border-style: dashed !important; } .table.budget tr.bsec td input.sec-in:focus { background: var(--panel) !important; border-color: var(--blue) !important; border-style: solid !important; }
