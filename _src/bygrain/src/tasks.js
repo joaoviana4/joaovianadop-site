@@ -188,25 +188,30 @@ export function editTask(t, st, after) {
 export { todayISO };
 
 // "Adicionar tarefa" (botão no canto de cada página): descrição, prazo e pessoa ou departamento, ligada à página
-export async function addTaskModal({ projectId, departments = [], entity = null, where = '' }) {
+export async function addTaskModal({ projectId, departments = [], entity = null, where = '', projects = null }) {
   const people = await loadPeople();
   const m = modal(`<h2>Adicionar tarefa</h2>${where ? `<p class="muted small">Fica ligada a: <b>${esc(where)}</b></p>` : ''}
     <form class="stack">
+      ${projects ? `<div class="field"><label for="nt-p">Projeto</label><select id="nt-p" name="project_id" required>${projects.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></div>` : ''}
       <div class="field"><label for="nt-t">Descrição</label><textarea id="nt-t" name="title" rows="2" required placeholder="O que é preciso fazer"></textarea></div>
       <div class="grid2">
         <div class="field"><label for="nt-d">Prazo</label><input id="nt-d" name="due" type="date"></div>
         <div class="field"><label for="nt-a">Pessoa</label><select id="nt-a" name="assignee"><option value="">— ninguém —</option>${people.map((p) => `<option value="${p.id}">${esc(p.display_name)}</option>`).join('')}</select></div>
       </div>
-      ${departments.length ? `<div class="field"><label>Departamento</label><div class="nt-depts">${departments.map((d) => `<label class="nt-dep" style="--dept:${esc(d.color || '#888')}"><input type="radio" name="department" value="${esc(d.id)}"><span>${esc(d.name)}</span></label>`).join('')}<label class="nt-dep"><input type="radio" name="department" value="" checked><span>Nenhum</span></label></div></div>` : ''}
+      <div data-ntdeps>${departments.length ? `<div class="field"><label>Departamento</label><div class="nt-depts">${departments.map((d) => `<label class="nt-dep" style="--dept:${esc(d.color || '#888')}"><input type="radio" name="department" value="${esc(d.id)}"><span>${esc(d.name)}</span></label>`).join('')}<label class="nt-dep"><input type="radio" name="department" value="" checked><span>Nenhum</span></label></div></div>` : ''}</div>
       <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Adicionar tarefa</button></div>
     </form>`);
   setTimeout(() => m.el.querySelector('#nt-t')?.focus(), 30);
+  const depHtml = (ds) => (ds.length ? `<div class="field"><label>Departamento</label><div class="nt-depts">${ds.map((d) => `<label class="nt-dep" style="--dept:${esc(d.color || '#888')}"><input type="radio" name="department" value="${esc(d.id)}"><span>${esc(d.name)}</span></label>`).join('')}<label class="nt-dep"><input type="radio" name="department" value="" checked><span>Nenhum</span></label></div></div>` : '');
+  const ps = m.el.querySelector('#nt-p');
+  if (ps) { const upd = () => { m.el.querySelector('[data-ntdeps]').innerHTML = depHtml(projects.find((x) => x.id === ps.value)?.departments || []); }; ps.addEventListener('change', upd); upd(); }
   m.el.querySelector('#nt-t').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); m.el.querySelector('form').requestSubmit(); } });
   m.el.querySelector('form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target));
     if (!f.title.trim()) return;
-    const row = { project_id: projectId, title: f.title.trim(), assignee_id: f.assignee || null, department: f.department || null, due: f.due || null, ...(entity ? { entity_type: entity.type, entity_id: entity.id || null } : {}) };
+    const row = { project_id: projectId || f.project_id, title: f.title.trim(), assignee_id: f.assignee || null, department: f.department || null, due: f.due || null, ...(entity ? { entity_type: entity.type, entity_id: entity.id || null } : {}) };
+    if (!row.project_id) return toast('Escolhe o projeto.');
     const { data, error } = await sb.from('tasks').insert(row).select().single();
     if (error) return toast(error.message);
     m.close(); toast('Tarefa adicionada.');
