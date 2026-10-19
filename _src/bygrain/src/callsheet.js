@@ -1,5 +1,6 @@
 import { sb, esc, toast, modal, confirmBox, ICON, signedUrl } from './lib.js';
 import { projectContacts, nameWithPhone } from './contacts.js';
+import { placeAddr } from './placegeo.js';
 import { CS_MODELS } from './csmodels.js';
 
 // Folha de serviço (call sheet) de um dia de rodagem, no estilo do modelo "A Forma e o Silêncio":
@@ -252,6 +253,17 @@ export function callsheetTool(main, p, tool) {
     toast(blank ? 'Dia novo, em branco.' : 'Dia novo com os mesmos contactos, horários e local (sem planos nem elenco).');
   };
   // hospital, polícia, bombeiros, meteorologia e sol a partir do décor do dia (ou da morada escrita)
+  // ao abrir: se o local de um dia é um décor do projeto, a morada acompanha a do décor
+  (async () => {
+    const { data: locs } = await sb.from('locations').select('id, name, info').eq('project_id', p.id);
+    const n = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    let changed = false;
+    all.sheets.forEach((sh) => {
+      const l = (locs || []).find((x) => sh.place && n(x.name) === n(sh.place)); const a = placeAddr(p, l);
+      if (l && a && a !== (sh.address || '').trim()) { sh.address = a; if (sh.hospital) sh.hospital = { name: '', url: '' }; changed = true; }
+    });
+    if (changed) { save(); draw(); toast('Morada atualizada a partir do décor.'); }
+  })();
   const geoTried = new Set();
   const geoFill = async ({ hosp = false, wx = false, loud = false }) => {
     if (!d.place && !d.address) { if (loud) toast('Escreve primeiro o local ou a morada.'); return; }
@@ -260,7 +272,7 @@ export function callsheetTool(main, p, tool) {
       const { data: locs } = await sb.from('locations').select('id, name, info').eq('project_id', p.id);
       const n = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
       let loc = (locs || []).find((l) => n(l.name) === n(d.place)) || (locs || []).find((l) => d.place && (n(l.name).includes(n(d.place)) || n(d.place).includes(n(l.name))));
-      if (loc && !(loc.info?.morada || loc.info?.address) && d.address) loc = null;
+      if (loc && !placeAddr(p, loc) && d.address) loc = null;
       const { placeInfo } = await import('./placegeo.js');
       const { geocode, nearby, weatherFor, weatherLine, pinUrl } = await import('./geo.js');
       let info = loc ? await placeInfo(p, loc) : null;
@@ -350,7 +362,7 @@ export function callsheetTool(main, p, tool) {
     main.querySelectorAll('[data-rmcol]').forEach((b) => b.addEventListener('click', async () => {
       const c = d.cols.find((y) => y.id === b.dataset.rmcol); if (!(await confirmBox(`Tirar a coluna "${c.label}"?`, 'Tirar'))) return; d.cols = d.cols.filter((y) => y !== c); save(); draw();
     }));
-    main.querySelector('[data-pick]').addEventListener('click', () => pickShots(p, d, () => { save(); draw(); }, used()));
+    main.querySelector('[data-pick]').addEventListener('click', () => { const before = `${d.place}|${d.address}`; pickShots(p, d, () => { save(); draw(); if (`${d.place}|${d.address}` !== before) geoFill({ hosp: true }); }, used()); });
     main.querySelector('[data-export]').addEventListener('click', () => exportDialog(all, cur, () => { save(); draw(); }));
     main.querySelector('[data-import]').addEventListener('click', () => importXlsx(d, (nd) => { all.sheets[cur] = nd; d = nd; save(); draw(); }));
   };
@@ -410,8 +422,10 @@ async function pickShots(p, d, after, elsewhere = new Map()) {
     const secs = (scenes || []).filter((s) => secIds.has(s.id));
     const locIds = [...new Set(secs.flatMap((s) => [s.location_id, ...(s.location_ids || [])]).filter(Boolean))];
     const loc = (locs || []).find((l) => l.id === locIds[0]);
+    const same = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
     if (loc && !d.place) d.place = loc.name;
-    if (loc && !d.address && loc.info?.address) d.address = loc.info.address;
+    // a morada vem sempre do décor (a que está escrita na página do décor), se o local da folha for esse décor
+    if (loc && placeAddr(p, loc) && same(d.place, loc.name)) d.address = placeAddr(p, loc);
     const castIds = [...new Set(secs.flatMap((s) => [...(s.character_ids || []), ...(s.extra_ids || [])]))];
     castIds.forEach((cid) => {
       const c = (chars || []).find((y) => y.id === cid); if (!c || d.cast.some((y) => y.char_id === cid)) return;
