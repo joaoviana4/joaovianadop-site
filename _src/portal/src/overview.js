@@ -49,13 +49,14 @@ export function situationData(p, tasksP) {
     loadPeople(),
     sb.from('boards').select('id, data').eq('project_id', p.id).eq('kind', 'timeline').limit(1),
     isMusic ? musicStats(p.id) : Promise.resolve(null),
+    import('./rodagem.js').then((m) => m.shootProgress(p)).catch(() => null),
   ]);
 }
 export async function mountSituation(box, p, base, { onChange } = {}) {
   box.innerHTML = '<p class="muted">A preparar o ponto de situação…</p>';
   const isMusic = hasMod(p, 'seguimento'); const withProps = hasMod(p, 'aderecos');
   const pre = p._preSit; p._preSit = null; // os dados pedidos pela visão geral só servem a primeira vez
-  const [{ data: tasks }, { data: props }, { data: questions }, people, { data: tl }, ms] = await (pre || situationData(p));
+  const [{ data: tasks }, { data: props }, { data: questions }, people, { data: tl }, ms, shoot] = await (pre || situationData(p));
   const st = { showResolved: false, questions: questions || [] };
   const all = tasks || [];
   const open = all.filter((t) => t.status !== 'done');
@@ -75,7 +76,17 @@ export async function mountSituation(box, p, base, { onChange } = {}) {
     const groups = new Map();
     open.forEach((t) => { const k = t.assignee_id || ''; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); });
     const order = [...groups.entries()].sort(([a, x], [b, y]) => (a === '') - (b === '') || y.filter((t) => late.includes(t)).length - x.filter((t) => late.includes(t)).length || y.length - x.length);
+    const doneN = all.length - open.length, sh = shoot && shoot.total ? shoot : null;
     box.innerHTML = `<div data-lay>
+      <div data-blk="prog"><section class="panel ov-prog">
+        <div class="ov-pg"><div class="row between"><a href="${base}/tarefas"><strong>Tarefas</strong></a><span class="muted small">${all.length ? `${open.length === 1 ? '1 por fazer' : `${open.length} por fazer`} · ${doneN} de ${all.length} feitas` : 'Ainda não há tarefas'}</span></div>
+          <div class="bar big"><i style="width:${all.length ? Math.round((doneN / all.length) * 100) : 0}%"></i></div></div>
+        <div class="ov-pg"><div class="row between"><a href="${base}/rodagem"><strong>Planos</strong></a><span class="muted small">${sh ? `${sh.total - sh.filmed === 1 ? 'falta 1 plano' : `faltam ${sh.total - sh.filmed} planos`} · ${sh.filmed} de ${sh.total} filmados` : 'Ainda não há planos'}</span></div>
+          <div class="bar big ok"><i style="width:${sh ? Math.round((sh.filmed / sh.total) * 100) : 0}%"></i></div></div>
+        <div class="ov-pg ov-film"><div class="row between"><strong>Filme</strong><span class="ov-pct">${sh ? Math.round((sh.filmed / sh.total) * 100) : 0}%</span></div>
+          <div class="bar big film"><i style="width:${sh ? Math.round((sh.filmed / sh.total) * 100) : 0}%"></i></div>
+          <span class="muted small">${sh ? `${shoot.daysDone} de ${shoot.days} ${shoot.days === 1 ? 'dia de rodagem fechado' : 'dias de rodagem fechados'}` : 'Os planos marcados como filmados na Rodagem contam aqui.'}</span></div>
+      </section></div>
       <div data-blk="kpis"><div class="ov-kpis">
         <a class="ov-kpi ${late.length ? 'warn' : ''}" href="${base}/tarefas"><span class="k-ic">${ICON.task}</span><strong>${open.length}</strong><span>${open.length === 1 ? 'tarefa por fazer' : 'tarefas por fazer'}</span>${late.length ? `<em>${plural(late.length, 'atrasada', 'atrasadas')}</em>` : all.length ? `<em class="ok">${all.length - open.length} de ${all.length} feitas</em>` : ''}</a>
         ${withProps ? `<a class="ov-kpi ${missing.length ? 'warn' : ''}" href="${base}/aderecos"><span class="k-ic">${ICON.prop}</span><strong>${missing.length}</strong><span>${missing.length === 1 ? 'adereço em falta' : 'adereços em falta'}</span>${P.length ? `<em class="${missing.length ? '' : 'ok'}">${P.length - missing.length} de ${P.length} prontos</em>` : '<em>sem lista ainda</em>'}</a>` : ''}
@@ -126,7 +137,7 @@ export async function mountSituation(box, p, base, { onChange } = {}) {
         </section></div>` : ''}
       </div>`;
     mountLayout(box.querySelector('[data-lay]'), { project: p, key: 'overview', title: 'vista geral', blocks: [
-      { id: 'kpis', label: 'Números do projeto', pos: 'full' }, { id: 'music', label: 'Seguimento', pos: 'full' },
+      { id: 'prog', label: 'Progresso', pos: 'full' }, { id: 'kpis', label: 'Números do projeto', pos: 'full' }, { id: 'music', label: 'Seguimento', pos: 'full' },
       { id: 'who', label: 'Quem tem o quê', pos: 'left' }, { id: 'crono', label: 'Cronograma', pos: 'right' }, { id: 'depts', label: 'Por departamento', pos: 'right' },
       { id: 'questions', label: 'Questões de produção', pos: 'left' }, { id: 'props', label: 'Adereços em falta', pos: 'right' },
     ] });

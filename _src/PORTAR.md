@@ -72,3 +72,7 @@ O resto deste ficheiro descreve como o Studio nasceu do código do byGrain (aind
 - Comunidade `Grain (teste)` (`d5ce2f37-078d-4da0-aa64-0e034f977e21`, business) no Studio: cópia dos 16 projetos (9 na reciclagem, como no byGrain), Central, boards, tarefas, cenas, planos, orçamentos, finanças e ficheiros, com os mesmos ids. O João é o único membro (admin); Ruben, Tomás e Daniel ficaram como equipa sem conta e as tarefas deles sem responsável, com o nome nas notas.
 - O byGrain não foi alterado (só lido pela função `backup-export`, que expira a 18 out). A função `grain-import` do BlackCat foi usada uma vez e está desligada (410).
 - É uma fotografia de 17 out: o que a equipa fizer no byGrain depois disso não aparece aqui.
+
+## 19 out — Rodagem (nos dois)
+- Página `rodagem` (rodagem.js, igual nos dois): folhas de serviço só de leitura, vistos por plano em `shoot_marks` (public e studio; qualquer membro do projeto marca), resumo por dia. Aparece sozinha quando a etapa Produção está ligada (MOD_DEF.rodagem = ['prod']).
+- Visão geral: bloco "Progresso" com tarefas por fazer, planos em falta e % do filme filmado.

@@ -21,7 +21,7 @@ import { newLightmapData } from './lmdata.js';
 const lazy = {
   finance: () => import('./finance.js'), lightmap: () => import('./lightmap.js'), lmhub: () => import('./lmhub.js'), wardrobe: () => import('./wardrobe.js'), gear: () => import('./gear.js'),
   props: () => import('./props.js'), budget: () => import('./budget.js'), shotlist: () => import('./shotlist.js'),
-  shot: () => import('./shot.js'), marketing: () => import('./marketing.js'), callsheet: () => import('./callsheet.js'), transport: () => import('./transport.js'),
+  shot: () => import('./shot.js'), marketing: () => import('./marketing.js'), callsheet: () => import('./callsheet.js'), rodagem: () => import('./rodagem.js'), transport: () => import('./transport.js'),
 };
 // pré-carrega em segundo plano depois de o site abrir, para a primeira abertura também ser rápida
 setTimeout(() => { const idle = window.requestIdleCallback || ((f) => setTimeout(f, 1500)); idle(() => Object.values(lazy).forEach((f) => f().catch(() => {}))); }, 4000);
@@ -1009,6 +1009,7 @@ async function projectPage(projectId, page, sub) {
   }
   if (page === 'marketing' && !p.is_central) return (await lazy.marketing()).marketingPage(main, p, sub, projBase(p));
   if (page === 'shotlist') return (await lazy.shotlist()).shotlistPage(main, p, projBase(p));
+  if (page === 'rodagem' && !p.is_central) return (await lazy.rodagem()).rodagemPage(main, p, projBase(p));
   if (page === 'equipamento' && !p.is_central) return (await lazy.gear()).gearPage(main, p, projBase(p));
   if (page === 'mapas' && !p.is_central) return (await lazy.lmhub()).lightmapsPage(main, p, projBase(p));
   if (page === 'plano' && sub) return (await lazy.shot()).shotPage(main, p, sub, projBase(p), onCleanup);

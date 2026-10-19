@@ -55,7 +55,7 @@ export function stagesMenu(p, after) {
 const ALL = ['pre', 'prod', 'pos'];
 // Tudo o que existia até 17 out 2026 é de pré-produção (as ferramentas de produção e pós-produção vêm a seguir).
 const PRE = ['pre'];
-const MOD_DEF = {};
+const MOD_DEF = { rodagem: ['prod'] };
 const KIND_DEF = {};
 
 export const modKey = (k) => `mod:${k}`;
