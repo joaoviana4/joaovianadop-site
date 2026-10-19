@@ -2496,3 +2496,7 @@ body.readonly .proj-main input[readonly]:focus, body.readonly .proj-main textare
 .an-t .row { margin-top: 6px; }
 /* na visão geral, numa etapa futura, fica só o banner e o aviso */
 .ov-ahead > [data-main] > :not(.pm-head) { display: none !important; }
+.ps-head { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 0 1 auto; }
+.ps-head .ps-name { max-width: 240px; }
+/* sem o nome do projeto no menu do lado, a pesquisa sobe */
+.page.has-strip .proj-nav { padding-top: 14px; }
