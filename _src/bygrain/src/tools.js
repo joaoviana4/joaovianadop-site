@@ -1,5 +1,6 @@
 import { sb, esc, toast, modal, confirmBox, ICON, fmtDate, todayISO, daysUntil } from './lib.js';
 import { loadPeople, editTask } from './tasks.js';
+import { shootDays } from './shootdays.js';
 
 // Ferramentas de projeto além do board: tabela e cronograma (o mapa de luz está em lightmap.js).
 
@@ -160,19 +161,30 @@ const PRESETS = ['Repérage', 'Casting', 'Ensaio', 'Provas de guarda-roupa', 'Re
 const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
 const diff = (a, b) => Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
 
+// dias de rodagem seguidos juntam-se numa barra ("Rodagem · dias 1–4 · 14–17 nov")
+function runs(days) {
+  const out = []; let cur = null;
+  [...days].sort((a, b) => a.date.localeCompare(b.date)).forEach((x) => {
+    if (cur && diff(cur.b, x.date) <= 1) { cur.b = x.date; cur.days.push(x.day); }
+    else { cur = { a: x.date, b: x.date, days: [x.day], board: x.board }; out.push(cur); }
+  });
+  out.forEach((r) => { const ds = r.days.length > 1 ? `dias ${r.days[0]}–${r.days[r.days.length - 1]}` : `dia ${r.days[0]}`; r.label = `Rodagem · ${ds} · ${fmtDate(r.a)}${r.b !== r.a ? ` – ${fmtDate(r.b)}` : ''}`; r.title = r.label; });
+  return out;
+}
 export async function timelineTool(main, p, tool) {
   const data = { ...(tool.data || {}) };
   if (!data.phases) {
     const s = p.starts_on || todayISO(); const e = p.ends_on || addDays(s, 60); const n = Math.max(3, diff(s, e));
     data.phases = { pre: [s, addDays(s, Math.round(n / 3))], prod: [addDays(s, Math.round(n / 3) + 1), addDays(s, Math.round((2 * n) / 3))], post: [addDays(s, Math.round((2 * n) / 3) + 1), e] };
   }
-  const [{ data: tasks }, people] = await Promise.all([sb.from('tasks').select('*').eq('project_id', p.id), loadPeople()]);
+  const [{ data: tasks }, people, sdays] = await Promise.all([sb.from('tasks').select('*').eq('project_id', p.id), loadPeople(), shootDays(p).catch(() => [])]);
+  const shoot = sdays.filter((x) => x.date);
   const st = { tasks: tasks || [], people, projects: new Map([[p.id, p]]) };
   const save = debounce(() => sb.from('boards').update({ data, updated_at: new Date().toISOString() }).eq('id', tool.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message)));
   const draw = () => {
     const dated = st.tasks.filter((t) => t.due);
     const items = (data.items ||= []);
-    const all = [...Object.values(data.phases).flat(), ...dated.map((t) => t.due), ...items.flatMap((x) => [x.start, x.end]).filter(Boolean), todayISO()];
+    const all = [...Object.values(data.phases).flat(), ...dated.map((t) => t.due), ...items.flatMap((x) => [x.start, x.end]).filter(Boolean), ...shoot.map((x) => x.date), todayISO()];
     const start = addDays(all.reduce((a, b) => (a < b ? a : b)), -3), end = addDays(all.reduce((a, b) => (a > b ? a : b)), 3);
     const total = Math.max(1, diff(start, end));
     const pct = (iso) => `${(diff(start, iso) / total) * 100}%`;
@@ -196,6 +208,7 @@ export async function timelineTool(main, p, tool) {
       <div class="tl">
         <div class="tl-scale">${months.map((m) => `<span style="left:${pct(m)}">${fmtDate(m).split(' ')[1]}</span>`).join('')}</div>
         <div class="tl-row tl-phase-row">${PHASES.map(([k, l, c]) => `<div class="tl-bar ph" style="left:${pct(data.phases[k][0])};width:${w(data.phases[k][0], data.phases[k][1])};--g:${c}" title="${l}">${l}</div>`).join('')}</div>
+        ${shoot.length ? `<div class="tl-group"><div class="tl-gh" style="--g:#F08A24"><i></i>Dias de rodagem <span class="muted small">(das folhas de serviço)</span></div>${runs(shoot).map((r) => `<div class="tl-row">${r.a === r.b ? `<a class="tl-ms" href="${location.hash.split('/f/')[0]}/f/${r.board}" style="left:${pct(r.a)};--g:#F08A24" title="${esc(r.title)}"><i></i><span>${esc(r.label)}</span></a>` : `<a class="tl-bar it" href="${location.hash.split('/f/')[0]}/f/${r.board}" style="left:${pct(r.a)};width:${w(r.a, r.b)};--g:#F08A24;text-decoration:none" title="${esc(r.title)}"></a><span class="tl-lbl" style="left:calc(${pct(r.a)} + ${w(r.a, r.b)})">${esc(r.label)}</span>`}</div>`).join('')}</div>` : ''}
         ${items.filter((x) => x.start).length ? `<div class="tl-group"><div class="tl-gh" style="--g:#8A8A99"><i></i>Outras datas</div>
           ${[...items].filter((x) => x.start).sort((a, b) => a.start.localeCompare(b.start)).map((x) => x.end && x.end > x.start
             ? `<div class="tl-row"><div class="tl-bar it" style="left:${pct(x.start)};width:${w(x.start, x.end)};--g:${esc(x.color)}" title="${esc(x.name)}: ${fmtDate(x.start)} – ${fmtDate(x.end)}"></div><span class="tl-lbl" style="left:calc(${pct(x.start)} + ${w(x.start, x.end)})">${esc(x.name || 'Data')} · ${fmtDate(x.start)} – ${fmtDate(x.end)}</span></div>`
