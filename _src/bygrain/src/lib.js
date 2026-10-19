@@ -101,9 +101,8 @@ export async function loadProfile() {
   const { data: { session } } = await sb.auth.getSession();
   state.user = session?.user || null;
   if (!state.user) { state.profile = null; return null; }
-  const { data } = await sb.from('profiles').select('*').eq('id', state.user.id).single();
+  const [{ data }, { data: perms }] = await Promise.all([sb.from('profiles').select('*').eq('id', state.user.id).single(), sb.from('user_perms').select('perm').eq('user_id', state.user.id)]);
   state.profile = data;
-  const { data: perms } = await sb.from('user_perms').select('perm').eq('user_id', state.user.id);
   state.perms = new Set((perms || []).map((x) => x.perm));
   return data;
 }
