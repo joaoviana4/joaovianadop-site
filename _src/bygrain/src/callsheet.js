@@ -441,6 +441,7 @@ async function pickShots(p, d, after, elsewhere = new Map()) {
     sb.from('locations').select('id, name, info').eq('project_id', p.id),
     sb.from('characters').select('id, name, actor, info').eq('project_id', p.id),
   ]);
+  const { data: props } = await sb.from('props').select('id, name, type').eq('project_id', p.id);
   const used = new Set(d.rows.map((r) => r.shot_id).filter(Boolean));
   // mesma ordem e numeração da shotlist: secção a secção (por posição), depois os planos sem secção
   const byPos = (a, b) => (a.position || 0) - (b.position || 0);
@@ -471,7 +472,7 @@ async function pickShots(p, d, after, elsewhere = new Map()) {
     if (!ids.length) return m.close();
     const chosen = ordered.filter((x) => ids.includes(x.id));
     const secIds = new Set();
-    const dayPeople = new Set();
+    const dayPeople = new Set(); const dayProps = new Set();
     chosen.forEach((x) => {
       const s = (scenes || []).find((y) => y.id === x.scene_id); if (s) secIds.add(s.id);
       // quem está no plano (escolhido na página do plano); se não estiver escolhido, toda a gente da cena
@@ -483,6 +484,8 @@ async function pickShots(p, d, after, elsewhere = new Map()) {
         actor: idx.join(';'), resumo: x.description || '', cam: [x.rig, x.lens].filter(Boolean).join(' · '),
         tecnico: [x.framing, x.movement, x.direction_notes, x.tech_notes].filter(Boolean).join(' || '), paf: x.tc || '',
       };
+      const pnames = (x.prop_ids || []).map((id) => (props || []).find((y) => y.id === id)?.name).filter(Boolean);
+      if (pnames.length) { cells.props = pnames.join(', '); pnames.forEach((n) => dayProps.add(n)); }
       d.rows.push({ id: uid(), kind: 'shot', shot_id: x.id, num: num.get(x.id), cells });
     });
     // décor e elenco do dia
@@ -499,6 +502,20 @@ async function pickShots(p, d, after, elsewhere = new Map()) {
       const scs = secs.filter((s) => [...(s.character_ids || []), ...(s.extra_ids || [])].includes(cid)).map((s) => (p._hasScript ? s.number : s.heading)).join(', ');
       d.cast.push({ id: uid(), char_id: cid, name: c.actor || c.name, role: c.info?.extra ? 'Figurante' : c.actor ? c.name : (c.info?.role || ''), scene: scs, call: d.call || '', out: '', obs: c.info?.phone ? `Tel. ${c.info.phone}` : '' });
     });
+    // adereços dos planos: coluna "Adereços" na tabela de planos e nota para a Arte com a lista do dia
+    if (dayProps.size) {
+      if (!d.cols.some((c) => c.id === 'props')) { const at = d.cols.findIndex((c) => c.id === 'resumo'); d.cols.splice(at >= 0 ? at + 1 : d.cols.length, 0, { id: 'props', label: 'Adereços' }); }
+      d.deptNotes ||= [];
+      let arte = d.deptNotes.find((x) => /arte|adere/i.test(x.dept || ''));
+      if (!arte) { arte = { id: uid(), dept: 'Arte', text: '' }; d.deptNotes.push(arte); }
+      // só mexe na linha "Adereços: …" (o resto da nota fica como estava)
+      const lines = String(arte.text || '').split('\n'); const li = lines.findIndex((l) => /^\s*Adereços:/i.test(l));
+      const have = new Set(li >= 0 ? lines[li].replace(/^\s*Adereços:\s*/i, '').split(/,\s*/).filter(Boolean) : []);
+      [...dayProps].forEach((n) => have.add(n));
+      const line = `Adereços: ${[...have].join(', ')}`;
+      if (li >= 0) lines[li] = line; else lines.unshift(line);
+      arte.text = lines.filter((l, k) => l.trim() || k < lines.length - 1).join('\n').trim();
+    }
     m.close(); after();
     toast(`${chosen.length} ${chosen.length === 1 ? 'plano juntado' : 'planos juntados'}${loc ? `, décor: ${loc.name}` : ''}.`);
   });

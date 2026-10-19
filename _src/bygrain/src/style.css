@@ -2243,3 +2243,32 @@ body.tool-dragging, body.tool-dragging * { cursor: grabbing !important; user-sel
 .ps-r span { display: flex; flex-direction: column; min-width: 0; }
 .ps-r small { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ps-r.on, .ps-r:hover { background: var(--panel2); }
+/* página do plano, mais compacta */
+.shot-left { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.shot-in { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.in-row { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 8px; align-items: start; }
+.in-h { font-size: 12px; color: var(--muted); padding-top: 5px; }
+.in-row .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cp-chip { border: 1px solid var(--line2); background: transparent; color: var(--muted); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+.cp-chip:hover { color: var(--text); }
+.cp-chip.frame { background: var(--blue); border-color: var(--blue); color: #fff; }
+.cp-chip.set { border-style: dashed; border-color: #E3B341; color: var(--text); }
+.cp-chip small { font-size: 10px; text-transform: uppercase; opacity: .8; }
+.cp-chip.prop.frame { background: #F08A24; border-color: #F08A24; }
+.in-add { width: auto; min-height: 28px; padding: 2px 6px; font-size: 13px; border-radius: 999px; }
+.in-help { margin: 2px 0 0; font-size: 11px; }
+.shot-acts { margin-top: -2px; }
+.shot-fields { gap: 10px; }
+.grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 1100px) { .grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.shot-extra { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.shot-extra:empty { display: none; }
+.ex-f .row { gap: 4px; flex-wrap: nowrap; }
+.ex-f .row input { flex: 1; min-width: 0; }
+.ex-l { border: 0 !important; background: none !important; padding: 0 !important; min-height: 0 !important; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+.ex-add { position: relative; }
+.ex-menu { position: absolute; z-index: 30; background: var(--panel); border: 1px solid var(--line2); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.18); padding: 4px; display: flex; flex-direction: column; margin-top: 4px; min-width: 200px; }
+.ex-menu button { text-align: left; background: none; border: 0; color: var(--text); font: inherit; padding: 7px 10px; border-radius: 7px; cursor: pointer; }
+.ex-menu button:hover { background: var(--panel2); }
+.in-add { max-width: 110px; }
+.pn-search { margin: 4px 0 10px; padding: 5px 9px; font-size: 12.5px; }
