@@ -2076,3 +2076,22 @@ body.tool-dragging, body.tool-dragging * { cursor: grabbing !important; user-sel
 .sr-fit button[aria-pressed="true"] { background: var(--blue); color: #fff; }
 .sr.fs .sr-pages { padding: 16px 24px; }
 .sr-pages { position: relative; }
+
+/* ---------- Cronograma: outras datas ---------- */
+.tl-items { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; background: var(--panel); }
+.tl-items h3 { margin: 0; font-size: 15px; }
+.tl-items ul { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.tl-items li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tl-items li [data-if="name"] { flex: 1; min-width: 180px; }
+.tl-items li input[type="date"] { width: auto; min-height: 36px; padding: 4px 8px; font-size: 14px; }
+.tl-items > p { margin: 8px 0 0; }
+.tl-col { position: relative; width: 28px; height: 28px; border-radius: 8px; background: var(--g); flex: none; cursor: pointer; overflow: hidden; }
+.tl-col i { display: none; }
+.tl-col select { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.tl-bar.it { box-shadow: none; }
+.tl-bar.it span { overflow: hidden; text-overflow: ellipsis; }
+.tl-ms { position: absolute; top: 4px; display: flex; align-items: center; gap: 6px; transform: translateX(-9px); white-space: nowrap; font-size: 12px; font-weight: 600; }
+.tl-ms i { width: 14px; height: 14px; background: var(--g); transform: rotate(45deg); border-radius: 3px; flex: none; margin: 0 2px; }
+.ov-ms { position: absolute; top: 50%; width: 10px; height: 10px; background: var(--g); border: 2px solid var(--panel, #fff); border-radius: 2px; transform: translate(-50%, -50%) rotate(45deg); z-index: 2; }
+.ov-phl li.ms i { transform: rotate(45deg); border-radius: 2px; width: 8px; height: 8px; }
+.tl-lbl { position: absolute; top: 8px; margin-left: 8px; font-size: 12px; font-weight: 600; white-space: nowrap; }

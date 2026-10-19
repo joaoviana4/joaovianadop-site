@@ -26,16 +26,18 @@ function milestone(p, phases) {
   return { big: '—', label: 'Sem datas definidas' };
 }
 
-function timelineHtml(p, phases) {
+function timelineHtml(p, phases, items = []) {
   const s = phases?.pre?.[0] || p.starts_on, e = phases?.post?.[1] || p.ends_on;
   if (!s || !e || e <= s) return '<p class="muted small">Define as datas do projeto (ou cria um Cronograma) para veres as fases aqui.</p>';
   const T = (d) => new Date(d + 'T00:00:00').getTime();
   const pct = (d) => Math.max(0, Math.min(100, ((T(d) - T(s)) / (T(e) - T(s))) * 100));
   const today = todayISO();
   const bars = phases ? PH.map(([k, l, c]) => phases[k] ? `<div class="ov-ph" style="left:${pct(phases[k][0])}%;width:${Math.max(2, pct(phases[k][1]) - pct(phases[k][0]))}%;--g:${c}" title="${l}: ${fmtDate(phases[k][0])} – ${fmtDate(phases[k][1])}"><span>${l}</span></div>` : '').join('') : `<div class="ov-ph" style="left:0;width:100%;--g:#7C5CFF"><span>Projeto</span></div>`;
-  return `<div class="ov-tl">${bars}${today >= s && today <= e ? `<i class="ov-today" style="left:${pct(today)}%"><span>Hoje</span></i>` : ''}</div>
+  const its = items.filter((x) => x.start).sort((a, b) => a.start.localeCompare(b.start));
+  const marks = its.filter((x) => x.start >= s && x.start <= e).map((x) => `<i class="ov-ms" style="left:${pct(x.start)}%;--g:${esc(x.color || '#8A8A99')}" title="${esc(x.name || 'Data')}: ${fmtDate(x.start)}${x.end && x.end > x.start ? ' – ' + fmtDate(x.end) : ''}"></i>`).join('');
+  return `<div class="ov-tl">${bars}${marks}${today >= s && today <= e ? `<i class="ov-today" style="left:${pct(today)}%"><span>Hoje</span></i>` : ''}</div>
     <div class="row between small muted"><span>${fmtDate(s)}</span><span>${fmtDate(e)}</span></div>
-    ${phases ? `<ul class="ov-phl">${PH.map(([k, l, c]) => phases[k] ? `<li style="--g:${c}"><i></i><span>${l}</span><span class="muted">${fmtDate(phases[k][0])} – ${fmtDate(phases[k][1])}</span></li>` : '').join('')}</ul>` : ''}`;
+    ${phases || its.length ? `<ul class="ov-phl">${phases ? PH.map(([k, l, c]) => phases[k] ? `<li style="--g:${c}"><i></i><span>${l}</span><span class="muted">${fmtDate(phases[k][0])} – ${fmtDate(phases[k][1])}</span></li>` : '').join('') : ''}${its.map((x) => `<li class="ms" style="--g:${esc(x.color || '#8A8A99')}"><i></i><span>${esc(x.name || 'Data')}</span><span class="muted">${fmtDate(x.start)}${x.end && x.end > x.start ? ' – ' + fmtDate(x.end) : ''}</span></li>`).join('')}</ul>` : ''}`;
 }
 
 export async function mountSituation(box, p, base, { onChange } = {}) {
@@ -89,7 +91,7 @@ export async function mountSituation(box, p, base, { onChange } = {}) {
           : `<div class="empty-box sm"><p>${all.length ? 'Está tudo feito.' : 'Ainda não há tarefas.'}</p><a class="btn ghost" href="${base}/tarefas">${ICON.plus} Distribuir tarefas</a></div>`}
         </section></div>
 
-        <div data-blk="crono"><section class="panel"><h2 class="h3">Cronograma</h2>${timelineHtml(p, phases)}</section></div>
+        <div data-blk="crono"><section class="panel"><h2 class="h3">Cronograma</h2>${timelineHtml(p, phases, tl?.[0]?.data?.items || [])}</section></div>
           ${depts.length ? `<div data-blk="depts"><section class="panel"><h2 class="h3">Por departamento</h2><ul class="ov-depts">${depts.map((d) => { const dt = all.filter((t) => t.department === d.id); const done = dt.filter((t) => t.status === 'done').length; const q = qOpen.filter((x) => x.department === d.id).length;
               return `<li style="--g:${esc(d.color)}"><div class="row between small"><span><i class="dot"></i>${esc(d.name)}</span><span class="muted">${dt.length ? `${done}/${dt.length}` : '—'}${q ? ` · ${plural(q, 'questão', 'questões')}` : ''}</span></div><div class="bar"><i style="width:${dt.length ? Math.round((done / dt.length) * 100) : 0}%"></i></div></li>`; }).join('')}</ul></section></div>` : ''}
 
