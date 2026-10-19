@@ -102,3 +102,45 @@ export function bindUndoKeys(root, h) {
   };
   document.addEventListener('keydown', onKey);
 }
+
+// ---------- mover linhas ----------
+// pega na pega (⋮⋮) e arrasta a linha para cima ou para baixo; com o teclado, ↑ e ↓ na pega.
+// onMove(id, targetId, after) — pôr a linha id antes (ou depois) de targetId.
+export const GRIP = (label = 'linha') => `<button type="button" class="row-grip" data-grip title="Arrasta para mover a ${label} (ou ↑ ↓ com o teclado)" aria-label="Mover a ${label}">⋮⋮</button>`;
+export function rowDrag(tbody, onMove) {
+  if (!tbody || tbody.dataset.dragOn) return; tbody.dataset.dragOn = '1';
+  let drag = null;
+  const line = document.createElement('div'); line.className = 'row-drop-line'; line.hidden = true;
+  const rowAt = (y) => [...tbody.querySelectorAll(':scope > tr[data-row]')].find((tr) => { const r = tr.getBoundingClientRect(); return y >= r.top && y <= r.bottom; });
+  tbody.addEventListener('pointerdown', (e) => {
+    const g = e.target.closest('[data-grip]'); if (!g || e.button !== 0) return;
+    const tr = g.closest('tr[data-row]'); if (!tr) return;
+    e.preventDefault(); g.setPointerCapture(e.pointerId);
+    drag = { id: tr.dataset.row, tr, target: null, after: false }; tr.classList.add('row-dragging'); document.body.append(line);
+  });
+  tbody.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const tr = rowAt(e.clientY); if (!tr || tr === drag.tr) { line.hidden = true; drag.target = null; return; }
+    const r = tr.getBoundingClientRect(); const after = e.clientY > r.top + r.height / 2;
+    drag.target = tr.dataset.row; drag.after = after;
+    const tr2 = tbody.closest('table').getBoundingClientRect();
+    Object.assign(line.style, { left: `${tr2.left}px`, width: `${tr2.width}px`, top: `${(after ? r.bottom : r.top) - 1}px` }); line.hidden = false;
+  });
+  const end = () => {
+    if (!drag) return; const d = drag; drag = null; d.tr.classList.remove('row-dragging'); line.remove(); line.hidden = true;
+    if (d.target && d.target !== d.id) onMove(d.id, d.target, d.after);
+  };
+  tbody.addEventListener('pointerup', end); tbody.addEventListener('pointercancel', end);
+  tbody.addEventListener('keydown', (e) => {
+    const g = e.target.closest('[data-grip]'); if (!g || !['ArrowUp', 'ArrowDown'].includes(e.key)) return;
+    e.preventDefault();
+    const tr = g.closest('tr[data-row]'); const sib = e.key === 'ArrowUp' ? tr.previousElementSibling : tr.nextElementSibling;
+    if (sib?.dataset.row) { const id = tr.dataset.row; onMove(id, sib.dataset.row, e.key === 'ArrowDown'); requestAnimationFrame(() => tbody.querySelector(`tr[data-row="${id}"] [data-grip]`)?.focus()); }
+  });
+}
+// reordena uma lista pelo id
+export function moveInList(list, id, targetId, after) {
+  const i = list.findIndex((x) => x.id === id); if (i < 0) return false;
+  const [x] = list.splice(i, 1); let j = list.findIndex((y) => y.id === targetId); if (j < 0) { list.splice(i, 0, x); return false; }
+  list.splice(after ? j + 1 : j, 0, x); return true;
+}

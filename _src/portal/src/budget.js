@@ -1,8 +1,8 @@
 import { sb, esc, toast, modal, confirmBox, ICON, saveLater } from './lib.js';
 import { exportPdf } from './pdf.js';
 import { GRAIN_FEE, feeRowSum } from './folders.js';
-import { budgetSheet, isFormula, show, colName, HELP } from './formula.js';
-import { colorField, readColor, bindColorField, colorPop, tableShortcuts, rowStyle, colStyle, makeHistory, bindUndoKeys } from './tablekit.js';
+import { budgetSheet, isFormula, show, colName, HELP, remapFormulas } from './formula.js';
+import { colorField, readColor, bindColorField, colorPop, tableShortcuts, rowStyle, colStyle, makeHistory, bindUndoKeys, GRIP, rowDrag, moveInList } from './tablekit.js';
 
 // Orçamento do projeto, como no Studio: tabela com secções, colunas de texto, valor (€) e número,
 // subtotais por secção, comparação com o orçamento geral, modelos por tipo de projeto, importar e exportar Excel.
@@ -59,7 +59,8 @@ function sums(b) {
 export async function budgetPage(main, p) {
   let b = p.budget && p.budget.cols ? JSON.parse(JSON.stringify(p.budget)) : null;
   let total = p.value != null ? Number(p.value) : null;
-  const hist = makeHistory({ get: () => b, set: (v) => { b = v; }, after: () => { save(0); draw(); }, notify: toast });
+  let lastR = (b?.rows || []).map((r) => r.id), lastC = (b?.cols || []).map((c) => c.id);
+  const hist = makeHistory({ get: () => b, set: (v) => { b = v; lastR = (b?.rows || []).map((r) => r.id); lastC = (b?.cols || []).map((c) => c.id); }, after: () => { save(0); draw(); }, notify: toast });
   let undoKeysBound = false;
   let saveT;
   // Guardar com proteção: só grava se ninguém (outra janela, outra pessoa) mudou o orçamento entretanto.
@@ -149,6 +150,8 @@ export async function budgetPage(main, p) {
       main.querySelector('[data-import]').addEventListener('click', pickImport);
       return;
     }
+    if (remapFormulas(b.rows, b.cols, lastR, lastC)) save();
+    lastR = b.rows.map((r) => r.id); lastC = b.cols.map((c) => c.id);
     const { tot, sec } = sums(b); const SH = budgetSheet(b);
     const moneyCols = b.cols.filter((c) => c.type !== 'text');
     const nItems = b.rows.filter((r) => r.kind !== 'section').length;
@@ -175,11 +178,11 @@ export async function budgetPage(main, p) {
       <div class="panel table-wrap btable"><table class="table budget">
         <thead><tr>${b.cols.map((c) => `<th class="${c.type !== 'text' ? 'num' : ''} ${c.color ? 'has-cc' : ''}" data-colid="${c.id}"${colStyle(c)}><span class="col-l" aria-hidden="true">${colName(b.cols.indexOf(c))}</span><button type="button" class="th-btn" data-col="${c.id}">${esc(c.name)}${c.id === b.main ? ' ●' : ''}</button></th>`).join('')}<th class="bact"><button type="button" class="icon-btn sm" data-addcol aria-label="Juntar coluna">${ICON.plus}</button></th></tr></thead>
         <tbody>${b.rows.map((r) => r.kind === 'section'
-          ? `<tr class="bsec ${r.color ? 'has-rc' : ''}" data-row="${r.id}"${rowStyle(r)}><td colspan="${Math.max(1, b.cols.findIndex((c) => c.type !== 'text'))}" class="rd-cell"><span class="row-n" aria-hidden="true">${b.rows.indexOf(r) + 1}</span><button type="button" class="row-dot" data-rowcolor title="Cor da secção" aria-label="Cor da secção"></button><input class="sec-in" data-sec value="${esc(r.title)}" aria-label="Nome da secção"></td>${b.cols.slice(Math.max(1, b.cols.findIndex((c) => c.type !== 'text'))).map((c) => `<td class="num">${c.type === 'text' ? '' : `<b data-ssum="${r.id}:${c.id}">${fmt(c, sec[r.id]?.[c.id] || 0)}</b>`}</td>`).join('')}<td class="bact"><button type="button" class="icon-btn sm" data-rm aria-label="Apagar secção">${ICON.close}</button></td></tr>`
-          : `<tr data-row="${r.id}" class="${r.color ? 'has-rc' : ''}"${rowStyle(r)}>${b.cols.map((c, i) => `<td class="${c.type !== 'text' ? 'num' : ''} ${c.color ? 'has-cc' : ''} ${i === 0 ? 'rd-cell' : ''}" data-colid="${c.id}"${colStyle(c)}>${i === 0 ? `<span class="row-n" aria-hidden="true">${b.rows.indexOf(r) + 1}</span><button type="button" class="row-dot" data-rowcolor title="Cor da linha" aria-label="Cor da linha"></button>` : ''}${cellInput(r, c, SH)}</td>`).join('')}<td class="bact"><button type="button" class="icon-btn sm" data-rm aria-label="Apagar linha">${ICON.close}</button></td></tr>`).join('')}</tbody>
+          ? `<tr class="bsec ${r.color ? 'has-rc' : ''}" data-row="${r.id}"${rowStyle(r)}><td colspan="${Math.max(1, b.cols.findIndex((c) => c.type !== 'text'))}" class="rd-cell"><span class="row-n" aria-hidden="true">${b.rows.indexOf(r) + 1}</span><button type="button" class="row-dot" data-rowcolor title="Cor da secção" aria-label="Cor da secção"></button><input class="sec-in" data-sec value="${esc(r.title)}" aria-label="Nome da secção"></td>${b.cols.slice(Math.max(1, b.cols.findIndex((c) => c.type !== 'text'))).map((c) => `<td class="num">${c.type === 'text' ? '' : `<b data-ssum="${r.id}:${c.id}">${fmt(c, sec[r.id]?.[c.id] || 0)}</b>`}</td>`).join('')}<td class="bact row-act">${GRIP('secção')}<button type="button" class="icon-btn sm" data-rm aria-label="Apagar secção">${ICON.close}</button></td></tr>`
+          : `<tr data-row="${r.id}" class="${r.color ? 'has-rc' : ''}"${rowStyle(r)}>${b.cols.map((c, i) => `<td class="${c.type !== 'text' ? 'num' : ''} ${c.color ? 'has-cc' : ''} ${i === 0 ? 'rd-cell' : ''}" data-colid="${c.id}"${colStyle(c)}>${i === 0 ? `<span class="row-n" aria-hidden="true">${b.rows.indexOf(r) + 1}</span><button type="button" class="row-dot" data-rowcolor title="Cor da linha" aria-label="Cor da linha"></button>` : ''}${cellInput(r, c, SH)}</td>`).join('')}<td class="bact row-act">${GRIP()}<button type="button" class="icon-btn sm" data-rm aria-label="Apagar linha">${ICON.close}</button></td></tr>`).join('')}</tbody>
         <tfoot><tr>${b.cols.map((c, i) => `<td class="num">${i === 0 ? '<strong>Total</strong>' : c.type === 'text' ? '' : `<strong data-tsum="${c.id}">${fmt(c, tot[c.id] || 0)}</strong>`}</td>`).join('')}<td></td></tr>${hasFee && b.main ? `<tr class="bfee-row" ${feeP() ? '' : 'hidden'}>${b.cols.map((c, i) => `<td class="num">${i === 0 ? `Grain fee (${String(feeP()).replace('.', ',')} %)` : c.id === b.main ? `<span data-tfee>${eur.format(feeOf(tot[c.id] || 0))}</span>` : ''}</td>`).join('')}<td></td></tr><tr class="bfee-row tot" ${feeP() ? '' : 'hidden'}>${b.cols.map((c, i) => `<td class="num">${i === 0 ? '<strong>Total com Grain fee</strong>' : c.id === b.main ? `<strong data-tfeetot>${eur.format((tot[c.id] || 0) + feeOf(tot[c.id] || 0))}</strong>` : ''}</td>`).join('')}<td></td></tr>` : ''}</tfoot>
       </table></div>
-      <div class="row wrap-gap"><button type="button" class="btn ghost" data-addrow>${ICON.plus} Linha</button><button type="button" class="btn ghost" data-addsec>${ICON.plus} Secção</button><span class="muted small">${nItems} ${nItems === 1 ? 'linha' : 'linhas'} · clica no nome de uma coluna para mudar nome, tipo e cor · ● conta para o total · <kbd>Alt</kbd>+<kbd>↓</kbd> linha, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>↓</kbd> secção, <kbd>Alt</kbd>+<kbd>→</kbd> coluna (onde está o rato) · cor da linha no ponto à esquerda</span></div>
+      <div class="row wrap-gap"><button type="button" class="btn ghost" data-addrow>${ICON.plus} Linha</button><button type="button" class="btn ghost" data-addcol2>${ICON.plus} Coluna</button><button type="button" class="btn ghost" data-addsec>${ICON.plus} Secção</button><span class="muted small">${nItems} ${nItems === 1 ? 'linha' : 'linhas'} · clica no nome de uma coluna para mudar nome, tipo e cor · ● conta para o total · <kbd>Alt</kbd>+<kbd>↓</kbd> linha, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>↓</kbd> secção, <kbd>Alt</kbd>+<kbd>→</kbd> coluna (onde está o rato) · cor da linha no ponto à esquerda</span></div>
       <p class="muted small f-help">${esc(HELP)}</p>`;
     bind();
   }
@@ -285,6 +288,8 @@ export async function budgetPage(main, p) {
     main.querySelector('[data-addrow]').addEventListener('click', () => { snapshot('juntar linha'); b.rows.push({ id: uid(), kind: 'item', cells: {} }); save(); draw(); main.querySelector('tbody tr:last-child [data-cell]')?.focus(); });
     main.querySelector('[data-addsec]').addEventListener('click', () => { snapshot('juntar secção'); b.rows.push({ id: uid(), kind: 'section', title: 'Nova secção' }); save(); draw(); const s = main.querySelector('tbody tr:last-child [data-sec]'); s?.focus(); s?.select(); });
     main.querySelector('[data-addcol]').addEventListener('click', () => colForm(null));
+    main.querySelector('[data-addcol2]')?.addEventListener('click', () => colForm(null));
+    rowDrag(main.querySelector('table.budget tbody'), (id, to, after) => { snapshot('mover linha'); if (moveInList(b.rows, id, to, after)) { save(); draw(); } });
     const at = (id) => { const i = b.rows.findIndex((x) => x.id === id); return i < 0 ? b.rows.length - 1 : i; };
     const insertRow = (i, row) => { snapshot(row.kind === 'section' ? 'juntar secção' : 'juntar linha'); b.rows.splice(i, 0, row); save(); draw(); const el = main.querySelector(`[data-row="${row.id}"] ${row.kind === 'section' ? '[data-sec]' : '[data-cell]'}`); el?.focus(); if (row.kind === 'section') el?.select(); };
     const insertCol = (id, side) => { snapshot('juntar coluna'); const i = b.cols.findIndex((c) => c.id === id); const c = { id: uid(), name: 'Nova coluna', type: 'text' }; b.cols.splice(i < 0 ? b.cols.length : i + side, 0, c); save(); draw(); colForm(c, true); };
@@ -302,6 +307,7 @@ export async function budgetPage(main, p) {
     const m = modal(`<h2>${isNew ? 'Nova coluna' : 'Coluna'}</h2><form class="stack">
       <div class="field"><label for="cn">Nome</label><input id="cn" value="${esc(c.name)}" required></div>
       <div class="field"><label for="ct">Tipo</label><select id="ct">${TYPES.map(([k, v]) => `<option value="${k}" ${c.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+      ${isNew ? '' : '<div class="field"><span class="label">Posição</span><div class="row wrap-gap"><button type="button" class="btn ghost sm" data-cmove="-1">← Para a esquerda</button><button type="button" class="btn ghost sm" data-cmove="1">Para a direita →</button></div></div>'}
       ${colorField(c.color)}
       <div class="row between">${isNew || b.cols.length < 2 ? '<span></span>' : `<button type="button" class="btn ghost danger-text" data-del>${ICON.trash} Apagar coluna</button>`}<div class="row"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Guardar</button></div></div></form>`);
     bindColorField(m.el);
@@ -313,6 +319,7 @@ export async function budgetPage(main, p) {
       if (!b.main || !b.cols.some((x) => x.id === b.main && x.type !== 'text')) b.main = b.cols.find((x) => x.type === 'money')?.id || b.cols.find((x) => x.type !== 'text')?.id || null;
       m.close(); save(); draw();
     });
+    m.el.querySelectorAll('[data-cmove]').forEach((bt) => bt.addEventListener('click', () => { const i = b.cols.indexOf(c), j = i + Number(bt.dataset.cmove); if (i < 0 || j < 0 || j >= b.cols.length) return; snapshot('mover coluna'); [b.cols[i], b.cols[j]] = [b.cols[j], b.cols[i]]; save(); draw(); }));
     m.el.querySelector('[data-del]')?.addEventListener('click', async () => {
       m.close(); if (!(await confirmBox(`Apagar a coluna "${c.name}"? Podes desfazer a seguir.`, 'Apagar'))) return;
       snapshot('apagar coluna'); b.cols = b.cols.filter((x) => x.id !== c.id); if (b.main === c.id) b.main = b.cols.find((x) => x.type === 'money')?.id || null; save(); draw();

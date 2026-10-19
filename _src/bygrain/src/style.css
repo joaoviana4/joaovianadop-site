@@ -2670,3 +2670,11 @@ a.pv-mark { text-decoration: none; display: inline-flex; }
 .ovm-d em.late { color: var(--late); }
 .sb-h .sb-addshot { margin-left: 6px; font-family: var(--sans); font-weight: 600; }
 .sb-foot { margin-top: 8px; }
+
+/* mover linhas nas tabelas e no orçamento */
+td.row-act { white-space: nowrap; }
+.row-grip { border: 0; background: none; color: var(--muted); cursor: grab; padding: 4px 4px; font-size: 13px; letter-spacing: -2px; line-height: 1; border-radius: 6px; opacity: .45; touch-action: none; }
+tr:hover .row-grip, .row-grip:focus-visible { opacity: 1; }
+.row-grip:active { cursor: grabbing; }
+tr.row-dragging { opacity: .45; }
+.row-drop-line { position: fixed; height: 2px; background: var(--blue); z-index: 50; pointer-events: none; border-radius: 2px; }

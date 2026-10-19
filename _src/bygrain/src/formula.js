@@ -42,6 +42,7 @@ function tokenize(src) {
   while (i < src.length) {
     const s = src.slice(i); let m;
     if ((m = s.match(re.ws))) { i += m[0].length; continue; }
+    if (s.startsWith('#REF!')) { out.push({ t: 'err' }); i += 5; continue; }
     if ((m = s.match(re.str))) { out.push({ t: 'str', v: m[1].replace(/""/g, '"') }); i += m[0].length; continue; }
     if ((m = s.match(re.ref))) { out.push({ t: 'ref', a: m[1], b: m[2] }); i += m[0].length; continue; }
     if ((m = s.match(re.colr))) { out.push({ t: 'col', a: m[1], b: m[2] }); i += m[0].length; continue; }
@@ -59,6 +60,7 @@ function parse(src) {
   const bin = (sub, ops) => () => { let l = sub(); while (peek()?.t === 'op' && ops.includes(peek().v)) { const o = next().v; l = { k: 'bin', o, l, r: sub() }; } return l; };
   const primary = () => {
     const t = next(); if (!t) throw new Error('#VALOR!');
+    if (t.t === 'err') return { k: 'err', e: '#REF!' };
     if (t.t === 'num') return { k: 'v', v: t.v };
     if (t.t === 'str') return { k: 'v', v: t.v };
     if (t.t === 'ref') return t.b ? { k: 'rng', a: t.a, b: t.b } : { k: 'ref', a: t.a };
@@ -240,4 +242,24 @@ export function budgetSheet(b) {
   const ci = new Map(cols.map((c, i) => [c.id, i])), ri = new Map(rows.map((r, i) => [r.id, i]));
   const value = (row, colId) => (ri.has(row.id) && ci.has(colId) ? S.value(ri.get(row.id), ci.get(colId)) : null);
   return { value, num: (row, colId) => { const v = value(row, colId); return typeof v === 'number' ? v : null; } };
+}
+
+// Quando linhas ou colunas mudam de sítio (mover, juntar, apagar), as fórmulas acompanham, como no Excel:
+// =B1*C1 continua a apontar para as mesmas células. prevR/prevC: ids pela ordem antiga; rows/cols: a ordem nova.
+// Uma célula apagada passa a #REF!.
+export function remapFormulas(rows, cols, prevR, prevC) {
+  const rNew = new Map(rows.map((r, i) => [r.id, i])), cNew = new Map(cols.map((c, i) => [c.id, i]));
+  const rMap = prevR.map((id) => (rNew.has(id) ? rNew.get(id) : -1)), cMap = prevC.map((id) => (cNew.has(id) ? cNew.get(id) : -1));
+  const same = rMap.every((v, i) => v === i) && cMap.every((v, i) => v === i) && prevR.length === rows.length && prevC.length === cols.length;
+  if (same) return 0;
+  // a tabela foi trocada inteira (modelo, importação): não há nada a acompanhar
+  if (prevR.length && !prevR.some((id) => rNew.has(id))) return 0;
+  const mr = (n) => { const i = n - 1; if (i < 0 || i >= rMap.length) return i + 1 + (rows.length - prevR.length); return rMap[i] < 0 ? null : rMap[i] + 1; };
+  const mc = (s) => { const i = colIndex(s); if (i < 0 || i >= cMap.length) return s; return cMap[i] < 0 ? null : colName(cMap[i]); };
+  const fix = (src) => src.split(/("(?:[^"]|"")*")/).map((seg, k) => (k % 2 ? seg : seg
+    .replace(/(?<![A-Za-z0-9_.$])(\$?)([A-Za-z]{1,3}):(\$?)([A-Za-z]{1,3})(?![A-Za-z0-9_(])/g, (m, d1, a, d2, b) => { const x = mc(a), y = mc(b); return x && y ? `${d1}${x}:${d2}${y}` : '#REF!'; })
+    .replace(/(?<![A-Za-z0-9_.$])(\$?)([A-Za-z]{1,3})(\$?)(\d+)(?![A-Za-z0-9_(])/g, (m, d1, c, d2, r) => { const x = mc(c), y = mr(Number(r)); return x && y ? `${d1}${x}${d2}${y}` : '#REF!'; }))).join('');
+  let n = 0;
+  rows.forEach((r) => { if (!r.cells) return; Object.keys(r.cells).forEach((k) => { const v = r.cells[k]; if (isFormula(v)) { const w = fix(v); if (w !== v) { r.cells[k] = w; n++; } } }); });
+  return n;
 }

@@ -57,12 +57,14 @@ export async function tableTemplate(p, tpl) {
 
 // ---------- tabela ----------
 import { exportPdf } from './pdf.js';
-import { makeSheet, isFormula, show, colName, HELP } from './formula.js';
-import { colorField, readColor, bindColorField, colorPop, tableShortcuts, rowStyle, colStyle, makeHistory, bindUndoKeys } from './tablekit.js';
+import { makeSheet, isFormula, show, colName, HELP, remapFormulas } from './formula.js';
+import { colorField, readColor, bindColorField, colorPop, tableShortcuts, rowStyle, colStyle, makeHistory, bindUndoKeys, GRIP, rowDrag, moveInList } from './tablekit.js';
 
 export function tableTool(main, p, tool) {
   let data = { columns: [], rows: [], ...(tool.data || {}) };
-  const hist = makeHistory({ get: () => data, set: (v) => { data = v; }, after: () => { draw(); save(); }, notify: toast });
+  // ordem das linhas/colunas da última vez que se desenhou: se mudou, as fórmulas acompanham
+  let lastR = (data.rows || []).map((r) => r.id), lastC = (data.columns || []).map((c) => c.id);
+  const hist = makeHistory({ get: () => data, set: (v) => { data = v; lastR = data.rows.map((r) => r.id); lastC = data.columns.map((c) => c.id); }, after: () => { draw(); save(); }, notify: toast });
   const snap = (l) => hist.push(l);
   const save = debounce(async () => {
     const { error } = await sb.from('boards').update({ data, updated_at: new Date().toISOString() }).eq('id', tool.id);
@@ -90,15 +92,18 @@ export function tableTool(main, p, tool) {
     });
   }
   function draw() {
+    if (remapFormulas(data.rows, data.columns, lastR, lastC)) save();
+    lastR = data.rows.map((r) => r.id); lastC = data.columns.map((c) => c.id);
     SH = sheet();
     main.querySelector('[data-tbl]').innerHTML = `<table class="table sheet"><thead><tr>${data.columns.map((c, ci) => `<th data-colid="${c.id}" class="${c.color ? 'has-cc' : ''}"${colStyle(c)}><span class="col-l" aria-hidden="true">${colName(ci)}</span><button type="button" class="th-btn" data-col="${c.id}">${esc(c.name)}</button></th>`).join('')}<th class="th-add"><button type="button" class="icon-btn sm" data-addcol aria-label="Juntar coluna">${ICON.plus}</button></th></tr></thead>
-      <tbody>${data.rows.map((r) => `<tr data-row="${r.id}" class="${r.color ? 'has-rc' : ''}"${rowStyle(r)}>${data.columns.map((c, i) => `<td class="t-${c.type} ${c.color ? 'has-cc' : ''} ${i === 0 ? 'rd-cell' : ''}" data-colid="${c.id}"${colStyle(c)}>${i === 0 ? `<span class="row-n" aria-hidden="true">${data.rows.indexOf(r) + 1}</span><button type="button" class="row-dot" data-rowcolor title="Cor da linha" aria-label="Cor da linha"></button>` : ''}${cell(r, c)}</td>`).join('')}<td><button type="button" class="icon-btn sm" data-rmrow aria-label="Apagar linha">${ICON.close}</button></td></tr>`).join('')}</tbody></table>
-      <div class="row wrap-gap"><button type="button" class="link-btn" data-addrow>${ICON.plus} Linha</button><span class="muted small"><kbd>Alt</kbd>+<kbd>↓</kbd> linha e <kbd>Alt</kbd>+<kbd>→</kbd> coluna onde está o rato · cor da linha no ponto à esquerda · cor da coluna clicando no nome</span></div>
+      <tbody>${data.rows.map((r) => `<tr data-row="${r.id}" class="${r.color ? 'has-rc' : ''}"${rowStyle(r)}>${data.columns.map((c, i) => `<td class="t-${c.type} ${c.color ? 'has-cc' : ''} ${i === 0 ? 'rd-cell' : ''}" data-colid="${c.id}"${colStyle(c)}>${i === 0 ? `<span class="row-n" aria-hidden="true">${data.rows.indexOf(r) + 1}</span><button type="button" class="row-dot" data-rowcolor title="Cor da linha" aria-label="Cor da linha"></button>` : ''}${cell(r, c)}</td>`).join('')}<td class="row-act">${GRIP()}<button type="button" class="icon-btn sm" data-rmrow aria-label="Apagar linha">${ICON.close}</button></td></tr>`).join('')}</tbody></table>
+      <div class="row wrap-gap"><button type="button" class="link-btn" data-addrow>${ICON.plus} Linha</button><button type="button" class="link-btn" data-addcol>${ICON.plus} Coluna</button><span class="muted small"><kbd>Alt</kbd>+<kbd>↓</kbd> linha e <kbd>Alt</kbd>+<kbd>→</kbd> coluna onde está o rato · cor da linha no ponto à esquerda · cor da coluna clicando no nome</span></div>
       <p class="muted small f-help">${esc(HELP)}</p>`;
     const at = (id) => { const i = data.rows.findIndex((x) => x.id === id); return i < 0 ? data.rows.length - 1 : i; };
     const insRow = (i) => { snap('juntar linha'); const r = { id: uid(), cells: {} }; data.rows.splice(i, 0, r); draw(); save(); main.querySelector(`[data-row="${r.id}"] [data-c]`)?.focus(); };
     const insCol = (id, side) => { snap('juntar coluna'); const i = data.columns.findIndex((c) => c.id === id); const c = { id: uid(), name: 'Nova coluna', type: 'text' }; data.columns.splice(i < 0 ? data.columns.length : i + side, 0, c); draw(); save(); colForm(c, true); };
     hist.watch(main.querySelector('table.sheet'));
+    rowDrag(main.querySelector('table.sheet tbody'), (id, to, after) => { snap('mover linha'); if (moveInList(data.rows, id, to, after)) { draw(); save(); } });
     tableShortcuts(main.querySelector('table.sheet'), { rowBelow: (id) => insRow(at(id) + 1), rowAbove: (id) => insRow(Math.max(0, at(id))), colRight: (id) => insCol(id, 1), colLeft: (id) => insCol(id, 0) });
   }
   bindUndoKeys(main, hist);
@@ -158,6 +163,7 @@ export function tableTool(main, p, tool) {
     const m = modal(`<h2>${isNew ? 'Nova coluna' : 'Coluna'}</h2><form class="stack">
       <div class="field"><label for="cn">Nome</label><input id="cn" value="${esc(c.name)}" required></div>
       <div class="field"><label for="ct">Tipo</label><select id="ct">${[['text', 'Texto'], ['number', 'Número'], ['date', 'Data'], ['check', 'Visto']].map(([k, v]) => `<option value="${k}" ${c.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+      ${isNew ? '' : '<div class="field"><span class="label">Posição</span><div class="row wrap-gap"><button type="button" class="btn ghost sm" data-cmove="-1">← Para a esquerda</button><button type="button" class="btn ghost sm" data-cmove="1">Para a direita →</button></div></div>'}
       ${colorField(c.color)}
       <div class="row between">${isNew ? '<span></span>' : `<button type="button" class="btn ghost danger-text" data-del>${ICON.trash} Apagar coluna</button>`}<div class="row"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Guardar</button></div></div></form>`);
     bindColorField(m.el);
@@ -167,6 +173,7 @@ export function tableTool(main, p, tool) {
       const col = readColor(m.el); if (col) c.color = col; else delete c.color;
       if (isNew) data.columns.push(c); m.close(); draw(); save();
     });
+    m.el.querySelectorAll('[data-cmove]').forEach((bt) => bt.addEventListener('click', () => { const i = data.columns.indexOf(c), j = i + Number(bt.dataset.cmove); if (i < 0 || j < 0 || j >= data.columns.length) return; snap('mover coluna'); [data.columns[i], data.columns[j]] = [data.columns[j], data.columns[i]]; draw(); save(); }));
     m.el.querySelector('[data-del]')?.addEventListener('click', async () => {
       m.close(); if (!(await confirmBox(`Apagar a coluna "${c.name}"?`, 'Apagar'))) return;
       snap('apagar coluna'); data.columns = data.columns.filter((x) => x.id !== c.id); draw(); save();
