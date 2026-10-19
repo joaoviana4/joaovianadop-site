@@ -2706,3 +2706,19 @@ tr.row-dragging { opacity: .45; }
 .pm-tpop li a:hover { background: rgba(127, 127, 127, .08); }
 .pm-tpop .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
 .pm-tpop .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-pills { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 4px; }
+.pm-pills .pm-tasks { margin-top: 0; }
+.pm-qi { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid currentColor; font-size: 11px; font-weight: 800; line-height: 1; }
+.pm-q.has { border-color: #FFD27A; }
+.pm-q.has span, .pm-q.has .pm-qi { color: #FFE2A8; }
+.pq-pop { width: min(480px, calc(100vw - 24px)); }
+.pq-add { display: grid; gap: 8px; }
+.pq-add input { width: 100%; }
+.pq-meta { display: none; gap: 8px; }
+.pq-add:focus-within .pq-meta, .pq-add:has(input:not(:placeholder-shown)) .pq-meta { display: flex; }
+.pq-meta select { flex: 1 1 0; min-width: 0; }
+.pq-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.pq-list li { display: flex; align-items: flex-start; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.pq-main { flex: 1; display: grid; gap: 2px; font-size: 14px; }
+.pq-main small { font-size: 12px; }
+.pq-list.done .pq-main > span { text-decoration: line-through; color: var(--muted); }

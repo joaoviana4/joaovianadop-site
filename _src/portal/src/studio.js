@@ -14,7 +14,7 @@ import { TOOL_KINDS, tableTool, timelineTool, tableTemplate } from './tools.js';
 import { isFolder, loadChildren, rollup, childrenSection, budgetChildrenPanel } from './folders.js';
 import { mountTaskCenter } from './taskcenter.js';
 import { clipPage, CLIP_PAGES, mediaTool } from './music.js';
-import { mountSituation, situationData } from './overview.js';
+import { mountSituation, situationData, questionsButton } from './overview.js';
 import { clearFullscreen } from './layout.js';
 import { newLightmapData } from './lmdata.js';
 // páginas pesadas só carregam quando são abertas (o site arranca mais depressa)
@@ -1121,7 +1121,7 @@ async function projectOverview(main, p) {
         <h1 class="pm-name">${esc(p.name)}</h1>
         <p class="pm-sub">${[p.client, p.starts_on && p.ends_on ? `${fmtDate(p.starts_on)} – ${fmtDate(p.ends_on)}` : ''].filter(Boolean).map(esc).join(' · ')}</p>
         ${!p.is_central ? `<div class="pm-leads" data-leads></div>` : ''}
-        ${!p.is_central ? (() => { const n = tasks.length, all = (allTasks || []).length, late = tasks.filter((t) => t.due && t.due < todayISO()).length; return `<button type="button" class="pm-tasks ${late ? 'late' : ''}" data-pmtasks aria-expanded="false" aria-haspopup="true" title="Ver as tarefas do projeto">${ICON.task}<span>${n ? `Tem ${n} ${n === 1 ? 'tarefa' : 'tarefas'}` : all ? 'Tarefas todas feitas' : 'Sem tarefas'}${late ? ` · ${late} ${late === 1 ? 'atrasada' : 'atrasadas'}` : ''}</span>${all ? `<i class="pm-tbar" aria-hidden="true"><b style="width:${Math.round(((all - n) / all) * 100)}%"></b></i>` : ''}</button>`; })() : ''}
+        ${!p.is_central ? (() => { const n = tasks.length, all = (allTasks || []).length, late = tasks.filter((t) => t.due && t.due < todayISO()).length; return `<div class="pm-pills"><button type="button" class="pm-tasks ${late ? 'late' : ''}" data-pmtasks aria-expanded="false" aria-haspopup="true" title="Ver as tarefas do projeto">${ICON.task}<span>${n ? `Tem ${n} ${n === 1 ? 'tarefa' : 'tarefas'}` : all ? 'Tarefas todas feitas' : 'Sem tarefas'}${late ? ` · ${late} ${late === 1 ? 'atrasada' : 'atrasadas'}` : ''}</span>${all ? `<i class="pm-tbar" aria-hidden="true"><b style="width:${Math.round(((all - n) / all) * 100)}%"></b></i>` : ''}</button><button type="button" class="pm-tasks pm-q" data-pmq aria-expanded="false" aria-haspopup="true" title="Questões do projeto: o que ainda está por decidir"><b class="pm-qi" aria-hidden="true">?</b><span>Questões</span></button></div>`; })() : ''}
         ${p.canBudget && hasMod(p, 'orcamento') ? (() => { const used = budgetUsed(p) + (p._kidsAlloc || 0); const over = p.value != null && used > p.value; return `<button type="button" class="pm-budget ${over ? 'over' : ''}" data-budget title="Só quem tem acesso ao orçamento vê isto"><span>${ICON.lock} Orçamento${p._approvedAt ? ' <em class="appr">✓ aprovado</em>' : ''}</span>${p.value != null ? `<strong>${eur.format(p.value)}</strong>${used ? `<small>${eur.format(used)} na tabela${over ? ` · ${eur.format(used - p.value)} acima` : ''}</small>` : ''}` : '<strong class="muted-w">Definir</strong>'}</button>`; })() : ''}
         ${ph.label || p.stage ? `<div class="pm-phase"><div class="row between small"><span>${esc(p.stage ? phaseLabel(p.stage) : ph.label)}</span><span>${Math.round(ph.pct * 100)}%</span></div><div class="bar light"><i style="width:${Math.round(ph.pct * 100)}%"></i></div></div>` : ''}
       </div>
@@ -1188,6 +1188,7 @@ async function projectOverview(main, p) {
     pop.querySelector('[data-newt]').addEventListener('click', () => { close(); addTaskModal({ projectId: p.id, departments: p.departments || [], entity: null, where: '' }); });
   });
   onCleanup(() => document.querySelector('.pm-tpop')?.remove());
+  { const qb = main.querySelector('[data-pmq]'); if (qb) { const q = questionsButton(qb, p); onCleanup(() => q.close()); } }
   const leadsEl = main.querySelector('[data-leads]');
   if (leadsEl) drawLeads(leadsEl, p);
   if (p.is_central) { const box = document.createElement('div'); box.className = 'co'; main.querySelector('.pm-head').after(box); centralOverview(box); }

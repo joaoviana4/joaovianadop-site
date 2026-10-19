@@ -1,4 +1,4 @@
-import { sb, esc, toast, modal, ICON, dueInfo, fmtDate, initials, daysUntil, todayISO, state } from './lib.js';
+import { sb, esc, toast, modal, confirmBox, ICON, dueInfo, fmtDate, initials, daysUntil, todayISO, state } from './lib.js';
 import { loadPeople } from './tasks.js';
 import { PROP_STATUS } from './propstatus.js';
 import { trackHtml, musicStats } from './music.js';
@@ -128,7 +128,6 @@ export async function mountSituation(box, p, base, { onChange } = {}) {
       <div data-blk="kpis"><div class="ov-kpis">
         <a class="ov-kpi ${late.length ? 'warn' : ''}" href="${base}/tarefas"><span class="k-ic">${ICON.task}</span><strong>${open.length}</strong><span>${open.length === 1 ? 'tarefa por fazer' : 'tarefas por fazer'}</span>${late.length ? `<em>${plural(late.length, 'atrasada', 'atrasadas')}</em>` : all.length ? `<em class="ok">${all.length - open.length} de ${all.length} feitas</em>` : ''}</a>
         ${withProps ? `<a class="ov-kpi ${missing.length ? 'warn' : ''}" href="${base}/aderecos"><span class="k-ic">${ICON.prop}</span><strong>${missing.length}</strong><span>${missing.length === 1 ? 'adereço em falta' : 'adereços em falta'}</span>${P.length ? `<em class="${missing.length ? '' : 'ok'}">${P.length - missing.length} de ${P.length} prontos</em>` : '<em>sem lista ainda</em>'}</a>` : ''}
-        <a class="ov-kpi ${qOpen.length ? 'warn' : ''}" href="#ov-q" data-jump><span class="k-ic">${ICON.question}</span><strong>${qOpen.length}</strong><span>${qOpen.length === 1 ? 'questão por decidir' : 'questões por decidir'}</span>${qDone.length ? `<em class="ok">${plural(qDone.length, 'resolvida', 'resolvidas')}</em>` : ''}</a>
         <div class="ov-kpi ${mile.late ? 'warn' : ''}"><span class="k-ic">${ICON.calendar || ICON.clock || ICON.task}</span><strong>${esc(mile.big)}</strong><span>${esc(mile.label)}</span></div>
         ${ms ? `<a class="ov-kpi" href="${base}/seguimento"><span class="k-ic">${ICON.music}</span><strong>${ms.scenes.length}</strong><span>${ms.scenes.length === 1 ? 'secção no seguimento' : 'secções no seguimento'}</span><em>${plural(ms.shots, 'plano', 'planos')}</em></a>` : ''}
       </div></div>
@@ -149,23 +148,6 @@ export async function mountSituation(box, p, base, { onChange } = {}) {
           ${depts.length ? `<div data-blk="depts"><section class="panel"><h2 class="h3">Por departamento</h2><ul class="ov-depts">${depts.map((d) => { const dt = all.filter((t) => t.department === d.id); const done = dt.filter((t) => t.status === 'done').length; const q = qOpen.filter((x) => x.department === d.id).length;
               return `<li style="--g:${esc(d.color)}"><div class="row between small"><span><i class="dot"></i>${esc(d.name)}</span><span class="muted">${dt.length ? `${done}/${dt.length}` : '—'}${q ? ` · ${plural(q, 'questão', 'questões')}` : ''}</span></div><div class="bar"><i style="width:${dt.length ? Math.round((done / dt.length) * 100) : 0}%"></i></div></li>`; }).join('')}</ul></section></div>` : ''}
 
-        <div data-blk="questions"><section class="panel ov-q" id="ov-q">
-          <div class="row between"><h2 class="h3">Questões de produção</h2><span class="muted small">o que ainda está por decidir</span></div>
-          <form class="ov-qadd" data-qadd>
-            <input name="text" placeholder="ex: Licença para filmar na rua? Confirmar o cão no set?" aria-label="Nova questão" autocomplete="off" required>
-            ${depts.length ? `<select name="department" aria-label="Departamento"><option value="">Departamento</option>${depts.map((d) => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</select>` : ''}
-            <select name="owner_id" aria-label="Quem trata"><option value="">Quem trata</option>${staff.map((x) => `<option value="${x.id}">${esc(x.display_name)}</option>`).join('')}</select>
-            <button class="btn primary" aria-label="Juntar questão">${ICON.plus}</button>
-          </form>
-          ${qOpen.length ? `<ul class="ov-qs">${qOpen.map((q) => { const d = deptOf(q.department); const o = people.find((x) => x.id === q.owner_id); return `<li data-q="${q.id}">
-              <button type="button" class="q-check" data-qact="resolve" aria-label="Marcar como resolvida">${ICON.circle || ''}</button>
-              <span class="q-main"><span class="q-text">${esc(q.text)}</span><span class="q-meta">${d ? `<span class="t-dept" style="--dept:${esc(d.color)}"><i></i>${esc(d.name)}</span>` : ''}<span class="muted small">${fmtDate(q.created_at)}</span></span></span>
-              ${av(o)}
-              <button type="button" class="icon-btn sm" data-qact="del" aria-label="Apagar questão">${ICON.trash}</button></li>`; }).join('')}</ul>`
-          : `<p class="muted small">${qDone.length ? 'Nada por decidir.' : 'Aponta aqui o que ainda tem de ser resolvido: autorizações, décors por confirmar, transportes, horários, dúvidas para o cliente…'}</p>`}
-          ${qDone.length ? `<button type="button" class="link-btn" data-qact="toggle">${st.showResolved ? 'Esconder' : 'Ver'} as resolvidas (${qDone.length})</button>
-            ${st.showResolved ? `<ul class="ov-qs done">${qDone.map((q) => `<li data-q="${q.id}"><button type="button" class="q-check on" data-qact="reopen" aria-label="Reabrir">${ICON.done || '✓'}</button><span class="q-main"><span class="q-text">${esc(q.text)}</span>${q.answer ? `<span class="q-ans">${esc(q.answer)}</span>` : ''}<span class="muted small">Resolvida a ${fmtDate(q.resolved_at)}</span></span></li>`).join('')}</ul>` : ''}` : ''}
-        </section></div>
 
         ${withProps ? `<div data-blk="props"><section class="panel ov-props">
           <div class="row between"><h2 class="h3">Adereços em falta</h2><a class="small" href="${base}/aderecos">Todos os adereços</a></div>
@@ -177,7 +159,7 @@ export async function mountSituation(box, p, base, { onChange } = {}) {
     mountLayout(box.querySelector('[data-lay]'), { project: p, key: 'overview', title: 'vista geral', blocks: [
       { id: 'prog', label: 'Progresso', pos: 'full' }, { id: 'mapa', label: 'Mapa de rodagem', pos: 'full' }, { id: 'kpis', label: 'Números do projeto', pos: 'full' }, { id: 'music', label: 'Seguimento', pos: 'full' },
       { id: 'who', label: 'Quem tem o quê', pos: 'left' }, { id: 'crono', label: 'Cronograma', pos: 'right' }, { id: 'depts', label: 'Por departamento', pos: 'right' },
-      { id: 'questions', label: 'Questões de produção', pos: 'left' }, { id: 'props', label: 'Adereços em falta', pos: 'right' },
+      { id: 'props', label: 'Adereços em falta', pos: 'right' },
     ] });
     bind();
   };
@@ -185,7 +167,7 @@ export async function mountSituation(box, p, base, { onChange } = {}) {
   const bind = () => {
     box.querySelectorAll('[data-rday]').forEach((a) => a.addEventListener('click', () => { try { localStorage.setItem(`bg-rod:${p.id}`, a.dataset.rday); } catch { /* nada */ } }));
     box.querySelector('[data-jump]')?.addEventListener('click', (e) => { e.preventDefault(); box.querySelector('#ov-q')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); box.querySelector('[data-qadd] input')?.focus({ preventScroll: true }); });
-    box.querySelector('[data-qadd]').addEventListener('submit', async (e) => {
+    box.querySelector('[data-qadd]')?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const f = Object.fromEntries(new FormData(e.target));
       if (!f.text.trim()) return;
@@ -216,3 +198,67 @@ export async function mountSituation(box, p, base, { onChange } = {}) {
 }
 
 export { state };
+
+// ---------- questões do projeto: botão "?" no banner, com a lista num painel ----------
+// o que ainda está por decidir (autorizações, décors por confirmar, dúvidas para o cliente…): qualquer pessoa pergunta,
+// quem trata marca como resolvida e escreve o que ficou decidido.
+export function questionsButton(btn, p) {
+  let qs = [], people = [], showDone = false, pop = null;
+  const depts = p.departments || [];
+  const deptOf = (id) => depts.find((d) => d.id === id);
+  const label = () => { const n = qs.filter((q) => !q.resolved_at).length; btn.querySelector('span').textContent = n ? `${n} ${n === 1 ? 'questão' : 'questões'}` : 'Questões'; btn.classList.toggle('has', n > 0); };
+  const load = async () => { const [{ data }, pp] = await Promise.all([sb.from('project_questions').select('*').eq('project_id', p.id).order('created_at'), loadPeople()]); qs = data || []; people = pp; label(); if (pop) draw(); };
+  const close = () => { pop?.remove(); pop = null; btn.setAttribute('aria-expanded', 'false'); document.removeEventListener('pointerdown', out, true); document.removeEventListener('keydown', key, true); };
+  const out = (e) => { if (pop && !pop.contains(e.target) && !btn.contains(e.target) && !e.target.closest('#modal')) close(); };
+  const key = (e) => { if (e.key === 'Escape' && !document.querySelector('#modal.open')) close(); };
+  const place = () => { const r = btn.getBoundingClientRect(); pop.style.top = `${r.bottom + 8}px`; pop.style.left = `${Math.max(12, Math.min(window.innerWidth - pop.offsetWidth - 12, r.left))}px`; };
+  const draw = () => {
+    const open = qs.filter((q) => !q.resolved_at), done = qs.filter((q) => q.resolved_at);
+    const staff = people.filter((x) => x.role !== 'guest');
+    pop.innerHTML = `<div class="row between"><strong>Questões do projeto</strong><button type="button" class="icon-btn sm" data-x aria-label="Fechar">${ICON.close}</button></div>
+      <form class="pq-add" data-add><input name="text" placeholder="Escreve uma questão e carrega Enter" aria-label="Nova questão" autocomplete="off" required>
+        <div class="pq-meta">${depts.length ? `<select name="department" aria-label="Departamento"><option value="">Departamento</option>${depts.map((d) => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</select>` : ''}
+        <select name="owner_id" aria-label="Quem trata"><option value="">Quem trata</option>${staff.map((x) => `<option value="${x.id}">${esc(x.display_name)}</option>`).join('')}</select><button class="btn primary sm">Juntar</button></div></form>
+      ${open.length ? `<ul class="pq-list">${open.map((q) => { const d = deptOf(q.department); const o = people.find((x) => x.id === q.owner_id); return `<li data-q="${q.id}">
+          <button type="button" class="q-check" data-qa="resolve" title="Marcar como resolvida" aria-label="Marcar como resolvida">${ICON.circle || ''}</button>
+          <span class="pq-main"><span>${esc(q.text)}</span><small class="muted">${[d?.name, o?.display_name, fmtDate(q.created_at)].filter(Boolean).map(esc).join(' · ')}</small></span>
+          <button type="button" class="icon-btn sm" data-qa="del" aria-label="Apagar questão">${ICON.trash}</button></li>`; }).join('')}</ul>`
+        : `<p class="muted small">${done.length ? 'Nada por decidir.' : 'Ainda não há questões. Aponta aqui autorizações, décors por confirmar, transportes, dúvidas para o cliente…'}</p>`}
+      ${done.length ? `<button type="button" class="link-btn small" data-qa="toggle">${showDone ? 'Esconder' : 'Ver'} as resolvidas (${done.length})</button>
+        ${showDone ? `<ul class="pq-list done">${done.map((q) => `<li data-q="${q.id}"><button type="button" class="q-check on" data-qa="reopen" aria-label="Reabrir">${ICON.done || '✓'}</button><span class="pq-main"><span>${esc(q.text)}</span>${q.answer ? `<small>${esc(q.answer)}</small>` : ''}<small class="muted">Resolvida a ${fmtDate(q.resolved_at)}</small></span></li>`).join('')}</ul>` : ''}` : ''}`;
+    place();
+    pop.querySelector('[data-x]').addEventListener('click', close);
+    const f = pop.querySelector('[data-add]');
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault(); const v = Object.fromEntries(new FormData(f)); if (!v.text.trim()) return;
+      const { data, error } = await sb.from('project_questions').insert({ project_id: p.id, text: v.text.trim(), department: v.department || null, owner_id: v.owner_id || null }).select().single();
+      if (error) return toast(error.message);
+      qs.push(data); label(); draw(); pop.querySelector('[data-add] input').focus();
+    });
+    pop.querySelectorAll('[data-qa]').forEach((b) => b.addEventListener('click', async () => {
+      const act = b.dataset.qa;
+      if (act === 'toggle') { showDone = !showDone; return draw(); }
+      const q = qs.find((x) => x.id === b.closest('[data-q]')?.dataset.q); if (!q) return;
+      if (act === 'del') { if (!(await confirmBox(`Apagar a questão "${q.text}"?`, 'Apagar'))) return; const { error } = await sb.from('project_questions').delete().eq('id', q.id); if (error) return toast(error.message); qs.splice(qs.indexOf(q), 1); label(); return draw(); }
+      if (act === 'reopen') { const { error } = await sb.from('project_questions').update({ resolved_at: null }).eq('id', q.id); if (error) return toast(error.message); q.resolved_at = null; label(); return draw(); }
+      const m = modal(`<h2>Resolvida</h2><p class="muted">${esc(q.text)}</p><form class="stack"><div class="field"><label for="qa">O que ficou decidido (opcional)</label><textarea id="qa" rows="3" placeholder="ex: Licença pedida à câmara, chega dia 20."></textarea></div><div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Marcar como resolvida</button></div></form>`);
+      m.el.querySelector('form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const patch = { resolved_at: new Date().toISOString(), answer: m.el.querySelector('#qa').value.trim() || null };
+        const { error } = await sb.from('project_questions').update(patch).eq('id', q.id);
+        if (error) return toast(error.message);
+        Object.assign(q, patch); m.close(); label(); draw(); toast('Resolvida. Fica em "Ver as resolvidas".');
+      });
+    }));
+  };
+  btn.addEventListener('click', () => {
+    if (pop) return close();
+    document.querySelector('.pm-tpop')?.remove();
+    pop = document.createElement('div'); pop.className = 'pm-tpop pq-pop'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', 'Questões do projeto');
+    document.body.append(pop); btn.setAttribute('aria-expanded', 'true'); draw();
+    setTimeout(() => { document.addEventListener('pointerdown', out, true); document.addEventListener('keydown', key, true); });
+    pop.querySelector('[data-add] input').focus();
+  });
+  load();
+  return { close };
+}
