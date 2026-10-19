@@ -36,6 +36,35 @@ export function currentPhase(p) {
   return l === 'Pré-produção' ? 'pre' : l === 'Produção' ? 'prod' : l.startsWith('Pós-produção') ? 'pos' : null;
 }
 
+// a fase que se está a ver ainda não chegou? (fase escolhida depois da fase atual do projeto)
+function curIndex(p) {
+  const list = phasesFor(p); const cur = currentPhase(p);
+  if (cur) return list.findIndex(([k]) => k === cur);
+  return p.starts_on && p.ends_on && phaseOf(p).pct >= 1 ? list.findIndex(([k]) => k === 'pos') : 0; // sem datas ou ainda não começou: pré-produção
+}
+export function aheadOf(p) {
+  const s = selPhase(p); if (s === 'all') return null;
+  const list = phasesFor(p); const i = list.findIndex(([k]) => k === s); const ci = curIndex(p);
+  return i > ci ? { sel: s, cur: list[ci]?.[0] || 'pre' } : null;
+}
+export function aheadNotice(p) {
+  const a = aheadOf(p); if (!a) return '';
+  return `<section class="ahead-note" role="status"><div class="an-ic">${ICON.lock || ''}</div><div class="an-t">
+      <h2>O projeto ainda não se encontra em ${esc(phaseLabel(a.sel).toLowerCase())}.</h2>
+      <p class="muted">Neste momento está em <b>${esc(phaseLabel(a.cur).toLowerCase())}</b>. Quando chegar a esta etapa, as ferramentas de ${esc(phaseLabel(a.sel).toLowerCase())} aparecem aqui.</p>
+      <div class="row wrap-gap"><button type="button" class="btn ghost" data-ahead-go="${a.cur}">Ver ${esc(phaseLabel(a.cur).toLowerCase())}</button>${p.canEdit !== false ? `<button type="button" class="btn primary" data-ahead-set="${a.sel}">Passar o projeto para ${esc(phaseLabel(a.sel).toLowerCase())}</button>` : ''}</div>
+    </div></section>`;
+}
+export function bindAhead(root, p, onChange) {
+  root.querySelectorAll('[data-ahead-go]').forEach((b) => b.addEventListener('click', () => { setSelPhase(p, b.dataset.aheadGo); onChange(); }));
+  root.querySelectorAll('[data-ahead-set]').forEach((b) => b.addEventListener('click', async () => {
+    const stage = b.dataset.aheadSet;
+    const { error } = await sb.from('projects').update({ stage }).eq('id', p.id);
+    if (error) return toast(error.message);
+    p.stage = stage; toast(`O projeto passou para ${phaseLabel(stage).toLowerCase()}.`); onChange();
+  }));
+}
+
 // barra do projeto, por baixo do cabeçalho em todas as páginas do projeto: nome + etapas como barra de progresso
 const SPAN = { pre: [0, 1 / 3], prod: [1 / 3, 2 / 3], pos: [2 / 3, 1] };
 export function projectStrip(p, base) {
