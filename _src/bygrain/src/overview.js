@@ -128,7 +128,6 @@ export async function mountSituation(box, p, base, { onChange } = {}) {
       </section></div>
       ${inProd ? `<div data-blk="mapa">${shootMap(shoot, base)}</div>` : ''}
       <div data-blk="kpis"><div class="ov-kpis">
-        <a class="ov-kpi ${late.length ? 'warn' : ''}" href="${base}/tarefas"><span class="k-ic">${ICON.task}</span><strong>${open.length}</strong><span>${open.length === 1 ? 'tarefa por fazer' : 'tarefas por fazer'}</span>${late.length ? `<em>${plural(late.length, 'atrasada', 'atrasadas')}</em>` : all.length ? `<em class="ok">${all.length - open.length} de ${all.length} feitas</em>` : ''}</a>
         ${withProps ? `<a class="ov-kpi ${missing.length ? 'warn' : ''}" href="${base}/aderecos"><span class="k-ic">${ICON.prop}</span><strong>${missing.length}</strong><span>${missing.length === 1 ? 'adereço em falta' : 'adereços em falta'}</span>${P.length ? `<em class="${missing.length ? '' : 'ok'}">${P.length - missing.length} de ${P.length} prontos</em>` : '<em>sem lista ainda</em>'}</a>` : ''}
         <a class="ov-kpi ${qOpen.length ? 'warn' : ''}" href="#ov-q" data-jump><span class="k-ic">${ICON.question}</span><strong>${qOpen.length}</strong><span>${qOpen.length === 1 ? 'questão por decidir' : 'questões por decidir'}</span>${qDone.length ? `<em class="ok">${plural(qDone.length, 'resolvida', 'resolvidas')}</em>` : ''}</a>
         <div class="ov-kpi ${mile.late ? 'warn' : ''}"><span class="k-ic">${ICON.calendar || ICON.clock || ICON.task}</span><strong>${esc(mile.big)}</strong><span>${esc(mile.label)}</span></div>
@@ -144,32 +143,33 @@ export async function mountSituation(box, p, base, { onChange } = {}) {
               <div class="ovp-h">${av(who)}<strong>${uid ? esc(who?.display_name || 'Alguém') : 'Sem responsável'}</strong><span class="muted small">${plural(list.length, 'por fazer', 'por fazer')}</span>${l ? `<span class="due due-late">${plural(l, 'atrasada', 'atrasadas')}</span>` : ''}</div>
               <ul class="ovp-t">${sorted.slice(0, 3).map((t) => { const du = dueInfo(t.due, t.status); const d = deptOf(t.department); return `<li><a href="${base}/tarefas">${d ? `<i class="dot" style="--g:${esc(d.color)}"></i>` : '<i class="dot"></i>'}<span>${esc(t.title)}</span><span class="due due-${du.tone}">${esc(du.label)}</span></a></li>`; }).join('')}${sorted.length > 3 ? `<li class="muted small">e mais ${sorted.length - 3}…</li>` : ''}</ul>
             </li>`; }).join('')}</ul>`
-          : `<div class="empty-box sm"><p>${all.length ? 'Está tudo feito.' : 'Ainda não há tarefas.'}</p><a class="btn ghost" href="${base}/tarefas">${ICON.plus} Distribuir tarefas</a></div>`}
+          : `<p class="muted small ov-empty">${all.length ? 'Está tudo feito.' : 'Ainda não há tarefas.'} <a href="${base}/tarefas">${all.length ? 'Ver tarefas' : 'Distribuir tarefas'}</a></p>`}
         </section></div>
 
         <div data-blk="crono"><section class="panel"><h2 class="h3">Cronograma</h2>${timelineHtml(p, phases, tl?.[0]?.data?.items || [])}</section></div>
-          ${depts.length ? `<div data-blk="depts"><section class="panel"><h2 class="h3">Por departamento</h2><ul class="ov-depts">${depts.map((d) => { const dt = all.filter((t) => t.department === d.id); const done = dt.filter((t) => t.status === 'done').length; const q = qOpen.filter((x) => x.department === d.id).length;
+          ${depts.some((d) => all.some((t) => t.department === d.id) || qOpen.some((x) => x.department === d.id)) ? `<div data-blk="depts"><section class="panel"><h2 class="h3">Por departamento</h2><ul class="ov-depts">${depts.filter((d) => all.some((t) => t.department === d.id) || qOpen.some((x) => x.department === d.id)).map((d) => { const dt = all.filter((t) => t.department === d.id); const done = dt.filter((t) => t.status === 'done').length; const q = qOpen.filter((x) => x.department === d.id).length;
               return `<li style="--g:${esc(d.color)}"><div class="row between small"><span><i class="dot"></i>${esc(d.name)}</span><span class="muted">${dt.length ? `${done}/${dt.length}` : '—'}${q ? ` · ${plural(q, 'questão', 'questões')}` : ''}</span></div><div class="bar"><i style="width:${dt.length ? Math.round((done / dt.length) * 100) : 0}%"></i></div></li>`; }).join('')}</ul></section></div>` : ''}
 
         <div data-blk="questions"><section class="panel ov-q" id="ov-q">
           <div class="row between"><h2 class="h3">Questões de produção</h2><span class="muted small">o que ainda está por decidir</span></div>
           <form class="ov-qadd" data-qadd>
-            <input name="text" placeholder="ex: Licença para filmar na rua? Confirmar o cão no set?" aria-label="Nova questão" autocomplete="off" required>
+            <input name="text" placeholder="+ Juntar questão (ex: licença para filmar na rua?) e Enter" aria-label="Nova questão" autocomplete="off" required>
+            <div class="ov-qmeta">
             ${depts.length ? `<select name="department" aria-label="Departamento"><option value="">Departamento</option>${depts.map((d) => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</select>` : ''}
             <select name="owner_id" aria-label="Quem trata"><option value="">Quem trata</option>${staff.map((x) => `<option value="${x.id}">${esc(x.display_name)}</option>`).join('')}</select>
-            <button class="btn primary" aria-label="Juntar questão">${ICON.plus}</button>
+            <button class="btn primary sm">Juntar</button></div>
           </form>
           ${qOpen.length ? `<ul class="ov-qs">${qOpen.map((q) => { const d = deptOf(q.department); const o = people.find((x) => x.id === q.owner_id); return `<li data-q="${q.id}">
               <button type="button" class="q-check" data-qact="resolve" aria-label="Marcar como resolvida">${ICON.circle || ''}</button>
               <span class="q-main"><span class="q-text">${esc(q.text)}</span><span class="q-meta">${d ? `<span class="t-dept" style="--dept:${esc(d.color)}"><i></i>${esc(d.name)}</span>` : ''}<span class="muted small">${fmtDate(q.created_at)}</span></span></span>
               ${av(o)}
               <button type="button" class="icon-btn sm" data-qact="del" aria-label="Apagar questão">${ICON.trash}</button></li>`; }).join('')}</ul>`
-          : `<p class="muted small">${qDone.length ? 'Nada por decidir.' : 'Aponta aqui o que ainda tem de ser resolvido: autorizações, décors por confirmar, transportes, horários, dúvidas para o cliente…'}</p>`}
+          : `<p class="muted small ov-empty">${qDone.length ? 'Nada por decidir.' : 'Autorizações, décors por confirmar, transportes, dúvidas para o cliente…'}</p>`}
           ${qDone.length ? `<button type="button" class="link-btn" data-qact="toggle">${st.showResolved ? 'Esconder' : 'Ver'} as resolvidas (${qDone.length})</button>
             ${st.showResolved ? `<ul class="ov-qs done">${qDone.map((q) => `<li data-q="${q.id}"><button type="button" class="q-check on" data-qact="reopen" aria-label="Reabrir">${ICON.done || '✓'}</button><span class="q-main"><span class="q-text">${esc(q.text)}</span>${q.answer ? `<span class="q-ans">${esc(q.answer)}</span>` : ''}<span class="muted small">Resolvida a ${fmtDate(q.resolved_at)}</span></span></li>`).join('')}</ul>` : ''}` : ''}
         </section></div>
 
-        ${withProps ? `<div data-blk="props"><section class="panel ov-props">
+        ${withProps && P.length ? `<div data-blk="props"><section class="panel ov-props">
           <div class="row between"><h2 class="h3">Adereços em falta</h2><a class="small" href="${base}/aderecos">Todos os adereços</a></div>
           ${P.length ? `<div class="bar ok"><i style="width:${Math.round(((P.length - missing.length) / P.length) * 100)}%"></i></div>
             ${missing.length ? `<ul class="ov-pl">${missing.slice(0, 8).map((x) => { const s = PROP_STATUS.find((y) => y[0] === x.status) || PROP_STATUS[0]; return `<li><a href="${base}/aderecos/${x.id}"><span>${esc(x.name)}</span><span class="pstat" style="--c:${s[2]}">${esc(s[1])}</span></a></li>`; }).join('')}${missing.length > 8 ? `<li class="muted small">e mais ${missing.length - 8}…</li>` : ''}</ul>` : '<p class="muted small">Está tudo pronto.</p>'}`

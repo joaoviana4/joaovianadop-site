@@ -725,7 +725,7 @@ async function ensureDept(p, key) {
   p.departments = deps; return key;
 }
 // ao lado do nome do projeto, na barra das etapas: "Só leitura" e o + das páginas (antes estavam no menu do lado)
-const stripExtra = (p) => `${p.canEdit === false ? '<span class="ro-badge" title="Podes ver tudo o que te está aberto, mas não mudar nada">Só leitura</span>' : ''}${isStaff() && p.canEdit !== false ? `<button type="button" class="icon-btn sm pn-mods" data-mods title="Páginas do projeto" aria-label="Juntar ou tirar páginas">${ICON.plus}</button>` : ''}`;
+const stripExtra = (p) => `${p.canEdit === false ? '<span class="ro-badge" title="Podes ver tudo o que te está aberto, mas não mudar nada">Só leitura</span>' : ''}`;
 function boardGroups(p) {
   // os mapas de luz não aparecem um a um: ficam todos na página "Mapas de luz" do departamento Imagem
   const top = p._boards.filter((b) => !b.parent_id && b.kind !== 'mkt' && b.kind !== 'wrd' && b.kind !== 'lightmap');
@@ -758,7 +758,7 @@ function projectNav(p, active) {
   return `
     ${p._parent ? `<a class="pn-parent" href="#/p/${p._parent.id}">${ICON.back}<span>${esc(p._parent.name)}</span></a>` : ''}
     ${p.is_central ? `<div class="pn-h"><div><strong>${esc(p.name)}</strong>${p.client ? `<span class="muted small">${esc(p.client)}</span>` : ''}</div>${p.canEdit === false ? '<span class="ro-badge" title="Podes ver tudo o que te está aberto, mas não mudar nada">Só leitura</span>' : ''}${!p.is_central && isStaff() && p.canEdit !== false ? `<button type="button" class="icon-btn sm pn-mods" data-mods title="Páginas do projeto" aria-label="Juntar ou tirar páginas">${ICON.plus}</button>` : ''}</div>` : ''}
-    <button type="button" class="pn-search" data-psearch title="Procurar no projeto (Ctrl+K)">${ICON.search}<span>Procurar</span><kbd>Ctrl K</kbd></button>
+    <div class="pn-searchrow"><button type="button" class="pn-search" data-psearch title="Procurar no projeto (Ctrl+K)">${ICON.search}<span>Procurar</span><kbd>Ctrl K</kbd></button>${!p.is_central && isStaff() && p.canEdit !== false ? `<button type="button" class="icon-btn pn-mods" data-mods title="Juntar páginas ao projeto" aria-label="Juntar páginas ao projeto">${ICON.plus}</button>` : ''}</div>
     <div class="pn-online" data-online></div>
     ${pages.map(([k, l, ic]) => `<a class="side-a" href="${base}${k === 'geral' ? '' : '/' + k}" ${active === k ? 'aria-current="page"' : ''}>${ic}<span>${l}</span></a>`).join('')}
     <div class="pn-sec"><span>Ferramentas</span>${p.canEdit !== false ? `<button type="button" class="icon-btn sm" data-newboard="" aria-label="Nova ferramenta">${ICON.plus}</button>` : ''}</div>

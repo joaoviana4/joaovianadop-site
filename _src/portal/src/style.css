@@ -2706,3 +2706,31 @@ tr:hover .row-grip, .row-grip:focus-visible { opacity: 1; }
 .row-grip:active { cursor: grabbing; }
 tr.row-dragging { opacity: .45; }
 .row-drop-line { position: fixed; height: 2px; background: var(--blue); z-index: 50; pointer-events: none; border-radius: 2px; }
+
+/* páginas de margem a margem: sem largura máxima, o conteúdo ocupa o ecrã todo */
+.wrap { max-width: none; }
+.proj-layout { max-width: none; margin: 0; flex-wrap: nowrap; }
+.proj-main { flex: 1 1 auto; }
+@media (max-width: 860px) { .proj-layout { flex-wrap: wrap; } }
+
+/* visão geral mais limpa: sem caixas, secções separadas por linhas finas */
+.ov .panel, .ov .ov-prog, .ov .ov-map { background: none; border: 0; border-top: 1px solid var(--line); border-radius: 0; padding: 18px 0 6px; box-shadow: none; }
+.ov .ov-kpis { gap: 0; border-top: 1px solid var(--line); }
+.ov .ov-kpi { background: none; border: 0; border-radius: 0; padding: 16px 20px 14px 0; }
+.ov .ov-kpi + .ov-kpi { border-left: 1px solid var(--line); padding-left: 20px; }
+.ov a.ov-kpi:hover { background: none; }
+.ov a.ov-kpi:hover strong { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px; }
+.ov .ov-kpi .k-ic { display: none; }
+.ov .panel > .row.between > h2.h3, .ov .panel > h2.h3, .ov .ov-pg strong { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600; }
+.ov .ov-pg a { text-decoration: none; }
+.ov form.ov-qadd { display: flex; flex-direction: column; gap: 8px; }
+.ov form.ov-qadd input { flex: none; border: 0; border-bottom: 1px dashed var(--line2); border-radius: 0; background: none; padding: 8px 0; min-height: 0; }
+.ov form.ov-qadd input:focus { outline: none; border-bottom-color: var(--text); }
+.ov .ov-qmeta { display: none; gap: 8px; align-items: center; }
+.ov form.ov-qadd:focus-within .ov-qmeta, .ov form.ov-qadd:has(input:not(:placeholder-shown)) .ov-qmeta { display: flex; }
+.ov .ov-qmeta select { flex: 1 1 0; min-width: 0; }
+.ov-empty { margin: 0; }
+.ov-empty a { margin-left: 6px; }
+.pn-searchrow { display: flex; gap: 6px; align-items: stretch; }
+.pn-searchrow .pn-search { flex: 1; min-width: 0; }
+.pn-searchrow .pn-mods { flex: none; width: 32px; height: auto; min-height: 0; border-radius: 8px; }
