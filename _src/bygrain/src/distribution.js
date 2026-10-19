@@ -33,7 +33,7 @@ export function distributionTool(main, p, tool) {
     const today = new Date().toISOString().slice(0, 10);
     const next = data.rows.filter((r) => r.deadline && r.deadline >= today && r.submission !== 'done').sort((a, b) => a.deadline.localeCompare(b.deadline))[0];
     main.innerHTML = `
-      <section class="panel dist-links"><div class="row between wrap-gap"><h2 class="h3">Onde está o filme</h2><button type="button" class="btn ghost sm" data-addlink>${ICON.plus} Linha</button></div>
+      <section class="panel dist-links"><div class="row between wrap-gap"><h2 class="h3">Dados do filme</h2><button type="button" class="btn ghost sm" data-addlink>${ICON.plus} Linha</button></div>
         <table class="table dist-lt"><tbody>${data.links.map((l, i) => `<tr data-link="${l.id}"><td class="dl-l"><input data-lk="label" value="${esc(l.label)}" placeholder="ex: Trailer, Filme, Press kit" aria-label="Nome do link"></td><td><input data-lk="url" value="${esc(l.url)}" placeholder="https://… (Vimeo, Drive, …)" aria-label="Link"></td>
           <td class="dl-a">${l.url ? `<a class="icon-btn sm" href="${esc(/^https?:/i.test(l.url) ? l.url : 'https://' + l.url)}" target="_blank" rel="noopener" title="Abrir">${ICON.open}</a><button type="button" class="icon-btn sm" data-copy="${i}" title="Copiar o link">${ICON.copy}</button>` : ''}<button type="button" class="icon-btn sm" data-rmlink="${l.id}" aria-label="Tirar">${ICON.close}</button></td></tr>`).join('')}</tbody></table></section>
       <div class="dist-sum">
