@@ -21,7 +21,7 @@ export async function shotPage(main, p, id, base, cleanup) {
     sb.from('shot_groups').select('id, name, color, position').eq('project_id', p.id).order('position'),
     sb.from('characters').select('id, name, actor, info').eq('project_id', p.id).order('position'),
   ]);
-  const { data: props } = await sb.from('props').select('id, name, type, scene_ids, removed').eq('project_id', p.id).order('name');
+  const { data: props } = await sb.from('props').select('id, name, type, category, scene_ids, removed').eq('project_id', p.id).order('name');
   const x = (shots || []).find((s) => s.id === id);
   if (!x) { main.innerHTML = `<p class="empty-note">Este plano já não existe.</p><a href="${base}/storyboard">Voltar ao storyboard</a>`; return; }
   // mesma ordem do storyboard: por secção/cena, depois pelos grupos da shotlist
@@ -117,18 +117,18 @@ export async function shotPage(main, p, id, base, cleanup) {
 function inPanel(el, x, scene, chars, props, base) {
   if (!el) return;
   const inScene = scene ? [...(scene.character_ids || []), ...(scene.extra_ids || [])] : [];
-  const sceneProps = scene ? props.filter((pr) => (pr.scene_ids || []).includes(scene.id)) : [];
+  const sceneProps = () => (scene ? props.filter((pr) => (pr.scene_ids || []).includes(scene.id)) : []);
   const save = async () => { const { error } = await sb.from('shots').update({ cast_ids: x.cast_ids || [], set_ids: x.set_ids || [], prop_ids: x.prop_ids || [], updated_at: new Date().toISOString() }).eq('id', x.id); if (error) toast(error.message); };
   const draw = () => {
     const cast = new Set(x.cast_ids || []); const set = new Set(x.set_ids || []); const pin = new Set(x.prop_ids || []);
     const ids = [...new Set([...inScene, ...cast, ...set])];
     const ppl = ids.map((id) => chars.find((c) => c.id === id)).filter(Boolean);
     const others = chars.filter((c) => !ids.includes(c.id));
-    const pls = [...new Map([...sceneProps, ...props.filter((pr) => pin.has(pr.id))].map((pr) => [pr.id, pr])).values()];
-    const otherProps = props.filter((pr) => !pls.some((y) => y.id === pr.id));
+    const pls = [...new Map([...sceneProps(), ...props.filter((pr) => pin.has(pr.id))].map((pr) => [pr.id, pr])).values()];
+    const otherProps = props.filter((pr) => !pls.some((y) => y.id === pr.id)).sort((a, b) => a.name.localeCompare(b.name, 'pt'));
     const st = (id) => (cast.has(id) ? 'frame' : set.has(id) ? 'set' : '');
-    el.innerHTML = `<div class="in-row"><span class="in-h">Personagens</span><div class="chips">${ppl.map((c) => `<button type="button" class="cp-chip ${st(c.id)}" data-cp="${c.id}" title="${st(c.id) === 'frame' ? 'Em plano' : st(c.id) === 'set' ? 'No set, fora de plano' : 'Não está neste plano'}${c.actor ? ` · ${esc(c.actor)}` : ''}">${esc(c.name)}${st(c.id) === 'set' ? ' <small>set</small>' : ''}</button>`).join('')}${others.length ? `<select class="in-add" data-cpadd aria-label="Juntar personagem"><option value="">+</option>${others.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select>` : ''}</div></div>
-      <div class="in-row"><span class="in-h">Adereços</span><div class="chips">${pls.map((pr) => `<button type="button" class="cp-chip prop ${pin.has(pr.id) ? 'frame' : ''}" data-pp="${pr.id}" title="${pin.has(pr.id) ? 'Neste plano' : 'Na cena, não neste plano'}">${esc(pr.name)}</button>`).join('') || '<span class="muted small">Sem adereços na cena.</span>'}${otherProps.length ? `<select class="in-add" data-ppadd aria-label="Juntar adereço"><option value="">+</option>${otherProps.map((pr) => `<option value="${pr.id}">${esc(pr.name)}</option>`).join('')}</select>` : ''}</div></div>
+    el.innerHTML = `<div class="in-row"><span class="in-h">Personagens</span><div class="chips">${ppl.map((c) => `<button type="button" class="cp-chip ${st(c.id)}" data-cp="${c.id}" title="${st(c.id) === 'frame' ? 'Em plano' : st(c.id) === 'set' ? 'No set, fora de plano' : 'Não está neste plano'}${c.actor ? ` · ${esc(c.actor)}` : ''}">${esc(c.name)}${st(c.id) === 'set' ? ' <small>set</small>' : ''}</button>`).join('')}${others.length ? `<button type="button" class="in-plus" data-cpadd aria-label="Juntar personagem" title="Juntar outra personagem">+</button>` : ''}</div></div>
+      <div class="in-row"><span class="in-h">Adereços</span><div class="chips">${pls.map((pr) => `<button type="button" class="cp-chip prop ${pin.has(pr.id) ? 'frame' : ''}" data-pp="${pr.id}" title="${pin.has(pr.id) ? 'Neste plano' : 'Na cena, não neste plano'}">${esc(pr.name)}</button>`).join('') || '<span class="muted small">Sem adereços na cena.</span>'}<button type="button" class="in-plus" data-ppadd aria-label="Juntar adereço" title="Procurar ou criar um adereço">+</button></div></div>
       <p class="muted small in-help">Carrega para marcar. Personagens: em plano → só no set → não está.</p>`;
     el.querySelectorAll('[data-cp]').forEach((b) => b.addEventListener('click', () => {
       const id = b.dataset.cp; const s0 = st(id);
@@ -137,8 +137,57 @@ function inPanel(el, x, scene, chars, props, base) {
       save(); draw();
     }));
     el.querySelectorAll('[data-pp]').forEach((b) => b.addEventListener('click', () => { const id = b.dataset.pp; x.prop_ids = pin.has(id) ? (x.prop_ids || []).filter((y) => y !== id) : [...(x.prop_ids || []), id]; save(); draw(); }));
-    el.querySelector('[data-cpadd]')?.addEventListener('change', (e) => { if (!e.target.value) return; x.cast_ids = [...(x.cast_ids || []), e.target.value]; save(); draw(); });
-    el.querySelector('[data-ppadd]')?.addEventListener('change', (e) => { if (!e.target.value) return; x.prop_ids = [...(x.prop_ids || []), e.target.value]; save(); draw(); });
+    el.querySelector('[data-cpadd]')?.addEventListener('click', (e) => picker(e.currentTarget, {
+      placeholder: 'Procurar personagem…', items: others.map((c) => ({ id: c.id, label: c.name, sub: [c.actor, c.info?.extra ? 'Figurante' : ''].filter(Boolean).join(' · ') })),
+      onPick: (id) => { x.cast_ids = [...(x.cast_ids || []), id]; save(); draw(); },
+    }));
+    el.querySelector('[data-ppadd]')?.addEventListener('click', (e) => picker(e.currentTarget, {
+      placeholder: 'Procurar adereço…',
+      items: otherProps.map((pr) => ({ id: pr.id, label: pr.name, sub: [pr.category, pr.type === 'cenario' ? 'cenário' : 'ação', (pr.scene_ids || []).length ? `${pr.scene_ids.length} ${pr.scene_ids.length === 1 ? 'cena' : 'cenas'}` : 'sem cena'].filter(Boolean).join(' · ') })),
+      create: (name) => `Criar o adereço «${name}»`,
+      onPick: (id) => { x.prop_ids = [...(x.prop_ids || []), id]; save(); draw(); },
+      onCreate: async (name) => {
+        const { data: np, error } = await sb.from('props').insert({ project_id: x.project_id, name, type: 'acao', scene_ids: scene ? [scene.id] : [], character_ids: x.cast_ids || [] }).select('id, name, type, scene_ids, category, removed').single();
+        if (error) return toast(error.message);
+        props.push(np); x.prop_ids = [...(x.prop_ids || []), np.id]; save(); draw(); toast(`Adereço «${name}» criado e ligado a este plano.`);
+      },
+    }));
   };
   draw();
+}
+
+
+// menu pequeno com pesquisa (personagens, adereços…), junto ao botão que o abriu
+const pnorm = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+function picker(anchor, { items, placeholder, onPick, create, onCreate }) {
+  document.querySelector('.pk')?.remove();
+  const box = document.createElement('div'); box.className = 'pk';
+  box.innerHTML = `<input type="search" placeholder="${esc(placeholder || 'Procurar…')}" autocomplete="off"><div class="pk-l" data-l></div>`;
+  document.body.append(box);
+  const r = anchor.getBoundingClientRect();
+  box.style.left = `${Math.max(8, Math.min(r.left + window.scrollX, window.scrollX + window.innerWidth - 300))}px`;
+  box.style.top = `${r.bottom + window.scrollY + 6}px`;
+  const inp = box.querySelector('input'); const list = box.querySelector('[data-l]');
+  let sel = 0; let shown = [];
+  const close = () => { box.remove(); document.removeEventListener('mousedown', out, true); };
+  const out = (e) => { if (!box.contains(e.target) && e.target !== anchor) close(); };
+  document.addEventListener('mousedown', out, true);
+  const draw = () => {
+    const q = pnorm(inp.value).trim();
+    shown = items.filter((x) => !q || pnorm(`${x.label} ${x.sub}`).includes(q)).sort((a, b) => (pnorm(a.label).startsWith(q) ? 0 : 1) - (pnorm(b.label).startsWith(q) ? 0 : 1)).slice(0, 80);
+    const canCreate = create && inp.value.trim() && !items.some((x) => pnorm(x.label) === q);
+    if (canCreate) shown.push({ create: true, label: inp.value.trim() });
+    sel = Math.min(sel, Math.max(0, shown.length - 1));
+    list.innerHTML = shown.length ? shown.map((x, i) => `<button type="button" class="pk-i ${i === sel ? 'on' : ''} ${x.create ? 'new' : ''}" data-i="${i}">${x.create ? `+ ${esc(create(x.label))}` : `<b>${esc(x.label)}</b>${x.sub ? `<small>${esc(x.sub)}</small>` : ''}`}</button>`).join('') : '<p class="muted small">Nada encontrado.</p>';
+    list.querySelectorAll('[data-i]').forEach((b) => b.addEventListener('mousedown', (e) => { e.preventDefault(); choose(shown[+b.dataset.i]); }));
+  };
+  const choose = (x) => { if (!x) return; close(); if (x.create) onCreate?.(x.label); else onPick(x.id); };
+  inp.addEventListener('input', () => { sel = 0; draw(); });
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(shown.length - 1, sel + 1); draw(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(0, sel - 1); draw(); }
+    else if (e.key === 'Enter') { e.preventDefault(); choose(shown[sel]); }
+    else if (e.key === 'Escape') close();
+  });
+  draw(); setTimeout(() => inp.focus(), 20);
 }
