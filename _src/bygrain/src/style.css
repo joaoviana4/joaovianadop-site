@@ -2682,8 +2682,10 @@ tr.row-dragging { opacity: .45; }
 /* páginas de margem a margem: sem largura máxima, o conteúdo ocupa o ecrã todo */
 .wrap { max-width: none; }
 .proj-layout { max-width: none; margin: 0; flex-wrap: nowrap; }
-.proj-main { flex: 1 1 auto; }
-@media (max-width: 860px) { .proj-layout { flex-wrap: wrap; } }
+/* a barra da esquerda tem largura fixa: o conteúdo nunca a pode apertar */
+.proj-nav { flex: 0 0 270px; width: 270px; min-width: 270px; }
+.proj-main { flex: 1 1 0; min-width: 0; }
+@media (max-width: 860px) { .proj-layout { flex-wrap: wrap; } .proj-nav { flex: 1 1 100%; width: auto; min-width: 0; } }
 .pn-searchrow { display: flex; gap: 6px; align-items: stretch; }
 .pn-searchrow .pn-search { flex: 1; min-width: 0; }
 .pn-searchrow .pn-mods { flex: none; width: 32px; height: auto; min-height: 0; border-radius: 8px; }
