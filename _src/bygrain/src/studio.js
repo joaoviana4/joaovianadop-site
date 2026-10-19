@@ -1081,7 +1081,8 @@ async function projectOverview(main, p) {
     ${!p.is_central && hasMod(p, 'marketing') ? '<section class="panel mk-upbox" data-mkup></section>' : ''}
     ${p._parent ? `<a class="fold-up" href="#/p/${p._parent.id}">${ICON.back} Faz parte de <b>${esc(p._parent.name)}</b></a>` : ''}
     ${p.is_central ? '' : '<div class="ov" data-situation></div>'}
-    <div class="pm-grid ${p.is_central ? '' : 'solo'}">
+    <!-- nos projetos as ferramentas estão na barra lateral; aqui só na Central -->
+    <div class="pm-grid ${p.is_central ? '' : 'solo'}" ${p.is_central ? '' : 'hidden'}>
       <section class="pm-boards" aria-labelledby="h-boards">
         <div class="row between"><h2 id="h-boards" class="h2">Ferramentas</h2><button type="button" class="btn primary" data-nb>${ICON.plus} Nova ferramenta</button></div>
         ${top.length || nMaps ? `<div class="board-grid">${top.map((b) => { const d = deptMap.get(b.group_id); const th = thumbOf(b.id); return `
