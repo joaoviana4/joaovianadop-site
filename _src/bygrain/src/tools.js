@@ -156,7 +156,7 @@ export function tableTool(main, p, tool) {
 }
 
 // ---------- cronograma ----------
-const PHASES = [['pre', 'Pré-produção', '#7C5CFF'], ['prod', 'Produção', '#F08A24'], ['post', 'Pós-produção', '#2FB67C']];
+const PHASES_BASE = [['pre', 'Pré-produção', '#7C5CFF'], ['prod', 'Produção', '#F08A24'], ['post', 'Pós-produção', '#2FB67C']];
 const COLORS = [['#2B7FFF', 'Azul'], ['#E5484D', 'Vermelho'], ['#E3B341', 'Amarelo'], ['#2FB67C', 'Verde'], ['#9B6CFF', 'Roxo'], ['#F08A24', 'Laranja'], ['#E05FA8', 'Rosa'], ['#8A8A99', 'Cinzento']];
 const PRESETS = ['Repérage', 'Casting', 'Ensaio', 'Provas de guarda-roupa', 'Reunião de produção', 'Leitura técnica', 'Teste de câmara', 'Entrega do offline', 'Color grading', 'Mistura de som', 'Entrega final', 'Estreia', 'Festival'];
 const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
@@ -178,6 +178,9 @@ export async function timelineTool(main, p, tool) {
     const s = p.starts_on || todayISO(); const e = p.ends_on || addDays(s, 60); const n = Math.max(3, diff(s, e));
     data.phases = { pre: [s, addDays(s, Math.round(n / 3))], prod: [addDays(s, Math.round(n / 3) + 1), addDays(s, Math.round((2 * n) / 3))], post: [addDays(s, Math.round((2 * n) / 3) + 1), e] };
   }
+  // ficção: quarta etapa, Distribuição (depois da pós-produção)
+  if (p.kind === 'ficcao' && !data.phases.dist) { const e = data.phases.post?.[1] || p.ends_on || todayISO(); data.phases.dist = [addDays(e, 1), addDays(e, 180)]; }
+  const PHASES = p.kind === 'ficcao' ? [...PHASES_BASE, ['dist', 'Distribuição', '#1F8A8A']] : PHASES_BASE;
   const [{ data: tasks }, people, sdays] = await Promise.all([sb.from('tasks').select('*').eq('project_id', p.id), loadPeople(), shootDays(p).catch(() => [])]);
   const shoot = sdays.filter((x) => x.date);
   const st = { tasks: tasks || [], people, projects: new Map([[p.id, p]]) };

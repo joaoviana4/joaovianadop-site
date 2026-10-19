@@ -31,9 +31,29 @@ export const phaseLabel = (k) => [...PHASES, ['dist', 'Distribuição']].find(([
 
 // fase em que o projeto está agora: a que foi escolhida (projects.stage) ou, sem isso, pelas datas do projeto
 export function currentPhase(p) {
+  const tl = tlPhase(p); if (tl) return tl;
   if (p.stage && phasesFor(p).some(([k]) => k === p.stage)) return p.stage;
   const l = phaseOf(p).label;
   return l === 'Pré-produção' ? 'pre' : l === 'Produção' ? 'prod' : l.startsWith('Pós-produção') ? 'pos' : null;
+}
+
+// fases do cronograma de produção (boards.data.phases: pre, prod, post e, na ficção, dist): hoje está em qual?
+const TL_KEY = { pre: 'pre', prod: 'prod', pos: 'post', dist: 'dist' };
+function tlPhase(p) {
+  const ph = p._tlPhases; if (!ph) return null;
+  const today = new Date().toISOString().slice(0, 10);
+  const list = phasesFor(p).map(([k]) => [k, ph[TL_KEY[k]]]).filter(([, r]) => Array.isArray(r) && r[0]);
+  if (!list.length) return null;
+  const inside = list.find(([, [a, b]]) => today >= a && today <= (b || a)); if (inside) return inside[0];
+  if (today < list[0][1][0]) return list[0][0];
+  const started = list.filter(([, [a]]) => a <= today); return started.length ? started[started.length - 1][0] : list[0][0];
+}
+export const fromTimeline = (p) => !!tlPhase(p);
+// barra de progresso de cada etapa pelas datas do cronograma
+function tlFill(p, k) {
+  const r = p._tlPhases?.[TL_KEY[k]]; if (!Array.isArray(r) || !r[0]) return null;
+  const today = Date.now(); const a = Date.parse(r[0] + 'T00:00:00'); const b = Date.parse((r[1] || r[0]) + 'T23:59:59');
+  return Math.max(0, Math.min(1, (today - a) / Math.max(1, b - a)));
 }
 
 // a fase que se está a ver ainda não chegou? (fase escolhida depois da fase atual do projeto)
@@ -52,7 +72,7 @@ export function aheadNotice(p) {
   return `<section class="ahead-note" role="status"><div class="an-ic">${ICON.lock || ''}</div><div class="an-t">
       <h2>O projeto ainda não se encontra em ${esc(phaseLabel(a.sel).toLowerCase())}.</h2>
       <p class="muted">Neste momento está em <b>${esc(phaseLabel(a.cur).toLowerCase())}</b>. Quando chegar a esta etapa, as ferramentas de ${esc(phaseLabel(a.sel).toLowerCase())} aparecem aqui.</p>
-      <div class="row wrap-gap"><button type="button" class="btn ghost" data-ahead-go="${a.cur}">Ver ${esc(phaseLabel(a.cur).toLowerCase())}</button>${p.canEdit !== false ? `<button type="button" class="btn primary" data-ahead-set="${a.sel}">Passar o projeto para ${esc(phaseLabel(a.sel).toLowerCase())}</button>` : ''}</div>
+      <div class="row wrap-gap"><button type="button" class="btn ghost" data-ahead-go="${a.cur}">Ver ${esc(phaseLabel(a.cur).toLowerCase())}</button>${p._tlHref ? `<a class="btn ghost" href="${esc(p._tlHref)}">Ver as datas no cronograma</a>` : p.canEdit !== false ? `<button type="button" class="btn primary" data-ahead-set="${a.sel}">Passar o projeto para ${esc(phaseLabel(a.sel).toLowerCase())}</button>` : ''}</div>
     </div></section>`;
 }
 export function bindAhead(root, p, onChange, onPhase) {
@@ -72,6 +92,7 @@ export function projectStrip(p, base, extra = '') {
   const list = phasesFor(p); const ci = list.findIndex(([k]) => k === cur);
   // com a fase escolhida: as anteriores ficam feitas, a atual a meio (ou pelas datas), as seguintes vazias
   const fill = (k) => {
+    if (fromTimeline(p)) { const f = tlFill(p, k); if (f != null) return f; }
     if (p.stage && ci >= 0) { const i = list.findIndex(([x]) => x === k); if (i < ci) return 1; if (i > ci) return 0; if (hasDates && SPAN[k]) { const [a, b] = SPAN[k]; return Math.max(0.08, Math.min(0.95, (pct - a) / (b - a))); } return 0.5; }
     if (!hasDates || !SPAN[k]) return 0; const [a, b] = SPAN[k]; return Math.max(0, Math.min(1, (pct - a) / (b - a)));
   };
@@ -80,7 +101,6 @@ export function projectStrip(p, base, extra = '') {
     <div class="ps-steps" role="tablist" style="--n:${list.length}">${list.map(([k, l], i) => { const f = fill(k); return `<button type="button" role="tab" class="ps-step ${k === cur ? 'now' : ''} ${f >= 1 ? 'done' : ''}" aria-selected="${s === k}" data-phase="${k}" title="${s === k ? 'Ver todas as fases' : `Ver só ${esc(l.toLowerCase())}`}">
         <span class="ps-l"><span class="ps-n">${f >= 1 ? '✓' : i + 1}</span>${esc(l)}${k === cur ? '<i class="phase-now" title="O projeto está nesta fase"></i>' : ''}</span>
         <span class="ps-bar"><i style="width:${Math.round(f * 100)}%"></i></span></button>`; }).join('')}</div>
-    <div class="ps-r">${s !== 'all' ? '<button type="button" class="link-btn small" data-phase="all">Ver tudo</button>' : ''}${p.canEdit !== false ? `<label class="ps-stage" title="Em que fase o projeto está"><span>Está em</span><select data-stage aria-label="Fase atual do projeto"><option value="">${p.stage ? 'Pelas datas' : (cur ? `${esc(phaseLabel(cur))} (datas)` : 'Pelas datas')}</option>${list.map(([k, l]) => `<option value="${k}" ${p.stage === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label><button type="button" class="link-btn small" data-phaseorg>Organizar fases</button>` : ''}</div>
   </div></div>`;
 }
 export function bindStrip(root, p, { onChange, onPhase, items }) {
