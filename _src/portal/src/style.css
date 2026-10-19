@@ -2750,3 +2750,49 @@ tr.row-dragging { opacity: .45; }
 .pq-main { flex: 1; display: grid; gap: 2px; font-size: 14px; }
 .pq-main small { font-size: 12px; }
 .pq-list.done .pq-main > span { text-decoration: line-through; color: var(--muted); }
+
+/* visão geral como board (Studio): barra de blocos à direita e controlos de cada bloco ao passar o rato */
+.ovb { display: grid; grid-template-columns: minmax(0, 1fr) 190px; gap: 20px; align-items: start; }
+.ovb-main { min-width: 0; }
+@media (max-width: 1100px) { .ovb { grid-template-columns: minmax(0, 1fr); } .ov-tools { position: static !important; flex-direction: row !important; flex-wrap: wrap; } .ov-tools hr, .ov-tools .ovt-h { display: none; } }
+.ov-tools { position: sticky; top: 84px; display: flex; flex-direction: column; gap: 2px; padding: 10px 8px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); }
+.ov-tools .ovt-h { margin: 0 6px 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.ov-tools button { display: flex; align-items: center; gap: 9px; width: 100%; padding: 8px 8px; border: 0; border-radius: 8px; background: none; color: var(--muted); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.ov-tools button:hover { background: rgba(127, 127, 127, .12); color: var(--text); }
+.ov-tools button.on { color: var(--text); }
+.ov-tools button svg { width: 16px; height: 16px; flex: none; }
+.ov-tools button span { flex: 1; min-width: 0; }
+.ov-tools .ovt-plus { font-style: normal; font-weight: 700; opacity: .7; }
+.ov-tools button.paste { color: var(--text); border: 1px dashed var(--line2); margin-top: 4px; }
+.ov-tools hr { width: 100%; border: 0; border-top: 1px solid var(--line); margin: 8px 0; }
+.lay-inline > [data-blk], .lay-inline .lay-col > [data-blk] { position: relative; }
+.lay-inline .lay-h { position: absolute; top: 8px; right: 8px; z-index: 5; display: flex; align-items: center; gap: 6px; padding: 3px 4px 3px 8px; border-radius: 9px; background: var(--panel2); border: 1px solid var(--line2); box-shadow: 0 4px 14px rgba(0, 0, 0, .3); opacity: 0; pointer-events: none; transition: opacity .12s; margin: 0; }
+.lay-inline .lay-h > strong { display: none; }
+.lay-inline [data-blk]:hover > .lay-h, .lay-inline .lay-h:focus-within { opacity: 1; pointer-events: auto; }
+.lay-inline .lay-h .lay-btns [data-mv] { display: none; }
+.lay-inline .lay-x { display: grid; place-items: center; }
+.lay-inline .lay-x svg { width: 14px; height: 14px; }
+.lay-inline { outline: 0 !important; }
+.lay-inline > [data-blk], .lay-inline .lay-col > [data-blk] { outline: 0 !important; }
+/* blocos colados */
+.ovx-sub { margin: -4px 0 0; }
+.ovx-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.ovx-table td, .ovx-table th { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+.ovx-table th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+.ovx-table .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ovx-table tr.sec td { font-weight: 700; background: rgba(127, 127, 127, .07); }
+.ovx-table tfoot td { border-bottom: 0; }
+.ovx-table tfoot tr.over td { color: var(--late); }
+.ovx-scroll { overflow-x: auto; }
+.ovx-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.ovx-list li { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.ovx-list li > :nth-child(2) { flex: 1; }
+.ovx-list .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.ovx-note .ovx-title { border: 0; background: none; padding: 0; font-size: 15px; font-weight: 700; color: var(--text); min-height: 0; }
+.ovx-note .ovx-title:focus { outline: none; }
+.ovx-note textarea { width: 100%; border: 0; background: none; padding: 0; resize: none; color: var(--text); font: inherit; line-height: 1.5; min-height: 90px; }
+.ovx-note textarea:focus { outline: none; }
+.ovx-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+.ovx-pick button { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 10px; border: 1px solid var(--line2); background: var(--bg2); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.ovx-pick button:hover { border-color: var(--text); }
+.ovx-pick svg { width: 18px; height: 18px; flex: none; }

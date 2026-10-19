@@ -930,12 +930,13 @@ async function toolPage(projectId, toolId) {
       <nav class="proj-nav" aria-label="Projeto">${projectNav(p, tool.id)}</nav>
       <main class="proj-main" data-main>${p.is_central ? '' : aheadNotice(p)}
         <div class="row between wrap-gap"><div><span class="small muted">${(TOOL_KINDS[tool.kind] || {}).label || ''}${d ? ` · ${esc(d.name)}` : ''}</span><h1 class="h1">${esc(tool.title)}</h1></div>
-          <div class="row wrap-gap"><button type="button" class="btn ghost" data-tooltask>${ICON.plus} Adicionar tarefa</button><button type="button" class="btn ghost" data-topt>${ICON.dots} Opções</button>${p.canEdit !== false ? `<button type="button" class="icon-btn" data-tdel title="Apagar esta ferramenta" aria-label="Apagar esta ferramenta">${ICON.trash}</button>` : ''}</div></div>
+          <div class="row wrap-gap"><button type="button" class="btn ghost" data-tooltask>${ICON.plus} Adicionar tarefa</button>${!p.is_central && ['table', 'budget', 'callsheet', 'timeline', 'distribution', 'transport', 'media'].includes(tool.kind) ? `<button type="button" class="btn ghost" data-tcopy title="Copiar esta ferramenta para a visão geral do projeto">${ICON.copy} Copiar para a visão geral</button>` : ''}<button type="button" class="btn ghost" data-topt>${ICON.dots} Opções</button>${p.canEdit !== false ? `<button type="button" class="icon-btn" data-tdel title="Apagar esta ferramenta" aria-label="Apagar esta ferramenta">${ICON.trash}</button>` : ''}</div></div>
         <div data-tool></div>
       </main>
     </div></div>`;
   bindHeader(app); bindProjectNav(app, p);
   if (!p.is_central) bindAhead(app, p, () => go(projBase(p)), () => go(projBase(p)));
+  app.querySelector('[data-tcopy]')?.addEventListener('click', async () => (await import('./ovwidgets.js')).copyToOverview(p, { kind: 'tool', ref: tool.id, title: tool.title }));
   app.querySelector('[data-topt]').addEventListener('click', () => boardOptions(p, tool, () => toolPage(projectId, toolId)));
   app.querySelector('[data-tdel]')?.addEventListener('click', () => deleteTool(p, tool, () => toolPage(projectId, toolId)));
   app.querySelector('[data-tooltask]')?.addEventListener('click', () => addTaskModal({ projectId: p.id, departments: p.departments || [], entity: { type: 'board', id: tool.id }, where: tool.title }));
@@ -1046,7 +1047,8 @@ async function projectPage(projectId, page, sub) {
   if (page === 'financas' && p.is_central && isStaff()) return (await lazy.finance()).financePage(main, sub);
   if (page === 'orcamento' && p.canBudget) {
     const folder = isFolder(p);
-    main.innerHTML = `<div class="row between wrap-gap"><div><h1 class="h1 pm-title"><input class="title-in" data-btitle value="${esc(p.budget?.title || 'Orçamento')}" aria-label="Nome do orçamento" title="Clica para mudar o nome" maxlength="80"></h1><p class="muted">${folder ? 'Orçamento geral da pasta: os custos próprios (tabela em baixo) mais o que está atribuído a cada projeto lá dentro.' : 'Soma tudo o que está na tabela e compara com o orçamento geral do projeto.'}</p></div><div data-who></div></div>${folder ? '<div data-kids></div>' : ''}<div class="budget-wrap" data-b></div>`;
+    main.innerHTML = `<div class="row between wrap-gap"><div><h1 class="h1 pm-title"><input class="title-in" data-btitle value="${esc(p.budget?.title || 'Orçamento')}" aria-label="Nome do orçamento" title="Clica para mudar o nome" maxlength="80"></h1><p class="muted">${folder ? 'Orçamento geral da pasta: os custos próprios (tabela em baixo) mais o que está atribuído a cada projeto lá dentro.' : 'Soma tudo o que está na tabela e compara com o orçamento geral do projeto.'}</p></div><div class="row wrap-gap">${p.is_central ? '' : `<button type="button" class="btn ghost" data-bcopy title="Copiar a tabela do orçamento para a visão geral do projeto">${ICON.copy} Copiar para a visão geral</button>`}<div data-who></div></div></div>${folder ? '<div data-kids></div>' : ''}<div class="budget-wrap" data-b></div>`;
+    main.querySelector('[data-bcopy]')?.addEventListener('click', async () => (await import('./ovwidgets.js')).copyToOverview(p, { kind: 'budget', title: p.budget?.title || 'Orçamento' }));
     budgetWhoChip(main.querySelector('[data-who]'), p);
     if (folder) { const kids = await loadChildren(p); p._extra = { amount: budgetChildrenPanel(main.querySelector('[data-kids]'), p, kids), label: 'atribuídos aos projetos dentro' }; }
     const done = (await lazy.budget()).budgetPage(main.querySelector('[data-b]'), p);

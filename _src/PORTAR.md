@@ -86,3 +86,7 @@ O resto deste ficheiro descreve como o Studio nasceu do código do byGrain (aind
 - Gravações seguras (nos dois): escritas na mesma linha vão por ordem (undo.js), `saveLater` em lib.js regista as gravações com atraso e `route()` envia-as e espera antes de mudar de página; aviso ao fechar a janela; pastilha "A guardar…/Guardado". Orçamento grava uma vez de cada vez (já não dá falso "mudado noutra janela"). Board junta campos do mesmo cartão; adereços com um temporizador por campo.
 - Presença: o separador mantém a identidade ao recarregar (sessionStorage) e larga a presença ao sair; já não aparece "Tu, noutra janela" depois de atualizar.
 - ⋯ ao lado de cada ferramenta na barra lateral: nome/departamento e apagar.
+
+## 19 out — Só no Studio, por portar para a Grain (pedido: "deixar a grain como está e quando tiver atualizável, atualizamos")
+- Visão geral como board: `layout.js` (modo `inline`, `b.off`, `add`/`show`, guarda chaves extra), `overview.js` (barra `.ov-tools` à direita com blocos sugeridos, notas, "Orçamento ou ferramenta", Colar), `ovwidgets.js` novo (notas e ferramentas coladas em `projects.layouts.overview.extra`).
+- "Copiar para a visão geral" no Orçamento e nas ferramentas (studio.js) + Ctrl+V / botão Colar na visão geral.
