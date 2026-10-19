@@ -2462,3 +2462,9 @@ body.readonly .proj-main input[readonly]:focus, body.readonly .proj-main textare
   .ps-l { font-size: 12px; }
   .page.has-strip .proj-nav { top: auto; max-height: none; }
 }
+/* quem está no projeto: linha arrumada entre a pesquisa e o menu */
+.pn-online { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; padding: 6px 10px; min-height: 0; border-radius: 9px; background: color-mix(in srgb, var(--ok) 9%, transparent); line-height: 1.25; }
+.pn-online .avatar.sm, .pn-online .avatar { width: 22px; height: 22px; font-size: 9.5px; flex: none; }
+.pn-online .av-stack { display: inline-flex; flex: none; }
+.pn-online small { font-size: 11.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pn-search { margin-bottom: 12px; }
