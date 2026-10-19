@@ -6,7 +6,7 @@ import { renderAuth } from './auth.js';
 import { activityButton, bindActivity, activityPage } from './activity.js';
 import { mountBoard } from './board.js';
 import { visField, bindVis, readVis } from './vis.js';
-import { onWrite } from './undo.js';
+import { onWrite, setWriteGuard } from './undo.js';
 import { projectSearch } from './psearch.js';
 import { mountTasks, loadPeople, clearPeopleCache, addTaskModal } from './tasks.js';
 import { TOOL_KINDS, tableTool, timelineTool, tableTemplate } from './tools.js';
@@ -66,6 +66,7 @@ function go(hash) { if (location.hash === hash) route(); else location.hash = ha
 async function route() {
   state.ctx = { project: null };
   teardown();
+  setReadOnly(null);
   const h = location.hash.replace(/^#\/?/, '');
   const parts = h.split('/').filter(Boolean);
   if (parts[0] === 'p' && parts[1]) return parts[2] === 'b' ? boardView(parts[1], parts[3]) : parts[2] === 'f' ? toolPage(parts[1], parts[3]) : projectPage(parts[1], parts[2] || 'geral', parts[3]);
@@ -434,7 +435,7 @@ function projectDetailsModal(p, after) {
 // ---------- equipa do projeto e convites ----------
 async function projectTeam(root, p) {
   const [{ data: members }, people, { data: invites }] = await Promise.all([
-    sb.from('project_members').select('user_id, added_at, depts, job, phone, email').eq('project_id', p.id),
+    sb.from('project_members').select('user_id, added_at, depts, job, phone, email, can_edit').eq('project_id', p.id),
     loadPeople(),
     isStaff() ? sb.from('invites').select('id, email, created_at, expires_at, used_at').eq('project_id', p.id).order('created_at', { ascending: false }) : Promise.resolve({ data: [] }),
   ]);
@@ -454,12 +455,12 @@ async function projectTeam(root, p) {
     </section>` : ''}
     ${p.is_central ? '' : `<section class="stack">
       <h3 class="h3">Convidados externos</h3>
-      ${guests.length ? `<ul class="people">${guests.map((x) => `<li><span class="avatar sm" style="--c:${esc(x.color)}">${esc(initials(x.display_name))}</span><span>${esc(x.display_name)}</span>${isStaff() ? `<button type="button" class="link-btn danger-text" data-rmguest="${x.id}">Tirar do projeto</button>` : ''}</li>`).join('')}</ul>` : '<p class="muted small">Ainda ninguém de fora.</p>'}
+      ${guests.length ? `<ul class="people">${guests.map((x) => { const gm = (members || []).find((m) => m.user_id === x.id); return `<li><span class="avatar sm" style="--c:${esc(x.color)}">${esc(initials(x.display_name))}</span><span>${esc(x.display_name)}</span>${isStaff() && p.canEdit !== false ? `<select class="acc-sel" data-gacc="${x.id}" aria-label="Acesso de ${esc(x.display_name)}"><option value="1" ${gm?.can_edit !== false ? 'selected' : ''}>Pode editar</option><option value="0" ${gm?.can_edit === false ? 'selected' : ''}>Só leitura</option></select><button type="button" class="link-btn danger-text" data-rmguest="${x.id}">Tirar do projeto</button>` : gm?.can_edit === false ? '<span class="ro-tag">Só leitura</span>' : ''}</li>`; }).join('')}</ul>` : '<p class="muted small">Ainda ninguém de fora.</p>'}
     </section>
-    ${isStaff() ? `<section class="stack">
+    ${isStaff() && p.canEdit !== false ? `<section class="stack">
       <h3 class="h3">Convidar pessoa externa</h3>
       <p class="muted small">Gera um código que só funciona uma vez, para este email e este projeto. Vale 14 dias.</p>
-      <form class="row" data-invite><input type="email" name="email" placeholder="email@exemplo.com" aria-label="Email da pessoa" required><button class="btn primary">Gerar código</button></form>
+      <form class="row wrap-gap" data-invite><input type="email" name="email" placeholder="email@exemplo.com" aria-label="Email da pessoa" required><select name="acc" aria-label="Acesso" class="acc-sel"><option value="1">Pode editar</option><option value="0">Só leitura</option></select><button class="btn primary">Gerar código</button></form>
       <div data-code></div>
       ${inv.length ? `<ul class="invites">${inv.map((i) => `<li><span>${esc(i.email)}</span><span class="muted small">${istate(i)}</span>${!i.used_at ? `<button type="button" class="icon-btn" data-rminv="${i.id}" aria-label="Anular convite">${ICON.trash}</button>` : ''}</li>`).join('')}</ul>` : ''}
     </section>` : ''}`}`;
@@ -468,7 +469,7 @@ async function projectTeam(root, p) {
   root.querySelector('[data-invite]')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = e.target.email.value.trim();
-    const { data: code, error } = await sb.rpc('create_invite', { p_project: p.id, p_email: email });
+    const { data: code, error } = await sb.rpc('create_invite_as', { p_project: p.id, p_email: email, p_can_edit: e.target.acc.value !== '0' });
     if (error) return toast(error.message);
     const url = location.origin + BASE;
     const msg = `Olá! Foste convidado para o projeto "${p.name}" no byGrain Studio.\n\n1. Entra em ${url}\n2. Escolhe "Tenho um código"\n3. Usa o email ${email} e o código ${code}\n\nO código só funciona uma vez e vale 14 dias.`;
@@ -476,6 +477,10 @@ async function projectTeam(root, p) {
     root.querySelector('[data-copy]').addEventListener('click', async () => { try { await navigator.clipboard.writeText(msg); toast('Copiado.'); } catch { root.querySelector('.code-box textarea').select(); } });
     e.target.reset();
   });
+  root.querySelectorAll('[data-gacc]').forEach((sel) => sel.addEventListener('change', async () => {
+    const { error } = await sb.from('project_members').update({ can_edit: sel.value !== '0' }).eq('project_id', p.id).eq('user_id', sel.dataset.gacc);
+    toast(error ? error.message : sel.value === '0' ? 'Passa a ter acesso só de leitura.' : 'Passa a poder editar.');
+  }));
   root.querySelectorAll('[data-rmguest]').forEach((b) => b.addEventListener('click', async () => {
     if (!(await confirmBox('Tirar esta pessoa do projeto?', 'Tirar'))) return;
     await sb.from('project_members').delete().eq('project_id', p.id).eq('user_id', b.dataset.rmguest); projectTeam(root, p);
@@ -490,14 +495,14 @@ async function crewPanel(el, p, people, members, reload) {
   const depts = p.departments || [];
   const byId = new Map(people.map((x) => [x.id, x]));
   const list = [
-    ...members.filter((m) => byId.has(m.user_id) && byId.get(m.user_id).role !== 'guest').map((m) => { const x = byId.get(m.user_id); const phone = m.phone || x.phone || ''; return { t: 'm', id: m.user_id, name: x.display_name, color: x.color, job: m.job || '', depts: m.depts || [], sub: [phone, m.email].filter(Boolean).join(' · ') || ROLES[x.role], phone, email: m.email || '' }; }),
+    ...members.filter((m) => byId.has(m.user_id) && byId.get(m.user_id).role !== 'guest').map((m) => { const x = byId.get(m.user_id); const phone = m.phone || x.phone || ''; return { t: 'm', id: m.user_id, canEdit: m.can_edit !== false, name: x.display_name, color: x.color, job: m.job || '', depts: m.depts || [], sub: [phone, m.email].filter(Boolean).join(' · ') || ROLES[x.role], phone, email: m.email || '' }; }),
     ...(crewRows || []).map((c) => ({ t: 'c', id: c.id, name: c.name, color: '#5A5A66', job: c.job || '', depts: c.depts || [], sub: [c.phone, c.email].filter(Boolean).join(' · ') || 'sem conta no studio', email: c.email, phone: c.phone })),
   ];
-  const canEdit = isStaff();
+  const canEdit = isStaff() && p.canEdit !== false;
   const dchip = (id) => { const d = depts.find((x) => x.id === id); return d ? `<span class="dchip" style="--dc:${esc(d.color)}">${esc(d.name)}</span>` : ''; };
   const row = (x) => `<li class="crew-row"><span class="avatar sm" style="--c:${esc(x.color)}">${esc(initials(x.name))}</span>
     <span class="crew-n"><b>${esc(x.name)}</b><small class="muted">${esc(x.job || x.sub || '')}${x.job && x.sub ? ` · ${esc(x.sub)}` : ''}</small></span>
-    <span class="crew-d">${x.depts.map(dchip).join('')}</span>
+    <span class="crew-d">${x.depts.map(dchip).join('')}${x.t === 'm' && !x.canEdit ? '<span class="ro-tag" title="Vê o projeto mas não muda nada">Só leitura</span>' : ''}</span>
     ${canEdit ? `<span class="crew-a"><button type="button" class="link-btn" data-cedit="${x.t}:${x.id}">Editar</button><button type="button" class="link-btn danger-text" data-crm="${x.t}:${x.id}">Tirar</button></span>` : ''}</li>`;
   const groups = depts.map((d) => ({ d, xs: list.filter((x) => x.depts.includes(d.id)) }));
   const none = list.filter((x) => !x.depts.some((id) => depts.some((d) => d.id === id)));
@@ -516,6 +521,10 @@ async function crewPanel(el, p, people, members, reload) {
       <div class="grid2"><div class="field"><label for="cp">Telefone</label><input id="cp" name="phone" type="tel" inputmode="tel" value="${esc(x?.phone || '')}" placeholder="912 345 678"></div><div class="field"><label for="ce">Email</label><input id="ce" name="email" type="email" value="${esc(x?.email || '')}"></div></div>
       <p class="muted small">O contacto fica associado a esta pessoa: aparece sozinho na folha de contactos, na folha de serviço e no mapa de transportes.</p>
       <div class="field"><label for="cj">Função</label><input id="cj" name="job" value="${esc(x?.job || '')}" placeholder="Ex.: Gaffer, 1.º AC, Produtora" list="crew-jobs"></div>
+      ${isNew || x.t === 'm' ? `<fieldset class="acc-pick" ${isNew ? 'data-for="m"' : ''}><legend>Acesso ao projeto</legend>
+        <label><input type="radio" name="acc" value="1" ${!x || x.canEdit ? 'checked' : ''}><span><b>Pode editar</b><small>Cria, muda e apaga nas páginas que vê.</small></span></label>
+        <label><input type="radio" name="acc" value="0" ${x && !x.canEdit ? 'checked' : ''}><span><b>Só leitura</b><small>Vê as páginas que lhe estão abertas, sem mudar nada. Pode marcar as tarefas que são dele.</small></span></label>
+        ${p.community_id ? '<small class="muted">Os administradores da comunidade e os líderes do projeto podem sempre editar.</small>' : ''}</fieldset>` : ''}
       <fieldset class="dpick"><legend>Departamentos</legend>${depts.length ? depts.map((d) => `<label><input type="checkbox" name="dept" value="${esc(d.id)}" ${x?.depts.includes(d.id) || (isNew && preDept === d.id) ? 'checked' : ''}><span style="--dc:${esc(d.color)}">${esc(d.name)}</span></label>`).join('') : '<p class="muted small">Este projeto ainda não tem departamentos (Detalhes → Departamentos e cores).</p>'}</fieldset>
       <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">${isNew ? 'Adicionar' : 'Guardar'}</button></div></form>
       <datalist id="crew-jobs">${['Realização', 'Produção', 'Direção de fotografia', '1.º assistente de câmara', '2.º assistente de câmara', 'Gaffer', 'Eletricista', 'Maquinista', 'Direção de arte', 'Adereços', 'Guarda-roupa', 'Cabelos e maquilhagem', 'Som direto', 'Montagem', 'Cor', 'Assistente de produção', 'Making of'].map((j) => `<option value="${j}">`).join('')}</datalist>`, { wide: true });
@@ -524,16 +533,17 @@ async function crewPanel(el, p, people, members, reload) {
     m.el.querySelector('[data-cf]').addEventListener('submit', async (e) => {
       e.preventDefault(); const fd = new FormData(e.target); const dsel = fd.getAll('dept'); const job = (fd.get('job') || '').trim() || null;
       const phone = (fd.get('phone') || '').trim() || null; const email = (fd.get('email') || '').trim() || null;
+      const can_edit = fd.get('acc') !== '0';
       let r;
       if (isNew && tab === 'm') {
         const uid = fd.get('user_id'); if (!uid) return toast('Escolhe uma pessoa.');
         const cur = inProj(uid);
         // quem já está no projeto: junta os departamentos novos aos que já tinha
-        r = cur ? await sb.from('project_members').update({ depts: [...new Set([...(cur.depts || []), ...dsel])], job: job || cur.job || null, phone: phone || cur.phone || null, email: email || cur.email || null }).eq('project_id', p.id).eq('user_id', uid)
-          : await sb.from('project_members').insert({ project_id: p.id, user_id: uid, depts: dsel, job, phone, email });
+        r = cur ? await sb.from('project_members').update({ depts: [...new Set([...(cur.depts || []), ...dsel])], job: job || cur.job || null, phone: phone || cur.phone || null, email: email || cur.email || null, can_edit }).eq('project_id', p.id).eq('user_id', uid)
+          : await sb.from('project_members').insert({ project_id: p.id, user_id: uid, depts: dsel, job, phone, email, can_edit });
       }
       else if (isNew) { const name = (fd.get('name') || '').trim(); if (!name) return toast('Escreve o nome.'); r = await sb.from('project_crew').insert({ project_id: p.id, name, email, phone, depts: dsel, job }); }
-      else if (x.t === 'm') r = await sb.from('project_members').update({ depts: dsel, job, phone, email }).eq('project_id', p.id).eq('user_id', x.id);
+      else if (x.t === 'm') r = await sb.from('project_members').update({ depts: dsel, job, phone, email, can_edit }).eq('project_id', p.id).eq('user_id', x.id);
       else r = await sb.from('project_crew').update({ name: (fd.get('name') || '').trim() || x.name, email, phone, depts: dsel, job }).eq('id', x.id);
       if (r.error) return toast(r.error.message);
       m.close(); toast(isNew ? 'Adicionado à equipa.' : 'Guardado.'); reload();
@@ -558,28 +568,60 @@ const toolHref = (p, b) => `${projBase(p)}/${(b.kind || 'board') === 'board' ? '
 // Qualquer gravação nas tabelas do projeto apaga esta memória; a página do orçamento pede sempre de novo.
 const projCache = new Map();
 onWrite((t) => { if (['projects', 'project_budgets', 'boards', 'scripts', 'budget_access', 'project_members', 'community_members', 'communities'].includes(t)) projCache.clear(); });
+// ---------- só leitura ----------
+// Quem está no projeto como leitor (project_members.can_edit = false) vê tudo o que lhe está aberto mas não muda
+// nada: a base de dados recusa (RLS) e aqui escondem-se os botões de criar/apagar e os campos ficam só de leitura.
+const RO_OK = new Set(['activity', 'activity_seen', 'profiles', 'push_subscriptions', 'project_pins', 'project_hidden', 'presence']);
+let roObs = null; let roRaf = 0;
+const RO_DATA = /^(add|new|rm|del|remove|trash|up$|upload|cadd|crm|cedit|edit|import|analy|apply|use$|reset|mods$|pick$|url$|cover|change|move|dup|tpl|create|save|rename|plus|drop$|clear|sec|split|merge|restore|approve|toggleshot|shot$|addshot)/i;
+const RO_TEXT = /^\s*(\+|novo|nova|adicionar|juntar|apagar|tirar|guardar|carregar|importar|analisar|mudar|editar|recomeçar|criar|duplicar|eliminar|remover|substituir|repor)/i;
+function roScan() {
+  roRaf = 0;
+  const root = document.querySelector('.proj-main'); if (!root) return;
+  root.querySelectorAll('button:not([data-ro-ok]), a.btn').forEach((b) => {
+    if (b.closest('.pk, .sr-head, .sr-tools, [data-ro-ok]')) return;
+    const keys = Object.keys(b.dataset);
+    if (keys.some((k) => RO_DATA.test(k)) || RO_TEXT.test(b.textContent || '') || /apagar|tirar|remover/i.test(b.getAttribute('aria-label') || '')) b.hidden = true;
+  });
+  root.querySelectorAll('input:not([type=search]):not([type=checkbox]):not([type=radio]):not([readonly]), textarea:not([readonly])').forEach((i) => { if (!i.closest('[data-ro-ok], .pk')) i.readOnly = true; });
+  root.querySelectorAll('td select, .field select, form select, [data-row] select, select[data-k], select[data-f]').forEach((x) => { if (!x.closest('[data-ro-ok]')) x.disabled = true; });
+  root.querySelectorAll('[contenteditable="true"]').forEach((x) => x.setAttribute('contenteditable', 'false'));
+  root.querySelectorAll('[draggable="true"]').forEach((x) => x.setAttribute('draggable', 'false'));
+}
+function setReadOnly(p) {
+  const ro = !!(p && p.canEdit === false);
+  document.body.classList.toggle('readonly', ro);
+  setWriteGuard(ro ? (table, kind) => (RO_OK.has(table) || (table === 'tasks' && kind === 'update') ? null : 'Tens acesso só de leitura neste projeto.') : null);
+  if (ro && !roObs) { roObs = new MutationObserver(() => { if (!roRaf) roRaf = requestAnimationFrame(roScan); }); roObs.observe(document.getElementById('app') || document.body, { childList: true, subtree: true }); roRaf = requestAnimationFrame(roScan); }
+  if (!ro && roObs) { roObs.disconnect(); roObs = null; }
+}
+
 async function loadProject(id, { fresh = false } = {}) {
   const c = projCache.get(id);
   if (!fresh && c && Date.now() - c.t < 60000) {
     const p = c.p;
     setCtx({ comm: p.community_id ? commById(p.community_id) : null, project: p });
+    setReadOnly(p);
     return p;
   }
   const p = await loadProjectNow(id);
   if (p) projCache.set(id, { t: Date.now(), p }); else projCache.delete(id);
+  setReadOnly(p);
   return p;
 }
 async function loadProjectNow(id) {
   // tudo de uma vez (antes eram 4 idas à base de dados, uma atrás da outra)
-  const [{ data: p }, { data: fin }, { data: grant }, { count: nScripts }, { data: boards }] = await Promise.all([
+  const [{ data: p }, { data: fin }, { data: grant }, { count: nScripts }, { data: boards }, { data: canEdit }] = await Promise.all([
     sb.from('projects').select(PROJECT_COLS).eq('id', id).maybeSingle(),
     // o orçamento só chega a quem tem acesso (a base de dados devolve vazio aos outros)
     sb.from('project_budgets').select('value, budget, updated_at, approved_at').eq('project_id', id).maybeSingle(),
     sb.from('budget_access').select('user_id').eq('project_id', id).eq('user_id', state.user.id).maybeSingle(),
     sb.from('scripts').select('id', { count: 'exact', head: true }).eq('project_id', id).neq('kind', 'tratamento'),
     sb.from('boards').select('id, parent_id, title, group_id, position, created_at, kind, visible_to, created_by').eq('project_id', id).order('position').order('created_at'),
+    sb.rpc('can_edit_project', { p: id }),
   ]);
   if (!p || p.deleted_at) return null;
+  p.canEdit = canEdit !== false;
   p._hasScript = (nScripts || 0) > 0;
   p.canBudget = !p.is_central && (hasPerm('budget') || !!grant);
   p.value = p.canBudget ? fin?.value ?? null : null;
@@ -631,13 +673,13 @@ function projectNav(p, active) {
   const pages = [['geral', 'Visão geral', ICON.home], ...(p.is_central && isStaff() ? [['financas', 'Finanças', ICON.money]] : []), ...mods, ['atividade', 'Atividade', ICON.bell], ['equipa', p.is_central ? 'Equipa' : 'Equipa e convites', ICON.team], ...(isStaff() ? [['detalhes', 'Detalhes', ICON.info]] : [])];
   return `
     ${p._parent ? `<a class="pn-parent" href="#/p/${p._parent.id}">${ICON.back}<span>${esc(p._parent.name)}</span></a>` : ''}
-    <div class="pn-h"><div><strong>${esc(p.name)}</strong>${p.client ? `<span class="muted small">${esc(p.client)}</span>` : ''}</div>${!p.is_central && isStaff() ? `<button type="button" class="icon-btn sm pn-mods" data-mods title="Páginas do projeto" aria-label="Juntar ou tirar páginas">${ICON.plus}</button>` : ''}</div>
+    <div class="pn-h"><div><strong>${esc(p.name)}</strong>${p.client ? `<span class="muted small">${esc(p.client)}</span>` : ''}</div>${p.canEdit === false ? '<span class="ro-badge" title="Podes ver tudo o que te está aberto, mas não mudar nada">Só leitura</span>' : ''}${!p.is_central && isStaff() && p.canEdit !== false ? `<button type="button" class="icon-btn sm pn-mods" data-mods title="Páginas do projeto" aria-label="Juntar ou tirar páginas">${ICON.plus}</button>` : ''}</div>
     <button type="button" class="pn-search" data-psearch title="Procurar no projeto (Ctrl+K)">${ICON.search}<span>Procurar</span><kbd>Ctrl K</kbd></button>
     <div class="pn-online" data-online></div>
     ${pages.map(([k, l, ic]) => `<a class="side-a" href="${base}${k === 'geral' ? '' : '/' + k}" ${active === k ? 'aria-current="page"' : ''}>${ic}<span>${l}</span></a>`).join('')}
-    <div class="pn-sec"><span>Ferramentas</span><button type="button" class="icon-btn sm" data-newboard="" aria-label="Nova ferramenta">${ICON.plus}</button></div>
+    <div class="pn-sec"><span>Ferramentas</span>${p.canEdit !== false ? `<button type="button" class="icon-btn sm" data-newboard="" aria-label="Nova ferramenta">${ICON.plus}</button>` : ''}</div>
     ${boardGroups(p).map((g) => `<div class="pn-group" style="--g:${esc(g.color)}">
-      <div class="pn-gh"><i></i><span>${esc(g.name)}</span>${g.id ? `<button type="button" class="icon-btn sm" data-newboard="${esc(g.id)}" aria-label="Novo board em ${esc(g.name)}">${ICON.plus}</button>` : ''}</div>
+      <div class="pn-gh"><i></i><span>${esc(g.name)}</span>${g.id && p.canEdit !== false ? `<button type="button" class="icon-btn sm" data-newboard="${esc(g.id)}" aria-label="Novo board em ${esc(g.name)}">${ICON.plus}</button>` : ''}</div>
       ${(g.pages || []).map((k) => `<a class="side-a sub" href="${base}/${k}" ${active === k ? 'aria-current="page"' : ''}>${ICON[pageMeta(k).icon]}<span>${esc(pageMeta(k).label)}</span></a>`).join('')}
       ${g.boards.map((b) => `<a class="side-a sub" href="${toolHref(p, b)}" ${active === b.id ? 'aria-current="page"' : ''}>${(TOOL_KINDS[b.kind] || TOOL_KINDS.board).icon}<span>${esc(b.title)}</span>${b.visible_to?.length ? `<i class="vis-lock" title="Só algumas pessoas veem">${ICON.lock}</i>` : ''}</a>`).join('')}
     </div>`).join('')}`;
@@ -810,7 +852,7 @@ async function projectPage(projectId, page, sub) {
   bindHeader(app); bindProjectNav(app, p);
   const main = app.querySelector('[data-main]');
   // tarefa ligada a esta página (ou à cena / pessoa / décor / plano / adereço aberto): botão no canto superior direito
-  if (!p.is_central) app.querySelector('.topbar-r')?.insertAdjacentHTML('afterbegin', `<button type="button" class="btn ghost sm task-top" data-pagetask>${ICON.plus}<span>Adicionar tarefa</span></button>`);
+  if (!p.is_central && p.canEdit !== false) app.querySelector('.topbar-r')?.insertAdjacentHTML('afterbegin', `<button type="button" class="btn ghost sm task-top" data-pagetask>${ICON.plus}<span>Adicionar tarefa</span></button>`);
   app.querySelector('[data-pagetask]')?.addEventListener('click', () => {
     const ENT = { cenas: 'scene', seguimento: 'scene', personagens: 'character', elenco: 'character', figurino: 'character', decors: 'location', plano: 'shot', aderecos: 'prop', marketing: 'marketing' };
     const entity = sub && ENT[page] ? { type: ENT[page], id: sub } : ['tarefas', 'geral'].includes(page) ? null : { type: `page:${page}`, id: null };
