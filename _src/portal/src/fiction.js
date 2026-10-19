@@ -10,6 +10,7 @@ import { geoPanel } from './placegeo.js';
 import { analyzeScriptModal, applyBreakdown, quickBreakdown } from './scriptan.js';
 import { newLightmapData } from './lmdata.js';
 import { ensureModules } from './modules.js';
+import { quickInfo, heroPhoto } from './quickinfo.js';
 
 // Modelo de ficção, igual ao do Studio: guião → cenas, personagens e décors → planos e storyboard.
 
@@ -426,20 +427,32 @@ async function personagem(main, p, f, id, base, cleanup) {
   const c = f.characters.find((x) => x.id === id);
   if (!c) { main.innerHTML = '<p class="empty-note">Esta personagem já não existe.</p>'; return; }
   const scenes = f.scenes.filter((s) => (s.character_ids || []).includes(c.id));
-  main.innerHTML = `<a href="${base}/personagens" class="link-btn">${ICON.back} Personagens</a>
-    <header class="ent-h"><input class="title-in h1" data-ename value="${esc(c.name)}" aria-label="Nome da personagem"><button type="button" class="icon-btn" data-delent aria-label="Apagar personagem">${ICON.trash}</button></header>
+  const photoUrl = c.info?.photo ? await signedUrl(c.info.photo) : null;
+  main.innerHTML = `<nav class="row between"><a href="${base}/personagens" class="link-btn">${ICON.back} Personagens</a><button type="button" class="icon-btn" data-delent title="Apagar personagem" aria-label="Apagar personagem">${ICON.trash}</button></nav>
+    <header class="qi-hero">${heroPhoto(photoUrl, 'Foto')}
+      <div class="qi-main"><span class="small muted">Personagem</span><input class="title-in h1" data-ename value="${esc(c.name)}" aria-label="Nome da personagem"><div data-qi></div></div></header>
     <div class="pm-grid"><div class="pm-boards stack">
-      <section class="panel stack">${await photoField(c)}<div class="field"><label for="actor">Ator ou atriz</label><input id="actor" data-actor value="${esc(c.actor)}"></div>
-        <div class="grid2"><div class="field"><label for="cph">Telefone</label><input id="cph" data-cinfo="phone" type="tel" inputmode="tel" placeholder="912 345 678" value="${esc(c.info?.phone || '')}"></div><div class="field"><label for="cem">Email</label><input id="cem" data-cinfo="email" type="email" value="${esc(c.info?.email || '')}"></div></div>
-        ${blocks(c, [['descricao', 'Descrição'], ...(c.info?.guarda_roupa ? [['guarda_roupa', 'Guarda-roupa (notas)']] : []), ['caracterizacao', 'Caracterização']])}</section>
       <section class="panel" data-wsum><p class="muted small">A carregar o figurino…</p></section>
       <section class="panel"><h2 class="h3">Tarefas</h2><div data-tasks></div></section>
     </div><aside class="pm-side"><section class="panel"><h2 class="h3">Onde entra (${scenes.length})</h2>${sceneLinks(scenes, f, base)}</section></aside></div>`;
-  const saveActor = debounce((v) => sb.from('characters').update({ actor: v }).eq('id', c.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message)));
-  main.querySelector('[data-actor]').addEventListener('input', (e) => saveActor(e.target.value));
-  bindBlocks(main, 'characters', c);
+  quickInfo(main.querySelector('[data-qi]'), {
+    groups: [
+      { key: 'actor', label: 'Ator ou atriz', fields: [{ k: 'actor', label: 'Ator ou atriz' }] },
+      { key: 'contact', label: 'Contacto', fields: [{ k: 'phone', label: 'Telefone', type: 'tel', placeholder: '912 345 678' }, { k: 'email', label: 'Email', type: 'email' }] },
+      { key: 'descricao', label: 'Descrição', fields: [{ k: 'descricao', label: 'Descrição', type: 'textarea' }] },
+      { key: 'caracterizacao', label: 'Caracterização', fields: [{ k: 'caracterizacao', label: 'Caracterização (cabelo, maquilhagem, marcas…)', type: 'textarea' }] },
+      ...(c.info?.guarda_roupa ? [{ key: 'guarda_roupa', label: 'Guarda-roupa', fields: [{ k: 'guarda_roupa', label: 'Guarda-roupa (notas)', type: 'textarea' }] }] : []),
+    ],
+    get: (k) => (k === 'actor' ? c.actor : c.info?.[k]),
+    save: async (patch) => {
+      const up = {};
+      if ('actor' in patch) { c.actor = patch.actor; up.actor = patch.actor; delete patch.actor; }
+      if (Object.keys(patch).length) { c.info = { ...(c.info || {}), ...patch }; up.info = c.info; }
+      const { error } = await sb.from('characters').update(up).eq('id', c.id); if (error) toast('Não foi possível guardar: ' + error.message);
+    },
+  });
   { const sv = debounce((v) => sb.from('characters').update({ name: v }).eq('id', c.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message))); main.querySelector('[data-ename]').addEventListener('input', (e) => { c.name = e.target.value; if (c.name.trim()) sv(c.name.trim()); }); }
-  { const saveI = debounce(() => sb.from('characters').update({ info: c.info }).eq('id', c.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message)), 600); main.querySelectorAll('[data-cinfo]').forEach((t) => t.addEventListener('input', () => { c.info = { ...(c.info || {}), [t.dataset.cinfo]: t.value.trim() }; saveI(); })); }
+  { const saveI = debounce(() => sb.from('characters').update({ info: c.info }).eq('id', c.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message)), 600); main.querySelectorAll('[data-cinfo-x]').forEach((t) => t.addEventListener('input', () => { c.info = { ...(c.info || {}), [t.dataset.cinfo]: t.value.trim() }; saveI(); })); }
   bindPhoto(main, p, 'characters', c, () => personagem(main, p, f, id, base, cleanup));
   import('./wardrobe.js').then(({ wardrobeSummary }) => wardrobeSummary(main.querySelector('[data-wsum]'), p, c, base, scenes));
   const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: 'character', id: c.id } }); cleanup(() => t.destroy());
@@ -469,17 +482,27 @@ async function decor(main, p, f, id, base, cleanup) {
   const scenes = f.scenes.filter((s) => s.location_id === l.id);
   const photos = l.photos || [];
   const urls = await signedUrls(photos.map((x) => x.path));
-  main.innerHTML = `<a href="${base}/decors" class="link-btn">${ICON.back} Décors</a>
-    <header class="ent-h"><div class="ent-hl"><input class="title-in h1" data-ename value="${esc(l.name)}" aria-label="Nome do décor"><div class="ent-tags">${ieOf(l.id, f) ? `<span class="ie-tag lg" title="Pelas cenas do guião">${IE_LABEL[ieOf(l.id, f)]}</span>` : ''}${(() => { const tods = [...new Set(scenes.map((x) => x.time_of_day).filter(Boolean))]; return tods.length ? `<span class="muted small">${esc(tods.join(' · '))}</span>` : ''; })()}</div></div><button type="button" class="icon-btn" data-delent aria-label="Apagar décor">${ICON.trash}</button></header>
+  main.innerHTML = `<nav class="row between"><a href="${base}/decors" class="link-btn">${ICON.back} Décors</a><button type="button" class="icon-btn" data-delent title="Apagar décor" aria-label="Apagar décor">${ICON.trash}</button></nav>
+    <header class="qi-hero no-photo"><div class="qi-main"><span class="small muted">Décor</span><input class="title-in h1" data-ename value="${esc(l.name)}" aria-label="Nome do décor"><div class="ent-tags">${ieOf(l.id, f) ? `<span class="ie-tag lg" title="Pelas cenas do guião">${IE_LABEL[ieOf(l.id, f)]}</span>` : ''}${(() => { const tods = [...new Set(scenes.map((x) => x.time_of_day).filter(Boolean))]; return tods.length ? `<span class="muted small">${esc(tods.join(' · '))}</span>` : ''; })()}</div><div data-qi></div></div></header>
     <div class="pm-grid"><div class="pm-boards stack">
-      <section class="panel stack"><h2 class="h3">Ficha</h2><div class="grid2">${[['morada', 'Morada'], ['contacto', 'Contacto'], ['estacionamento', 'Estacionamento'], ['eletricidade', 'Eletricidade'], ['luz_natural', 'Luz natural'], ['notas', 'Notas']].map(([k, lab]) => `<div class="field"><label for="i-${k}">${lab}</label><textarea id="i-${k}" data-info="${k}" rows="2">${esc(l.info?.[k] || '')}</textarea></div>`).join('')}</div></section>
-      <section class="panel"><div class="row between"><h2 class="h3">Fotos de repérage</h2><button type="button" class="btn ghost" data-addph>${ICON.plus} Fotos</button></div>
+      <section class="panel" ${photos.length ? '' : 'hidden'} data-phsec><div class="row between"><h2 class="h3">Fotos de repérage</h2><button type="button" class="btn ghost sm" data-addph>${ICON.plus} Fotos</button></div>
         <div class="photo-grid" data-photos>${photos.map((ph, i) => `<figure><img src="${esc(urls[ph.path] || '')}" alt=""><button type="button" class="icon-btn sm" data-rmph="${i}" aria-label="Tirar foto">${ICON.close}</button></figure>`).join('') || '<p class="muted small">Ainda sem fotos. Também podes largá-las aqui ou colar com Ctrl+V.</p>'}</div></section>
       <section class="panel"><div class="row between"><h2 class="h3">Mapas de luz da montagem base</h2><button type="button" class="btn ghost" data-newlm>${ICON.bulb} Mapa de luz</button></div><div data-lms class="muted small">A carregar…</div></section>
       <section class="panel dp-props" data-dprops><p class="muted small">A carregar adereços…</p></section>
       <section class="panel"><h2 class="h3">Tarefas</h2><div data-tasks></div></section>
     </div><aside class="pm-side">${moodboardPanel(l)}<section class="panel geo-panel" data-geo></section><section class="panel"><h2 class="h3">Cenas neste décor (${scenes.length})</h2>${sceneLinks(scenes, f, base)}</section></aside></div>`;
-  bindBlocks(main, 'locations', l);
+  quickInfo(main.querySelector('[data-qi]'), {
+    groups: [
+      { key: 'morada', label: 'Morada', fields: [{ k: 'morada', label: 'Morada', type: 'textarea', rows: 2 }] },
+      { key: 'contacto', label: 'Contacto', fields: [{ k: 'contacto', label: 'Contacto do local (nome, telefone)' }] },
+      { key: 'logistica', label: 'Logística', fields: [{ k: 'estacionamento', label: 'Estacionamento', type: 'textarea', rows: 2 }, { k: 'eletricidade', label: 'Eletricidade', type: 'textarea', rows: 2 }] },
+      { key: 'luz_natural', label: 'Luz natural', fields: [{ k: 'luz_natural', label: 'Luz natural', type: 'textarea', rows: 2 }] },
+      { key: 'notas', label: 'Notas', fields: [{ k: 'notas', label: 'Notas', type: 'textarea' }] },
+    ],
+    actions: photos.length ? '' : `<button type="button" class="qi-btn" data-addph2>${ICON.image}<span>Fotos de repérage</span></button>`,
+    get: (k) => l.info?.[k],
+    save: async (patch) => { l.info = { ...(l.info || {}), ...patch }; const { error } = await sb.from('locations').update({ info: l.info }).eq('id', l.id); if (error) toast('Não foi possível guardar: ' + error.message); },
+  });
   bindMoodboard(main, p, { table: 'locations', row: l, key: 'location_id', base });
   placeProps(main.querySelector('[data-dprops]'), p, l, scenes.map((s) => s.id), base);
   geoPanel(main.querySelector('[data-geo]'), p, l);
@@ -501,7 +524,7 @@ async function decor(main, p, f, id, base, cleanup) {
     for (const file of imgs) { try { const up = await uploadImage(p.id, 'decors', file); l.photos = [...(l.photos || []), { path: up.path }]; } catch (e) { toast(e.message); } }
     await sb.from('locations').update({ photos: l.photos }).eq('id', l.id); decor(main, p, f, id, base, cleanup);
   };
-  main.querySelector('[data-addph]').addEventListener('click', () => { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = true; inp.onchange = () => add(inp.files); inp.click(); });
+  main.querySelectorAll('[data-addph], [data-addph2]').forEach((b) => b.addEventListener('click', () => { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = true; inp.onchange = () => add(inp.files); inp.click(); }));
   const grid = main.querySelector('[data-photos]');
   grid.addEventListener('dragover', (e) => e.preventDefault());
   grid.addEventListener('drop', (e) => { e.preventDefault(); add(e.dataTransfer.files); });

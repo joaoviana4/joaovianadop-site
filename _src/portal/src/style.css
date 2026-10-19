@@ -2797,3 +2797,45 @@ tr.row-dragging { opacity: .45; }
 .cv-note .cv-ntitle { border: 0; background: none; padding: 0; font-size: 15px; font-weight: 700; color: var(--text); min-height: 0; }
 .cv-note textarea { width: 100%; border: 0; background: none; padding: 0; resize: none; color: var(--text); font: inherit; line-height: 1.5; min-height: 110px; height: 100%; }
 .cv-note input:focus, .cv-note textarea:focus { outline: none; }
+
+/* ---------- páginas limpas: topo com foto, nome e só o que está preenchido; o resto atrás de botões ---------- */
+.qi-hero { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 24px; align-items: start; margin: 4px 0 8px; }
+@media (max-width: 640px) { .qi-hero { grid-template-columns: minmax(0, 1fr); } }
+.qi-main { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.qi-main .h1, .qi-main .title-in.h1 { margin: 0; }
+.qi-photo { position: relative; width: 132px; aspect-ratio: 3 / 4; border-radius: 14px; overflow: hidden; background: var(--panel2); border: 1px solid var(--line); }
+.qi-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.qi-photo.empty { border: 1.5px dashed var(--line2); background: transparent; }
+.qi-photo-btn { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
+.qi-photo:not(.empty) .qi-photo-btn { inset: auto 8px 8px auto; width: 30px; height: 30px; border-radius: 8px; background: rgba(12, 12, 18, .6); color: #fff; opacity: 0; transition: opacity .12s; }
+.qi-photo:not(.empty):hover .qi-photo-btn, .qi-photo:not(.empty) .qi-photo-btn:focus-visible { opacity: 1; }
+.qi-photo-btn svg { width: 20px; height: 20px; }
+.qi-photo:not(.empty) .qi-photo-btn svg { width: 15px; height: 15px; }
+.qi-photo.empty:hover { border-color: var(--text); }
+.qi-photo.empty:hover .qi-photo-btn { color: var(--text); }
+.qi-photo-rm { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; border: 0; border-radius: 7px; background: rgba(12, 12, 18, .6); color: #fff; display: grid; place-items: center; cursor: pointer; opacity: 0; transition: opacity .12s; }
+.qi-photo:hover .qi-photo-rm { opacity: 1; }
+.qi-photo-rm svg { width: 13px; height: 13px; }
+.qi-facts { margin: 6px 0 0; display: grid; gap: 4px; }
+.qi-f { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 12px; align-items: baseline; }
+.qi-f dt { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+.qi-f dd { margin: 0; min-width: 0; }
+.qi-v { border: 0; background: none; padding: 2px 6px; margin-left: -6px; border-radius: 6px; color: var(--text); font: inherit; font-size: 14.5px; text-align: left; cursor: pointer; line-height: 1.45; }
+.qi-v:hover { background: rgba(127, 127, 127, .12); }
+.qi-f.long .qi-v { white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+@media (max-width: 640px) { .qi-f { grid-template-columns: minmax(0, 1fr); gap: 0; } }
+.qi-add { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.qi-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 99px; border: 1px dashed var(--line2); background: transparent; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
+.qi-btn:hover { color: var(--text); border-color: var(--text); border-style: solid; }
+.qi-btn svg { width: 14px; height: 14px; }
+.qi-btn.strong { border-style: solid; color: var(--text); }
+.qi-form { display: grid; gap: 12px; }
+.qi-form.many { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+.qi-form .qi-wide { grid-column: 1 / -1; }
+.wr-drop { border: 1.5px dashed var(--line2); border-radius: 10px; padding: 14px; text-align: center; font-size: 13px; color: var(--muted); }
+.wr-cost textarea[hidden] { display: none; }
+.qi-hero.no-photo { grid-template-columns: minmax(0, 1fr); }
+.ent-in { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ent-in .chip { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; color: var(--text); }
+.prop-pills { margin-top: 2px; }
+.pill-sel select { width: auto; min-height: 0; padding: 5px 30px 5px 12px; border-radius: 99px; font-size: 13px; font-weight: 600; }

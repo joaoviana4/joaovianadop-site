@@ -48,7 +48,7 @@ export function bindEdits(root, items) {
 function onPasteImages(root, fn) {
   const h = (e) => {
     if (!document.body.contains(root)) { document.removeEventListener('paste', h); return; }
-    if (e.target.closest?.('input, textarea, [contenteditable="true"]') || document.querySelector('#modal .modal')) return;
+    if (e.defaultPrevented || e.target.closest?.('input, textarea, [contenteditable="true"]') || document.querySelector('#modal .modal')) return;
     const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith('image/'));
     if (files.length) { e.preventDefault(); fn(files); }
   };

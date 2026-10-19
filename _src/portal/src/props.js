@@ -2,6 +2,7 @@ import { onWrite } from './undo.js';
 import { saveLater, sb, esc, toast, modal, confirmBox, ICON, signedUrls, uploadImage } from './lib.js';
 import { mountTasks } from './tasks.js';
 import { scriptMode } from './modules.js';
+import { quickInfo } from './quickinfo.js';
 import { analyzeScenes } from './breakdown.js';
 
 // Adereços (departamento de Arte), como no Studio: de ação e de cenário, estados com cores,
@@ -264,19 +265,18 @@ async function propPage(main, p, f, id, base, cleanup) {
   const chips = (ids, list, key) => `<div class="chips">${(ids || []).map((i) => { const e = list.find((y) => y.id === i); return e ? `<span class="chip">${esc(e.name)}<button type="button" class="chip-x" data-rm="${key}:${i}" aria-label="Tirar ${esc(e.name)}">${ICON.close}</button></span>` : ''; }).join('')}
     <label class="sel chip-add"><span class="vh">Juntar</span><select data-addrel="${key}"><option value="">+ Juntar</option>${list.filter((e) => !(ids || []).includes(e.id)).map((e) => `<option value="${e.id}">${esc(e.name)}</option>`).join('')}</select></label></div>`;
   main.innerHTML = `<a href="${base}/aderecos" class="link-btn">${ICON.back} Adereços</a>
-    <header class="ent-h"><h1 class="h1">${esc(x.name)}</h1><button type="button" class="btn ghost danger-text" data-delprop>${ICON.trash} Apagar adereço</button></header>
-    <div class="pm-grid"><div class="pm-boards stack">
-      <section class="panel stack"><div class="grid2">
-        <div class="field"><label for="pty">Tipo</label><select id="pty" data-k="type"><option value="acao" ${x.type === 'acao' ? 'selected' : ''}>De ação</option><option value="cenario" ${x.type === 'cenario' ? 'selected' : ''}>De cenário</option></select></div>
-        <div class="field"><label for="pst">Estado</label><select id="pst" data-k="status">${PROP_STATUS.map(([k, l]) => `<option value="${k}" ${x.status === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
-        <div class="field"><label for="pca">Categoria</label><input id="pca" data-k="category" value="${esc(x.category)}" list="pcats"><datalist id="pcats">${['Mobiliário', 'Decoração', 'Comida e bebida', 'Documentos', 'Eletrónica', 'Armas de cena', 'Veículos', 'Roupa e acessórios', 'Iluminação prática'].map((c) => `<option value="${c}">`).join('')}</datalist></div>
-        <div class="field"><label for="pq">Quantidade</label><input id="pq" type="number" min="1" data-k="quantity" value="${esc(x.quantity)}"></div>
+    <header class="qi-hero no-photo"><div class="qi-main">
+      <div class="row between wrap-gap"><span class="small muted">Adereço</span><button type="button" class="icon-btn" data-delprop title="Apagar adereço" aria-label="Apagar adereço">${ICON.trash}</button></div>
+      <h1 class="h1">${esc(x.name)}</h1>
+      <div class="row wrap-gap prop-pills">
+        <label class="pill-sel"><span class="vh">Estado</span><select id="pst" data-k="status">${PROP_STATUS.map(([k, l]) => `<option value="${k}" ${x.status === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label class="pill-sel"><span class="vh">Tipo</span><select id="pty" data-k="type"><option value="acao" ${x.type === 'acao' ? 'selected' : ''}>De ação</option><option value="cenario" ${x.type === 'cenario' ? 'selected' : ''}>De cenário</option></select></label>
       </div>
-      <div class="field"><label for="pd">Descrição</label><textarea id="pd" rows="3" data-k="description">${esc(x.description)}</textarea></div>
-      <div class="field"><label for="pco">Continuidade (parte-se, molha-se, fica vazio…)</label><textarea id="pco" rows="2" data-k="continuity">${esc(x.continuity)}</textarea></div></section>
+      <div data-qi></div></div></header>
+    <div class="pm-grid"><div class="pm-boards stack">
       <section class="panel stack" data-acq></section>
-      <section class="panel"><h2 class="h3">Interações</h2>${(x.interactions || []).length ? `<ul class="inter">${x.interactions.map((it) => `<li><strong>${esc(it.character || '—')}</strong> · ${esc(it.action || '')}${it.scene ? ` <span class="muted small">(cena ${esc(it.scene)})</span>` : ''}</li>`).join('')}</ul>` : '<p class="muted small">Sem interações registadas.</p>'}</section>
-      <section class="panel"><div class="row between"><h2 class="h3">Referências</h2><div class="row"><span class="muted small paste-hint">ou cola com Ctrl+V</span><button type="button" class="btn ghost" data-addimg>${ICON.image} Imagens</button><button type="button" class="btn ghost" data-addlink>${ICON.link} Link</button></div></div>
+      <section class="panel" ${(x.interactions || []).length ? '' : 'hidden'}><h2 class="h3">Interações</h2>${(x.interactions || []).length ? `<ul class="inter">${x.interactions.map((it) => `<li><strong>${esc(it.character || '—')}</strong> · ${esc(it.action || '')}${it.scene ? ` <span class="muted small">(cena ${esc(it.scene)})</span>` : ''}</li>`).join('')}</ul>` : '<p class="muted small">Sem interações registadas.</p>'}</section>
+      <section class="panel" ${imgs.length || links.length ? '' : 'hidden'}><div class="row between"><h2 class="h3">Referências</h2><div class="row"><span class="muted small paste-hint">ou cola com Ctrl+V</span><button type="button" class="btn ghost" data-addimg>${ICON.image} Imagens</button><button type="button" class="btn ghost" data-addlink>${ICON.link} Link</button></div></div>
         ${imgs.length ? `<div class="photo-grid">${imgs.map((r, i) => `<figure><img src="${esc(urls[r.path] || '')}" alt=""><button type="button" class="icon-btn sm" data-rmimg="${i}" aria-label="Tirar imagem">${ICON.close}</button></figure>`).join('')}</div>` : ''}
         ${links.length ? `<ul class="links">${links.map((r, i) => `<li><a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${esc(r.title || r.url)}</a><button type="button" class="icon-btn sm" data-rmlink="${i}" aria-label="Tirar link">${ICON.close}</button></li>`).join('')}</ul>` : ''}
         ${!imgs.length && !links.length ? '<p class="muted small">Imagens e links para produtos.</p>' : ''}</section>
@@ -286,6 +286,18 @@ async function propPage(main, p, f, id, base, cleanup) {
       ${f.characters.length ? `<section class="panel"><h2 class="h3">${!scriptMode(p) ? 'Atores e figurantes' : 'Personagens'}</h2>${chips(x.character_ids, f.characters, 'character_ids')}</section>` : ''}
       ${f.locations.length ? `<section class="panel"><h2 class="h3">Décors</h2>${chips(x.location_ids, f.locations, 'location_ids')}</section>` : ''}
     </aside></div>`;
+  quickInfo(main.querySelector('[data-qi]'), {
+    groups: [
+      { key: 'cat', label: 'Categoria', fields: [{ k: 'category', label: 'Categoria', placeholder: 'ex: Mobiliário, Comida e bebida' }, { k: 'quantity', label: 'Quantidade', type: 'number' }], show: (g) => [g('category'), Number(g('quantity')) > 1 ? `${g('quantity')} unidades` : ''].filter(Boolean).join(' · ') },
+      { key: 'description', label: 'Descrição', fields: [{ k: 'description', label: 'Descrição', type: 'textarea' }] },
+      { key: 'continuity', label: 'Continuidade', fields: [{ k: 'continuity', label: 'Continuidade (parte-se, molha-se, fica vazio…)', type: 'textarea', rows: 3 }] },
+    ],
+    get: (k) => (k === 'quantity' ? (Number(x.quantity) > 1 ? x.quantity : '') : x[k]),
+    save: async (patch) => { if ('quantity' in patch) patch.quantity = Number(patch.quantity) || 1; Object.assign(x, patch); const { error } = await sb.from('props').update(patch).eq('id', x.id); if (error) toast('Não foi possível guardar: ' + error.message); },
+    actions: imgs.length || links.length ? '' : `<button type="button" class="qi-btn" data-addimg2>${ICON.image}<span>Imagens de referência</span></button><button type="button" class="qi-btn" data-addlink2>${ICON.link || ICON.plus}<span>Link para produto</span></button>`,
+  });
+  main.querySelector('[data-addimg2]')?.addEventListener('click', () => main.querySelector('[data-addimg]').click());
+  main.querySelector('[data-addlink2]')?.addEventListener('click', () => main.querySelector('[data-addlink]').click());
   const savers = {};
   main.querySelectorAll('[data-k]').forEach((el) => el.addEventListener('input', () => {
     const k = el.dataset.k; x[k] = el.type === 'number' ? Number(el.value) || 1 : el.value;

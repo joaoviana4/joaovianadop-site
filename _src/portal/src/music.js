@@ -8,6 +8,7 @@ import { shotCard, bindShots, shotViewer } from './fiction.js';
 import { mountTasks } from './tasks.js';
 import { mountLayout, fullscreenButton } from './layout.js';
 import { ensureModules } from './modules.js';
+import { quickInfo, heroPhoto } from './quickinfo.js';
 
 // Videoclipes: a música partida em secções (intro, versos, refrões, ponte…), como no Studio.
 // Cada secção é uma linha de "scenes" com tempos; décors = locations, pessoas = characters (figurantes têm info.extra).
@@ -432,21 +433,17 @@ async function entityPage(main, p, f, kind, id, base, cleanup) {
   const info = { ...(e.info || {}) };
   const fields = isPlace ? [['address', 'Morada / localização', 'Onde fica, como se chega, contacto do local'], ['notes', 'Notas', 'Autorizações, horários, luz natural, som, estacionamento…']]
     : [['role', 'Papel no clipe', 'ex: o artista, a mulher do bar, dançarina'], ['phone', 'Telefone', '912 345 678'], ['email', 'Email', ''], ['contact', 'Agência ou outro contacto', 'Agência, representante…'], ['notes', 'Notas', 'Guarda-roupa, cabelo e maquilhagem, disponibilidade…']];
+  const photoUrl = !isPlace && e.info?.photo ? await signedUrl(e.info.photo) : null;
+  // página limpa: em cima o nome (e a foto, nas pessoas) e só o que está preenchido; o resto abre-se com "+ …"
   main.innerHTML = `
-    <nav class="row between wrap-gap"><a href="${base}/${path}" class="link-btn">${ICON.back} ${isPlace ? 'Décors' : 'Atores e figurantes'}</a></nav>
-    <header class="row between wrap-gap"><div><span class="small muted">${isPlace ? 'Décor' : info.extra ? 'Figurante' : 'Ator ou atriz'}</span><input class="title-in h1" data-name value="${esc(e.name)}" aria-label="Nome"></div>
-      <button type="button" class="btn ghost danger-text" data-del>${ICON.trash} Apagar</button></header>
-    <div class="ent-layout">
-      <section class="panel stack">
-        ${isPlace ? '' : await photoField(e)}
-        ${isPlace ? '' : `<div class="field"><label for="ea">Nome real</label><input id="ea" data-actor value="${esc(e.actor || '')}" placeholder="Quem faz"></div>${''}<label class="row small"><input type="checkbox" data-extra ${info.extra ? 'checked' : ''}> É figurante</label>`}
-        ${isPlace ? '' : '<div class="grid2">'}${fields.filter(([k]) => k === 'phone' || k === 'email').map(([k, l, ph]) => `<div class="field"><label for="ei-${k}">${l}</label><input id="ei-${k}" data-info="${k}" type="${k === 'phone' ? 'tel' : 'email'}" ${k === 'phone' ? 'inputmode="tel"' : ''} placeholder="${esc(ph)}" value="${esc(info[k] || '')}"></div>`).join('')}${isPlace ? '' : '</div>'}
-        ${fields.filter(([k]) => k !== 'phone' && k !== 'email').map(([k, l, ph]) => `<div class="field"><label for="ei-${k}">${l}</label><textarea id="ei-${k}" data-info="${k}" rows="${k === 'notes' ? 4 : 2}" placeholder="${esc(ph)}">${esc(info[k] || '')}</textarea></div>`).join('')}
-      </section>
-      <section class="panel"><h2 class="h3">Aparece em</h2>
-        ${secs.length ? `<ul class="ent-secs">${secs.map((s) => { const i = f.scenes.indexOf(s); return `<li><a href="${base}/seguimento/${s.id}"><i class="seg-dot" style="--sc:${SEG_COLORS[i % SEG_COLORS.length]}"></i><span>${esc(s.heading || 'Sem nome')}</span><span class="muted small">${esc([s.starts_at, s.ends_at].filter(Boolean).join('–'))}</span></a></li>`; }).join('')}</ul>` : '<p class="muted small">Ainda em nenhuma secção. Junta-o dentro de uma secção do seguimento.</p>'}
-      </section>
-    </div>
+    <nav class="row between wrap-gap"><a href="${base}/${path}" class="link-btn">${ICON.back} ${isPlace ? 'Décors' : 'Atores e figurantes'}</a><button type="button" class="icon-btn" data-del title="Apagar" aria-label="Apagar">${ICON.trash}</button></nav>
+    <header class="qi-hero ${isPlace ? 'no-photo' : ''}">
+      ${isPlace ? '' : heroPhoto(photoUrl, 'Foto')}
+      <div class="qi-main"><span class="small muted">${isPlace ? 'Décor' : info.extra ? 'Figurante' : 'Ator ou atriz'}${isPlace ? '' : ` · <button type="button" class="link-btn small" data-extra>${info.extra ? 'passar a elenco' : 'é figurante?'}</button>`}</span>
+        <input class="title-in h1" data-name value="${esc(e.name)}" aria-label="Nome">
+        <div data-qi></div></div>
+    </header>
+    ${secs.length ? `<section class="ent-in"><span class="small muted">Aparece em</span>${secs.map((s) => { const i = f.scenes.indexOf(s); return `<a class="chip" href="${base}/seguimento/${s.id}"><i class="seg-dot" style="--sc:${SEG_COLORS[i % SEG_COLORS.length]}"></i>${esc(s.heading || 'Sem nome')}</a>`; }).join('')}</section>` : ''}
     ${!isPlace && !info.extra ? '<section class="panel" data-wsum></section>' : ''}
     ${isPlace ? moodboardPanel(e) : ''}
     ${isPlace ? '<section class="panel geo-panel" data-geo></section>' : ''}
@@ -462,15 +459,29 @@ async function entityPage(main, p, f, kind, id, base, cleanup) {
   const flush = debounce(() => { const patch = pending; pending = {}; sb.from(table).update(patch).eq('id', e.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message)); }, 500);
   const save = (patch) => { pending = { ...pending, ...patch }; flush(); };
   main.querySelector('[data-name]').addEventListener('input', (ev) => { e.name = ev.target.value; save({ name: e.name }); });
-  main.querySelector('[data-actor]')?.addEventListener('input', (ev) => { e.actor = ev.target.value; save({ actor: e.actor }); });
-  main.querySelector('[data-extra]')?.addEventListener('change', async (ev) => {
-    info.extra = ev.target.checked; e.info = { ...info };
+  quickInfo(main.querySelector('[data-qi]'), {
+    groups: isPlace
+      ? [{ key: 'address', label: 'Morada', fields: [{ k: 'address', label: 'Morada / localização', placeholder: 'Onde fica, como se chega, contacto do local', type: 'textarea', rows: 2 }] },
+        { key: 'notes', label: 'Notas', fields: [{ k: 'notes', label: 'Notas', placeholder: 'Autorizações, horários, luz natural, som, estacionamento…', type: 'textarea' }] }]
+      : [{ key: 'actor', label: 'Nome real', add: 'Quem faz', fields: [{ k: 'actor', label: 'Nome real (quem faz)' }] },
+        { key: 'role', label: 'Papel', fields: [{ k: 'role', label: 'Papel no clipe', placeholder: 'ex: o artista, a mulher do bar, dançarina' }] },
+        { key: 'contact', label: 'Contacto', fields: [{ k: 'phone', label: 'Telefone', type: 'tel', placeholder: '912 345 678' }, { k: 'email', label: 'Email', type: 'email' }, { k: 'contact', label: 'Agência ou outro contacto', wide: true }] },
+        { key: 'notes', label: 'Notas', fields: [{ k: 'notes', label: 'Notas', placeholder: 'Guarda-roupa, cabelo e maquilhagem, horários…', type: 'textarea' }] }],
+    get: (k) => (k === 'actor' ? e.actor : info[k]),
+    save: async (patch) => {
+      const up = {};
+      if ('actor' in patch) { e.actor = patch.actor; up.actor = patch.actor; delete patch.actor; }
+      if (Object.keys(patch).length) { Object.assign(info, patch); e.info = { ...(e.info || {}), ...patch }; up.info = e.info; }
+      const { error } = await sb.from(table).update(up).eq('id', e.id); if (error) toast('Não foi possível guardar: ' + error.message);
+    },
+  });
+  main.querySelector('[data-extra]')?.addEventListener('click', async () => {
+    info.extra = !info.extra; e.info = { ...(e.info || {}), extra: info.extra };
     // passa a secção certa: figurantes ficam em extra_ids, o resto em character_ids
     await sb.from(table).update({ info }).eq('id', e.id);
     await Promise.all(secs.map((s) => { const c = (s.character_ids || []).filter((x) => x !== id), x = (s.extra_ids || []).filter((y) => y !== id); (info.extra ? x : c).push(id); s.character_ids = c; s.extra_ids = x; return sb.from('scenes').update({ character_ids: c, extra_ids: x }).eq('id', s.id); }));
-    toast(info.extra ? 'Agora é figurante.' : 'Agora está no elenco.');
+    toast(info.extra ? 'Agora é figurante.' : 'Agora está no elenco.'); redrawPage();
   });
-  main.querySelectorAll('[data-info]').forEach((t) => t.addEventListener('input', () => { info[t.dataset.info] = t.value; e.info = { ...(e.info || {}), [t.dataset.info]: t.value }; save({ info: e.info }); }));
   main.querySelector('[data-del]').addEventListener('click', async () => {
     if (!(await confirmBox(`Apagar "${e.name}"? Sai também das secções onde está.`, 'Apagar'))) return;
     const key = isPlace ? ['location_ids'] : ['character_ids', 'extra_ids'];

@@ -90,3 +90,6 @@ O resto deste ficheiro descreve como o Studio nasceu do código do byGrain (aind
 ## 19 out — Só no Studio, por portar para a Grain (pedido: "deixar a grain como está e quando tiver atualizável, atualizamos")
 - Visão geral como board: `layout.js` (modo `inline`, `b.off`, `add`/`show`, guarda chaves extra), `overview.js` (barra `.ov-tools` à direita com blocos sugeridos, notas, "Orçamento ou ferramenta", Colar), `ovwidgets.js` novo (notas e ferramentas coladas em `projects.layouts.overview.extra`).
 - "Copiar para a visão geral" no Orçamento e nas ferramentas (studio.js) + Ctrl+V / botão Colar na visão geral.
+
+### Studio só: páginas limpas (quickinfo.js)
+- Figurino (pessoa), Décors (clip e ficção), Atores/Personagens e Adereços: só aparece o que está preenchido; o resto são botões "+ Medidas", "+ Morada"… que abrem uma janela ao centro. Ficheiros: quickinfo.js, wardrobe.js personPage, music.js entityPage, fiction.js personagem/decor, props.js propPage, style.css (.qi-*).
