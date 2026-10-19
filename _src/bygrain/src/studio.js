@@ -636,7 +636,7 @@ async function loadProjectNow(id) {
   p._budgetAt = p.canBudget ? fin?.updated_at ?? null : null;
   p._approvedAt = p.canBudget ? fin?.approved_at ?? null : null;
   p._boards = boards || [];
-  if (p.parent_id) { let par = p.parent; if (par === undefined) ({ data: par } = await sb.from('projects').select('id, name, kind, deleted_at').eq('id', p.parent_id).maybeSingle()); p._parent = par && !par.deleted_at ? par : null; }
+  if (p.parent_id) { let par = Array.isArray(p.parent) ? p.parent[0] : p.parent; if (par === undefined || (par && !par.id)) ({ data: par } = await sb.from('projects').select('id, name, kind, deleted_at').eq('id', p.parent_id).maybeSingle()); p._parent = par && !par.deleted_at ? par : null; }
   delete p.parent;
   return p;
 }
