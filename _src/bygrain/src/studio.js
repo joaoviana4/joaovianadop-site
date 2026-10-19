@@ -1,7 +1,7 @@
 import './style.css';
 import { settleSaves, daysUntil } from './lib.js';
 import { loadHidden, hideProject, unhideProject } from './lib.js';
-import { IS_STUDIO, sb, BUCKET, state, esc, $, loadProfile, isStaff, isAdmin, toast, modal, confirmBox, ICON, LOGO, KINDS, ROLES, phaseOf, greeting, initials, signedUrls, uploadImage, callFn, authPw, MIN_PW, fmtDate, dueInfo, registerSW, isInstalled, installApp, BASE, PROJECT_COLS, hasPerm, leadsOf } from './lib.js';
+import { IS_STUDIO, sb, BUCKET, state, esc, $, loadProfile, isStaff, isAdmin, toast, modal, confirmBox, ICON, LOGO, KINDS, ROLES, phaseOf, greeting, initials, signedUrls, uploadImage, callFn, authPw, MIN_PW, fmtDate, dueInfo, todayISO, registerSW, isInstalled, installApp, BASE, PROJECT_COLS, hasPerm, leadsOf } from './lib.js';
 import { renderAuth } from './auth.js';
 import { activityButton, bindActivity, activityPage } from './activity.js';
 import { visField, bindVis, readVis } from './vis.js';
@@ -1072,6 +1072,7 @@ async function projectOverview(main, p) {
         <h1 class="pm-name">${esc(p.name)}</h1>
         <p class="pm-sub">${[p.client, p.starts_on && p.ends_on ? `${fmtDate(p.starts_on)} – ${fmtDate(p.ends_on)}` : ''].filter(Boolean).map(esc).join(' · ')}</p>
         ${!p.is_central ? `<div class="pm-leads" data-leads></div>` : ''}
+        ${!p.is_central ? (() => { const n = tasks.length, all = (allTasks || []).length, late = tasks.filter((t) => t.due && t.due < todayISO()).length; return `<button type="button" class="pm-tasks ${late ? 'late' : ''}" data-pmtasks aria-expanded="false" aria-haspopup="true" title="Ver as tarefas do projeto">${ICON.task}<span>${n ? `Tem ${n} ${n === 1 ? 'tarefa' : 'tarefas'}` : all ? 'Tarefas todas feitas' : 'Sem tarefas'}${late ? ` · ${late} ${late === 1 ? 'atrasada' : 'atrasadas'}` : ''}</span>${all ? `<i class="pm-tbar" aria-hidden="true"><b style="width:${Math.round(((all - n) / all) * 100)}%"></b></i>` : ''}</button>`; })() : ''}
         ${p.canBudget && hasMod(p, 'orcamento') ? (() => { const used = budgetUsed(p) + (p._kidsAlloc || 0); const over = p.value != null && used > p.value; return `<button type="button" class="pm-budget ${over ? 'over' : ''}" data-budget title="Só quem tem acesso ao orçamento vê isto"><span>${ICON.lock} Orçamento${p._approvedAt ? ' <em class="appr">✓ aprovado</em>' : ''}</span>${p.value != null ? `<strong>${eur.format(p.value)}</strong>${used ? `<small>${eur.format(used)} na tabela${over ? ` · ${eur.format(used - p.value)} acima` : ''}</small>` : ''}` : '<strong class="muted-w">Definir</strong>'}</button>`; })() : ''}
         ${ph.label || p.stage ? `<div class="pm-phase"><div class="row between small"><span>${esc(p.stage ? phaseLabel(p.stage) : ph.label)}</span><span>${Math.round(ph.pct * 100)}%</span></div><div class="bar light"><i style="width:${Math.round(ph.pct * 100)}%"></i></div></div>` : ''}
       </div>
@@ -1116,6 +1117,28 @@ async function projectOverview(main, p) {
   if (!p.is_central) { mountSituation(main.querySelector('[data-situation]'), p, base); autoModules(p); }
   const mkup = main.querySelector('[data-mkup]'); if (mkup) lazy.marketing().then((m) => m.upcomingBox(mkup, p, base));
   if (kids) childrenSection(main.querySelector('[data-kids]'), p, kids, { base, canBudget: p.canBudget, onNew: isStaff() ? () => newProject({ parent: p }) : null, canEdit: isStaff(), after: () => projectPage(p.id, 'geral') });
+  // tarefas do projeto: um botão no banner; ao carregar mostra as que estão por fazer
+  main.querySelector('[data-pmtasks]')?.addEventListener('click', (e) => {
+    const btn = e.currentTarget; const open = document.querySelector('.pm-tpop'); if (open) { open.remove(); btn.setAttribute('aria-expanded', 'false'); return; }
+    const deptMap2 = new Map((p.departments || []).map((d) => [d.id, d]));
+    const list = [...tasks].sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999'));
+    const pop = document.createElement('div'); pop.className = 'pm-tpop'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', 'Tarefas do projeto');
+    pop.innerHTML = `<div class="row between"><strong>${list.length ? `${list.length} por fazer` : 'Nada por fazer'}</strong><button type="button" class="icon-btn sm" data-x aria-label="Fechar">${ICON.close}</button></div>
+      ${list.length ? `<ul>${list.slice(0, 10).map((t) => { const du = dueInfo(t.due, t.status); const who = people.find((x) => x.id === t.assignee_id); const dp = deptMap2.get(t.department); return `<li><a href="${base}/tarefas">${dp ? `<i class="dot" style="background:${esc(dp.color)}"></i>` : '<i class="dot"></i>'}<span class="t">${esc(t.title)}</span><span class="muted small">${esc(who?.display_name || '')}</span><span class="due due-${du.tone}">${esc(du.label)}</span></a></li>`; }).join('')}${list.length > 10 ? `<li class="muted small">e mais ${list.length - 10}…</li>` : ''}</ul>` : '<p class="muted small">Não há tarefas por fazer neste projeto.</p>'}
+      <div class="row between"><a class="small" href="${base}/tarefas">Ver todas as tarefas</a><button type="button" class="btn ghost sm" data-newt>${ICON.plus} Nova tarefa</button></div>`;
+    document.body.append(pop);
+    const r = btn.getBoundingClientRect();
+    pop.style.top = `${r.bottom + 8}px`; pop.style.left = `${Math.max(12, Math.min(window.innerWidth - pop.offsetWidth - 12, r.left))}px`;
+    btn.setAttribute('aria-expanded', 'true');
+    const close = () => { pop.remove(); btn.setAttribute('aria-expanded', 'false'); document.removeEventListener('pointerdown', out, true); document.removeEventListener('keydown', k, true); window.removeEventListener('scroll', close, true); };
+    const out = (ev) => { if (!pop.contains(ev.target) && !btn.contains(ev.target)) close(); };
+    const k = (ev) => { if (ev.key === 'Escape') close(); };
+    setTimeout(() => { document.addEventListener('pointerdown', out, true); document.addEventListener('keydown', k, true); window.addEventListener('scroll', close, true); });
+    pop.querySelector('[data-x]').addEventListener('click', close);
+    pop.querySelectorAll('a').forEach((a) => a.addEventListener('click', close));
+    pop.querySelector('[data-newt]').addEventListener('click', () => { close(); addTaskModal({ projectId: p.id, departments: p.departments || [], entity: null, where: '' }); });
+  });
+  onCleanup(() => document.querySelector('.pm-tpop')?.remove());
   const leadsEl = main.querySelector('[data-leads]');
   if (leadsEl) drawLeads(leadsEl, p);
   if (p.is_central) { const box = document.createElement('div'); box.className = 'co'; main.querySelector('.pm-head').after(box); centralOverview(box); }

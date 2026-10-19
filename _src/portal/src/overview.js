@@ -117,15 +117,13 @@ export async function mountSituation(box, p, base, { onChange } = {}) {
     // o resumo da rodagem é da etapa Produção (ou de "todas" quando o projeto já está a filmar)
     const ph = selPhase(p), inProd = ph === 'prod' || (ph === 'all' && currentPhase(p) === 'prod');
     box.innerHTML = `<div data-lay>
-      <div data-blk="prog"><section class="panel ov-prog">
-        <div class="ov-pg"><div class="row between"><a href="${base}/tarefas"><strong>Tarefas</strong></a><span class="muted small">${all.length ? `${open.length === 1 ? '1 por fazer' : `${open.length} por fazer`} · ${doneN} de ${all.length} feitas` : 'Ainda não há tarefas'}</span></div>
-          <div class="bar big"><i style="width:${all.length ? Math.round((doneN / all.length) * 100) : 0}%"></i></div></div>
-        ${inProd ? `<div class="ov-pg"><div class="row between"><a href="${base}/rodagem"><strong>Planos</strong></a><span class="muted small">${sh ? `${sh.total - sh.filmed === 1 ? 'falta 1 plano' : `faltam ${sh.total - sh.filmed} planos`} · ${sh.filmed} de ${sh.total} filmados` : 'Ainda não há planos'}</span></div>
+      ${inProd ? `<div data-blk="prog"><section class="panel ov-prog">
+        <div class="ov-pg"><div class="row between"><a href="${base}/rodagem"><strong>Planos</strong></a><span class="muted small">${sh ? `${sh.total - sh.filmed === 1 ? 'falta 1 plano' : `faltam ${sh.total - sh.filmed} planos`} · ${sh.filmed} de ${sh.total} filmados` : 'Ainda não há planos'}</span></div>
           <div class="bar big ok"><i style="width:${sh ? Math.round((sh.filmed / sh.total) * 100) : 0}%"></i></div></div>
         <div class="ov-pg ov-film"><div class="row between"><strong>Filme</strong><span class="ov-pct">${sh ? Math.round((sh.filmed / sh.total) * 100) : 0}%</span></div>
           <div class="bar big film"><i style="width:${sh ? Math.round((sh.filmed / sh.total) * 100) : 0}%"></i></div>
-          <span class="muted small">${sh ? `${shoot.daysDone} de ${shoot.days} ${shoot.days === 1 ? 'dia de rodagem fechado' : 'dias de rodagem fechados'}` : 'Os planos marcados como filmados na Rodagem contam aqui.'}</span></div>` : ''}
-      </section></div>
+          <span class="muted small">${sh ? `${shoot.daysDone} de ${shoot.days} ${shoot.days === 1 ? 'dia de rodagem fechado' : 'dias de rodagem fechados'}` : 'Os planos marcados como filmados na Rodagem contam aqui.'}</span></div>
+      </section></div>` : ''}
       ${inProd ? `<div data-blk="mapa">${shootMap(shoot, base)}</div>` : ''}
       <div data-blk="kpis"><div class="ov-kpis">
         <a class="ov-kpi ${late.length ? 'warn' : ''}" href="${base}/tarefas"><span class="k-ic">${ICON.task}</span><strong>${open.length}</strong><span>${open.length === 1 ? 'tarefa por fazer' : 'tarefas por fazer'}</span>${late.length ? `<em>${plural(late.length, 'atrasada', 'atrasadas')}</em>` : all.length ? `<em class="ok">${all.length - open.length} de ${all.length} feitas</em>` : ''}</a>
