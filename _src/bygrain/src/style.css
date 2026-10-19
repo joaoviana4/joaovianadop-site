@@ -2272,3 +2272,7 @@ body.tool-dragging, body.tool-dragging * { cursor: grabbing !important; user-sel
 .ex-menu button:hover { background: var(--panel2); }
 .in-add { max-width: 110px; }
 .pn-search { margin: 4px 0 10px; padding: 5px 9px; font-size: 12.5px; }
+.shot-code-a { display: inline-flex; align-items: center; width: auto !important; border: 0 !important; color: var(--text); text-decoration: none; border-radius: 7px; }
+.shot-code-a:hover { background: var(--panel2); color: var(--blue); }
+.pl-code { font-weight: 700; color: var(--text); text-decoration: none; padding: 4px 6px; border-radius: 6px; }
+.pl-code:hover { background: var(--panel2); color: var(--blue); }
