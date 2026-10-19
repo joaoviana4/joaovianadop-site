@@ -1,6 +1,7 @@
 import { sb, esc, toast, modal, confirmBox, ICON } from './lib.js';
 import { exportPdf } from './pdf.js';
 import { GRAIN_FEE, feeRowSum } from './folders.js';
+import { budgetSheet, isFormula, show, colName, HELP } from './formula.js';
 import { colorField, readColor, bindColorField, colorPop, tableShortcuts, rowStyle, colStyle, makeHistory, bindUndoKeys } from './tablekit.js';
 
 // Orçamento do projeto, como no Studio: tabela com secções, colunas de texto, valor (€) e número,
@@ -46,11 +47,11 @@ const fmt = (c, v) => (v == null || v === '' ? '' : c.type === 'money' ? eur.for
 const fmtIn = (c, v) => { const n = num(v); return n == null ? (v ?? '') : c.type === 'money' ? new Intl.NumberFormat('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n) : String(n).replace('.', ','); };
 
 function sums(b) {
-  const tot = {}, sec = {}; let cur = null;
+  const tot = {}, sec = {}; let cur = null; const S = budgetSheet(b);
   b.cols.forEach((c) => c.type !== 'text' && (tot[c.id] = 0));
   b.rows.forEach((r) => {
     if (r.kind === 'section') { cur = r.id; sec[cur] = {}; return; }
-    b.cols.forEach((c) => { if (c.type === 'text') return; const n = num(r.cells?.[c.id]); if (n == null) return; tot[c.id] += n; if (cur) sec[cur][c.id] = (sec[cur][c.id] || 0) + n; });
+    b.cols.forEach((c) => { if (c.type === 'text') return; const n = S.num(r, c.id); if (n == null) return; tot[c.id] += n; if (cur) sec[cur][c.id] = (sec[cur][c.id] || 0) + n; });
   });
   return { tot, sec };
 }
@@ -129,8 +130,9 @@ export async function budgetPage(main, p) {
       ${has ? `<div class="bbar-w"><div class="bbar" role="img" aria-label="${Math.round(ratio * 100)} % do orçamento geral"><span class="bst-${stt}" style="width:${Math.min(100, ratio * 100).toFixed(1)}%"></span>${ratio > 1 ? `<i style="left:${(100 / ratio).toFixed(1)}%"></i>` : ''}</div><p class="muted small">${Math.round(ratio * 100)} % do orçamento geral</p></div>` : ''}`;
   }
 
-  function cellInput(r, c) {
+  function cellInput(r, c, S) {
     const v = r.cells?.[c.id] ?? '';
+    if (isFormula(v)) { const x = S.value(r, c.id); return `<input class="${c.type !== 'text' ? 'num' : ''} is-f" data-cell="${c.id}" data-raw="${esc(v)}" title="${esc(v)}" value="${esc(typeof x === 'number' && c.type !== 'text' ? fmt(c, x) : show(x))}" ${c.type !== 'text' ? 'inputmode="decimal"' : ''} aria-label="${esc(c.name)}">`; }
     return `<input class="${c.type !== 'text' ? 'num' : ''}" data-cell="${c.id}" value="${esc(c.type === 'text' ? v : fmtIn(c, v))}" ${c.type !== 'text' ? 'inputmode="decimal" placeholder="0,00"' : `placeholder="${esc(c.name)}"`} aria-label="${esc(c.name)}">`;
   }
 
@@ -144,7 +146,7 @@ export async function budgetPage(main, p) {
       main.querySelector('[data-import]').addEventListener('click', pickImport);
       return;
     }
-    const { tot, sec } = sums(b);
+    const { tot, sec } = sums(b); const SH = budgetSheet(b);
     const moneyCols = b.cols.filter((c) => c.type !== 'text');
     const nItems = b.rows.filter((r) => r.kind !== 'section').length;
     main.innerHTML = `
@@ -168,17 +170,27 @@ export async function budgetPage(main, p) {
         ${hist.last ? `<button type="button" class="link-btn" data-undo title="Ctrl+Z">Desfazer: ${esc(hist.last)}</button>` : ''}
       </div>
       <div class="panel table-wrap btable"><table class="table budget">
-        <thead><tr>${b.cols.map((c) => `<th class="${c.type !== 'text' ? 'num' : ''} ${c.color ? 'has-cc' : ''}" data-colid="${c.id}"${colStyle(c)}><button type="button" class="th-btn" data-col="${c.id}">${esc(c.name)}${c.id === b.main ? ' ●' : ''}</button></th>`).join('')}<th class="bact"><button type="button" class="icon-btn sm" data-addcol aria-label="Juntar coluna">${ICON.plus}</button></th></tr></thead>
+        <thead><tr>${b.cols.map((c) => `<th class="${c.type !== 'text' ? 'num' : ''} ${c.color ? 'has-cc' : ''}" data-colid="${c.id}"${colStyle(c)}><span class="col-l" aria-hidden="true">${colName(b.cols.indexOf(c))}</span><button type="button" class="th-btn" data-col="${c.id}">${esc(c.name)}${c.id === b.main ? ' ●' : ''}</button></th>`).join('')}<th class="bact"><button type="button" class="icon-btn sm" data-addcol aria-label="Juntar coluna">${ICON.plus}</button></th></tr></thead>
         <tbody>${b.rows.map((r) => r.kind === 'section'
-          ? `<tr class="bsec ${r.color ? 'has-rc' : ''}" data-row="${r.id}"${rowStyle(r)}><td colspan="${Math.max(1, b.cols.findIndex((c) => c.type !== 'text'))}" class="rd-cell"><button type="button" class="row-dot" data-rowcolor title="Cor da secção" aria-label="Cor da secção"></button><input class="sec-in" data-sec value="${esc(r.title)}" aria-label="Nome da secção"></td>${b.cols.slice(Math.max(1, b.cols.findIndex((c) => c.type !== 'text'))).map((c) => `<td class="num">${c.type === 'text' ? '' : `<b data-ssum="${r.id}:${c.id}">${fmt(c, sec[r.id]?.[c.id] || 0)}</b>`}</td>`).join('')}<td class="bact"><button type="button" class="icon-btn sm" data-rm aria-label="Apagar secção">${ICON.close}</button></td></tr>`
-          : `<tr data-row="${r.id}" class="${r.color ? 'has-rc' : ''}"${rowStyle(r)}>${b.cols.map((c, i) => `<td class="${c.type !== 'text' ? 'num' : ''} ${c.color ? 'has-cc' : ''} ${i === 0 ? 'rd-cell' : ''}" data-colid="${c.id}"${colStyle(c)}>${i === 0 ? '<button type="button" class="row-dot" data-rowcolor title="Cor da linha" aria-label="Cor da linha"></button>' : ''}${cellInput(r, c)}</td>`).join('')}<td class="bact"><button type="button" class="icon-btn sm" data-rm aria-label="Apagar linha">${ICON.close}</button></td></tr>`).join('')}</tbody>
+          ? `<tr class="bsec ${r.color ? 'has-rc' : ''}" data-row="${r.id}"${rowStyle(r)}><td colspan="${Math.max(1, b.cols.findIndex((c) => c.type !== 'text'))}" class="rd-cell"><span class="row-n" aria-hidden="true">${b.rows.indexOf(r) + 1}</span><button type="button" class="row-dot" data-rowcolor title="Cor da secção" aria-label="Cor da secção"></button><input class="sec-in" data-sec value="${esc(r.title)}" aria-label="Nome da secção"></td>${b.cols.slice(Math.max(1, b.cols.findIndex((c) => c.type !== 'text'))).map((c) => `<td class="num">${c.type === 'text' ? '' : `<b data-ssum="${r.id}:${c.id}">${fmt(c, sec[r.id]?.[c.id] || 0)}</b>`}</td>`).join('')}<td class="bact"><button type="button" class="icon-btn sm" data-rm aria-label="Apagar secção">${ICON.close}</button></td></tr>`
+          : `<tr data-row="${r.id}" class="${r.color ? 'has-rc' : ''}"${rowStyle(r)}>${b.cols.map((c, i) => `<td class="${c.type !== 'text' ? 'num' : ''} ${c.color ? 'has-cc' : ''} ${i === 0 ? 'rd-cell' : ''}" data-colid="${c.id}"${colStyle(c)}>${i === 0 ? `<span class="row-n" aria-hidden="true">${b.rows.indexOf(r) + 1}</span><button type="button" class="row-dot" data-rowcolor title="Cor da linha" aria-label="Cor da linha"></button>` : ''}${cellInput(r, c, SH)}</td>`).join('')}<td class="bact"><button type="button" class="icon-btn sm" data-rm aria-label="Apagar linha">${ICON.close}</button></td></tr>`).join('')}</tbody>
         <tfoot><tr>${b.cols.map((c, i) => `<td class="num">${i === 0 ? '<strong>Total</strong>' : c.type === 'text' ? '' : `<strong data-tsum="${c.id}">${fmt(c, tot[c.id] || 0)}</strong>`}</td>`).join('')}<td></td></tr>${hasFee && b.main ? `<tr class="bfee-row" ${feeP() ? '' : 'hidden'}>${b.cols.map((c, i) => `<td class="num">${i === 0 ? `Grain fee (${String(feeP()).replace('.', ',')} %)` : c.id === b.main ? `<span data-tfee>${eur.format(feeOf(tot[c.id] || 0))}</span>` : ''}</td>`).join('')}<td></td></tr><tr class="bfee-row tot" ${feeP() ? '' : 'hidden'}>${b.cols.map((c, i) => `<td class="num">${i === 0 ? '<strong>Total com Grain fee</strong>' : c.id === b.main ? `<strong data-tfeetot>${eur.format((tot[c.id] || 0) + feeOf(tot[c.id] || 0))}</strong>` : ''}</td>`).join('')}<td></td></tr>` : ''}</tfoot>
       </table></div>
-      <div class="row wrap-gap"><button type="button" class="btn ghost" data-addrow>${ICON.plus} Linha</button><button type="button" class="btn ghost" data-addsec>${ICON.plus} Secção</button><span class="muted small">${nItems} ${nItems === 1 ? 'linha' : 'linhas'} · clica no nome de uma coluna para mudar nome, tipo e cor · ● conta para o total · <kbd>Alt</kbd>+<kbd>↓</kbd> linha, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>↓</kbd> secção, <kbd>Alt</kbd>+<kbd>→</kbd> coluna (onde está o rato) · cor da linha no ponto à esquerda</span></div>`;
+      <div class="row wrap-gap"><button type="button" class="btn ghost" data-addrow>${ICON.plus} Linha</button><button type="button" class="btn ghost" data-addsec>${ICON.plus} Secção</button><span class="muted small">${nItems} ${nItems === 1 ? 'linha' : 'linhas'} · clica no nome de uma coluna para mudar nome, tipo e cor · ● conta para o total · <kbd>Alt</kbd>+<kbd>↓</kbd> linha, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>↓</kbd> secção, <kbd>Alt</kbd>+<kbd>→</kbd> coluna (onde está o rato) · cor da linha no ponto à esquerda</span></div>
+      <p class="muted small f-help">${esc(HELP)}</p>`;
     bind();
   }
 
+  // fórmulas: na célula com o cursor vê-se a fórmula; nas outras, o resultado
+  function refreshFormulas() {
+    const S = budgetSheet(b);
+    main.querySelectorAll('tbody tr[data-row]').forEach((tr) => { const r = b.rows.find((x) => x.id === tr.dataset.row); if (!r || r.kind === 'section') return;
+      tr.querySelectorAll('[data-cell]').forEach((inp) => { const c = b.cols.find((x) => x.id === inp.dataset.cell); const raw = r.cells?.[c.id];
+        if (isFormula(raw)) { inp.dataset.raw = raw; inp.title = raw; inp.classList.add('is-f'); if (inp !== document.activeElement) { const x = S.value(r, c.id); inp.value = typeof x === 'number' && c.type !== 'text' ? fmt(c, x) : show(x); } }
+        else if (inp.dataset.raw) { delete inp.dataset.raw; inp.removeAttribute('title'); inp.classList.remove('is-f'); } }); });
+  }
   function refreshSums() {
+    refreshFormulas();
     const { tot, sec } = sums(b);
     main.querySelectorAll('[data-tsum]').forEach((el) => { const c = b.cols.find((x) => x.id === el.dataset.tsum); el.textContent = fmt(c, tot[c.id] || 0); });
     main.querySelectorAll('[data-ssum]').forEach((el) => { const [sid, cid] = el.dataset.ssum.split(':'); const c = b.cols.find((x) => x.id === cid); el.textContent = fmt(c, sec[sid]?.[cid] || 0); });
@@ -220,10 +232,10 @@ export async function budgetPage(main, p) {
     main.querySelector('[data-export]').addEventListener('click', () => exportXlsx(b, total, p.name, feeP()));
     main.querySelector('[data-hist]')?.addEventListener('click', history);
     main.querySelector('[data-pdf]').addEventListener('click', () => {
-      const { tot, sec } = sums(b); const groups = []; let cur = { title: null, rows: [] };
+      const { tot, sec } = sums(b); const SP = budgetSheet(b); const groups = []; let cur = { title: null, rows: [] };
       b.rows.forEach((r) => {
         if (r.kind === 'section') { if (cur.title !== null || cur.rows.length) groups.push(cur); cur = { title: r.title, color: r.color || '#1E2AD4', right: b.main && sec[r.id]?.[b.main] != null ? fmt(b.cols.find((c) => c.id === b.main), sec[r.id][b.main]) : '', rows: [] }; return; }
-        cur.rows.push(b.cols.map((c) => (c.type === 'text' ? r.cells?.[c.id] ?? '' : fmt(c, num(r.cells?.[c.id])))));
+        cur.rows.push(b.cols.map((c) => { const v = r.cells?.[c.id]; if (isFormula(v)) { const x = SP.value(r, c.id); return typeof x === 'number' && c.type !== 'text' ? fmt(c, x) : show(x); } return c.type === 'text' ? v ?? '' : fmt(c, num(v)); }));
       });
       groups.push(cur);
       const mainCol = b.cols.find((c) => c.id === b.main); const t = (b.main && tot[b.main]) || 0;
@@ -238,10 +250,11 @@ export async function budgetPage(main, p) {
     tbody.addEventListener('input', (e) => {
       const tr = e.target.closest('[data-row]'); const r = b.rows.find((x) => x.id === tr.dataset.row);
       if (e.target.matches('[data-sec]')) r.title = e.target.value;
-      else if (e.target.matches('[data-cell]')) { const c = b.cols.find((x) => x.id === e.target.dataset.cell); r.cells = { ...(r.cells || {}), [c.id]: c.type === 'text' ? e.target.value : (num(e.target.value) ?? e.target.value) }; if (c.type !== 'text' || hasFee) refreshSums(); }
+      else if (e.target.matches('[data-cell]')) { const c = b.cols.find((x) => x.id === e.target.dataset.cell); r.cells = { ...(r.cells || {}), [c.id]: c.type === 'text' ? e.target.value : (num(e.target.value) ?? e.target.value) }; refreshSums(); }
       save();
     });
-    tbody.addEventListener('focusout', (e) => { if (e.target.matches('[data-cell].num')) { const c = b.cols.find((x) => x.id === e.target.dataset.cell); const n = num(e.target.value); if (n != null) e.target.value = fmtIn(c, n); } });
+    tbody.addEventListener('focusin', (e) => { if (e.target.matches('[data-cell]') && e.target.dataset.raw) e.target.value = e.target.dataset.raw; });
+    tbody.addEventListener('focusout', (e) => { if (e.target.matches('[data-cell]') && isFormula(e.target.value)) { setTimeout(refreshSums); return; } if (e.target.matches('[data-cell].num')) { const c = b.cols.find((x) => x.id === e.target.dataset.cell); const n = num(e.target.value); if (n != null) e.target.value = fmtIn(c, n); } });
     tbody.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter' || !e.target.matches('[data-cell], [data-sec]')) return;
       e.preventDefault();
@@ -410,10 +423,10 @@ async function exportXlsx(b, total, name, feePct = 0) {
   const wb = new ExcelJS.Workbook(); const ws = wb.addWorksheet('Orçamento');
   ws.columns = b.cols.map((c) => ({ header: c.name, key: c.id, width: c.type === 'text' ? 30 : 14 }));
   ws.getRow(1).font = { bold: true };
-  const { tot, sec } = sums(b);
+  const { tot, sec } = sums(b); const SX = budgetSheet(b);
   b.rows.forEach((r) => {
     if (r.kind === 'section') { const row = ws.addRow({}); row.getCell(1).value = r.title; row.font = { bold: true }; b.cols.forEach((c, i) => { if (c.type !== 'text' && sec[r.id]?.[c.id] != null) row.getCell(i + 1).value = sec[r.id][c.id]; }); return; }
-    const o = {}; b.cols.forEach((c) => { const v = r.cells?.[c.id]; o[c.id] = c.type === 'text' ? v || '' : num(v) ?? (v || ''); }); ws.addRow(o);
+    const o = {}; b.cols.forEach((c) => { const v = r.cells?.[c.id]; const x = isFormula(v) ? SX.value(r, c.id) : null; o[c.id] = isFormula(v) ? (typeof x === 'number' ? x : show(x)) : c.type === 'text' ? v || '' : num(v) ?? (v || ''); }); ws.addRow(o);
   });
   ws.addRow({});
   const t = ws.addRow({}); t.getCell(1).value = 'Total'; t.font = { bold: true }; b.cols.forEach((c, i) => { if (c.type !== 'text') t.getCell(i + 1).value = tot[c.id]; });

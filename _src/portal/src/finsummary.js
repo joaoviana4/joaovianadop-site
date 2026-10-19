@@ -22,7 +22,7 @@ const dd = (iso) => (iso ? `${+iso.slice(8, 10)} ${MES[+iso.slice(5, 7) - 1]}` :
 // carrega tudo o que as contas precisam
 export async function loadFin() {
   const [{ data: earn }, { data: mov }, { data: acc }, { data: rec }, { data: projects }, { data: people }] = await Promise.all([
-    sb.from('fin_earnings').select('*').eq('community_id', CID()).order('date', { ascending: false }),
+    sb.from('fin_earnings').select('*').eq('community_id', CID()).is('archived_at', null).order('date', { ascending: false }),
     sb.from('fin_movements').select('date, amount, direction, category, project_id, account_id').eq('community_id', CID()),
     sb.from('fin_accounts').select('id, opening_balance').eq('community_id', CID()),
     sb.from('fin_recurring').select('amount, active').eq('community_id', CID()),

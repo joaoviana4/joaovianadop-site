@@ -858,13 +858,14 @@ async function toolPage(projectId, toolId) {
       <nav class="proj-nav" aria-label="Projeto">${projectNav(p, tool.id)}</nav>
       <main class="proj-main" data-main>${p.is_central ? '' : aheadNotice(p)}
         <div class="row between wrap-gap"><div><span class="small muted">${(TOOL_KINDS[tool.kind] || {}).label || ''}${d ? ` · ${esc(d.name)}` : ''}</span><h1 class="h1">${esc(tool.title)}</h1></div>
-          <div class="row wrap-gap"><button type="button" class="btn ghost" data-tooltask>${ICON.plus} Adicionar tarefa</button><button type="button" class="btn ghost" data-topt>${ICON.dots} Opções</button></div></div>
+          <div class="row wrap-gap"><button type="button" class="btn ghost" data-tooltask>${ICON.plus} Adicionar tarefa</button><button type="button" class="btn ghost" data-topt>${ICON.dots} Opções</button>${p.canEdit !== false ? `<button type="button" class="icon-btn" data-tdel title="Apagar esta ferramenta" aria-label="Apagar esta ferramenta">${ICON.trash}</button>` : ''}</div></div>
         <div data-tool></div>
       </main>
     </div></div>`;
   bindHeader(app); bindProjectNav(app, p);
   if (!p.is_central) bindAhead(app, p, () => go(projBase(p)), () => go(projBase(p)));
   app.querySelector('[data-topt]').addEventListener('click', () => boardOptions(p, tool, () => toolPage(projectId, toolId)));
+  app.querySelector('[data-tdel]')?.addEventListener('click', () => deleteTool(p, tool, () => toolPage(projectId, toolId)));
   app.querySelector('[data-tooltask]')?.addEventListener('click', () => addTaskModal({ projectId: p.id, departments: p.departments || [], entity: { type: 'board', id: tool.id }, where: tool.title }));
   const box = app.querySelector('[data-tool]');
   joinProject(p.id);
@@ -904,12 +905,37 @@ function boardOptions(p, b, after) {
     if (error) return toast(error.message);
     m.close(); after();
   });
-  m.el.querySelector('[data-del]').addEventListener('click', async () => {
-    m.close();
-    if (!(await confirmBox(`Apagar "${b.title}" e tudo o que tem dentro?`, 'Apagar'))) return;
-    const { error } = await sb.from('boards').delete().eq('id', b.id);
+  m.el.querySelector('[data-del]').addEventListener('click', () => { m.close(); deleteTool(p, b, after); });
+}
+
+// apagar uma ferramenta: diz o que se perde e pede confirmação (com visto quando há conteúdo)
+async function deleteTool(p, b, after) {
+  const { data: full } = await sb.from('boards').select('id, title, kind, data').eq('id', b.id).maybeSingle();
+  const d = full?.data || b.data || {};
+  const n = (x, a, c) => `${x} ${x === 1 ? a : c}`;
+  const lost = [];
+  if (b.kind === 'callsheet') {
+    const sh = d.sheets || (d.rows ? [d] : []); const shots = sh.reduce((t, x) => t + (x.rows || []).filter((r) => r.kind !== 'band').length, 0);
+    if (sh.length) lost.push(n(sh.length, 'dia de rodagem', 'dias de rodagem')); if (shots) lost.push(n(shots, 'plano na folha', 'planos nas folhas'));
+    const { count } = await sb.from('shoot_marks').select('row_id', { count: 'exact', head: true }).eq('board_id', b.id); if (count) lost.push(n(count, 'visto de plano filmado', 'vistos de planos filmados'));
+  } else if (b.kind === 'table') { if (d.rows?.length) lost.push(n(d.rows.length, 'linha', 'linhas')); }
+  else if (b.kind === 'budget') { const r = (d.rows || []).filter((x) => x.kind !== 'section').length; if (r) lost.push(n(r, 'linha de orçamento', 'linhas de orçamento')); }
+  else if (b.kind === 'timeline') { if (d.items?.length) lost.push(n(d.items.length, 'data marcada', 'datas marcadas')); }
+  else if (b.kind === 'transport') { const t = (d.days || d.trips || []).length; if (t) lost.push(n(t, 'registo', 'registos')); }
+  else { const [{ count: items }, { count: kids }] = await Promise.all([sb.from('board_items').select('id', { count: 'exact', head: true }).eq('board_id', b.id), sb.from('boards').select('id', { count: 'exact', head: true }).eq('parent_id', b.id)]); if (items) lost.push(n(items, 'cartão ou imagem', 'cartões e imagens')); if (kids) lost.push(n(kids, 'board dentro', 'boards dentro')); }
+  const label = ((TOOL_KINDS[b.kind] || TOOL_KINDS.board).label || 'ferramenta').toLowerCase();
+  const m = modal(`<h2>Apagar "${esc(b.title)}"?</h2>
+    <p>${lost.length ? `Esta ${esc(label)} tem ${esc(lost.join(', '))}. Tudo isto desaparece para toda a equipa.` : `Esta ${esc(label)} ainda está vazia.`}</p>
+    <p class="muted small">Não dá para desfazer.${b.kind === 'callsheet' ? ' As datas dos dias de rodagem deixam de aparecer no cronograma e na Rodagem.' : ''}</p>
+    ${lost.length ? '<label class="check"><input type="checkbox" data-sure> Percebo que vou perder este conteúdo</label>' : ''}
+    <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button type="button" class="btn danger" data-go ${lost.length ? 'disabled' : ''}>${ICON.trash} Apagar</button></div>`);
+  m.el.querySelector('[data-sure]')?.addEventListener('change', (e) => { m.el.querySelector('[data-go]').disabled = !e.target.checked; });
+  m.el.querySelector('[data-go]').addEventListener('click', async () => {
+    const { data: gone, error } = await sb.from('boards').delete().eq('id', b.id).select('id');
     if (error) return toast(error.message);
-    toast('Apagado.'); if (location.hash.includes(b.id)) go(projBase(p)); else after();
+    if (!gone?.length) return toast('Não tens permissão para apagar esta ferramenta. Pede a um administrador ou a um líder do projeto.');
+    m.close(); toast(`"${b.title}" foi apagada.`);
+    if (location.hash.includes(b.id)) go(projBase(p)); else after();
   });
 }
 

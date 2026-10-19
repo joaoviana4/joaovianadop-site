@@ -57,6 +57,7 @@ export async function tableTemplate(p, tpl) {
 
 // ---------- tabela ----------
 import { exportPdf } from './pdf.js';
+import { makeSheet, isFormula, show, colName, HELP } from './formula.js';
 import { colorField, readColor, bindColorField, colorPop, tableShortcuts, rowStyle, colStyle, makeHistory, bindUndoKeys } from './tablekit.js';
 
 export function tableTool(main, p, tool) {
@@ -67,17 +68,33 @@ export function tableTool(main, p, tool) {
     const { error } = await sb.from('boards').update({ data, updated_at: new Date().toISOString() }).eq('id', tool.id);
     if (error) toast('Não foi possível guardar: ' + error.message);
   });
+  // fórmulas como no Excel: colunas A, B, C… e linhas 1, 2, 3…
+  const sheet = () => makeSheet({ rows: data.rows.length, cols: data.columns.length, raw: (r, c) => { const col = data.columns[c]; const v = data.rows[r]?.cells?.[col.id]; return col.type === 'check' ? !!v : v; } });
+  let SH = null;
+  const shown = (r, c) => show(SH.value(data.rows.indexOf(r), data.columns.indexOf(c)));
   function cell(r, c) {
     const v = r.cells?.[c.id] ?? '';
     if (c.type === 'check') return `<input type="checkbox" data-c="${c.id}" ${v ? 'checked' : ''} aria-label="${esc(c.name)}">`;
-    if (c.type === 'number') return `<input type="number" data-c="${c.id}" value="${esc(v)}" aria-label="${esc(c.name)}">`;
+    if (isFormula(v) && c.type !== 'date') return `<input class="is-f" data-c="${c.id}" data-raw="${esc(v)}" title="${esc(v)}" value="${esc(shown(r, c))}" aria-label="${esc(c.name)}">`;
+    if (c.type === 'number') return `<input data-c="${c.id}" value="${esc(v)}" inputmode="decimal" aria-label="${esc(c.name)}">`;
     if (c.type === 'date') return `<input type="date" data-c="${c.id}" value="${esc(v)}" aria-label="${esc(c.name)}">`;
     return `<input data-c="${c.id}" value="${esc(v)}" aria-label="${esc(c.name)}">`;
   }
+  function refreshF() {
+    SH = sheet();
+    main.querySelectorAll('tbody [data-c]').forEach((inp) => {
+      const r = data.rows.find((x) => x.id === inp.closest('[data-row]')?.dataset.row); const c = data.columns.find((x) => x.id === inp.dataset.c); if (!r || !c || c.type === 'check') return;
+      const raw = r.cells?.[c.id];
+      if (isFormula(raw)) { inp.dataset.raw = raw; inp.title = raw; inp.classList.add('is-f'); if (inp !== document.activeElement) inp.value = shown(r, c); }
+      else if (inp.dataset.raw) { delete inp.dataset.raw; inp.removeAttribute('title'); inp.classList.remove('is-f'); }
+    });
+  }
   function draw() {
-    main.querySelector('[data-tbl]').innerHTML = `<table class="table sheet"><thead><tr>${data.columns.map((c) => `<th data-colid="${c.id}" class="${c.color ? 'has-cc' : ''}"${colStyle(c)}><button type="button" class="th-btn" data-col="${c.id}">${esc(c.name)}</button></th>`).join('')}<th class="th-add"><button type="button" class="icon-btn sm" data-addcol aria-label="Juntar coluna">${ICON.plus}</button></th></tr></thead>
-      <tbody>${data.rows.map((r) => `<tr data-row="${r.id}" class="${r.color ? 'has-rc' : ''}"${rowStyle(r)}>${data.columns.map((c, i) => `<td class="t-${c.type} ${c.color ? 'has-cc' : ''} ${i === 0 ? 'rd-cell' : ''}" data-colid="${c.id}"${colStyle(c)}>${i === 0 ? '<button type="button" class="row-dot" data-rowcolor title="Cor da linha" aria-label="Cor da linha"></button>' : ''}${cell(r, c)}</td>`).join('')}<td><button type="button" class="icon-btn sm" data-rmrow aria-label="Apagar linha">${ICON.close}</button></td></tr>`).join('')}</tbody></table>
-      <div class="row wrap-gap"><button type="button" class="link-btn" data-addrow>${ICON.plus} Linha</button><span class="muted small"><kbd>Alt</kbd>+<kbd>↓</kbd> linha e <kbd>Alt</kbd>+<kbd>→</kbd> coluna onde está o rato · cor da linha no ponto à esquerda · cor da coluna clicando no nome</span></div>`;
+    SH = sheet();
+    main.querySelector('[data-tbl]').innerHTML = `<table class="table sheet"><thead><tr>${data.columns.map((c, ci) => `<th data-colid="${c.id}" class="${c.color ? 'has-cc' : ''}"${colStyle(c)}><span class="col-l" aria-hidden="true">${colName(ci)}</span><button type="button" class="th-btn" data-col="${c.id}">${esc(c.name)}</button></th>`).join('')}<th class="th-add"><button type="button" class="icon-btn sm" data-addcol aria-label="Juntar coluna">${ICON.plus}</button></th></tr></thead>
+      <tbody>${data.rows.map((r) => `<tr data-row="${r.id}" class="${r.color ? 'has-rc' : ''}"${rowStyle(r)}>${data.columns.map((c, i) => `<td class="t-${c.type} ${c.color ? 'has-cc' : ''} ${i === 0 ? 'rd-cell' : ''}" data-colid="${c.id}"${colStyle(c)}>${i === 0 ? `<span class="row-n" aria-hidden="true">${data.rows.indexOf(r) + 1}</span><button type="button" class="row-dot" data-rowcolor title="Cor da linha" aria-label="Cor da linha"></button>` : ''}${cell(r, c)}</td>`).join('')}<td><button type="button" class="icon-btn sm" data-rmrow aria-label="Apagar linha">${ICON.close}</button></td></tr>`).join('')}</tbody></table>
+      <div class="row wrap-gap"><button type="button" class="link-btn" data-addrow>${ICON.plus} Linha</button><span class="muted small"><kbd>Alt</kbd>+<kbd>↓</kbd> linha e <kbd>Alt</kbd>+<kbd>→</kbd> coluna onde está o rato · cor da linha no ponto à esquerda · cor da coluna clicando no nome</span></div>
+      <p class="muted small f-help">${esc(HELP)}</p>`;
     const at = (id) => { const i = data.rows.findIndex((x) => x.id === id); return i < 0 ? data.rows.length - 1 : i; };
     const insRow = (i) => { snap('juntar linha'); const r = { id: uid(), cells: {} }; data.rows.splice(i, 0, r); draw(); save(); main.querySelector(`[data-row="${r.id}"] [data-c]`)?.focus(); };
     const insCol = (id, side) => { snap('juntar coluna'); const i = data.columns.findIndex((c) => c.id === id); const c = { id: uid(), name: 'Nova coluna', type: 'text' }; data.columns.splice(i < 0 ? data.columns.length : i + side, 0, c); draw(); save(); colForm(c, true); };
@@ -110,14 +127,16 @@ export function tableTool(main, p, tool) {
   main.querySelector('[data-pdf]').addEventListener('click', () => exportPdf({
     title: tool.title, subtitle: p.name, landscape: data.columns.length > 5,
     columns: data.columns.map((c) => ({ label: c.name, align: c.type === 'number' ? 'right' : c.type === 'check' ? 'center' : undefined })),
-    groups: [{ title: null, rows: data.rows.map((r) => data.columns.map((c) => { const v = r.cells?.[c.id]; return c.type === 'check' ? (v ? '✓' : '') : c.type === 'date' && v ? new Date(v + 'T00:00:00').toLocaleDateString('pt-PT') : v ?? ''; })) }],
+    groups: [{ title: null, rows: data.rows.map((r) => data.columns.map((c) => { const v = r.cells?.[c.id]; if (isFormula(v)) { SH = sheet(); return shown(r, c); } return c.type === 'check' ? (v ? '✓' : '') : c.type === 'date' && v ? new Date(v + 'T00:00:00').toLocaleDateString('pt-PT') : v ?? ''; })) }],
   }));
   main.addEventListener('input', (e) => {
     const inp = e.target.closest('[data-c]'); if (!inp) return;
     const r = data.rows.find((x) => x.id === inp.closest('[data-row]').dataset.row);
     r.cells = { ...(r.cells || {}), [inp.dataset.c]: inp.type === 'checkbox' ? inp.checked : inp.value };
-    save();
+    save(); refreshF();
   });
+  main.addEventListener('focusin', (e) => { const inp = e.target.closest('[data-c]'); if (inp?.dataset.raw) inp.value = inp.dataset.raw; });
+  main.addEventListener('focusout', (e) => { if (e.target.closest('[data-c]')) setTimeout(refreshF); });
   main.addEventListener('keydown', (e) => {
     const inp = e.target.closest('[data-c]'); if (!inp || e.key !== 'Enter') return;
     e.preventDefault();

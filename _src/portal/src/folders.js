@@ -5,6 +5,7 @@ import { sb, esc, ICON, KINDS, PROJECT_COLS, signedUrls, phaseOf, modal, confirm
 // projects.parent_id aponta para a pasta.
 
 export const isFolder = (p) => p?.kind === 'album';
+import { budgetSheet } from './formula.js';
 const eur = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' });
 // Grain fee: percentagem da byGrain sobre os custos do orçamento do projeto (10 % por defeito).
 // Só existe no orçamento geral do projeto — os orçamentos de departamento (ex.: Arte) não têm fee.
@@ -12,11 +13,12 @@ export const GRAIN_FEE = 10;
 // uma linha da tabela chamada "Agency fee" / "Grain fee" já É a fee: nesse caso não se soma a automática por cima
 const FEE_RE = /\b(agency|grain)\s*fee\b|^\s*(fee|agency)\s*$/i;
 export const isFeeRow = (b, r) => r.kind === 'item' && (b?.cols || []).some((c) => c.type === 'text' && FEE_RE.test(String(r.cells?.[c.id] || '')));
-export const feeRowSum = (b) => (!b?.rows || !b.main ? 0 : b.rows.filter((r) => isFeeRow(b, r)).reduce((a, r) => a + (Number(r.cells?.[b.main]) || 0), 0));
+// os valores podem ser fórmulas (=B2*C2): contam já calculados
+export const feeRowSum = (b) => { if (!b?.rows || !b.main) return 0; const S = budgetSheet(b); return b.rows.filter((r) => isFeeRow(b, r)).reduce((a, r) => a + (S.num(r, b.main) || 0), 0); };
 export const costsOf = (b) => tableTotal(b) - feeRowSum(b);
 export const feePct = (b) => (feeRowSum(b) ? 0 : b?.gfee?.off ? 0 : b?.gfee?.pct != null ? Number(b.gfee.pct) || 0 : GRAIN_FEE);
 export const grainFee = (b) => feeRowSum(b) || costsOf(b) * feePct(b) / 100;
-export const tableTotal = (b) => (!b?.rows || !b.main ? 0 : b.rows.filter((r) => r.kind === 'item').reduce((a, r) => a + (Number(r.cells?.[b.main]) || 0), 0));
+export const tableTotal = (b) => { if (!b?.rows || !b.main) return 0; const S = budgetSheet(b); return b.rows.filter((r) => r.kind === 'item').reduce((a, r) => a + (S.num(r, b.main) || 0), 0); };
 
 // projetos dentro da pasta, com o orçamento de cada um (só chega o de quem tem acesso)
 export async function loadChildren(p) {

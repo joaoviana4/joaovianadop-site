@@ -21,7 +21,7 @@ const dd = (iso) => (iso ? `${+iso.slice(8, 10)} ${MES[+iso.slice(5, 7) - 1]}` :
 // carrega tudo o que as contas precisam
 export async function loadFin() {
   const [{ data: earn }, { data: mov }, { data: acc }, { data: rec }, { data: projects }, { data: people }] = await Promise.all([
-    sb.from('fin_earnings').select('*').order('date', { ascending: false }),
+    sb.from('fin_earnings').select('*').is('archived_at', null).order('date', { ascending: false }),
     sb.from('fin_movements').select('date, amount, direction, category, project_id, account_id'),
     sb.from('fin_accounts').select('id, opening_balance'),
     sb.from('fin_recurring').select('amount, active'),

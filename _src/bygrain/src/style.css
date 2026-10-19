@@ -2616,3 +2616,10 @@ body.readonly .proj-main input[readonly]:focus, body.readonly .proj-main textare
 .an-zoomer { height: 78vh; overflow: hidden; background: #fff; border-radius: 10px; touch-action: none; cursor: grab; display: grid; place-items: center; margin-bottom: 10px; }
 .an-zoomer img { max-width: 100%; max-height: 100%; transform-origin: center; user-select: none; -webkit-user-drag: none; }
 .rod-mode { margin: 0; }
+
+/* fórmulas nas tabelas e no orçamento */
+.col-l { display: block; font-size: 10px; font-weight: 600; letter-spacing: .06em; color: var(--muted); opacity: .7; text-align: center; line-height: 1; padding-top: 2px; }
+.row-n { display: inline-block; min-width: 18px; font-size: 10px; color: var(--muted); opacity: .7; text-align: right; margin-right: 2px; vertical-align: middle; font-variant-numeric: tabular-nums; }
+input.is-f { color: var(--ok); }
+input.is-f:focus { color: var(--text); font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+.f-help { margin: 4px 0 0; }

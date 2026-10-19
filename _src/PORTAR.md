@@ -80,3 +80,6 @@ O resto deste ficheiro descreve como o Studio nasceu do código do byGrain (aind
 - Folha de serviço aparece em Pré-produção e Produção (KIND_DEF.callsheet); na Produção abre em modo rodagem (só ler + vistos); "Editar folha de serviço" passa ao editor.
 - Visão geral: barras de planos/% do filme só na Produção.
 - Folhas de Anotação (`anotacao.js`, tabela annotation_sheets nos dois; fotos em <projeto>/anotacao/, qualquer membro pode carregar): carregar fotos/PDF por dia, ler com o Claude de graça (fotos descarregadas com faixa "ID nnn", pedido, colar resposta), por cena/plano com a foto ao lado, exportar Excel/CSV para a montagem, modelos para imprimir.
+- Fórmulas (`formula.js`, igual nos dois): Tabelas e Orçamento aceitam =B2*C2, =SOMA(), =SE(), =PROCV()… (nomes PT e EN). Colunas A, B, C…, linhas 1, 2, 3… (no orçamento as secções contam como linha). Totais do orçamento, fee e Ganhos (folders.js) já usam os valores calculados.
+- Apagar ferramenta: botão de lixo no topo da ferramenta e em Opções; aviso diz o que se perde e pede visto quando há conteúdo; confirma que apagou mesmo (RLS).
+- byGrain: os 6 ganhos órfãos do Milanote ficam arquivados (fin_earnings.archived_at) e já não contam em Ganhos, Resumo nem Pessoas (o DELETE continua bloqueado; cópia em fin_earnings_backup).
