@@ -15,6 +15,7 @@ import { isFolder, loadChildren, rollup, childrenSection, budgetChildrenPanel } 
 import { mountTaskCenter } from './taskcenter.js';
 import { clipPage, CLIP_PAGES, mediaTool } from './music.js';
 import { mountSituation, situationData, questionsButton } from './overview.js';
+import { mountCanvas } from './canvas.js';
 import { clearFullscreen } from './layout.js';
 import { newLightmapData } from './lmdata.js';
 // páginas pesadas só carregam quando são abertas (o site arranca mais depressa)
@@ -930,19 +931,28 @@ async function toolPage(projectId, toolId) {
       <nav class="proj-nav" aria-label="Projeto">${projectNav(p, tool.id)}</nav>
       <main class="proj-main" data-main>${p.is_central ? '' : aheadNotice(p)}
         <div class="row between wrap-gap"><div><span class="small muted">${(TOOL_KINDS[tool.kind] || {}).label || ''}${d ? ` · ${esc(d.name)}` : ''}</span><h1 class="h1">${esc(tool.title)}</h1></div>
-          <div class="row wrap-gap"><button type="button" class="btn ghost" data-tooltask>${ICON.plus} Adicionar tarefa</button>${!p.is_central && ['table', 'budget', 'callsheet', 'timeline', 'distribution', 'transport', 'media'].includes(tool.kind) ? `<button type="button" class="btn ghost" data-tcopy title="Copiar esta ferramenta para a visão geral do projeto">${ICON.copy} Copiar para a visão geral</button>` : ''}<button type="button" class="btn ghost" data-topt>${ICON.dots} Opções</button>${p.canEdit !== false ? `<button type="button" class="icon-btn" data-tdel title="Apagar esta ferramenta" aria-label="Apagar esta ferramenta">${ICON.trash}</button>` : ''}</div></div>
+          <div class="row wrap-gap"><button type="button" class="btn ghost" data-tooltask>${ICON.plus} Adicionar tarefa</button><button type="button" class="btn ghost" data-topt>${ICON.dots} Opções</button>${p.canEdit !== false ? `<button type="button" class="icon-btn" data-tdel title="Apagar esta ferramenta" aria-label="Apagar esta ferramenta">${ICON.trash}</button>` : ''}</div></div>
         <div data-tool></div>
       </main>
     </div></div>`;
   bindHeader(app); bindProjectNav(app, p);
   if (!p.is_central) bindAhead(app, p, () => go(projBase(p)), () => go(projBase(p)));
-  app.querySelector('[data-tcopy]')?.addEventListener('click', async () => (await import('./ovwidgets.js')).copyToOverview(p, { kind: 'tool', ref: tool.id, title: tool.title }));
   app.querySelector('[data-topt]').addEventListener('click', () => boardOptions(p, tool, () => toolPage(projectId, toolId)));
   app.querySelector('[data-tdel]')?.addEventListener('click', () => deleteTool(p, tool, () => toolPage(projectId, toolId)));
   app.querySelector('[data-tooltask]')?.addEventListener('click', () => addTaskModal({ projectId: p.id, departments: p.departments || [], entity: { type: 'board', id: tool.id }, where: tool.title }));
   const box = app.querySelector('[data-tool]');
   joinProject(p.id);
   { const lk = lockPage(`${p.id}:f:${tool.id}`, app.querySelector('[data-main]'), { reopen: () => route() }); onCleanup(() => lk.destroy()); }
+  if (IS_STUDIO && !p.is_central && !['lightmap'].includes(tool.kind)) {
+    const el = document.createElement('div'); el.className = 'cv-page';
+    mountCanvas(box, p, { key: `f:${tool.id}`, pageLabel: 'ferramenta', here: { kind: 'tool', id: tool.id },
+      native: [{ id: 'tool', label: tool.title, el, ref: { kind: 'tool', id: tool.id }, removable: false }], render: (b, ref) => renderRef(b, p, ref) });
+    return renderToolBody(el, p, tool);
+  }
+  return renderToolBody(box, p, tool);
+}
+
+async function renderToolBody(box, p, tool) {
   if (tool.kind === 'table') tableTool(box, p, tool);
   if (tool.kind === 'timeline') timelineTool(box, p, tool);
   if (tool.kind === 'budget') (await lazy.budget()).budgetTool(box, p, tool);
@@ -1035,20 +1045,45 @@ async function projectPage(projectId, page, sub) {
     const where = !entity ? '' : sub ? `${label} · ${(h?.value || h?.textContent || '').trim()}` : label;
     addTaskModal({ projectId: p.id, departments: p.departments || [], entity, where });
   });
-  const titles = { tarefas: 'Tarefas', equipa: p.is_central ? 'Equipa' : 'Equipa e convites', detalhes: 'Detalhes' };
   joinProject(p.id);
   // páginas de trabalho: só uma janela edita de cada vez (as outras ficam só a ver)
   if (['orcamento', 'seguimento', 'decors', 'elenco', 'personagens', 'aderecos', 'cenas', 'guiao', 'planificacao', 'detalhes', 'shotlist', 'storyboard', 'financas', 'plano', 'equipamento', 'figurino', 'tratamento'].includes(page)) {
     const lk = lockPage(`${p.id}:${page}:${sub || ''}`, main, { reopen: () => route() });
     onCleanup(() => lk.destroy());
   }
-  if (page === 'geral') return projectOverview(main, p);
+  // Studio: cada página é um board (grelha com encaixe), com a página em si como elemento e o que se colar de outras
+  if (IS_STUDIO && !p.is_central && !['detalhes', 'equipa'].includes(page)) {
+    if (page === 'geral') return projectOverview(main, p);
+    const el = document.createElement('div'); el.className = 'cv-page';
+    const label = pageMeta(page)?.label || { atividade: 'Atividade', tarefas: 'Tarefas', plano: 'Plano', rodagem: 'Rodagem', anotacao: 'Folhas de Anotação' }[page] || page;
+    mountCanvas(main, p, { key: `pg:${page}${sub ? ':' + sub : ''}`, pageLabel: 'página', here: { kind: 'page', page, sub: sub || null },
+      native: [{ id: 'page', label, el, ref: { kind: 'page', page, sub: sub || null }, removable: false }], render: (box, ref) => renderRef(box, p, ref) });
+    return renderPage(el, p, page, sub);
+  }
+  return renderPage(main, p, page, sub);
+}
+
+// desenha um elemento colado: uma página, um bloco da visão geral, uma ferramenta
+async function renderRef(box, p, ref) {
+  if (ref.kind === 'page') return renderPage(box, p, ref.page, ref.sub || undefined, { plain: true });
+  if (ref.kind === 'block') { const tmp = document.createElement('div'); return mountSituation(tmp, p, projBase(p), { onBlocks: (bl) => { const b = bl.find((x) => x.id === ref.block); box.innerHTML = ''; if (b) box.append(b.el); else box.innerHTML = '<p class="muted small">Este bloco não tem nada para mostrar agora.</p>'; } }); }
+  if (ref.kind === 'tool') {
+    const { data: tool } = await sb.from('boards').select('*').eq('id', ref.id).maybeSingle();
+    if (!tool) { box.innerHTML = '<p class="muted small">Esta ferramenta já não existe. Podes tirá-la daqui.</p>'; return; }
+    box.innerHTML = `<div class="row between cv-th"><a href="${toolHref(p, tool)}"><strong>${esc(tool.title)}</strong></a><a class="small" href="${toolHref(p, tool)}">Abrir</a></div><div data-tb></div>`;
+    if (tool.kind === 'board' || tool.kind === 'lightmap') { box.querySelector('[data-tb]').innerHTML = `<a class="btn ghost" href="${toolHref(p, tool)}">${ICON.open} Abrir ${esc(tool.title)}</a>`; return; }
+    return renderToolBody(box.querySelector('[data-tb]'), p, tool);
+  }
+}
+
+async function renderPage(main, p, page, sub, { plain = false } = {}) {
+  const titles = { tarefas: 'Tarefas', equipa: p.is_central ? 'Equipa' : 'Equipa e convites', detalhes: 'Detalhes' };
+  if (page === 'geral') return projectOverview(main, p, { plain });
   if (page === 'atividade') return activityPage(main, p);
   if (page === 'financas' && p.is_central && isStaff()) return (await lazy.finance()).financePage(main, sub);
   if (page === 'orcamento' && p.canBudget) {
     const folder = isFolder(p);
-    main.innerHTML = `<div class="row between wrap-gap"><div><h1 class="h1 pm-title"><input class="title-in" data-btitle value="${esc(p.budget?.title || 'Orçamento')}" aria-label="Nome do orçamento" title="Clica para mudar o nome" maxlength="80"></h1><p class="muted">${folder ? 'Orçamento geral da pasta: os custos próprios (tabela em baixo) mais o que está atribuído a cada projeto lá dentro.' : 'Soma tudo o que está na tabela e compara com o orçamento geral do projeto.'}</p></div><div class="row wrap-gap">${p.is_central ? '' : `<button type="button" class="btn ghost" data-bcopy title="Copiar a tabela do orçamento para a visão geral do projeto">${ICON.copy} Copiar para a visão geral</button>`}<div data-who></div></div></div>${folder ? '<div data-kids></div>' : ''}<div class="budget-wrap" data-b></div>`;
-    main.querySelector('[data-bcopy]')?.addEventListener('click', async () => (await import('./ovwidgets.js')).copyToOverview(p, { kind: 'budget', title: p.budget?.title || 'Orçamento' }));
+    main.innerHTML = `<div class="row between wrap-gap"><div><h1 class="h1 pm-title"><input class="title-in" data-btitle value="${esc(p.budget?.title || 'Orçamento')}" aria-label="Nome do orçamento" title="Clica para mudar o nome" maxlength="80"></h1><p class="muted">${folder ? 'Orçamento geral da pasta: os custos próprios (tabela em baixo) mais o que está atribuído a cada projeto lá dentro.' : 'Soma tudo o que está na tabela e compara com o orçamento geral do projeto.'}</p></div><div data-who></div></div>${folder ? '<div data-kids></div>' : ''}<div class="budget-wrap" data-b></div>`;
     budgetWhoChip(main.querySelector('[data-who]'), p);
     if (folder) { const kids = await loadChildren(p); p._extra = { amount: budgetChildrenPanel(main.querySelector('[data-kids]'), p, kids), label: 'atribuídos aos projetos dentro' }; }
     const done = (await lazy.budget()).budgetPage(main.querySelector('[data-b]'), p);
@@ -1079,7 +1114,7 @@ async function projectPage(projectId, page, sub) {
   if (page === 'equipa') projectTeam(body, p);
   if (page === 'detalhes') {
     if (!p.is_central && p.kind !== 'album') { const fq = sb.from('projects').select('id, name').eq('kind', 'album').is('deleted_at', null).neq('id', p.id).order('name'); const { data: fs } = await (p.community_id ? fq.eq('community_id', p.community_id) : fq.is('community_id', null)); p._folders = fs || []; }
-    body.innerHTML = detailsForm(p); bindDetails(body, p, () => projectPage(projectId, 'detalhes'));
+    body.innerHTML = detailsForm(p); bindDetails(body, p, () => projectPage(p.id, 'detalhes'));
   }
 }
 
@@ -1088,7 +1123,7 @@ function budgetUsed(p) {
   return b.rows.filter((r) => r.kind === 'item').reduce((a, r) => a + (Number(r.cells?.[b.main]) || 0), 0);
 }
 
-async function projectOverview(main, p) {
+async function projectOverview(main, p, { plain = false } = {}) {
   const base = projBase(p);
   // tudo ao mesmo tempo (antes eram 4 ou 5 esperas seguidas)
   // (um pedido do Supabase só corre quando se espera por ele, e corre de novo a cada espera: Promise.resolve faz um só)
@@ -1165,7 +1200,8 @@ async function projectOverview(main, p) {
     });
   });
   main.querySelectorAll('[data-bopt]').forEach((btn) => btn.addEventListener('click', () => boardOptions(p, p._boards.find((x) => x.id === btn.dataset.bopt), () => projectPage(p.id, 'geral'))));
-  if (!p.is_central) { mountSituation(main.querySelector('[data-situation]'), p, base); autoModules(p); }
+  const asCanvas = IS_STUDIO && !plain && !p.is_central;
+  if (!p.is_central && !asCanvas) { mountSituation(main.querySelector('[data-situation]'), p, base); autoModules(p); }
   const mkup = main.querySelector('[data-mkup]'); if (mkup) lazy.marketing().then((m) => m.upcomingBox(mkup, p, base));
   if (kids) childrenSection(main.querySelector('[data-kids]'), p, kids, { base, canBudget: p.canBudget, onNew: isStaff() ? () => newProject({ parent: p }) : null, canEdit: isStaff(), after: () => projectPage(p.id, 'geral') });
   // tarefas do projeto: um botão no banner; ao carregar mostra as que estão por fazer
@@ -1194,6 +1230,19 @@ async function projectOverview(main, p) {
   const leadsEl = main.querySelector('[data-leads]');
   if (leadsEl) drawLeads(leadsEl, p);
   if (p.is_central) { const box = document.createElement('div'); box.className = 'co'; main.querySelector('.pm-head').after(box); centralOverview(box); }
+  // Studio: a visão geral é um board — o banner e cada bloco são elementos da grelha
+  if (asCanvas) {
+    autoModules(p);
+    const sit = main.querySelector('[data-situation]');
+    const head = document.createElement('div'); head.className = 'cv-headblk';
+    [...main.children].forEach((c) => { if (c !== sit && !c.matches('.pm-grid[hidden]')) head.append(c); });
+    sit.innerHTML = '<p class="muted">A preparar a visão geral…</p>';
+    await mountSituation(sit, p, base, { onBlocks: (blocks) => {
+      mountCanvas(main, p, { key: 'pg:geral', pageLabel: 'visão geral', here: { kind: 'page', page: 'geral', sub: null },
+        native: [{ id: 'head', label: 'Banner do projeto', el: head, removable: false }, ...blocks.map((b) => ({ id: b.id, label: b.label, el: b.el, w: b.w, x: b.x, off: b.off, icon: b.icon, ref: { kind: 'block', block: b.id } }))],
+        render: (bx, ref) => renderRef(bx, p, ref) });
+    } });
+  }
 }
 
 // ---------- Central: visão geral dos projetos ----------

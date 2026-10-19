@@ -170,3 +170,11 @@ input[type=date], input[type=time], input[type=datetime-local], input[type=month
 .pv-mark { font-family: inherit; font-size: 24px; padding: 4px 8px; line-height: 1; display: inline-flex; align-items: center; }
 .pv-mark .plogo { gap: .4em !important; }
 .pv-top { gap: 10px; }
+/* tarefas e questões no banner claro */
+.pm-head:not([style*="background-image"]) .pm-tasks { background: var(--panel2); color: var(--text); border-color: var(--line2); backdrop-filter: none; }
+.pm-head:not([style*="background-image"]) .pm-tasks:hover, .pm-head:not([style*="background-image"]) .pm-tasks[aria-expanded="true"] { background: var(--bg2); border-color: var(--text); }
+.pm-head:not([style*="background-image"]) .pm-tbar { background: var(--line2); }
+.pm-head:not([style*="background-image"]) .pm-tbar b { background: var(--text); }
+.pm-head:not([style*="background-image"]) .pm-tasks.late span { color: var(--late); }
+.pm-head:not([style*="background-image"]) .pm-q.has { border-color: var(--soon); }
+.pm-head:not([style*="background-image"]) .pm-q.has span, .pm-head:not([style*="background-image"]) .pm-q.has .pm-qi { color: var(--soon); }

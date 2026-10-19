@@ -1,10 +1,9 @@
-import { IS_STUDIO, sb, esc, toast, modal, confirmBox, ICON, dueInfo, fmtDate, initials, daysUntil, todayISO, state } from './lib.js';
+import { sb, esc, toast, modal, confirmBox, ICON, dueInfo, fmtDate, initials, daysUntil, todayISO, state } from './lib.js';
 import { loadPeople } from './tasks.js';
 import { PROP_STATUS } from './propstatus.js';
 import { trackHtml, musicStats } from './music.js';
 import { mountLayout } from './layout.js';
 import { hasMod } from './modules.js';
-import { renderExtra, pickTool, readClip, uid } from './ovwidgets.js';
 import { selPhase, currentPhase } from './phases.js';
 
 // "Ponto de situação" do projeto: o que falta fazer e por quem, adereços em falta,
@@ -90,7 +89,7 @@ export function situationData(p, tasksP) {
     import('./rodagem.js').then((m) => m.shootProgress(p)).catch(() => null),
   ]);
 }
-export async function mountSituation(box, p, base, { onChange } = {}) {
+export async function mountSituation(box, p, base, { onChange, onBlocks } = {}) {
   box.innerHTML = '<p class="muted">A preparar o ponto de situação…</p>';
   const isMusic = hasMod(p, 'seguimento'); const withProps = hasMod(p, 'aderecos');
   const pre = p._preSit; p._preSit = null; // os dados pedidos pela visão geral só servem a primeira vez
@@ -117,7 +116,7 @@ export async function mountSituation(box, p, base, { onChange } = {}) {
     const doneN = all.length - open.length, sh = shoot && shoot.total ? shoot : null;
     // o resumo da rodagem é da etapa Produção (ou de "todas" quando o projeto já está a filmar)
     const ph = selPhase(p), inProd = ph === 'prod' || (ph === 'all' && currentPhase(p) === 'prod');
-    box.innerHTML = `<div class="ovb"><div class="ovb-main"><div data-lay>
+    box.innerHTML = `<div data-lay>
       ${inProd ? `<div data-blk="prog"><section class="panel ov-prog">
         <div class="ov-pg"><div class="row between"><a href="${base}/rodagem"><strong>Planos</strong></a><span class="muted small">${sh ? `${sh.total - sh.filmed === 1 ? 'falta 1 plano' : `faltam ${sh.total - sh.filmed} planos`} · ${sh.filmed} de ${sh.total} filmados` : 'Ainda não há planos'}</span></div>
           <div class="bar big ok"><i style="width:${sh ? Math.round((sh.filmed / sh.total) * 100) : 0}%"></i></div></div>
@@ -156,46 +155,21 @@ export async function mountSituation(box, p, base, { onChange } = {}) {
             ${missing.length ? `<ul class="ov-pl">${missing.slice(0, 8).map((x) => { const s = PROP_STATUS.find((y) => y[0] === x.status) || PROP_STATUS[0]; return `<li><a href="${base}/aderecos/${x.id}"><span>${esc(x.name)}</span><span class="pstat" style="--c:${s[2]}">${esc(s[1])}</span></a></li>`; }).join('')}${missing.length > 8 ? `<li class="muted small">e mais ${missing.length - 8}…</li>` : ''}</ul>` : '<p class="muted small">Está tudo pronto.</p>'}`
           : `<p class="muted small">Ainda não há adereços.</p><a class="btn ghost" href="${base}/aderecos">${ICON.plus} Juntar adereços</a>`}
         </section></div>` : ''}
-      </div></div>${IS_STUDIO ? '<aside class="ov-tools" data-ovtools aria-label="Juntar blocos à visão geral"></aside>' : ''}</div>`;
-    // a visão geral funciona como um board: blocos que se juntam e tiram na barra da direita, arrastam e mudam de largura
+      </div>`;
+    // blocos da visão geral: no Studio cada um é um elemento da grelha (onBlocks); fora disso, arrumação por colunas
     const defsStd = [
-      { id: 'prog', label: 'Progresso da rodagem', pos: 'full', icon: ICON.check }, { id: 'mapa', label: 'Mapa de rodagem', pos: 'full', icon: ICON.calendar },
-      { id: 'kpis', label: 'Números do projeto', pos: 'full', icon: ICON.list }, { id: 'music', label: 'Seguimento', pos: 'full', icon: ICON.music, off: !(ms && ms.scenes.length) },
-      { id: 'who', label: 'Quem tem o quê', pos: 'left', icon: ICON.team }, { id: 'crono', label: 'Cronograma', pos: 'right', icon: ICON.calendar }, { id: 'depts', label: 'Por departamento', pos: 'right', icon: ICON.board, off: !all.some((t) => t.department) },
-      { id: 'props', label: 'Adereços em falta', pos: 'right', icon: ICON.prop, off: !withProps },
+      { id: 'prog', label: 'Progresso da rodagem', w: 12, icon: ICON.check }, { id: 'mapa', label: 'Mapa de rodagem', w: 12, icon: ICON.calendar },
+      { id: 'kpis', label: 'Números do projeto', w: 12, icon: ICON.list }, { id: 'music', label: 'Seguimento', w: 12, icon: ICON.music, off: !(ms && ms.scenes.length) },
+      { id: 'who', label: 'Quem tem o quê', w: 7, icon: ICON.team }, { id: 'crono', label: 'Cronograma', w: 5, x: 7, icon: ICON.calendar }, { id: 'depts', label: 'Por departamento', w: 5, x: 7, icon: ICON.board, off: !all.some((t) => t.department) },
+      { id: 'props', label: 'Adereços em falta', w: 5, x: 7, icon: ICON.prop, off: !withProps },
     ];
     const root = box.querySelector('[data-lay]');
-    const extra = () => (p.layouts?.overview?.extra || []);
-    const saveExtra = async (list) => {
-      const layouts = { ...(p.layouts || {}), overview: { ...(p.layouts?.overview || {}), extra: list } }; p.layouts = layouts;
-      const { error } = await sb.from('projects').update({ layouts }).eq('id', p.id); if (error) toast('Não foi possível guardar: ' + error.message);
-    };
-    const xLabel = (it) => it.title || (it.kind === 'note' ? 'Nota' : 'Ferramenta');
-    const xEl = (it) => { const el = document.createElement('div'); el.dataset.blk = `x:${it.id}`; renderExtra(el, p, it, base, () => saveExtra(extra())); return el; };
-    extra().forEach((it) => root.append(xEl(it)));
-    let lay = null; const tools = box.querySelector('[data-ovtools]');
-    lay = mountLayout(root, { project: p, key: 'overview', title: 'vista geral', inline: true,
-      blocks: [...defsStd, ...extra().map((it) => ({ id: `x:${it.id}`, label: xLabel(it), pos: it.pos || 'full' }))],
-      onRemove: (id) => { if (!id.startsWith('x:')) return false; saveExtra(extra().filter((x) => `x:${x.id}` !== id)); toast('Bloco tirado.'); return true; },
-      onChange: () => drawTools() });
-    const addExtra = (it) => { const item = { id: uid(), ...it }; saveExtra([...extra(), item]); lay.add(xEl(item), { id: `x:${item.id}`, label: xLabel(item), pos: 'full' }); };
-    function drawTools() {
-      if (!tools) return;
-      const clip = readClip(p);
-      const present = defsStd.filter((d) => root.querySelector(`[data-blk="${d.id}"]`) || lay?.st?.order.includes(d.id));
-      tools.innerHTML = `<p class="ovt-h">Blocos</p>${present.map((d) => { const on = lay ? !lay.isHidden(d.id) : true; return `<button type="button" class="${on ? 'on' : ''}" data-std="${d.id}" title="${on ? `${d.label}: está na página (tira-o com o × do bloco)` : `Juntar ${d.label}`}">${d.icon || ICON.board}<span>${esc(d.label)}</span>${on ? '' : '<i class="ovt-plus">+</i>'}</button>`; }).join('')}
-        <hr><button type="button" data-note>${ICON.note}<span>Nota</span><i class="ovt-plus">+</i></button>
-        <button type="button" data-tool>${ICON.board}<span>Orçamento ou ferramenta</span><i class="ovt-plus">+</i></button>
-        ${clip ? `<button type="button" class="paste" data-paste title="Colar ${esc(clip.title)}">${ICON.copy}<span>Colar «${esc(clip.title)}»</span></button>` : ''}`;
-      tools.querySelectorAll('[data-std]').forEach((b) => b.addEventListener('click', () => { const id = b.dataset.std; if (lay.isHidden(id)) { lay.show(id); toast(`${defsStd.find((d) => d.id === id).label} juntou-se à página.`); } else root.querySelector(`[data-blk="${id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }));
-      tools.querySelector('[data-note]').addEventListener('click', () => addExtra({ kind: 'note', title: '', text: '' }));
-      tools.querySelector('[data-tool]').addEventListener('click', () => pickTool(p, (it) => addExtra(it)));
-      tools.querySelector('[data-paste]')?.addEventListener('click', () => paste());
+    if (onBlocks) {
+      const els = new Map([...root.querySelectorAll(':scope > [data-blk]')].map((e) => [e.dataset.blk, e]));
+      onBlocks(defsStd.filter((d) => els.has(d.id)).map((d) => ({ ...d, el: els.get(d.id) })));
+    } else {
+      mountLayout(root, { project: p, key: 'overview', title: 'vista geral', blocks: defsStd.map((d) => ({ id: d.id, label: d.label, pos: d.w === 12 ? 'full' : d.x ? 'right' : 'left' })) });
     }
-    const paste = () => { const c = readClip(p); if (!c) return false; addExtra({ kind: c.kind, ref: c.ref, title: c.title }); try { localStorage.removeItem('portal-clip'); } catch { /* nada */ } drawTools(); toast(`"${c.title}" colado na visão geral.`); return true; };
-    const onPaste = (e) => { if (!document.body.contains(root)) { document.removeEventListener('paste', onPaste); window.removeEventListener('portal-clip', drawTools); return; } if (e.target.closest?.('input, textarea, [contenteditable]')) return; if (paste()) e.preventDefault(); };
-    document.addEventListener('paste', onPaste); window.addEventListener('portal-clip', drawTools);
-    drawTools();
     bind();
   };
 
