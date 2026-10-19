@@ -31,7 +31,7 @@ export async function shotPage(main, p, id, base, cleanup) {
   main.innerHTML = `
     <nav class="row between wrap-gap"><span class="row wrap-gap"><a href="${base}/storyboard" class="link-btn">${ICON.back} Storyboard</a>${scene ? `<a href="${base}/${unit}/${scene.id}" class="link-btn">${esc(scene.heading || 'Secção')}</a>` : ''}<a href="${base}/shotlist" class="link-btn">Shotlist</a></span>
       <span class="row">${prev ? `<a class="btn ghost" href="${base}/plano/${prev.id}" aria-label="Plano anterior">${ICON.back}</a>` : ''}<span class="muted small">${i + 1} de ${order.length}</span>${next ? `<a class="btn ghost" href="${base}/plano/${next.id}" aria-label="Plano seguinte">${ICON.chev}</a>` : ''}</span></nav>
-    <header class="shot-head"><input class="title-in" data-f="code" value="${esc(x.code || '')}" placeholder="Código (ex: 3A)" aria-label="Código do plano"></header>
+    <header class="shot-head"><input class="title-in" data-f="code" value="${esc(x.code || '')}" placeholder="Código (ex: 3.1)" aria-label="Código do plano"></header>
     <div class="shot-layout">
       <section class="shot-big" data-img tabindex="0" role="button" aria-label="${img ? 'Mudar a imagem' : 'Juntar imagem'}">${img ? `<img src="${esc(img)}" alt="${esc(title)}">` : `<span>${ICON.image}<strong>Juntar imagem</strong><small>clica, arrasta ou cola com Ctrl+V</small></span>`}</section>
       <section class="panel stack shot-fields">

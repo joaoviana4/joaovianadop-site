@@ -17,18 +17,19 @@ export const MODULES = {
   planificacao: { label: 'Planificação', icon: 'board', desc: 'Lista de planos para a rodagem.' },
   equipamento: { label: 'Equipamento', icon: 'camera', desc: 'Câmaras, objetivas, luzes, frames, maquinaria e elétrico do projeto, com especificações, quantidades e rental. Os mapas de luz usam esta lista.' },
   aderecos: { label: 'Adereços', icon: 'prop', desc: 'Lista e grelha de adereços com fotos, estado, custo, fornecedor e pacotes de aluguer.' },
+  figurino: { label: 'Figurino', icon: 'hanger', desc: 'Uma página por ator: moodboard, medidas, figurinos com fotos de referência e provas de guarda-roupa.' },
   marketing: { label: 'Marketing', icon: 'megaphone', desc: 'Calendário de lançamentos e conteúdos (videoclipes, teasers, TikToks, capas…), com responsável, estado e página própria para cada um.' },
   tarefas: { label: 'Tarefas', icon: 'task', desc: 'Tarefas do projeto, por pessoa e departamento.' },
 };
 // ordem no menu
-export const ORDER = ['orcamento', 'seguimento', 'guiao', 'cenas', 'elenco', 'decors', 'storyboard', 'shotlist', 'planificacao', 'equipamento', 'aderecos', 'marketing', 'tarefas'];
+export const ORDER = ['orcamento', 'seguimento', 'guiao', 'cenas', 'elenco', 'decors', 'storyboard', 'shotlist', 'planificacao', 'equipamento', 'aderecos', 'figurino', 'marketing', 'tarefas'];
 // o seguimento e as cenas usam a mesma lista de secções/cenas: um projeto usa um ou outro
 const SCRIPT = ['guiao', 'cenas', 'planificacao'];
 
 export const TEMPLATES = {
-  videoclipe: ['orcamento', 'seguimento', 'elenco', 'decors', 'storyboard', 'shotlist', 'equipamento', 'aderecos', 'tarefas'],
-  ficcao: ['orcamento', 'guiao', 'cenas', 'elenco', 'decors', 'storyboard', 'planificacao', 'equipamento', 'aderecos', 'tarefas'],
-  campanha: ['orcamento', 'seguimento', 'elenco', 'decors', 'storyboard', 'shotlist', 'equipamento', 'aderecos', 'tarefas'],
+  videoclipe: ['orcamento', 'seguimento', 'elenco', 'decors', 'storyboard', 'shotlist', 'equipamento', 'aderecos', 'figurino', 'tarefas'],
+  ficcao: ['orcamento', 'guiao', 'cenas', 'elenco', 'decors', 'storyboard', 'planificacao', 'equipamento', 'aderecos', 'figurino', 'tarefas'],
+  campanha: ['orcamento', 'seguimento', 'elenco', 'decors', 'storyboard', 'shotlist', 'equipamento', 'aderecos', 'figurino', 'tarefas'],
   branded: ['orcamento', 'seguimento', 'decors', 'shotlist', 'equipamento', 'aderecos', 'tarefas'],
   documentario: ['orcamento', 'elenco', 'decors', 'equipamento', 'tarefas'],
   album: ['orcamento', 'marketing', 'tarefas'],
@@ -79,7 +80,7 @@ export async function autoModules(p) {
   const c = async (t, extra) => { let q = sb.from(t).select('id', { count: 'exact', head: true }).eq('project_id', p.id); if (extra) q = extra(q); const { count } = await q; return count || 0; };
   const [loc, ch, sh, pr, sc, ge] = await Promise.all([c('locations'), c('characters'), c('shots'), c('props', (q) => q.eq('removed', false)), c('scenes'), c('gear')]);
   const want = [];
-  if (loc) want.push('decors'); if (ch) want.push('elenco'); if (sh) want.push('storyboard', ...(scriptMode(p) ? [] : ['shotlist'])); if (pr) want.push('aderecos'); if (ge) want.push('equipamento');
+  if (loc) want.push('decors'); if (ch) want.push('elenco', 'figurino'); if (sh) want.push('storyboard', ...(scriptMode(p) ? [] : ['shotlist'])); if (pr) want.push('aderecos'); if (ge) want.push('equipamento');
   if (sc && !hasMod(p, 'seguimento') && !hasMod(p, 'cenas')) want.push(scriptMode(p) ? 'cenas' : 'seguimento');
   if (want.length) await ensureModules(p, want, { user: false });
 }

@@ -15,7 +15,7 @@ import { clearFullscreen } from './layout.js';
 import { newLightmapData } from './lmdata.js';
 // páginas pesadas só carregam quando são abertas (o site arranca mais depressa)
 const lazy = {
-  finance: () => import('./finance.js'), lightmap: () => import('./lightmap.js'), lmhub: () => import('./lmhub.js'), gear: () => import('./gear.js'),
+  finance: () => import('./finance.js'), lightmap: () => import('./lightmap.js'), lmhub: () => import('./lmhub.js'), wardrobe: () => import('./wardrobe.js'), gear: () => import('./gear.js'),
   props: () => import('./props.js'), budget: () => import('./budget.js'), shotlist: () => import('./shotlist.js'),
   shot: () => import('./shot.js'), marketing: () => import('./marketing.js'), callsheet: () => import('./callsheet.js'), transport: () => import('./transport.js'),
 };
@@ -580,11 +580,11 @@ async function ensureDept(p, key) {
 }
 function boardGroups(p) {
   // os mapas de luz não aparecem um a um: ficam todos na página "Mapas de luz" do departamento Imagem
-  const top = p._boards.filter((b) => !b.parent_id && b.kind !== 'mkt' && b.kind !== 'lightmap');
+  const top = p._boards.filter((b) => !b.parent_id && b.kind !== 'mkt' && b.kind !== 'wrd' && b.kind !== 'lightmap');
   const hasMaps = p._boards.some((b) => b.kind === 'lightmap');
   const groups = (p.departments || []).map((d) => ({ ...d, boards: top.filter((b) => b.group_id === d.id), pages: [] }));
   const need = (key, mod) => { if (p.is_central || !(mod === 'mapas' ? hasMaps || ['equipamento', 'storyboard', 'shotlist'].some((k) => hasMod(p, k)) : hasMod(p, mod))) return; let g = groups.find((x) => x.id === (deptOf(p, key)?.id || key)); if (!g) { g = { id: key, ...FIXED_DEPTS[key], boards: [], pages: [], virtual: true }; groups.push(g); } g.pages.push(mod); };
-  need('imagem', 'equipamento'); need('imagem', 'mapas'); need('arte', 'aderecos');
+  need('imagem', 'equipamento'); need('imagem', 'mapas'); need('arte', 'aderecos'); need('arte', 'figurino');
   const known = new Set(groups.map((g) => g.id));
   const other = top.filter((b) => !b.group_id || !known.has(b.group_id));
   if (other.length) groups.push({ id: '', name: 'Outros', color: '#8A8A99', boards: other, pages: [] });
@@ -596,7 +596,7 @@ const pageMeta = (k) => (k === 'mapas' ? { label: 'Mapas de luz', icon: 'bulb' }
 function projectNav(p, active) {
   const base = projBase(p);
   navState.p = p; navState.active = active;
-  const mods = p.is_central ? [['tarefas', 'Tarefas', ICON.task]] : modulesOf(p).filter((k) => (k !== 'orcamento' || p.canBudget) && k !== 'equipamento' && k !== 'aderecos').map((k) => [modPath(p, k), modLabel(p, k), ICON[MODULES[k].icon]]);
+  const mods = p.is_central ? [['tarefas', 'Tarefas', ICON.task]] : modulesOf(p).filter((k) => (k !== 'orcamento' || p.canBudget) && k !== 'equipamento' && k !== 'aderecos' && k !== 'figurino').map((k) => [modPath(p, k), modLabel(p, k), ICON[MODULES[k].icon]]);
   const pages = [['geral', 'Visão geral', ICON.home], ...(p.is_central && isStaff() ? [['financas', 'Finanças', ICON.money]] : []), ...mods, ['atividade', 'Atividade', ICON.bell], ['equipa', p.is_central ? 'Equipa' : 'Equipa e convites', ICON.team], ...(isStaff() ? [['detalhes', 'Detalhes', ICON.info]] : [])];
   return `
     ${p._parent ? `<a class="pn-parent" href="#/p/${p._parent.id}">${ICON.back}<span>${esc(p._parent.name)}</span></a>` : ''}
@@ -750,7 +750,7 @@ async function projectPage(projectId, page, sub) {
   const titles = { tarefas: 'Tarefas', equipa: p.is_central ? 'Equipa' : 'Equipa e convites', detalhes: 'Detalhes' };
   joinProject(p.id);
   // páginas de trabalho: só uma janela edita de cada vez (as outras ficam só a ver)
-  if (['orcamento', 'seguimento', 'decors', 'elenco', 'personagens', 'aderecos', 'cenas', 'guiao', 'planificacao', 'detalhes', 'shotlist', 'storyboard', 'financas', 'plano', 'equipamento'].includes(page)) {
+  if (['orcamento', 'seguimento', 'decors', 'elenco', 'personagens', 'aderecos', 'cenas', 'guiao', 'planificacao', 'detalhes', 'shotlist', 'storyboard', 'financas', 'plano', 'equipamento', 'figurino'].includes(page)) {
     const lk = lockPage(`${p.id}:${page}:${sub || ''}`, main, { reopen: () => route() });
     onCleanup(() => lk.destroy());
   }
@@ -780,6 +780,7 @@ async function projectPage(projectId, page, sub) {
   }
   if (['orcamento', 'financas'].includes(page)) { main.innerHTML = `<div class="empty-box"><p>${ICON.lock} Não tens acesso a esta parte.</p><p class="muted small">Pede a um administrador.</p></div>`; return; }
   if (page === 'aderecos' && !p.is_central) return (await lazy.props()).propsPage(main, p, sub, projBase(p), onCleanup);
+  if (page === 'figurino' && !p.is_central) return (await lazy.wardrobe()).wardrobePage(main, p, sub, projBase(p), onCleanup);
   main.innerHTML = `<h1 class="h1 pm-title">${esc(titles[page] || '')}</h1><div class="panel" data-body></div>`;
   const body = main.querySelector('[data-body]');
   if (page === 'tarefas') { body.classList.remove('panel'); body.classList.add('tc'); const t = mountTaskCenter(body, { projectId: p.id }); onCleanup(() => t.destroy()); }
@@ -809,7 +810,7 @@ async function projectOverview(main, p) {
   const imgPaths = (items || []).filter((i) => i.kind === 'image').map((i) => i.data?.path);
   const thumbs = await signedUrls(imgPaths.slice(0, 40));
   const ph = phaseOf(p);
-  const top = p._boards.filter((b) => !b.parent_id && b.kind !== 'mkt' && b.kind !== 'lightmap');
+  const top = p._boards.filter((b) => !b.parent_id && b.kind !== 'mkt' && b.kind !== 'wrd' && b.kind !== 'lightmap');
   const nMaps = p._boards.filter((b) => b.kind === 'lightmap').length;
   const count = (id) => (items || []).filter((i) => i.board_id === id).length;
   const thumbOf = (id) => { const im = (items || []).find((i) => i.board_id === id && i.kind === 'image' && thumbs[i.data?.path]); return im ? thumbs[im.data.path] : null; };
@@ -1049,6 +1050,7 @@ async function boardView(projectId, boardId) {
     onUp: async () => {
       if (cur.parent_id) return go(`${base}/b/${cur.parent_id}`);
       // board de um item de marketing: volta para a página do item
+      if (cur.kind === 'wrd') { const { data: wb } = await sb.from('boards').select('data').eq('id', cur.id).maybeSingle(); return go(`${base}/figurino${wb?.data?.character_id ? '/' + wb.data.character_id : ''}`); }
       if (cur.kind === 'mkt') { const { data: mi } = await sb.from('marketing_items').select('id').eq('board_id', cur.id).maybeSingle(); if (mi) return go(`${base}/marketing/${mi.id}`); }
       go(base);
     },
