@@ -20,12 +20,29 @@ export function bindMode(root, k, redraw) {
 // items: [{ e, href, title, sub, meta }]; place = décor (sem foto mostra o ícone de casa), senão iniciais
 export function entItems(items, { mode, urls, place = false }) {
   const pic = (e, title, cls) => { const u = urls[entPhoto(e)]; return `<span class="${cls}">${u ? `<img src="${esc(u)}" alt="" loading="lazy">` : place ? ICON.home : `<b>${esc(initials(title))}</b>`}</span>`; };
+  // item.edit = { table, field: 'actor' | 'info.<chave>', placeholder, label }: um campo que se edita logo na lista
+  const ed = (it) => `<input class="ent-ed" data-ented="${esc(it.e.id)}" value="${esc(editValue(it))}" placeholder="${esc(it.edit.placeholder || '')}" aria-label="${esc(it.edit.label || it.edit.placeholder || '')} de ${esc(it.title)}">`;
   if (mode === 'list') {
-    return `<div class="ent-list">${items.map(({ e, href, title, sub, meta }) => `<a class="ent-row" href="${href}">${pic(e, title, 'ent-th')}<strong>${esc(title)}</strong><span class="muted small">${sub}</span><span class="small">${meta}</span>${ICON.chev}</a>`).join('')}</div>`;
+    return `<div class="ent-list">${items.map((it, i) => { const { e, href, title, sub, meta } = it; return it.edit
+      ? `<div class="ent-row ed"><a href="${href}" class="ent-ra" tabindex="-1" aria-hidden="true">${pic(e, title, 'ent-th')}</a><a href="${href}" class="ent-rt"><strong>${esc(title)}</strong></a>${ed(it)}<span class="small">${meta}</span><a href="${href}" class="ent-rc" aria-label="Abrir ${esc(title)}">${ICON.chev}</a></div>`
+      : `<a class="ent-row" href="${href}">${pic(e, title, 'ent-th')}<strong>${esc(title)}</strong><span class="muted small">${sub}</span><span class="small">${meta}</span>${ICON.chev}</a>`; }).join('')}</div>`;
   }
-  return `<div class="ent-tiles">${items.map(({ e, href, title, sub, meta }) => `<a class="ent-tile" href="${href}">${pic(e, title, 'ent-ph')}<span class="ent-tb"><strong>${esc(title)}</strong><span class="muted small">${sub}</span><span class="small">${meta}</span></span></a>`).join('')}</div>`;
+  return `<div class="ent-tiles">${items.map((it, i) => { const { e, href, title, sub, meta } = it; return it.edit
+    ? `<div class="ent-tile ed"><a href="${href}" class="ent-ta">${pic(e, title, 'ent-ph')}<span class="ent-tb"><strong>${esc(title)}</strong></span></a><span class="ent-tb ent-tb2">${ed(it)}<span class="small">${meta}</span></span></div>`
+    : `<a class="ent-tile" href="${href}">${pic(e, title, 'ent-ph')}<span class="ent-tb"><strong>${esc(title)}</strong><span class="muted small">${sub}</span><span class="small">${meta}</span></span></a>`; }).join('')}</div>`;
 }
-
+const editValue = (it) => { const f = it.edit.field; return f.startsWith('info.') ? it.e.info?.[f.slice(5)] || '' : it.e[f] || ''; };
+// grava o que se escreve nos campos da lista (cada linha à sua vez)
+export function bindEdits(root, items) {
+  const timers = new Map();
+  root.querySelectorAll('[data-ented]').forEach((inp) => inp.addEventListener('input', () => {
+    const it = items.find((x) => x.e.id === inp.dataset.ented); if (!it) return; const { table, field } = it.edit; const e = it.e; const v = inp.value;
+    const patch = field.startsWith('info.') ? (e.info = { ...(e.info || {}), [field.slice(5)]: v }, { info: e.info }) : (e[field] = v, { [field]: v });
+    clearTimeout(timers.get(e.id));
+    timers.set(e.id, setTimeout(() => sb.from(table).update(patch).eq('id', e.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message)), 600));
+  }));
+  root.querySelectorAll('[data-ented]').forEach((inp) => inp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') inp.blur(); }));
+}
 
 // Ctrl+V com uma imagem copiada: entra como foto (enquanto esta página estiver aberta)
 function onPasteImages(root, fn) {
