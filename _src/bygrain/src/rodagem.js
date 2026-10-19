@@ -9,15 +9,17 @@ const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
 const sheetsOf = (b) => b.data?.sheets || (b.data?.rows ? [b.data] : []);
 const shotLabel = (r, cols) => { const c = r.cells || {}; return [c.cena, c.efeito].filter(Boolean).join(' · ') || r.num || cols.map((x) => c[x.id]).find(Boolean) || 'Plano'; };
 
-async function loadAll(p) {
+async function loadAll(p, only) {
   const [{ data: boards }, { data: marks }, { data: shots }] = await Promise.all([
     sb.from('boards').select('id, title, data, created_at').eq('project_id', p.id).eq('kind', 'callsheet').order('created_at'),
     sb.from('shoot_marks').select('*').eq('project_id', p.id),
     sb.from('shots').select('id').eq('project_id', p.id),
   ]);
   const days = [];
-  (boards || []).forEach((b) => sheetsOf(b).forEach((sh, i) => days.push({ board: b, i, sh, rows: (sh.rows || []).filter((r) => r.kind !== 'band') })));
-  days.sort((a, b) => (a.sh.date || '9999').localeCompare(b.sh.date || '9999') || a.i - b.i);
+  // folhas sem nenhum plano (ex: uma folha nova vazia) não contam, a não ser que se abra essa folha
+  (boards || []).filter((b) => (only ? b.id === only : sheetsOf(b).some((sh) => (sh.rows || []).some((r) => r.kind !== 'band')))).forEach((b) => sheetsOf(b).forEach((sh, i) => days.push({ board: b, i, sh, rows: (sh.rows || []).filter((r) => r.kind !== 'band') })));
+  if (only) days.sort((a, b) => a.i - b.i);
+  else days.sort((a, b) => (a.sh.date || '9999').localeCompare(b.sh.date || '9999') || a.i - b.i);
   return { boards: boards || [], days, marks: new Map((marks || []).map((m) => [`${m.board_id}:${m.row_id}`, m])), shots: shots || [] };
 }
 
@@ -34,12 +36,14 @@ export async function shootProgress(p) {
   try { const st = await loadAll(p); const t = totals(st); return { ...t, days: st.days.length, daysDone: st.days.filter((d) => d.rows.length && d.rows.every((r) => st.marks.has(`${d.board.id}:${r.id}`))).length }; } catch { return null; }
 }
 
-export async function rodagemPage(main, p, base) {
+// opts.board: só os dias dessa folha de serviço (a ferramenta Folha de serviço na etapa Produção); opts.onEdit: passa a editar
+export async function rodagemPage(main, p, base, opts = {}) {
   main.innerHTML = '<p class="muted">A abrir as folhas de serviço…</p>';
-  const st = await loadAll(p);
+  const st = await loadAll(p, opts.board);
   const canEdit = p.canEdit !== false;
   let cur = 0, saved = null;
-  try { saved = localStorage.getItem(`bg-rod:${p.id}`); } catch { /* nada */ }
+  const LK = opts.board ? `bg-cs-day:${opts.board}` : `bg-rod:${p.id}`;
+  try { saved = localStorage.getItem(LK); } catch { /* nada */ }
   if (saved != null) cur = Math.max(0, Math.min(st.days.length - 1, Number(saved) || 0));
   // abre no primeiro dia com planos por filmar, se não houver um escolhido antes
   else { const i = st.days.findIndex((d) => d.rows.some((r) => !st.marks.has(`${d.board.id}:${r.id}`))); if (i > 0) cur = i; }
@@ -47,12 +51,12 @@ export async function rodagemPage(main, p, base) {
 
   const draw = () => {
     if (!st.days.length) {
-      main.innerHTML = `<h1 class="h1">Rodagem</h1><div class="empty-box"><p>Ainda não há folhas de serviço. Quando a pré-produção fizer a folha de serviço de cada dia, os dias aparecem aqui para marcares o que foi filmado.</p>${canEdit ? `<p class="muted small">Cria uma em Pré-produção: juntar ferramenta, Folha de serviço.</p>` : ''}</div>`;
+      main.innerHTML = `${opts.board ? '' : '<h1 class="h1">Rodagem</h1>'}<div class="empty-box"><p>Ainda não há folhas de serviço. Quando a pré-produção fizer a folha de serviço de cada dia, os dias aparecem aqui para marcares o que foi filmado.</p>${canEdit ? `<p class="muted small">Cria uma em Pré-produção: juntar ferramenta, Folha de serviço.</p>` : ''}</div>`;
       return;
     }
     const t = totals(st);
     const d = st.days[cur]; const s = dayStats(d); const cols = d.sh.cols || [];
-    main.innerHTML = `<div class="row between wrap-gap"><div><span class="small muted">Produção</span><h1 class="h1">Rodagem</h1></div>
+    main.innerHTML = `<div class="row between wrap-gap">${opts.board ? '<p class="muted small rod-mode">Modo rodagem: a folha está só para ler. Marca cada plano quando estiver filmado.</p>' : '<div><span class="small muted">Produção</span><h1 class="h1">Rodagem</h1></div>'}
         ${canEdit ? `<a class="btn ghost" href="${base}/f/${d.board.id}" data-edit title="Abre a folha de serviço deste dia para mudar horários, planos ou elenco">${ICON.edit} Editar folha de serviço</a>` : ''}</div>
       <section class="panel rod-sum">
         <div class="rod-big"><strong>${pct(t.filmed, t.total)}%</strong><span>do filme filmado</span></div>
@@ -85,7 +89,7 @@ export async function rodagemPage(main, p, base) {
         </tbody></table></section>`;
     bind();
   };
-  const go = (i) => { cur = i; try { localStorage.setItem(`bg-rod:${p.id}`, i); } catch { /* nada */ } draw(); };
+  const go = (i) => { cur = i; try { localStorage.setItem(LK, i); } catch { /* nada */ } draw(); };
   const toggle = async (d, rows, on) => {
     const keys = rows.map((r) => `${d.board.id}:${r.id}`);
     const before = new Map(keys.map((k) => [k, st.marks.get(k)]));
@@ -103,7 +107,7 @@ export async function rodagemPage(main, p, base) {
     main.querySelectorAll('[data-ck]').forEach((b) => b.addEventListener('click', () => { const r = d.rows.find((x) => x.id === b.dataset.ck); if (r) toggle(d, [r], !st.marks.has(`${d.board.id}:${r.id}`)); }));
     main.querySelectorAll('[data-all]').forEach((b) => b.addEventListener('click', () => { const on = b.dataset.all === '1'; toggle(d, d.rows.filter((r) => st.marks.has(`${d.board.id}:${r.id}`) !== on), on); }));
     // a folha de serviço abre no mesmo dia
-    main.querySelector('[data-edit]')?.addEventListener('click', () => { try { localStorage.setItem(`bg-cs-day:${d.board.id}`, d.i); } catch { /* nada */ } });
+    main.querySelector('[data-edit]')?.addEventListener('click', (e) => { try { localStorage.setItem(`bg-cs-day:${d.board.id}`, d.i); } catch { /* nada */ } if (opts.onEdit) { e.preventDefault(); opts.onEdit(); } });
   };
   draw();
   // vistos de outras pessoas: volta a ler quando a janela regressa ao primeiro plano

@@ -17,6 +17,7 @@ export const MODULES = {
   storyboard: { label: 'Storyboard', icon: 'image', desc: 'Todos os planos do projeto, por ordem.' },
   shotlist: { label: 'Shotlist', icon: 'list', desc: 'Todos os planos numa tabela rápida, em grupos coloridos, com notas de direção e técnicas. Exporta para PDF.' },
   planificacao: { label: 'Planificação', icon: 'board', desc: 'Lista de planos para a rodagem.' },
+  anotacao: { label: 'Folhas de Anotação', icon: 'note', desc: 'A anotadora carrega as fotos das folhas de cada dia; o Claude lê a letra e o studio organiza por cena, plano e take, com a foto ao lado, para a montagem.' },
   rodagem: { label: 'Rodagem', icon: 'check', desc: 'As folhas de serviço de cada dia, para marcar os planos já filmados e ver o resumo dos dias. Aparece quando o projeto tem a etapa Produção.' },
   equipamento: { label: 'Equipamento', icon: 'camera', desc: 'Câmaras, objetivas, luzes, frames, maquinaria e elétrico do projeto, com especificações, quantidades e rental. Os mapas de luz usam esta lista.' },
   aderecos: { label: 'Adereços', icon: 'prop', desc: 'Lista e grelha de adereços com fotos, estado, custo, fornecedor e pacotes de aluguer.' },
@@ -25,7 +26,7 @@ export const MODULES = {
   tarefas: { label: 'Tarefas', icon: 'task', desc: 'Tarefas do projeto, por pessoa e departamento.' },
 };
 // ordem no menu
-export const ORDER = ['orcamento', 'tratamento', 'seguimento', 'guiao', 'cenas', 'elenco', 'decors', 'storyboard', 'shotlist', 'planificacao', 'rodagem', 'equipamento', 'aderecos', 'figurino', 'marketing', 'tarefas'];
+export const ORDER = ['orcamento', 'tratamento', 'seguimento', 'guiao', 'cenas', 'elenco', 'decors', 'storyboard', 'shotlist', 'planificacao', 'rodagem', 'anotacao', 'equipamento', 'aderecos', 'figurino', 'marketing', 'tarefas'];
 // o seguimento e as cenas usam a mesma lista de secções/cenas: um projeto usa um ou outro
 const SCRIPT = ['guiao', 'cenas', 'planificacao'];
 
@@ -45,9 +46,10 @@ const state = (p) => {
   return { list: TEMPLATES[p.kind] || TEMPLATES.default, removed: [] };
 };
 // as Cenas só existem depois de importar um guião (p._hasScript vem do carregamento do projeto)
-// a Rodagem junta-se sozinha quando o projeto tem a etapa Produção (a não ser que a tirem à mão)
-const autoRodagem = (p) => !state(p).removed.includes('rodagem') && stagesOn(p).includes('prod');
-export const modulesOf = (p) => (p.is_central ? [] : ORDER.filter((k) => (state(p).list.includes(k) || (k === 'rodagem' && autoRodagem(p))) && (k !== 'cenas' || p._hasScript)));
+// a Rodagem e as Folhas de Anotação juntam-se sozinhas quando o projeto tem a etapa Produção (a não ser que a tirem à mão)
+const AUTO_PROD = ['rodagem', 'anotacao'];
+const autoProd = (p, k) => AUTO_PROD.includes(k) && !state(p).removed.includes(k) && stagesOn(p).includes('prod');
+export const modulesOf = (p) => (p.is_central ? [] : ORDER.filter((k) => (state(p).list.includes(k) || autoProd(p, k)) && (k !== 'cenas' || p._hasScript)));
 export const hasMod = (p, k) => modulesOf(p).includes(k);
 export const scriptMode = (p) => SCRIPT.some((k) => hasMod(p, k));
 export const modLabel = (p, k) => (k === 'elenco' && scriptMode(p) ? MODULES.elenco.scriptLabel : MODULES[k].label);

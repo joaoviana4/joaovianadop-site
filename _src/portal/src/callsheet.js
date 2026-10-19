@@ -1,3 +1,4 @@
+import { selPhase } from './phases.js';
 import { sb, esc, toast, modal, confirmBox, ICON, signedUrl } from './lib.js';
 import { projectContacts, nameWithPhone } from './contacts.js';
 import { placeAddr } from './placegeo.js';
@@ -278,7 +279,12 @@ function peoplePicker(main, p, d, save) {
   });
 }
 
-export function callsheetTool(main, p, tool) {
+export function callsheetTool(main, p, tool, { edit = false } = {}) {
+  // na etapa Produção a folha abre só para ler, com um visto por plano filmado; quem pode editar passa a editar
+  if (!edit && selPhase(p) === 'prod') {
+    import('./rodagem.js').then((m) => m.rodagemPage(main, p, location.hash.replace(/\/f\/.*$/, ''), { board: tool.id, onEdit: () => callsheetTool(main, p, tool, { edit: true }) }));
+    return;
+  }
   const all = wrap(tool.data, p);
   const key = `bg-cs-day:${tool.id}`;
   let cur = 0; try { cur = Math.min(all.sheets.length - 1, Math.max(0, Number(localStorage.getItem(key)) || 0)); } catch { /* nada */ }

@@ -76,3 +76,7 @@ O resto deste ficheiro descreve como o Studio nasceu do código do byGrain (aind
 ## 19 out — Rodagem (nos dois)
 - Página `rodagem` (rodagem.js, igual nos dois): folhas de serviço só de leitura, vistos por plano em `shoot_marks` (public e studio; qualquer membro do projeto marca), resumo por dia. Aparece sozinha quando a etapa Produção está ligada (MOD_DEF.rodagem = ['prod']).
 - Visão geral: bloco "Progresso" com tarefas por fazer, planos em falta e % do filme filmado.
+- Etapas iniciadas não se desligam (`lockedStages` em phases.js).
+- Folha de serviço aparece em Pré-produção e Produção (KIND_DEF.callsheet); na Produção abre em modo rodagem (só ler + vistos); "Editar folha de serviço" passa ao editor.
+- Visão geral: barras de planos/% do filme só na Produção.
+- Folhas de Anotação (`anotacao.js`, tabela annotation_sheets nos dois; fotos em <projeto>/anotacao/, qualquer membro pode carregar): carregar fotos/PDF por dia, ler com o Claude de graça (fotos descarregadas com faixa "ID nnn", pedido, colar resposta), por cena/plano com a foto ao lado, exportar Excel/CSV para a montagem, modelos para imprimir.

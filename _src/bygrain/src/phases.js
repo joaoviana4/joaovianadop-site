@@ -27,17 +27,24 @@ const STAGE_INFO = {
   pos: 'Montagem, cor, som, música, versões e entregas.',
   dist: 'Festivais, mostras, salas e a Tabela Distribuição.',
 };
+// etapas já iniciadas não se desligam: a etapa em que o projeto está e todas as que vêm antes da última ligada
+export function lockedStages(p) {
+  const all = phasesFor(p).map(([k]) => k), on = stagesOn(p);
+  const last = Math.max(all.indexOf(legacyCurrent(p)), ...on.map((k) => all.indexOf(k)).filter((i) => i >= 0).map((i) => i - 1));
+  return all.filter((k, i) => i <= last && on.includes(k));
+}
 export async function setStages(p, list) {
-  const order = phasesFor(p).map(([k]) => k), stages = order.filter((k) => list.includes(k));
+  const lock = lockedStages(p);
+  const order = phasesFor(p).map(([k]) => k), stages = order.filter((k) => list.includes(k) || lock.includes(k));
   const layouts = { ...(p.layouts || {}), stages };
   const { error } = await sb.from('projects').update({ layouts }).eq('id', p.id);
   if (error) { toast('Não foi possível guardar: ' + error.message); return false; }
   p.layouts = layouts; return true;
 }
 export function stagesMenu(p, after) {
-  const on = stagesOn(p), list = phasesFor(p);
-  const m = modal(`<h2>Etapas do projeto</h2><p class="muted small">O projeto começa só com a etapa em que está. Liga as outras quando chegar a altura: cada etapa traz as suas páginas e ferramentas. Desligar uma etapa só a esconde, não apaga nada.</p>
-    <div class="stg-list">${list.map(([k, l], i) => `<label class="stg-o"><input type="checkbox" value="${k}" ${on.includes(k) ? 'checked' : ''}><span class="stg-n">${i + 1}</span><span><b>${esc(l)}</b><small>${esc(STAGE_INFO[k] || '')}</small></span></label>`).join('')}</div>
+  const on = stagesOn(p), list = phasesFor(p), lock = lockedStages(p);
+  const m = modal(`<h2>Etapas do projeto</h2><p class="muted small">O projeto começa só com a etapa em que está. Liga as outras quando chegar a altura: cada etapa traz as suas páginas e ferramentas. Uma etapa já iniciada fica sempre no projeto.</p>
+    <div class="stg-list">${list.map(([k, l], i) => `<label class="stg-o ${lock.includes(k) ? 'locked' : ''}"><input type="checkbox" value="${k}" ${on.includes(k) ? 'checked' : ''} ${lock.includes(k) ? 'disabled' : ''}><span class="stg-n">${i + 1}</span><span><b>${esc(l)}${lock.includes(k) ? ' <span class="stg-lock">Iniciada</span>' : ''}</b><small>${esc(STAGE_INFO[k] || '')}</small></span></label>`).join('')}</div>
     <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button type="button" class="btn primary" data-save>Guardar</button></div>`);
   m.el.querySelector('[data-save]').addEventListener('click', async () => {
     const v = [...m.el.querySelectorAll('.stg-o input:checked')].map((x) => x.value);
@@ -55,8 +62,9 @@ export function stagesMenu(p, after) {
 const ALL = ['pre', 'prod', 'pos'];
 // Tudo o que existia até 17 out 2026 é de pré-produção (as ferramentas de produção e pós-produção vêm a seguir).
 const PRE = ['pre'];
-const MOD_DEF = { rodagem: ['prod'] };
-const KIND_DEF = {};
+const MOD_DEF = { rodagem: ['prod'], anotacao: ['prod'] };
+// as folhas de serviço fazem-se na pré-produção e usam-se na rodagem (aí abrem só para ler, com vistos)
+const KIND_DEF = { callsheet: ['pre', 'prod'] };
 
 export const modKey = (k) => `mod:${k}`;
 export const toolKey = (b) => `tool:${b.id}`;
