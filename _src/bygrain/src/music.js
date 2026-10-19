@@ -280,7 +280,7 @@ async function section(main, p, f, sid, base, cleanup) {
     <section class="panel"><h2 class="h3">Tarefas desta secção</h2><div data-tasks></div></section>
     <div class="row end"><button type="button" class="btn ghost danger-text" data-del>${ICON.trash} Apagar secção</button></div>`;
   const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: 'scene', id: s.id } }); cleanup(() => t.destroy());
-  const saveNotes = debounce((v) => sb.from('scenes').update({ notes: v }).eq('id', s.id));
+  const saveNotes = debounce((v) => sb.from('scenes').update({ notes: v }).eq('id', s.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message)));
   main.querySelector('[data-notes]').addEventListener('input', (e) => saveNotes(e.target.value));
   bindShots(main, p, f, s, shots, urls, base);
   // referências da secção: imagens (botão, arrastar ou colar com o rato por cima do painel)
@@ -435,7 +435,10 @@ async function entityPage(main, p, f, kind, id, base, cleanup) {
     <section class="panel"><h2 class="h3">Tarefas</h2><div data-tasks></div></section>`;
   const table = isPlace ? 'locations' : 'characters';
   if (isPlace) bindPlacePhotos(main, p, e, redrawPage); else bindPhoto(main, p, 'characters', e, redrawPage);
-  const save = debounce((patch) => sb.from(table).update(patch).eq('id', e.id).then(({ error }) => error && toast(error.message)), 500);
+  // junta tudo o que mudou (nome, ator, campos) e grava de uma vez: antes só ficava a última alteração
+  let pending = {};
+  const flush = debounce(() => { const patch = pending; pending = {}; sb.from(table).update(patch).eq('id', e.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message)); }, 500);
+  const save = (patch) => { pending = { ...pending, ...patch }; flush(); };
   main.querySelector('[data-name]').addEventListener('input', (ev) => { e.name = ev.target.value; save({ name: e.name }); });
   main.querySelector('[data-actor]')?.addEventListener('input', (ev) => { e.actor = ev.target.value; save({ actor: e.actor }); });
   main.querySelector('[data-extra]')?.addEventListener('change', async (ev) => {

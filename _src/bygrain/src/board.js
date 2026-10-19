@@ -1,4 +1,4 @@
-import { DB_SCHEMA, sb, BUCKET, esc, signedUrls, uploadImage, toast, modal, confirmBox, ICON } from './lib.js';
+import { DB_SCHEMA, sb, BUCKET, esc, signedUrl, signedUrls, uploadImage, toast, modal, confirmBox, ICON } from './lib.js';
 import { ytId } from './music.js';
 
 // Board infinito à maneira do Milanote: cada cartão é uma linha própria na base de dados,
@@ -10,6 +10,21 @@ const SIZE = { note: [280, 180], title: [520, 72], palette: [320, 150], list: [2
 // ---------- formatação de texto (notas, títulos, listas) ----------
 // Alinhamento, letra e tamanho valem para o cartão inteiro. Negrito, itálico, sublinhado e cor valem para o
 // texto selecionado (a escrever) ou para o cartão inteiro (sem seleção). Fontes grátis do Google Fonts.
+// cartão copiado com Ctrl+C (fica entre boards enquanto a página estiver aberta)
+let CLIP = null;
+async function copyToSystem(it) {
+  const mark = CLIP.mark;
+  try {
+    if (it.kind === 'image' && it.data?.path && window.ClipboardItem && navigator.clipboard?.write) {
+      const url = await signedUrl(it.data.path);
+      const png = await new Promise((res, rej) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => { const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; c.getContext('2d').drawImage(im, 0, 0); c.toBlob((b) => (b ? res(b) : rej()), 'image/png'); }; im.onerror = rej; im.src = url; });
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': png, 'text/plain': new Blob([mark], { type: 'text/plain' }) })]);
+      return;
+    }
+    await navigator.clipboard.writeText(mark);
+  } catch { try { await navigator.clipboard.writeText(mark); } catch { /* sem acesso: o Ctrl+V dentro do Studio continua a funcionar pelo CLIP */ } }
+}
+
 export const FONTS = [['', 'Predefinida'], ['Instrument Sans', 'Instrument Sans'], ['Inter', 'Inter'], ['Montserrat', 'Montserrat'], ['Archivo Black', 'Archivo Black'], ['Bebas Neue', 'Bebas Neue'],
   ['Playfair Display', 'Playfair Display'], ['DM Serif Display', 'DM Serif Display'], ['Lora', 'Lora'], ['Instrument Serif', 'Instrument Serif'], ['Space Mono', 'Space Mono'], ['Courier Prime', 'Courier Prime'], ['Caveat', 'Caveat (à mão)']];
 const SIZES = [['s', 'Pequeno', 0.8], ['m', 'Normal', 1], ['l', 'Grande', 1.35], ['xl', 'Muito grande', 1.8]];
@@ -611,6 +626,15 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   stage.addEventListener('drop', (e) => { e.preventDefault(); root.querySelector('.drop-hint').hidden = true; addImages([...e.dataTransfer.files], toWorld(e.clientX, e.clientY)); });
   const onPaste = (e) => {
     if (st.editing || /INPUT|TEXTAREA/.test(document.activeElement?.tagName) || document.querySelector('#modal.open')) return;
+    // cartão copiado com Ctrl+C (neste board ou noutro): cola uma cópia igual, com a mesma imagem
+    const mark = e.clipboardData?.getData('text/plain')?.trim();
+    if (CLIP && mark === CLIP.mark) {
+      e.preventDefault(); CLIP.n = (CLIP.n || 0) + 1;
+      const same = CLIP.board === boardId; const off = same ? 30 * CLIP.n : 0;
+      const r = stage.getBoundingClientRect(); const c = toWorld(r.left + r.width / 2, r.top + r.height / 2);
+      const it = CLIP.item; create(it.kind, same ? { x: it.x + it.w / 2 + off, y: it.y + it.h / 2 + off } : c, JSON.parse(JSON.stringify(it.data)), [it.w, it.h]);
+      return;
+    }
     const files = [...(e.clipboardData?.files || [])];
     if (files.length) { e.preventDefault(); addImages(files); return; }
     const t = e.clipboardData?.getData('text/plain')?.trim();
@@ -634,7 +658,14 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     if (mod && (e.key === '=' || e.key === '+')) { e.preventDefault(); zoomBy(1.2); }
     else if (mod && e.key === '-') { e.preventDefault(); zoomBy(1 / 1.2); }
     else if (mod && e.key === '0') { e.preventDefault(); fit(); }
-    else if (mod && e.key.toLowerCase() === 'd' && st.sel) {
+    else if (mod && e.key.toLowerCase() === 'c' && st.sel && !st.editing && !String(window.getSelection?.() || '')) {
+      // copiar o cartão: fica pronto para colar (Ctrl+V) aqui ou noutro board; uma imagem vai também
+      // para a área de transferência do computador, para a colares num plano, noutra app, etc.
+      const it = items.get(st.sel); if (!it || it.kind === 'board') return;
+      e.preventDefault();
+      CLIP = { mark: `portal-card:${Date.now().toString(36)}`, item: JSON.parse(JSON.stringify({ kind: it.kind, data: it.data, x: it.x, y: it.y, w: it.w, h: it.h })), board: boardId, n: 0 };
+      copyToSystem(it).then(() => toast(it.kind === 'image' ? 'Imagem copiada.' : 'Copiado. Cola com Ctrl+V.'));
+    } else if (mod && e.key.toLowerCase() === 'd' && st.sel) {
       e.preventDefault(); const it = items.get(st.sel); if (!it || it.kind === 'board') return;
       create(it.kind, { x: it.x + it.w / 2 + 30, y: it.y + it.h / 2 + 30 }, JSON.parse(JSON.stringify(it.data)), [it.w, it.h]);
     } else if ((e.key === 'Delete' || e.key === 'Backspace') && st.sel) {
