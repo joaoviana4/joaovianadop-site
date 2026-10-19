@@ -74,7 +74,9 @@ function studioFlavor() {
     },
     transformIndexHtml(html) {
       return swap(html)
-        .replace('</head>', '  <link rel="preconnect" href="https://fonts.googleapis.com">\n  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap">\n  <meta name="theme-color" content="#f5f5f7">\n  <script>try{var l=JSON.parse(localStorage.getItem("portal-look")||"{}"),r=document.documentElement,d=l.theme==="dark"||(l.theme==="auto"&&matchMedia("(prefers-color-scheme: dark)").matches);r.dataset.theme=d?"dark":"light";r.dataset.bg=l.bg||"liso";if(l.accent)r.style.setProperty("--blue",l.accent==="#1d1d1f"&&d?"#e5e5ea":l.accent)}catch(e){}</script>\n</head>')
+        // o Studio só usa a Archivo (e a Courier Prime no guião): não carrega as letras do byGrain
+        .replace(/\s*<link rel="preconnect" href="https:\/\/fonts\.googleapis\.com">\s*<link rel="preconnect" href="https:\/\/fonts\.gstatic\.com" crossorigin>\s*<link rel="stylesheet" href="https:\/\/fonts\.googleapis\.com\/css2\?family=Instrument[^"]*">/, '')
+        .replace('</head>', '  <link rel="preconnect" href="https://fonts.googleapis.com">\n  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Courier+Prime:wght@400;700&display=swap">\n  <meta name="theme-color" content="#f5f5f7">\n  <script>try{var l=JSON.parse(localStorage.getItem("portal-look")||"{}"),r=document.documentElement,d=l.theme==="dark"||(l.theme==="auto"&&matchMedia("(prefers-color-scheme: dark)").matches);r.dataset.theme=d?"dark":"light";r.dataset.bg=l.bg||"liso";if(l.accent)r.style.setProperty("--blue",l.accent==="#1d1d1f"&&d?"#e5e5ea":l.accent)}catch(e){}</script>\n</head>')
         .replace(/<meta name="theme-color" content="#[0-9A-Fa-f]+">\s*(?=[\s\S]*<meta name="theme-color" content="#f5f5f7">)/, '');
     },
     // pasta public do Studio: a do byGrain com os textos trocados e os ícones PØRTAL

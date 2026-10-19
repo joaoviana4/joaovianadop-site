@@ -1,7 +1,13 @@
+import { onWrite } from './undo.js';
 import { sb, BUCKET, esc, toast, modal, confirmBox, ICON, signedUrl, signedUrls, uploadImage, fmtDate } from './lib.js';
-import { entMode, entUrls, modeToggle, bindMode, entItems, photoField, bindPhoto } from './entview.js';
+import { entMode, entUrls, modeToggle, bindMode, entItems, photoField, bindPhoto, bindEdits } from './entview.js';
 import { parseScript, fileToText, eighthsLabel } from './script.js';
 import { mountTasks } from './tasks.js';
+import { mountReader } from './scriptview.js';
+import { sceneInfo, placeProps } from './sceneinfo.js';
+import { moodboardPanel, bindMoodboard } from './moodboard.js';
+import { geoPanel } from './placegeo.js';
+import { analyzeScriptModal, applyBreakdown, quickBreakdown } from './scriptan.js';
 import { newLightmapData } from './lmdata.js';
 import { ensureModules } from './modules.js';
 
@@ -21,17 +27,30 @@ const MOVES = ['', 'Fixo', 'Panorâmica', 'Tilt', 'Travelling', 'Dolly in', 'Dol
 
 const debounce = (fn, ms = 600) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 
+// os dados da página ficam em memória enquanto ninguém grava nestas tabelas (navegar entre páginas fica imediato)
+const memo = new Map();
+onWrite((t) => { if (['scenes', 'characters', 'locations', 'shots', 'scripts'].includes(t)) memo.clear(); });
 async function load(pid) {
+  const m = memo.get(pid);
+  if (m && Date.now() - m.t < 45000) return m.f;
+  const f = await loadNow(pid);
+  memo.set(pid, { t: Date.now(), f });
+  return f;
+}
+async function loadNow(pid) {
   const [sc, ch, lo, sh, sp] = await Promise.all([
     sb.from('scenes').select('*').eq('project_id', pid).order('position'),
     sb.from('characters').select('*').eq('project_id', pid).order('position'),
     sb.from('locations').select('*').eq('project_id', pid).order('position'),
     sb.from('shots').select('*').eq('project_id', pid).order('position'),
-    sb.from('scripts').select('id, version, filename, file_path, is_current, created_at').eq('project_id', pid).order('version', { ascending: false }),
+    sb.from('scripts').select('id, version, filename, file_path, is_current, created_at').eq('project_id', pid).neq('kind', 'tratamento').order('version', { ascending: false }),
   ]);
   return { scenes: sc.data || [], characters: ch.data || [], locations: lo.data || [], shots: sh.data || [], scripts: sp.data || [] };
 }
 
+// interior / exterior de um décor, a partir das cenas do guião que lá acontecem
+const ieOf = (locId, f) => { const v = new Set(f.scenes.filter((s) => s.location_id === locId).map((s) => s.int_ext).filter(Boolean).flatMap((x) => x.split('/'))); return v.has('INT') && v.has('EXT') ? 'INT/EXT' : v.has('INT') ? 'INT' : v.has('EXT') ? 'EXT' : ''; };
+const IE_LABEL = { INT: 'Interior', EXT: 'Exterior', 'INT/EXT': 'Interior e exterior' };
 const sceneTitle = (s, f) => { const loc = f.locations.find((l) => l.id === s.location_id); return [s.int_ext, loc?.name || s.heading].filter(Boolean).join('. '); };
 const nameList = (ids, f) => (ids || []).map((id) => f.characters.find((c) => c.id === id)?.name).filter(Boolean);
 
@@ -44,29 +63,44 @@ export async function fictionPage(main, p, page, sub, base, cleanup) {
 }
 
 // ---------- Guião ----------
+// o que o projeto já conhece, para realçar no guião: personagens, décors, adereços e figurino (cada um leva à sua página)
+async function scriptMarks(p, f, base) {
+  const title = (x) => x.toLowerCase().replace(/(^|[\s\-'’.])(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
+  const out = []; const seen = new Set();
+  const add = (term, kind, href, t) => { const k = term.trim().toLocaleLowerCase('pt'); if (k.length < 2 || seen.has(k)) return; seen.add(k); out.push({ term: term.trim(), kind, href, title: t }); };
+  f.characters.filter((c) => !c.info?.extra).forEach((c) => {
+    const href = `${base}/personagens/${c.id}`; const t = `Personagem: ${c.name}${c.actor ? ` (${c.actor})` : ''}`;
+    add(c.name, 'char', href, t); add(title(c.name), 'char', href, t);
+    const core = c.name.replace(/^(SR|SRA|DR|DRA|D|DONA|PADRE|TIA|TIO)\.?\s+/i, ''); if (core !== c.name) { add(core, 'char', href, t); add(title(core), 'char', href, t); }
+  });
+  f.locations.forEach((l) => add(l.name, 'loc', `${base}/decors/${l.id}`, `Décor: ${l.name}`));
+  try {
+    const { data: props } = await sb.from('props').select('id, name, removed').eq('project_id', p.id);
+    (props || []).filter((x) => !x.removed).forEach((x) => add(x.name, 'prop', `${base}/aderecos/${x.id}`, `Adereço: ${x.name}`));
+  } catch { /* sem adereços */ }
+  f.scenes.forEach((sc) => Object.entries(sc.info?.wardrobe || {}).forEach(([cid, w]) => String(w?.notes || '').split(/;\s*/).forEach((ph) => { if (ph.length >= 4 && ph.length <= 60) add(ph, 'wrd', `${base}/figurino/${cid}`, `Figurino: ${f.characters.find((c) => c.id === cid)?.name || ''}`); })));
+  return out;
+}
+
 function guiao(main, p, f, _sub, base) {
   const cur = f.scripts.find((s) => s.is_current) || f.scripts[0];
   main.innerHTML = `
-    <div class="row between wrap-gap"><h1 class="h1 pm-title">Guião</h1>${f.scripts.length ? `<button type="button" class="btn primary" data-imp>${ICON.plus} Importar nova versão</button>` : ''}</div>
+    <div class="row between wrap-gap"><h1 class="h1 pm-title">Guião</h1>${f.scripts.length ? `<span class="row wrap-gap"><button type="button" class="btn ghost" data-analyze>Analisar o guião</button><button type="button" class="btn primary" data-imp>${ICON.plus} Importar nova versão</button></span>` : ''}</div>
     ${f.scripts.length ? '' : `<div class="drop-box" data-drop>
       <strong>Importa o guião</strong>
       <p class="muted">PDF, Fountain, Final Draft (.fdx) ou texto. A app separa as cenas, as personagens e os décors.</p>
       <div class="row wrap-gap"><button type="button" class="btn primary" data-imp>${ICON.open} Escolher ficheiro</button><button type="button" class="btn ghost" data-paste>Colar texto</button></div>
       <p class="muted small">Também podes largar o ficheiro aqui.</p>
     </div>`}
-    ${f.scripts.length ? `<section class="panel">
-      <h2 class="h3">Ficheiros do guião</h2>
-      <ul class="versions">${f.scripts.map((s) => `<li>
-        <span class="v-tag ${s.is_current ? 'on' : ''}">v${s.version}</span>
-        <span class="v-name"><strong>${esc(s.filename || 'Texto colado')}</strong><small class="muted">${fmtDate(s.created_at)}${s.is_current ? ' · em uso' : ''}</small></span>
-        ${s.file_path ? `<button type="button" class="link-btn" data-open="${esc(s.file_path)}">Abrir original</button>` : ''}
-        ${!s.is_current ? `<button type="button" class="link-btn" data-use="${s.id}">Usar esta versão</button>` : ''}
-      </li>`).join('')}</ul>
-      <p class="muted small">${f.scenes.length} cenas · ${f.characters.length} personagens · ${f.locations.length} décors</p>
-    </section>
-    <section class="panel"><div class="row between"><h2 class="h3">Texto${cur ? ` (v${cur.version})` : ''}</h2></div><pre class="script-view" data-text>A carregar…</pre></section>` : ''}`;
+    ${f.scripts.length ? `<div class="sr-head">
+      <label class="sr-ver"><span class="muted small">Versão</span><select data-ver aria-label="Versão do guião">${f.scripts.map((s) => `<option value="${s.id}" ${s.id === cur?.id ? 'selected' : ''}>v${s.version} · ${esc(s.filename || 'Texto colado')} · ${fmtDate(s.created_at)}${s.is_current ? ' · em uso' : ''}</option>`).join('')}</select></label>
+      <button type="button" class="btn ghost sm" data-use hidden>Usar esta versão</button>
+      <span class="muted small sr-stats">${f.scenes.length} cenas · ${f.characters.length} personagens · ${f.locations.length} décors</span>
+    </div>
+    <div data-reader class="sr-wrap"></div>` : ''}`;
   const pick = () => { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.pdf,.fountain,.fdx,.txt,.md,application/pdf,text/plain'; inp.onchange = () => inp.files[0] && importFile(inp.files[0]); inp.click(); };
   main.querySelectorAll('[data-imp]').forEach((b) => b.addEventListener('click', pick));
+  main.querySelector('[data-analyze]')?.addEventListener('click', () => analyzeScriptModal(p, f, () => { location.hash = `${base}/cenas`; }));
   main.querySelector('[data-paste]')?.addEventListener('click', () => {
     const m = modal(`<h2>Colar o guião</h2><form class="stack"><div class="field"><label for="st">Texto do guião</label><textarea id="st" rows="14" class="mono" placeholder="INT. CASA - NOITE&#10;&#10;..."></textarea></div><div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Continuar</button></div></form>`, { wide: true });
     m.el.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); const t = m.el.querySelector('#st').value; m.close(); preview(t, null); });
@@ -77,16 +111,27 @@ function guiao(main, p, f, _sub, base) {
     drop.addEventListener('dragleave', () => drop.classList.remove('over'));
     drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); const file = e.dataTransfer.files[0]; file && importFile(file); });
   }
-  main.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', async () => { const u = await signedUrl(b.dataset.open); u && window.open(u, '_blank', 'noopener'); }));
+  let reader = null;
+  const marksP = scriptMarks(p, f, base);
+  const showVersion = async (id) => {
+    reader?.destroy();
+    const { data } = await sb.from('scripts').select('*').eq('id', id).single();
+    const box = main.querySelector('[data-reader]'); if (!box || !data) return;
+    const marks = data.is_current ? await marksP : null;
+    reader = mountReader(box, { version: data, marks, sceneHref: data.is_current ? (n) => { const sc = f.scenes.find((x) => String(x.number) === String(n)); return sc ? `${base}/cenas/${sc.id}` : `${base}/cenas`; } : null });
+    const use = main.querySelector('[data-use]'); use.hidden = !!data.is_current; use.dataset.use = data.id;
+  };
+  if (cur) showVersion(cur.id);
+  window.addEventListener('hashchange', () => reader?.destroy(), { once: true });
+  main.querySelector('[data-ver]')?.addEventListener('change', (e) => showVersion(e.target.value));
   main.querySelectorAll('[data-use]').forEach((b) => b.addEventListener('click', async () => {
     if (!(await confirmBox('Usar esta versão? As cenas são atualizadas pelo número; os planos e o storyboard ficam onde estão.', 'Usar esta versão'))) return;
     const { data } = await sb.from('scripts').select('*').eq('id', b.dataset.use).single();
     await applyScript(p, f, parseScript(data.body));
-    await sb.from('scripts').update({ is_current: false }).eq('project_id', p.id);
+    await sb.from('scripts').update({ is_current: false }).eq('project_id', p.id).neq('kind', 'tratamento');
     await sb.from('scripts').update({ is_current: true }).eq('id', data.id);
     toast(`Versão v${data.version} em uso.`); location.hash = `${base}/guiao`; window.dispatchEvent(new HashChangeEvent('hashchange'));
   }));
-  if (cur) sb.from('scripts').select('body').eq('id', cur.id).single().then(({ data }) => { const el = main.querySelector('[data-text]'); if (el) el.textContent = data?.body || ''; });
 
   async function importFile(file) {
     try { toast('A ler o guião…', 8000); const t = await fileToText(file); preview(t, file); }
@@ -111,7 +156,7 @@ function guiao(main, p, f, _sub, base) {
           const { error } = await sb.storage.from(BUCKET).upload(file_path, file, { contentType: file.type || 'application/octet-stream' });
           if (error) file_path = null;
         }
-        await sb.from('scripts').update({ is_current: false }).eq('project_id', p.id);
+        await sb.from('scripts').update({ is_current: false }).eq('project_id', p.id).neq('kind', 'tratamento');
         const { error } = await sb.from('scripts').insert({ project_id: p.id, version, filename: file?.name || '', file_path, body: text, is_current: true });
         if (error) throw error;
         await applyScript(p, f, r);
@@ -139,6 +184,12 @@ async function applyScript(p, f, r) {
   });
   if (ins.length) { const { error } = await sb.from('scenes').insert(ins); if (error) throw error; }
   if (ups.length) { const { error } = await sb.from('scenes').upsert(ups); if (error) throw error; }
+  // personagens também pelas apresentações e pelos nomes nas ações, figurantes e figurino (análise rápida)
+  try {
+    const { data: fresh } = await sb.from('scenes').select('*').eq('project_id', p.id).order('position');
+    f.scenes = fresh || f.scenes; f.characters = [...chars.values()];
+    await applyBreakdown(p, f, quickBreakdown(f));
+  } catch { /* a análise rápida pode ser refeita à mão */ }
   p._hasScript = true;
   await ensureModules(p, ['cenas', ...(r.characters.length ? ['elenco'] : []), ...(r.locations.length ? ['decors'] : [])]);
 }
@@ -148,10 +199,11 @@ function cenas(main, p, f, sub, base, cleanup) {
   if (sub) return cena(main, p, f, sub, base, cleanup);
   const nShots = (id) => f.shots.filter((s) => s.scene_id === id).length;
   main.innerHTML = `
-    <div class="row between wrap-gap"><h1 class="h1 pm-title">Cenas</h1><button type="button" class="btn ghost" data-add>${ICON.plus} Cena</button></div>
+    <div class="row between wrap-gap"><h1 class="h1 pm-title">Cenas</h1><span class="row wrap-gap">${f.scenes.length ? '<button type="button" class="btn ghost" data-analyze>Analisar personagens e figurino</button>' : ''}<button type="button" class="btn ghost" data-add>${ICON.plus} Cena</button></span></div>
     ${f.scenes.length ? `<div class="panel table-wrap"><table class="table"><thead><tr><th>Nº</th><th>Cena</th><th>Momento</th><th>Personagens</th><th>Páginas</th><th>Planos</th></tr></thead><tbody>
       ${f.scenes.map((s) => `<tr class="click-row" data-href="${base}/cenas/${s.id}"><td><a href="${base}/cenas/${s.id}"><strong>${esc(s.number)}</strong></a></td><td>${esc(sceneTitle(s, f))}</td><td class="muted">${esc(s.time_of_day)}</td><td class="small">${esc(nameList(s.character_ids, f).join(', '))}</td><td class="muted">${eighthsLabel(s.eighths)}</td><td>${nShots(s.id) || '<span class="muted">—</span>'}</td></tr>`).join('')}
     </tbody></table></div>` : `<div class="empty-box"><p>Ainda não há cenas.</p><p class="muted small">Importa o guião para as separar automaticamente, ou cria-as à mão.</p><a class="btn primary" href="${base}/guiao">Importar guião</a></div>`}`;
+  main.querySelector('[data-analyze]')?.addEventListener('click', () => analyzeScriptModal(p, f, () => cenas(main, p, f, null, base, cleanup)));
   main.querySelectorAll('[data-href]').forEach((tr) => tr.addEventListener('click', (e) => { if (!e.target.closest('a')) location.hash = tr.dataset.href; }));
   main.querySelector('[data-add]').addEventListener('click', () => {
     const m = modal(`<h2>Nova cena</h2><form class="stack"><div class="grid2"><div class="field"><label for="sn">Número</label><input id="sn" value="${f.scenes.length + 1}" required></div><div class="field"><label for="sie">INT / EXT</label><select id="sie"><option>INT</option><option>EXT</option><option>INT/EXT</option></select></div></div>
@@ -172,9 +224,9 @@ function cenas(main, p, f, sub, base, cleanup) {
 
 export function shotCard(sh, url, base) {
   return `<article class="shot" data-shot="${sh.id}">
-    <div class="shot-img" data-img tabindex="0" role="button" aria-label="${url ? 'Ver o plano em grande' : 'Juntar imagem de storyboard'}">${url ? `<img src="${esc(url)}" alt="Storyboard ${esc(sh.code)}">` : `<span>${ICON.image}<small>Juntar storyboard</small><small class="muted">ou cola com Ctrl+V</small></span>`}</div>
+    <div class="shot-img" data-img tabindex="0" role="button" aria-label="${url ? 'Abrir o plano' : 'Juntar imagem de storyboard'}">${url ? `<img src="${esc(url)}" alt="Storyboard ${esc(sh.code)}">` : `<span>${ICON.image}<small>Juntar storyboard</small><small class="muted">ou cola com Ctrl+V</small></span>`}</div>
     <div class="shot-f">
-      <div class="row between"><input class="shot-code" data-f="code" value="${esc(sh.code)}" aria-label="Código do plano"><span class="row">${base ? `<a class="icon-btn sm" href="${base}/plano/${sh.id}" title="Abrir o plano" aria-label="Abrir o plano">${ICON.open}</a>` : ''}<button type="button" class="icon-btn sm" data-del aria-label="Apagar plano">${ICON.trash}</button></span></div>
+      <div class="row between">${base ? `<a class="shot-code shot-code-a" href="${base}/plano/${sh.id}" title="Abrir o plano ${esc(sh.code)}">${esc(sh.code || 'Plano')}</a>` : `<input class="shot-code" data-f="code" value="${esc(sh.code)}" aria-label="Código do plano">`}<span class="row"><button type="button" class="icon-btn sm" data-del aria-label="Apagar plano">${ICON.trash}</button></span></div>
       <label class="mini">Enquadramento<select data-f="framing">${FRAMINGS.map((x) => `<option ${x === sh.framing ? 'selected' : ''} value="${esc(x)}">${esc(x || '—')}</option>`).join('')}${sh.framing && !FRAMINGS.includes(sh.framing) ? `<option selected>${esc(sh.framing)}</option>` : ''}</select></label>
       <label class="mini">Movimento<select data-f="movement">${MOVES.map((x) => `<option ${x === sh.movement ? 'selected' : ''} value="${esc(x)}">${esc(x || '—')}</option>`).join('')}${sh.movement && !MOVES.includes(sh.movement) ? `<option selected>${esc(sh.movement)}</option>` : ''}</select></label>
       <label class="mini">Lente<input data-f="lens" value="${esc(sh.lens)}" placeholder="ex: 35mm"></label>
@@ -196,23 +248,39 @@ async function cena(main, p, f, sid, base, cleanup) {
       <span class="row">${prev ? `<a class="btn ghost" href="${base}/cenas/${prev.id}" aria-label="Cena anterior">${ICON.back} ${esc(prev.number)}</a>` : ''}${next ? `<a class="btn ghost" href="${base}/cenas/${next.id}" aria-label="Cena seguinte">${esc(next.number)} ${ICON.chev}</a>` : ''}</span></nav>
     <header class="scene-h"><span class="scene-n">${esc(s.number)}</span><div><h1 class="h2">${esc(s.heading || sceneTitle(s, f))}</h1>
       <div class="chips">${loc ? `<a class="chip" href="${base}/decors/${loc.id}">${ICON.home}${esc(loc.name)}</a>` : ''}${s.time_of_day ? `<span class="chip">${esc(s.time_of_day)}</span>` : ''}${s.eighths ? `<span class="chip">${eighthsLabel(s.eighths)} pág.</span>` : ''}
-      ${(s.character_ids || []).map((id) => { const c = f.characters.find((x) => x.id === id); return c ? `<a class="chip" href="${base}/personagens/${c.id}">${esc(c.name)}</a>` : ''; }).join('')}</div></div></header>
+</div></div></header>
     <section><div class="row between"><h2 class="h3">Planos</h2><span class="muted small">${shots.length} ${shots.length === 1 ? 'plano' : 'planos'}</span></div>
       <div class="shots" data-shots>${shots.map((x) => shotCard(x, urls[x.image_path], base)).join('')}<button type="button" class="shot-add" data-addshot>${ICON.plus}<span>Plano</span></button></div></section>
-    <details class="panel"><summary class="h3">Texto da cena</summary><pre class="script-view">${esc(s.body || 'Sem texto.')}</pre></details>
+    <div data-sinfo class="si"></div>
+    <section class="panel"><div class="row between"><h2 class="h3">Texto da cena</h2><a class="link-btn small" href="${base}/guiao">Abrir o guião ${ICON.chev}</a></div><div data-scenetext class="sr-wrap"><p class="muted small">A abrir…</p></div></section>
     <section class="panel"><h2 class="h3">Tarefas da cena</h2><div data-tasks></div></section>
     <section class="panel"><h2 class="h3">Notas</h2><textarea data-notes rows="4" placeholder="Notas de realização, produção, continuidade…">${esc(s.notes)}</textarea></section>`;
   const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: 'scene', id: s.id } }); cleanup(() => t.destroy());
-  const saveNotes = debounce((v) => sb.from('scenes').update({ notes: v }).eq('id', s.id));
+  const saveNotes = debounce((v) => sb.from('scenes').update({ notes: v }).eq('id', s.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message)));
   main.querySelector('[data-notes]').addEventListener('input', (e) => saveNotes(e.target.value));
+  sceneInfo(main.querySelector('[data-sinfo]'), p, f, s, base);
+  // a cena tal como está no guião: as páginas do PDF desta cena, ou o texto paginado como guião
+  (async () => {
+    const box = main.querySelector('[data-scenetext]'); if (!box) return;
+    const cur = f.scripts.find((x) => x.is_current) || f.scripts[0];
+    const { data: v } = cur ? await sb.from('scripts').select('id, body, file_path, filename').eq('id', cur.id).maybeSingle() : { data: null };
+    let idx = -1;
+    if (v?.file_path && /\.pdf$/i.test(v.file_path)) idx = parseScript(v.body || '').scenes.findIndex((x) => String(x.number) === String(s.number));
+    const marks = await scriptMarks(p, f, base);
+    const r = idx >= 0 ? mountReader(box, { version: v, scene: idx, compact: true, marks })
+      : mountReader(box, { version: { body: `${s.heading || ''}\n\n${s.body || ''}`, file_path: null }, compact: true, marks });
+    cleanup(() => r.destroy());
+  })();
   bindShots(main, p, f, s, shots, urls, base);
 }
 
 function nextCode(scene, shots) {
-  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  // planos numerados 1.1, 1.2, 1.3… (cena.plano)
+  const pre = `${scene.number}.`;
   const used = new Set(shots.map((x) => x.code));
-  for (const l of letters) { const c = `${scene.number}${l}`; if (!used.has(c)) return c; }
-  return `${scene.number}-${shots.length + 1}`;
+  let n = shots.reduce((m, x) => { const k = String(x.code || '').startsWith(pre) ? parseInt(String(x.code).slice(pre.length), 10) : 0; return k > m ? k : m; }, 0) + 1;
+  while (used.has(pre + n)) n++;
+  return pre + n;
 }
 
 export function bindShots(main, p, f, s, shots, urls, base) {
@@ -250,7 +318,7 @@ export function bindShots(main, p, f, s, shots, urls, base) {
       location.hash = `${base}/f/${tool.id}`; return;
     }
     if (e.target.closest('[data-img]')) {
-      if (sh.image_path) return shotViewer(f, sh, base);
+      if (sh.image_path) return base ? (location.hash = `${base}/plano/${sh.id}`) : shotViewer(f, sh, base);
       pickImage(sh, card);
     }
   });
@@ -322,10 +390,11 @@ async function personagens(main, p, f, sub, base, cleanup) {
   const count = (id) => f.scenes.filter((s) => (s.character_ids || []).includes(id)).length;
   const urls = await entUrls([f.characters]);
   const mode = entMode('people');
-  const items = f.characters.map((c) => ({ e: c, href: `${base}/personagens/${c.id}`, title: c.name, sub: esc(c.actor || 'Sem ator ou atriz'), meta: `${count(c.id)} ${count(c.id) === 1 ? 'cena' : 'cenas'}` }));
+  const items = f.characters.map((c) => ({ e: c, href: `${base}/personagens/${c.id}`, title: c.name, sub: esc(c.actor || 'Sem ator ou atriz'), meta: `${count(c.id)} ${count(c.id) === 1 ? 'cena' : 'cenas'}`, edit: { table: 'characters', field: 'actor', placeholder: 'Ator ou atriz', label: 'Ator ou atriz' } }));
   main.innerHTML = `<div class="row between wrap-gap"><h1 class="h1 pm-title">Personagens</h1><div class="row">${f.characters.length ? modeToggle('people') : ''}<button type="button" class="btn ghost" data-add>${ICON.plus} Personagem</button></div></div>
     ${f.characters.length ? entItems(items, { mode, urls }) : '<p class="empty-note">Ainda não há personagens. Aparecem ao importar o guião.</p>'}`;
   bindMode(main, 'people', () => personagens(main, p, f, sub, base, cleanup));
+  bindEdits(main, items);
   main.querySelector('[data-add]').addEventListener('click', () => addNamed('characters', 'Nova personagem', p, f.characters, (id) => (location.hash = `${base}/personagens/${id}`)));
 }
 
@@ -343,7 +412,7 @@ function blocks(ent, defs) {
   return defs.map(([k, label, ph]) => `<div class="field"><label for="b-${k}">${label}</label><textarea id="b-${k}" data-info="${k}" rows="3" placeholder="${esc(ph || '')}">${esc(ent.info?.[k] || '')}</textarea></div>`).join('');
 }
 function bindBlocks(main, table, ent) {
-  const save = debounce(() => sb.from(table).update({ info: ent.info }).eq('id', ent.id), 600);
+  const save = debounce(() => sb.from(table).update({ info: ent.info }).eq('id', ent.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message)), 600);
   main.querySelectorAll('[data-info]').forEach((t) => t.addEventListener('input', () => { ent.info = { ...(ent.info || {}), [t.dataset.info]: t.value }; save(); }));
 }
 function sceneLinks(list, f, base) {
@@ -355,16 +424,21 @@ async function personagem(main, p, f, id, base, cleanup) {
   if (!c) { main.innerHTML = '<p class="empty-note">Esta personagem já não existe.</p>'; return; }
   const scenes = f.scenes.filter((s) => (s.character_ids || []).includes(c.id));
   main.innerHTML = `<a href="${base}/personagens" class="link-btn">${ICON.back} Personagens</a>
-    <header class="ent-h"><h1 class="h1">${esc(c.name)}</h1><button type="button" class="icon-btn" data-delent aria-label="Apagar personagem">${ICON.trash}</button></header>
+    <header class="ent-h"><input class="title-in h1" data-ename value="${esc(c.name)}" aria-label="Nome da personagem"><button type="button" class="icon-btn" data-delent aria-label="Apagar personagem">${ICON.trash}</button></header>
     <div class="pm-grid"><div class="pm-boards stack">
       <section class="panel stack">${await photoField(c)}<div class="field"><label for="actor">Ator ou atriz</label><input id="actor" data-actor value="${esc(c.actor)}"></div>
-        ${blocks(c, [['descricao', 'Descrição'], ['guarda_roupa', 'Guarda-roupa'], ['caracterizacao', 'Caracterização']])}</section>
+        <div class="grid2"><div class="field"><label for="cph">Telefone</label><input id="cph" data-cinfo="phone" type="tel" inputmode="tel" placeholder="912 345 678" value="${esc(c.info?.phone || '')}"></div><div class="field"><label for="cem">Email</label><input id="cem" data-cinfo="email" type="email" value="${esc(c.info?.email || '')}"></div></div>
+        ${blocks(c, [['descricao', 'Descrição'], ...(c.info?.guarda_roupa ? [['guarda_roupa', 'Guarda-roupa (notas)']] : []), ['caracterizacao', 'Caracterização']])}</section>
+      <section class="panel" data-wsum><p class="muted small">A carregar o figurino…</p></section>
       <section class="panel"><h2 class="h3">Tarefas</h2><div data-tasks></div></section>
     </div><aside class="pm-side"><section class="panel"><h2 class="h3">Onde entra (${scenes.length})</h2>${sceneLinks(scenes, f, base)}</section></aside></div>`;
-  const saveActor = debounce((v) => sb.from('characters').update({ actor: v }).eq('id', c.id));
+  const saveActor = debounce((v) => sb.from('characters').update({ actor: v }).eq('id', c.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message)));
   main.querySelector('[data-actor]').addEventListener('input', (e) => saveActor(e.target.value));
   bindBlocks(main, 'characters', c);
+  { const sv = debounce((v) => sb.from('characters').update({ name: v }).eq('id', c.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message))); main.querySelector('[data-ename]').addEventListener('input', (e) => { c.name = e.target.value; if (c.name.trim()) sv(c.name.trim()); }); }
+  { const saveI = debounce(() => sb.from('characters').update({ info: c.info }).eq('id', c.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message)), 600); main.querySelectorAll('[data-cinfo]').forEach((t) => t.addEventListener('input', () => { c.info = { ...(c.info || {}), [t.dataset.cinfo]: t.value.trim() }; saveI(); })); }
   bindPhoto(main, p, 'characters', c, () => personagem(main, p, f, id, base, cleanup));
+  import('./wardrobe.js').then(({ wardrobeSummary }) => wardrobeSummary(main.querySelector('[data-wsum]'), p, c, base, scenes));
   const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: 'character', id: c.id } }); cleanup(() => t.destroy());
   main.querySelector('[data-delent]').addEventListener('click', async () => {
     if (!(await confirmBox(`Apagar a personagem ${c.name}?`, 'Apagar'))) return;
@@ -378,10 +452,11 @@ async function decors(main, p, f, sub, base, cleanup) {
   const count = (id) => f.scenes.filter((s) => s.location_id === id).length;
   const urls = await entUrls([f.locations]);
   const mode = entMode('places');
-  const items = f.locations.map((l) => ({ e: l, href: `${base}/decors/${l.id}`, title: l.name, sub: esc(l.info?.morada || 'Sem morada'), meta: `${count(l.id)} ${count(l.id) === 1 ? 'cena' : 'cenas'}` }));
+  const items = f.locations.map((l) => ({ e: l, href: `${base}/decors/${l.id}`, title: l.name, sub: esc(l.info?.morada || 'Sem morada'), meta: `${ieOf(l.id, f) ? `<span class="ie-tag">${ieOf(l.id, f)}</span> ` : ''}${count(l.id)} ${count(l.id) === 1 ? 'cena' : 'cenas'}`, edit: { table: 'locations', field: 'info.morada', placeholder: 'Morada ou link do Google Maps', label: 'Morada' } }));
   main.innerHTML = `<div class="row between wrap-gap"><h1 class="h1 pm-title">Décors</h1><div class="row">${f.locations.length ? modeToggle('places') : ''}<button type="button" class="btn ghost" data-add>${ICON.plus} Décor</button></div></div>
     ${f.locations.length ? entItems(items, { mode, urls, place: true }) : '<p class="empty-note">Ainda não há décors. Aparecem ao importar o guião.</p>'}`;
   bindMode(main, 'places', () => decors(main, p, f, sub, base, cleanup));
+  bindEdits(main, items);
   main.querySelector('[data-add]').addEventListener('click', () => addNamed('locations', 'Novo décor', p, f.locations, (id) => (location.hash = `${base}/decors/${id}`)));
 }
 
@@ -392,15 +467,20 @@ async function decor(main, p, f, id, base, cleanup) {
   const photos = l.photos || [];
   const urls = await signedUrls(photos.map((x) => x.path));
   main.innerHTML = `<a href="${base}/decors" class="link-btn">${ICON.back} Décors</a>
-    <header class="ent-h"><h1 class="h1">${esc(l.name)}</h1><button type="button" class="icon-btn" data-delent aria-label="Apagar décor">${ICON.trash}</button></header>
+    <header class="ent-h"><div class="ent-hl"><input class="title-in h1" data-ename value="${esc(l.name)}" aria-label="Nome do décor"><div class="ent-tags">${ieOf(l.id, f) ? `<span class="ie-tag lg" title="Pelas cenas do guião">${IE_LABEL[ieOf(l.id, f)]}</span>` : ''}${(() => { const tods = [...new Set(scenes.map((x) => x.time_of_day).filter(Boolean))]; return tods.length ? `<span class="muted small">${esc(tods.join(' · '))}</span>` : ''; })()}</div></div><button type="button" class="icon-btn" data-delent aria-label="Apagar décor">${ICON.trash}</button></header>
     <div class="pm-grid"><div class="pm-boards stack">
       <section class="panel stack"><h2 class="h3">Ficha</h2><div class="grid2">${[['morada', 'Morada'], ['contacto', 'Contacto'], ['estacionamento', 'Estacionamento'], ['eletricidade', 'Eletricidade'], ['luz_natural', 'Luz natural'], ['notas', 'Notas']].map(([k, lab]) => `<div class="field"><label for="i-${k}">${lab}</label><textarea id="i-${k}" data-info="${k}" rows="2">${esc(l.info?.[k] || '')}</textarea></div>`).join('')}</div></section>
       <section class="panel"><div class="row between"><h2 class="h3">Fotos de repérage</h2><button type="button" class="btn ghost" data-addph>${ICON.plus} Fotos</button></div>
-        <div class="photo-grid" data-photos>${photos.map((ph, i) => `<figure><img src="${esc(urls[ph.path] || '')}" alt=""><button type="button" class="icon-btn sm" data-rmph="${i}" aria-label="Tirar foto">${ICON.close}</button></figure>`).join('') || '<p class="muted small">Ainda sem fotos. Também podes largá-las aqui.</p>'}</div></section>
+        <div class="photo-grid" data-photos>${photos.map((ph, i) => `<figure><img src="${esc(urls[ph.path] || '')}" alt=""><button type="button" class="icon-btn sm" data-rmph="${i}" aria-label="Tirar foto">${ICON.close}</button></figure>`).join('') || '<p class="muted small">Ainda sem fotos. Também podes largá-las aqui ou colar com Ctrl+V.</p>'}</div></section>
       <section class="panel"><div class="row between"><h2 class="h3">Mapas de luz da montagem base</h2><button type="button" class="btn ghost" data-newlm>${ICON.bulb} Mapa de luz</button></div><div data-lms class="muted small">A carregar…</div></section>
+      <section class="panel dp-props" data-dprops><p class="muted small">A carregar adereços…</p></section>
       <section class="panel"><h2 class="h3">Tarefas</h2><div data-tasks></div></section>
-    </div><aside class="pm-side"><section class="panel"><h2 class="h3">Cenas neste décor (${scenes.length})</h2>${sceneLinks(scenes, f, base)}</section></aside></div>`;
+    </div><aside class="pm-side">${moodboardPanel(l)}<section class="panel geo-panel" data-geo></section><section class="panel"><h2 class="h3">Cenas neste décor (${scenes.length})</h2>${sceneLinks(scenes, f, base)}</section></aside></div>`;
   bindBlocks(main, 'locations', l);
+  bindMoodboard(main, p, { table: 'locations', row: l, key: 'location_id', base });
+  placeProps(main.querySelector('[data-dprops]'), p, l, scenes.map((s) => s.id), base);
+  geoPanel(main.querySelector('[data-geo]'), p, l);
+  { const sv = debounce((v) => sb.from('locations').update({ name: v }).eq('id', l.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message))); main.querySelector('[data-ename]').addEventListener('input', (e) => { l.name = e.target.value; if (l.name.trim()) sv(l.name.trim()); }); }
   const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: 'location', id: l.id } }); cleanup(() => t.destroy());
   sb.from('boards').select('id, title').eq('project_id', p.id).eq('kind', 'lightmap').eq('data->>location_id', l.id).then(({ data }) => {
     const box = main.querySelector('[data-lms]'); if (!box) return;
@@ -422,6 +502,7 @@ async function decor(main, p, f, id, base, cleanup) {
   const grid = main.querySelector('[data-photos]');
   grid.addEventListener('dragover', (e) => e.preventDefault());
   grid.addEventListener('drop', (e) => { e.preventDefault(); add(e.dataTransfer.files); });
+  { const h = (e) => { if (!document.body.contains(grid)) { document.removeEventListener('paste', h); return; } if (e.target.closest?.('input, textarea') || document.querySelector('#modal .modal')) return; const fs = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith('image/')); if (fs.length) { e.preventDefault(); add(fs); } }; document.addEventListener('paste', h); }
   grid.querySelectorAll('[data-rmph]').forEach((b) => b.addEventListener('click', async () => { l.photos = l.photos.filter((_, i) => i !== +b.dataset.rmph); await sb.from('locations').update({ photos: l.photos }).eq('id', l.id); decor(main, p, f, id, base, cleanup); }));
   main.querySelector('[data-delent]').addEventListener('click', async () => {
     if (!(await confirmBox(`Apagar o décor ${l.name}? As cenas ficam sem décor.`, 'Apagar'))) return;
@@ -431,31 +512,91 @@ async function decor(main, p, f, id, base, cleanup) {
 
 // ---------- Storyboard ----------
 async function storyboard(main, p, f, _sub, base) {
+  // todas as cenas, com os seus planos: abrir o plano, trocar a imagem (botão, arrastar ou colar) e juntar planos
   const urls = await signedUrls(f.shots.map((x) => x.image_path));
-  const withShots = f.scenes.filter((s) => f.shots.some((x) => x.scene_id === s.id));
-  main.innerHTML = `<h1 class="h1 pm-title">Storyboard</h1>
-    ${withShots.length ? withShots.map((s) => `<section class="sb-scene"><a class="sb-h" href="${base}/cenas/${s.id}"><span class="scene-n sm">${esc(s.number)}</span>${esc(sceneTitle(s, f))}<span class="muted small">${esc(s.time_of_day)}</span></a>
-      <div class="sb-grid">${f.shots.filter((x) => x.scene_id === s.id).map((x) => `<a class="sb-shot" href="${base}/plano/${x.id}"><span class="sb-img">${urls[x.image_path] ? `<img src="${esc(urls[x.image_path])}" alt="">` : ICON.image}</span><span><strong>${esc(x.code)}</strong> <span class="muted small">${esc([x.framing, x.movement].filter(Boolean).join(' · '))}</span></span>${x.description ? `<span class="small sb-d">${esc(x.description)}</span>` : ''}</a>`).join('')}</div></section>`).join('')
-    : `<p class="empty-note">Ainda não há planos. Cria-os dentro de cada cena.</p>${f.scenes.length ? `<a class="btn primary" href="${base}/cenas">Ir para as cenas</a>` : ''}`}`;
+  const draw = () => {
+    main.innerHTML = `<h1 class="h1 pm-title">Storyboard</h1>
+    ${f.scenes.length ? f.scenes.map((s) => { const xs = f.shots.filter((x) => x.scene_id === s.id); return `<section class="sb-scene"><a class="sb-h" href="${base}/cenas/${s.id}"><span class="scene-n sm">${esc(s.number)}</span>${esc(sceneTitle(s, f))}<span class="muted small">${esc(s.time_of_day)}</span></a>
+      <div class="sb-grid">${xs.map((x) => `<div class="sb-shot sb-ed" data-sbshot="${x.id}"><a class="sb-img" href="${base}/plano/${x.id}" title="Abrir o plano">${urls[x.image_path] ? `<img src="${esc(urls[x.image_path])}" alt="">` : ICON.image}</a><button type="button" class="icon-btn sm sb-up" data-sbup="${x.id}" title="${x.image_path ? 'Trocar a imagem' : 'Juntar imagem'} (ou arrasta para aqui)" aria-label="Trocar a imagem">${ICON.image}</button>
+        <a class="sb-meta" href="${base}/plano/${x.id}"><span><strong>${esc(x.code)}</strong> <span class="muted small">${esc([x.framing, x.movement].filter(Boolean).join(' · '))}</span></span>${x.description ? `<span class="small sb-d">${esc(x.description)}</span>` : ''}</a></div>`).join('')}
+        <button type="button" class="sb-add" data-sbadd="${s.id}">${ICON.plus}<span>Plano</span></button></div></section>`; }).join('')
+    : `<p class="empty-note">Ainda não há cenas. Importa o guião primeiro.</p>`}`;
+    const setImg = async (x, file) => {
+      try { toast('A enviar a imagem…'); const up = await uploadImage(p.id, 'storyboard', file); const { error } = await sb.from('shots').update({ image_path: up.path, updated_at: new Date().toISOString() }).eq('id', x.id); if (error) return toast(error.message); x.image_path = up.path; Object.assign(urls, await signedUrls([up.path])); draw(); } catch (e) { toast(e.message || String(e)); }
+    };
+    main.querySelectorAll('[data-sbup]').forEach((b) => b.addEventListener('click', () => { const x = f.shots.find((y) => y.id === b.dataset.sbup); const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.onchange = () => inp.files[0] && setImg(x, inp.files[0]); inp.click(); }));
+    main.querySelectorAll('[data-sbshot]').forEach((el) => {
+      el.addEventListener('dragover', (e) => { e.preventDefault(); el.classList.add('drop'); });
+      el.addEventListener('dragleave', () => el.classList.remove('drop'));
+      el.addEventListener('drop', (e) => { e.preventDefault(); el.classList.remove('drop'); const file = [...e.dataTransfer.files].find((y) => y.type.startsWith('image/')); if (file) setImg(f.shots.find((y) => y.id === el.dataset.sbshot), file); });
+      el.addEventListener('mouseenter', () => { hover = el.dataset.sbshot; }); el.addEventListener('mouseleave', () => { if (hover === el.dataset.sbshot) hover = null; });
+    });
+    main.querySelectorAll('[data-sbadd]').forEach((b) => b.addEventListener('click', async () => {
+      const sc = f.scenes.find((x) => x.id === b.dataset.sbadd); const xs = f.shots.filter((x) => x.scene_id === sc.id);
+      const { data, error } = await sb.from('shots').insert({ project_id: p.id, scene_id: sc.id, code: nextCode(sc, xs), position: xs.length }).select().single();
+      if (error) return toast(error.message);
+      f.shots.push(data); location.hash = `${base}/plano/${data.id}`;
+    }));
+  };
+  // Ctrl+V com o rato por cima de um plano: troca a imagem desse plano
+  let hover = null;
+  const onPaste = (e) => { if (!document.body.contains(main.querySelector('.sb-grid')) ) { document.removeEventListener('paste', onPaste); return; } if (!hover || e.target.closest?.('input, textarea')) return; const file = [...(e.clipboardData?.files || [])].find((y) => y.type.startsWith('image/')); if (!file) return; e.preventDefault(); const x = f.shots.find((y) => y.id === hover); if (x) (async () => { toast('A enviar a imagem…'); const up = await uploadImage(p.id, 'storyboard', file); await sb.from('shots').update({ image_path: up.path }).eq('id', x.id); x.image_path = up.path; Object.assign(urls, await signedUrls([up.path])); draw(); })(); };
+  document.addEventListener('paste', onPaste);
+  draw();
 }
 
 // ---------- Planificação ----------
+// planos por cena numa tabela: editar ali mesmo, juntar planos a cada cena e exportar (PDF ou Excel)
 function planificacao(main, p, f, _sub, base) {
-  const rows = f.scenes.flatMap((s) => f.shots.filter((x) => x.scene_id === s.id).map((x) => ({ s, x })));
-  main.innerHTML = `<h1 class="h1 pm-title">Planificação</h1>
-    ${rows.length ? `<div class="panel table-wrap"><table class="table plan"><thead><tr><th>Cena</th><th>Plano</th><th>Enquadramento</th><th>Movimento</th><th>Lente</th><th>Descrição</th></tr></thead><tbody>
-    ${rows.map(({ s, x }) => `<tr data-shot="${x.id}"><td><a href="${base}/cenas/${s.id}">${esc(s.number)}</a></td><td><input data-f="code" value="${esc(x.code)}" aria-label="Plano"></td>
-      <td><select data-f="framing" aria-label="Enquadramento">${FRAMINGS.map((o) => `<option ${o === x.framing ? 'selected' : ''} value="${esc(o)}">${esc(o || '—')}</option>`).join('')}</select></td>
-      <td><select data-f="movement" aria-label="Movimento">${MOVES.map((o) => `<option ${o === x.movement ? 'selected' : ''} value="${esc(o)}">${esc(o || '—')}</option>`).join('')}</select></td>
-      <td><input data-f="lens" value="${esc(x.lens)}" aria-label="Lente"></td><td><input data-f="description" value="${esc(x.description)}" aria-label="Descrição"></td></tr>`).join('')}
-    </tbody></table></div>` : '<p class="empty-note">Ainda não há planos. Cria-os dentro de cada cena.</p>'}`;
+  const names = (ids) => (ids || []).map((id) => f.characters.find((c) => c.id === id)?.name).filter(Boolean).join(', ');
+  const draw = () => {
+    const any = f.shots.some((x) => f.scenes.some((s) => s.id === x.scene_id));
+    main.innerHTML = `<div class="row between wrap-gap"><h1 class="h1 pm-title">Planificação</h1>${f.scenes.length ? `<div class="row wrap-gap"><button type="button" class="btn ghost" data-xlsx>${ICON.copy} Exportar Excel</button><button type="button" class="btn ghost" data-pdf>${ICON.open} Exportar PDF</button></div>` : ''}</div>
+      ${f.scenes.length ? `<div class="panel table-wrap"><table class="table plan"><thead><tr><th>Plano</th><th>Enquadramento</th><th>Movimento</th><th>Lente</th><th>Descrição</th><th>Personagens</th><th></th></tr></thead>
+      ${f.scenes.map((s) => { const xs = f.shots.filter((x) => x.scene_id === s.id); return `<tbody class="plan-sc"><tr class="plan-h"><td colspan="7"><a href="${base}/cenas/${s.id}"><span class="scene-n sm">${esc(s.number)}</span> ${esc(sceneTitle(s, f))}</a><span class="muted small"> ${esc(s.time_of_day || '')} · ${xs.length} ${xs.length === 1 ? 'plano' : 'planos'}</span><button type="button" class="link-btn small plan-add" data-addshot="${s.id}">${ICON.plus} Plano</button></td></tr>
+        ${xs.map((x) => `<tr data-shot="${x.id}"><td><a class="pl-code" href="${base}/plano/${x.id}" title="Abrir o plano">${esc(x.code || 'Plano')}</a></td>
+          <td><select data-f="framing" aria-label="Enquadramento">${FRAMINGS.map((o) => `<option ${o === x.framing ? 'selected' : ''} value="${esc(o)}">${esc(o || '—')}</option>`).join('')}${x.framing && !FRAMINGS.includes(x.framing) ? `<option selected>${esc(x.framing)}</option>` : ''}</select></td>
+          <td><select data-f="movement" aria-label="Movimento">${MOVES.map((o) => `<option ${o === x.movement ? 'selected' : ''} value="${esc(o)}">${esc(o || '—')}</option>`).join('')}${x.movement && !MOVES.includes(x.movement) ? `<option selected>${esc(x.movement)}</option>` : ''}</select></td>
+          <td><input data-f="lens" value="${esc(x.lens || '')}" placeholder="Lente" aria-label="Lente"></td><td><input data-f="description" value="${esc(x.description || '')}" placeholder="Descrição" aria-label="Descrição"></td>
+          <td class="small muted">${esc(names(x.cast_ids))}</td><td><button type="button" class="icon-btn sm" data-delshot="${x.id}" aria-label="Apagar plano">${ICON.trash}</button></td></tr>`).join('')}</tbody>`; }).join('')}
+      </table></div>${any ? '' : '<p class="muted small">Ainda não há planos: junta-os com "+ Plano" em cada cena.</p>'}` : '<p class="empty-note">Ainda não há cenas. Importa o guião primeiro.</p>'}`;
+    main.querySelectorAll('[data-addshot]').forEach((b) => b.addEventListener('click', async () => {
+      const sc = f.scenes.find((x) => x.id === b.dataset.addshot); const xs = f.shots.filter((x) => x.scene_id === sc.id);
+      const { data, error } = await sb.from('shots').insert({ project_id: p.id, scene_id: sc.id, code: nextCode(sc, xs), position: xs.length }).select().single();
+      if (error) return toast(error.message);
+      f.shots.push(data); draw(); main.querySelector(`[data-shot="${data.id}"] [data-f="description"]`)?.focus();
+    }));
+    main.querySelectorAll('[data-delshot]').forEach((b) => b.addEventListener('click', async () => {
+      const x = f.shots.find((y) => y.id === b.dataset.delshot); if (!(await confirmBox(`Apagar o plano ${x.code || ''}?`, 'Apagar'))) return;
+      const { error } = await sb.from('shots').delete().eq('id', x.id); if (error) return toast(error.message);
+      f.shots = f.shots.filter((y) => y.id !== x.id); draw();
+    }));
+    main.querySelector('[data-pdf]')?.addEventListener('click', async () => {
+      const { exportPdf } = await import('./pdf.js');
+      exportPdf({ title: `Planificação — ${p.name}`, subtitle: `${f.shots.length} planos · ${f.scenes.length} cenas`, landscape: true,
+        columns: [{ label: 'Plano', width: '7%' }, { label: 'Enquadramento', width: '13%' }, { label: 'Movimento', width: '11%' }, { label: 'Lente', width: '7%' }, { label: 'Descrição', width: '38%' }, { label: 'Personagens', width: '24%' }],
+        groups: f.scenes.filter((s) => f.shots.some((x) => x.scene_id === s.id)).map((s) => ({ title: `${s.number} · ${sceneTitle(s, f)}`, note: s.time_of_day || '', color: '#333', rows: f.shots.filter((x) => x.scene_id === s.id).map((x) => [x.code, x.framing, x.movement, x.lens, x.description, names(x.cast_ids)]) })) });
+    });
+    main.querySelector('[data-xlsx]')?.addEventListener('click', async () => {
+      const ExcelJS = (await import('exceljs')).default;
+      const wb = new ExcelJS.Workbook(); const ws = wb.addWorksheet('Planificação');
+      ws.columns = [{ header: 'Cena', width: 8 }, { header: 'Décor', width: 30 }, { header: 'Plano', width: 8 }, { header: 'Enquadramento', width: 18 }, { header: 'Movimento', width: 16 }, { header: 'Lente', width: 10 }, { header: 'Descrição', width: 50 }, { header: 'Personagens', width: 30 }];
+      ws.getRow(1).font = { bold: true };
+      f.scenes.forEach((s) => f.shots.filter((x) => x.scene_id === s.id).forEach((x) => ws.addRow([s.number, sceneTitle(s, f), x.code, x.framing, x.movement, x.lens, x.description, names(x.cast_ids)])));
+      const buf = await wb.xlsx.writeBuffer();
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })); a.download = `Planificação ${p.name}.xlsx`; document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    });
+  };
+  draw();
   const savers = new Map();
   main.addEventListener('input', (e) => {
     const el = e.target.closest('[data-f]'); if (!el) return;
     const id = el.closest('[data-shot]').dataset.shot; const k = id + el.dataset.f;
-    if (!savers.has(k)) savers.set(k, debounce((v) => sb.from('shots').update({ [el.dataset.f]: v }).eq('id', id), 500));
+    const x = f.shots.find((y) => y.id === id); if (x) x[el.dataset.f] = el.value;
+    if (!savers.has(k)) savers.set(k, debounce((v) => sb.from('shots').update({ [el.dataset.f]: v }).eq('id', id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message)), 500));
     savers.get(k)(el.value);
   });
+  main.addEventListener('change', (e) => { const el = e.target.closest('select[data-f]'); if (el) el.dispatchEvent(new Event('input', { bubbles: true })); });
 }
 
 export async function fictionStats(p) {

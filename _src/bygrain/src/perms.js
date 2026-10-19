@@ -35,8 +35,8 @@ export async function budgetWhoChip(box, p, onManage) {
 }
 
 // lista com interruptores: usada na equipa do projeto e no "Gerir" do orçamento
-export async function budgetAccessPanel(root, p, after) {
-  const a = await budgetAccess(p);
+export async function budgetAccessPanel(root, p, after, pre) {
+  const a = await (pre || budgetAccess(p));
   const can = hasPerm('budget');
   const rows = [...a.people].sort((x, y) => ['admin', 'global', 'project', null].indexOf(a.how(x)) - ['admin', 'global', 'project', null].indexOf(a.how(y)) || x.display_name.localeCompare(y.display_name, 'pt'));
   root.innerHTML = `<ul class="perm-list">${rows.map((x) => { const h = a.how(x); return `<li>

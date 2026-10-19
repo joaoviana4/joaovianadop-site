@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { installUndo } from './undo.js';
 import { FLAVOR, IS_STUDIO } from './flavor.js';
 export { IS_STUDIO, FLAVOR };
 
@@ -11,6 +12,8 @@ export const sb = createClient(SUPABASE_URL, SUPABASE_ANON, {
   auth: { persistSession: true, autoRefreshToken: true, storageKey: FLAVOR.storageKey },
   db: { schema: FLAVOR.schema },
 });
+// Ctrl+Z em todas as páginas (undo.js)
+queueMicrotask(() => installUndo(sb, (m) => toast(m)));
 // ficheiros: sb.storage.from(BUCKET)
 export const BUCKET = FLAVOR.bucket;
 
@@ -98,9 +101,8 @@ export async function loadProfile() {
   const { data: { session } } = await sb.auth.getSession();
   state.user = session?.user || null;
   if (!state.user) { state.profile = null; return null; }
-  const { data } = await sb.from('profiles').select('*').eq('id', state.user.id).single();
+  const [{ data }, { data: perms }] = await Promise.all([sb.from('profiles').select('*').eq('id', state.user.id).single(), sb.from('user_perms').select('perm').eq('user_id', state.user.id)]);
   state.profile = data;
-  const { data: perms } = await sb.from('user_perms').select('perm').eq('user_id', state.user.id);
   state.perms = new Set((perms || []).map((x) => x.perm));
   return data;
 }
@@ -110,7 +112,9 @@ export const isAdmin = () => state.profile?.role === 'admin';
 export const PERMS = { budget: ['Orçamentos', 'Vê e edita o orçamento e os valores de todos os projetos'], finance: ['Finanças', 'Vê e edita as finanças da Central (movimentos, contas e despesas)'] };
 export const hasPerm = (k) => isAdmin() || !!state.perms?.has(k);
 // colunas de projects que a app pode ler (os valores vivem em project_budgets, protegidos)
-export const PROJECT_COLS = 'id, name, client, kind, status, is_central, cover_path, departments, starts_on, ends_on, created_by, created_at, updated_at, done_at, music, layouts, modules, deleted_at, deleted_by, parent_id, lead_id, manager_id';
+export const PROJECT_COLS = 'id, name, client, kind, status, is_central, cover_path, departments, starts_on, ends_on, created_by, created_at, updated_at, done_at, music, layouts, modules, deleted_at, deleted_by, parent_id, lead_id, lead_ids, manager_id, stage';
+// líderes do projeto (vários); lead_id fica com o primeiro, para o que ainda o lê
+export const leadsOf = (p) => { const a = Array.isArray(p?.lead_ids) ? p.lead_ids.filter(Boolean) : []; return a.length ? a : p?.lead_id ? [p.lead_id] : []; };
 
 export async function signIn(identifier, password) {
   let email = String(identifier || '').trim().toLowerCase();
@@ -136,6 +140,10 @@ export async function callFn(name, body) {
 
 // ---------- ficheiros ----------
 const urlCache = new Map();
+// os links assinados (válidos 6 h) sobrevivem a recarregar a página: as imagens voltam a sair da cache do browser
+try { const saved = JSON.parse(sessionStorage.getItem('portal-urls') || '[]'); saved.forEach(([k, v]) => { if (v?.exp > Date.now()) urlCache.set(k, v); }); } catch { /* sem armazenamento */ }
+let urlSaveT = 0;
+const saveUrls = () => { clearTimeout(urlSaveT); urlSaveT = setTimeout(() => { try { sessionStorage.setItem('portal-urls', JSON.stringify([...urlCache.entries()].slice(-1500))); } catch { /* cheio ou bloqueado */ } }, 800); };
 // imagens que já são links da web (ex.: projetos de demonstração) não passam pelo armazenamento
 const isWeb = (p) => /^https?:\/\//.test(p || '');
 // 'vf:<caminho>' = fotografia do Viewfinder (balde photos do BlackCat); o resto = ficheiros do projeto
@@ -161,6 +169,7 @@ export async function signedUrls(paths) {
       const { data } = await sb.storage.from(bk).createSignedUrls(list.map((x) => x[1]), 3600 * 6);
       const back = new Map(list.map(([p, key]) => [key, p]));
       (data || []).forEach((d) => d.signedUrl && urlCache.set(back.get(d.path) || d.path, { url: d.signedUrl, exp: Date.now() + 3600 * 5 * 1000 }));
+      saveUrls();
     }));
   }
   return Object.fromEntries(paths.filter(Boolean).map((p) => [p, isWeb(p) ? p : urlCache.get(p)?.url]));
@@ -185,6 +194,14 @@ export async function uploadImage(projectId, folder, file) {
   return { path, w, h };
 }
 
+// instalar a app no computador (Chrome/Edge guardam o pedido; Safari não tem pedido: mostram-se os passos)
+let installEvt = null;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; });
+export const isInstalled = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+export async function installApp() {
+  if (installEvt) { installEvt.prompt(); const r = await installEvt.userChoice.catch(() => null); installEvt = null; return r?.outcome === 'accepted' ? 'ok' : 'no'; }
+  return 'manual';
+}
 export function registerSW() {
   if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
     navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE }).catch(() => {});
@@ -219,6 +236,7 @@ function watchVersion() {
 }
 
 export const ICON = {
+  globe: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.6 5.4 3.6 8.5s-1.1 5.9-3.6 8.5c-2.5-2.6-3.6-5.4-3.6-8.5s1.1-5.9 3.6-8.5z"/></svg>',
   plus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
   search: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
   car: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16v-4l2-5h12l2 5v4"/><rect x="3" y="12" width="18" height="5" rx="1.5"/><circle cx="7.5" cy="17.5" r="1.5"/><circle cx="16.5" cy="17.5" r="1.5"/></svg>',
@@ -233,6 +251,8 @@ export const ICON = {
   dots: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg>',
   note: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5"/></svg>',
   image: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/></svg>',
+  pin: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 6 3 3v1H7v-1l3-3z"/><path d="M12 14v6"/></svg>',
+  hanger: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7.5a2 2 0 1 1 2-2"/><path d="M12 7.5v1.2L3.4 15.6a1.2 1.2 0 0 0 .8 2.1h15.6a1.2 1.2 0 0 0 .8-2.1L12 8.7"/></svg>',
   palette: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.2 0 1.6-1 1.1-1.9-.6-1-.1-2.1 1.1-2.1H17a4 4 0 0 0 4-4c0-5.5-4-10-9-10z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/></svg>',
   list: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>',
   board: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><rect x="7" y="7" width="5" height="5"/><path d="M14 8h3M14 12h3M7 16h10"/></svg>',

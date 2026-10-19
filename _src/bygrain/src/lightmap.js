@@ -1,4 +1,5 @@
-import { sb, esc, toast, modal, ICON } from './lib.js';
+import { sb, esc, toast, modal, confirmBox, ICON } from './lib.js';
+import { newLightmapData } from './lmdata.js';
 import { loadGear, addGearModal, gearName, specLine, lensFocals, MOD_KINDS, FABRICS, CATALOG, loadCatalog } from './gear.js';
 import { makeHistory, bindUndoKeys } from './tablekit.js';
 
@@ -70,6 +71,8 @@ export function lightmapTool(main, p, tool, opts = {}) {
         ${OTHER.map(([k, l, ic]) => `<button type="button" data-tool="${k}" title="${l}" aria-haspopup="dialog">${ic}<span>${l}</span></button>`).join('')}
         <hr>
         <button type="button" data-drawer-t title="Legenda, consumo e material">${ICON.list}<span>Legenda</span></button>
+        <hr>
+        <button type="button" data-reset title="Recomeçar: volta a ter só a câmara e os atores do plano"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/></svg><span>Recomeçar</span></button>
       </div>
       <div class="lm-pop" data-pop hidden role="dialog"></div>
       <aside class="lm-props" data-props hidden></aside>
@@ -324,7 +327,7 @@ export function lightmapTool(main, p, tool, opts = {}) {
       head = cam ? `<p class="lm-gear"><b>${esc(gearName(cam))}</b><small>${esc(specLine(cam))}</small></p>` : '<p class="lm-warn">Esta câmara não está no equipamento. Escolhe uma da lista:</p>';
       const lenses = gear.filter((g) => g.category === 'lens');
       f = `<label class="mini">Câmara<select data-k="gear_id">${opt(gear.filter((g) => g.category === 'camera'), it.gear_id, cam ? null : '— escolher —')}</select></label>
-        ${fld('code', 'Plano / câmara', it.code, 'text', 'placeholder="ex: 5A ou A-cam"')}
+        ${fld('code', 'Plano / câmara', it.code, 'text', 'placeholder="ex: 5.1 ou A-cam"')}
         <label class="mini">Objetiva<select data-k="lens_id">${opt(lenses, it.lens_id, lenses.length ? '— escolher —' : 'Nenhuma no equipamento')}</select></label>
         ${focals && focals.length ? `<label class="mini">Focal<select data-k="focal">${focals.map((x) => `<option value="${x}" ${+x === +it.focal ? 'selected' : ''}>${x} mm</option>`).join('')}</select></label>`
           : fld('focal', `Focal (mm)${lens?.specs?.zoom ? ` · ${lens.specs.zoom[0]}–${lens.specs.zoom[1]}` : ''}`, it.focal, 'number', `min="${lens?.specs?.zoom?.[0] || 4}" max="${lens?.specs?.zoom?.[1] || 1200}"`)}
@@ -485,6 +488,21 @@ export function lightmapTool(main, p, tool, opts = {}) {
   document.addEventListener('pointerdown', popOut, true);
   main.querySelector('[data-undo]').addEventListener('click', () => hist.undo());
   main.querySelector('[data-fit]').addEventListener('click', fit);
+  // recomeçar: só a câmara do plano e os atores (os escolhidos no plano, ou os da cena); Ctrl+Z volta atrás
+  main.querySelector('[data-reset]').addEventListener('click', async () => {
+    if (data.items.length && !(await confirmBox('Recomeçar este mapa de luz? Fica só a câmara e os atores do plano. Dá para voltar atrás com Ctrl+Z.', 'Recomeçar'))) return;
+    let cameraCode = ''; let people = [];
+    if (data.shot_id) {
+      const { data: sh } = await sb.from('shots').select('code, scene_id, cast_ids, set_ids').eq('id', data.shot_id).maybeSingle();
+      cameraCode = sh?.code || 'A';
+      let ids = sh?.cast_ids?.length ? sh.cast_ids : [];
+      if (!ids.length && sh?.scene_id) { const { data: sc } = await sb.from('scenes').select('character_ids').eq('id', sh.scene_id).maybeSingle(); ids = sc?.character_ids || []; }
+      if (ids.length) { const { data: cs } = await sb.from('characters').select('id, name').in('id', ids); people = ids.map((id) => cs?.find((c) => c.id === id)?.name).filter(Boolean); }
+    } else { const cam = data.items.find((x) => x.kind === 'camera'); cameraCode = cam?.code || 'A'; people = data.items.filter((x) => x.kind === 'person').map((x) => x.name).filter(Boolean); }
+    hist.push('recomeçar');
+    data.items = newLightmapData({ cameraCode, people }).items; st.sel = null;
+    draw(); save(); fit(); toast('Mapa recomeçado.');
+  });
   main.querySelector('[data-png]').addEventListener('click', () => exportPng(svg, tool.title));
   main.querySelector('[data-pdf]').addEventListener('click', async () => {
     const url = await svgPng(svg, 2);

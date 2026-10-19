@@ -20,10 +20,39 @@ export function bindMode(root, k, redraw) {
 // items: [{ e, href, title, sub, meta }]; place = décor (sem foto mostra o ícone de casa), senão iniciais
 export function entItems(items, { mode, urls, place = false }) {
   const pic = (e, title, cls) => { const u = urls[entPhoto(e)]; return `<span class="${cls}">${u ? `<img src="${esc(u)}" alt="" loading="lazy">` : place ? ICON.home : `<b>${esc(initials(title))}</b>`}</span>`; };
+  // item.edit = { table, field: 'actor' | 'info.<chave>', placeholder, label }: um campo que se edita logo na lista
+  const ed = (it) => `<input class="ent-ed" data-ented="${esc(it.e.id)}" value="${esc(editValue(it))}" placeholder="${esc(it.edit.placeholder || '')}" aria-label="${esc(it.edit.label || it.edit.placeholder || '')} de ${esc(it.title)}">`;
   if (mode === 'list') {
-    return `<div class="ent-list">${items.map(({ e, href, title, sub, meta }) => `<a class="ent-row" href="${href}">${pic(e, title, 'ent-th')}<strong>${esc(title)}</strong><span class="muted small">${sub}</span><span class="small">${meta}</span>${ICON.chev}</a>`).join('')}</div>`;
+    return `<div class="ent-list">${items.map((it, i) => { const { e, href, title, sub, meta } = it; return it.edit
+      ? `<div class="ent-row ed"><a href="${href}" class="ent-ra" tabindex="-1" aria-hidden="true">${pic(e, title, 'ent-th')}</a><a href="${href}" class="ent-rt"><strong>${esc(title)}</strong></a>${ed(it)}<span class="small">${meta}</span><a href="${href}" class="ent-rc" aria-label="Abrir ${esc(title)}">${ICON.chev}</a></div>`
+      : `<a class="ent-row" href="${href}">${pic(e, title, 'ent-th')}<strong>${esc(title)}</strong><span class="muted small">${sub}</span><span class="small">${meta}</span>${ICON.chev}</a>`; }).join('')}</div>`;
   }
-  return `<div class="ent-tiles">${items.map(({ e, href, title, sub, meta }) => `<a class="ent-tile" href="${href}">${pic(e, title, 'ent-ph')}<span class="ent-tb"><strong>${esc(title)}</strong><span class="muted small">${sub}</span><span class="small">${meta}</span></span></a>`).join('')}</div>`;
+  return `<div class="ent-tiles">${items.map((it, i) => { const { e, href, title, sub, meta } = it; return it.edit
+    ? `<div class="ent-tile ed"><a href="${href}" class="ent-ta">${pic(e, title, 'ent-ph')}<span class="ent-tb"><strong>${esc(title)}</strong></span></a><span class="ent-tb ent-tb2">${ed(it)}<span class="small">${meta}</span></span></div>`
+    : `<a class="ent-tile" href="${href}">${pic(e, title, 'ent-ph')}<span class="ent-tb"><strong>${esc(title)}</strong><span class="muted small">${sub}</span><span class="small">${meta}</span></span></a>`; }).join('')}</div>`;
+}
+const editValue = (it) => { const f = it.edit.field; return f.startsWith('info.') ? it.e.info?.[f.slice(5)] || '' : it.e[f] || ''; };
+// grava o que se escreve nos campos da lista (cada linha à sua vez)
+export function bindEdits(root, items) {
+  const timers = new Map();
+  root.querySelectorAll('[data-ented]').forEach((inp) => inp.addEventListener('input', () => {
+    const it = items.find((x) => x.e.id === inp.dataset.ented); if (!it) return; const { table, field } = it.edit; const e = it.e; const v = inp.value;
+    const patch = field.startsWith('info.') ? (e.info = { ...(e.info || {}), [field.slice(5)]: v }, { info: e.info }) : (e[field] = v, { [field]: v });
+    clearTimeout(timers.get(e.id));
+    timers.set(e.id, setTimeout(() => sb.from(table).update(patch).eq('id', e.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message)), 600));
+  }));
+  root.querySelectorAll('[data-ented]').forEach((inp) => inp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') inp.blur(); }));
+}
+
+// Ctrl+V com uma imagem copiada: entra como foto (enquanto esta página estiver aberta)
+function onPasteImages(root, fn) {
+  const h = (e) => {
+    if (!document.body.contains(root)) { document.removeEventListener('paste', h); return; }
+    if (e.target.closest?.('input, textarea, [contenteditable="true"]') || document.querySelector('#modal .modal')) return;
+    const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith('image/'));
+    if (files.length) { e.preventDefault(); fn(files); }
+  };
+  document.addEventListener('paste', h);
 }
 
 // Foto de uma pessoa (atores, figurantes, personagens): guardada em info.photo
@@ -40,13 +69,14 @@ export function bindPhoto(root, p, table, e, redraw) {
   const d = root.querySelector('[data-photo-drop]');
   d?.addEventListener('dragover', (ev) => ev.preventDefault());
   d?.addEventListener('drop', (ev) => { ev.preventDefault(); up(ev.dataTransfer.files[0]); });
+  if (d) onPasteImages(d, (files) => up(files[0]));
 }
 
 // Fotos de um décor (locations.photos = [{ path }]); a primeira é a que aparece na grelha
 export async function placePhotos(l) {
   const photos = l.photos || []; const urls = await signedUrls(photos.map((x) => x.path));
   return `<section class="panel"><div class="row between"><h2 class="h3">Fotos do décor</h2><button type="button" class="btn ghost" data-addph>${ICON.plus} Fotos</button></div>
-    <div class="photo-grid" data-photos>${photos.map((ph, i) => `<figure><img src="${esc(urls[ph.path] || '')}" alt="">${i === 0 ? '<figcaption class="small muted">Capa</figcaption>' : `<button type="button" class="link-btn small" data-coverph="${i}">Usar como capa</button>`}<button type="button" class="icon-btn sm" data-rmph="${i}" aria-label="Tirar foto">${ICON.close}</button></figure>`).join('') || '<p class="muted small">Ainda sem fotos. Também podes largá-las aqui.</p>'}</div></section>`;
+    <div class="photo-grid" data-photos>${photos.map((ph, i) => `<figure><img src="${esc(urls[ph.path] || '')}" alt="">${i === 0 ? '<figcaption class="small muted">Capa</figcaption>' : `<button type="button" class="link-btn small" data-coverph="${i}">Usar como capa</button>`}<button type="button" class="icon-btn sm" data-rmph="${i}" aria-label="Tirar foto">${ICON.close}</button></figure>`).join('') || '<p class="muted small">Ainda sem fotos. Também podes largá-las aqui ou colar com Ctrl+V.</p>'}</div></section>`;
 }
 export function bindPlacePhotos(root, p, l, redraw) {
   const put = async () => { const { error } = await sb.from('locations').update({ photos: l.photos }).eq('id', l.id); if (error) toast(error.message); redraw(); };
@@ -60,6 +90,7 @@ export function bindPlacePhotos(root, p, l, redraw) {
   const grid = root.querySelector('[data-photos]');
   grid?.addEventListener('dragover', (e) => e.preventDefault());
   grid?.addEventListener('drop', (e) => { e.preventDefault(); add(e.dataTransfer.files); });
+  if (grid) onPasteImages(grid, add);
   root.querySelectorAll('[data-rmph]').forEach((b) => b.addEventListener('click', () => { l.photos = l.photos.filter((_, i) => i !== +b.dataset.rmph); put(); }));
   root.querySelectorAll('[data-coverph]').forEach((b) => b.addEventListener('click', () => { const i = +b.dataset.coverph; const ph = l.photos[i]; l.photos = [ph, ...l.photos.filter((_, j) => j !== i)]; put(); }));
 }

@@ -1,4 +1,6 @@
+import { bindTimes } from './timepick.js';
 import { sb, esc, toast, modal, confirmBox, ICON } from './lib.js';
+import { projectContacts, phoneFor } from './contacts.js';
 
 // Mapa de transportes (ferramenta de produção).
 // Por dia: secções (ex.: Elenco, Realização e produção, Equipa) com viagens.
@@ -40,7 +42,8 @@ export async function transportTool(main, p, tool) {
     sb.from('locations').select('name, info').eq('project_id', p.id).order('position'),
     sb.from('profiles').select('display_name').order('display_name'),
   ]);
-  const people = [...new Set([...(chars || []).map((c) => (c.actor ? `${c.actor}` : c.name)), ...(team || []).map((t) => t.display_name).filter(Boolean)])];
+  const contacts = await projectContacts(p);
+  const people = [...new Set([...(chars || []).map((c) => (c.actor ? `${c.actor}` : c.name)), ...contacts.map((c) => c.name), ...(team || []).map((t) => t.display_name).filter(Boolean)])];
   const places = (locs || []).map((l) => ({ name: l.name, address: l.info?.address || l.info?.morada || '' }));
   const placeAddr = (txt) => { const pl = places.find((x) => x.name.toLowerCase() === v(txt).trim().toLowerCase()); return pl?.address || txt; };
 
@@ -48,7 +51,7 @@ export async function transportTool(main, p, tool) {
 
   const draw = () => {
     const vehicles = [...new Set(all.sheets.flatMap((s) => s.trips.map((t) => t.vehicle)).filter(has))];
-    const drivers = [...new Set(all.sheets.flatMap((s) => s.trips.map((t) => t.driver)).filter(has))];
+    const drivers = [...new Set([...all.sheets.flatMap((s) => s.trips.map((t) => t.driver)).filter(has), ...contacts.filter((c) => c.kind === 'crew').map((c) => c.name)])];
     const sorted = (sec) => d.trips.filter((t) => t.sec === sec.id);
     const paxCount = d.trips.reduce((a, t) => a + t.pax.filter(has).length, 0);
     main.innerHTML = `
@@ -106,6 +109,12 @@ export async function transportTool(main, p, tool) {
       if (k === 'seats') { const n = t.pax.filter(has).length; const sp = el.closest('.tr-seats'); sp.classList.toggle('over', n > t.seats); }
     }));
     main.querySelectorAll('[data-t="seats"]').forEach((el) => el.addEventListener('change', draw));
+    bindTimes([...main.querySelectorAll('[data-t="time"], [data-t="arrival"]')]);
+    // condutor da equipa: o telefone vem sozinho (se ainda não estiver escrito)
+    main.querySelectorAll('[data-t="driver"]').forEach((el) => el.addEventListener('change', () => {
+      const t = trip(el); const ph = phoneFor(contacts, el.value);
+      if (ph && !has(t.phone)) { t.phone = ph; const pi = el.parentElement.querySelector('[data-t="phone"]'); if (pi) pi.value = ph; save(); }
+    }));
     main.querySelectorAll('[data-addpax]').forEach((el) => {
       const add = () => { const val = el.value.trim(); if (!val) return; const t = trip(el); t.pax.push(val); el.value = ''; save(); draw(); main.querySelector(`[data-trip="${t.id}"] [data-addpax]`)?.focus(); };
       el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } });

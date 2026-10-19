@@ -9,7 +9,7 @@ import { hasMod } from './modules.js';
 // questões de produção por decidir, departamentos e cronograma. Sem valores (esses ficam no Orçamento).
 
 const READY = new Set(['pronto', 'comprado', 'alugado', 'emprestado', 'construido']);
-const PH = [['pre', 'Pré-produção', '#7C5CFF'], ['prod', 'Rodagem', '#F08A24'], ['post', 'Pós-produção', '#2FB67C']];
+const PH = [['pre', 'Pré-produção', '#7C5CFF'], ['prod', 'Rodagem', '#F08A24'], ['post', 'Pós-produção', '#2FB67C'], ['dist', 'Distribuição', '#1F8A8A']];
 const plural = (n, a, b) => `${n} ${n === 1 ? a : b}`;
 const av = (x) => (x ? `<span class="avatar sm" title="${esc(x.display_name)}" style="--c:${esc(x.color)}">${esc(initials(x.display_name))}</span>` : '<span class="avatar sm empty" title="Sem responsável"></span>');
 
@@ -26,29 +26,36 @@ function milestone(p, phases) {
   return { big: '—', label: 'Sem datas definidas' };
 }
 
-function timelineHtml(p, phases) {
+function timelineHtml(p, phases, items = []) {
   const s = phases?.pre?.[0] || p.starts_on, e = phases?.post?.[1] || p.ends_on;
   if (!s || !e || e <= s) return '<p class="muted small">Define as datas do projeto (ou cria um Cronograma) para veres as fases aqui.</p>';
   const T = (d) => new Date(d + 'T00:00:00').getTime();
   const pct = (d) => Math.max(0, Math.min(100, ((T(d) - T(s)) / (T(e) - T(s))) * 100));
   const today = todayISO();
   const bars = phases ? PH.map(([k, l, c]) => phases[k] ? `<div class="ov-ph" style="left:${pct(phases[k][0])}%;width:${Math.max(2, pct(phases[k][1]) - pct(phases[k][0]))}%;--g:${c}" title="${l}: ${fmtDate(phases[k][0])} – ${fmtDate(phases[k][1])}"><span>${l}</span></div>` : '').join('') : `<div class="ov-ph" style="left:0;width:100%;--g:#7C5CFF"><span>Projeto</span></div>`;
-  return `<div class="ov-tl">${bars}${today >= s && today <= e ? `<i class="ov-today" style="left:${pct(today)}%"><span>Hoje</span></i>` : ''}</div>
+  const its = items.filter((x) => x.start).sort((a, b) => a.start.localeCompare(b.start));
+  const marks = its.filter((x) => x.start >= s && x.start <= e).map((x) => `<i class="ov-ms" style="left:${pct(x.start)}%;--g:${esc(x.color || '#8A8A99')}" title="${esc(x.name || 'Data')}: ${fmtDate(x.start)}${x.end && x.end > x.start ? ' – ' + fmtDate(x.end) : ''}"></i>`).join('');
+  return `<div class="ov-tl">${bars}${marks}${today >= s && today <= e ? `<i class="ov-today" style="left:${pct(today)}%"><span>Hoje</span></i>` : ''}</div>
     <div class="row between small muted"><span>${fmtDate(s)}</span><span>${fmtDate(e)}</span></div>
-    ${phases ? `<ul class="ov-phl">${PH.map(([k, l, c]) => phases[k] ? `<li style="--g:${c}"><i></i><span>${l}</span><span class="muted">${fmtDate(phases[k][0])} – ${fmtDate(phases[k][1])}</span></li>` : '').join('')}</ul>` : ''}`;
+    ${phases || its.length ? `<ul class="ov-phl">${phases ? PH.map(([k, l, c]) => phases[k] ? `<li style="--g:${c}"><i></i><span>${l}</span><span class="muted">${fmtDate(phases[k][0])} – ${fmtDate(phases[k][1])}</span></li>` : '').join('') : ''}${its.map((x) => `<li class="ms" style="--g:${esc(x.color || '#8A8A99')}"><i></i><span>${esc(x.name || 'Data')}</span><span class="muted">${fmtDate(x.start)}${x.end && x.end > x.start ? ' – ' + fmtDate(x.end) : ''}</span></li>`).join('')}</ul>` : ''}`;
 }
 
-export async function mountSituation(box, p, base, { onChange } = {}) {
-  box.innerHTML = '<p class="muted">A preparar o ponto de situação…</p>';
-  const isMusic = hasMod(p, 'seguimento'); const withProps = hasMod(p, 'aderecos');
-  const [{ data: tasks }, { data: props }, { data: questions }, people, { data: tl }, ms] = await Promise.all([
-    sb.from('tasks').select('*').eq('project_id', p.id),
+export function situationData(p, tasksP) {
+  const isMusic = hasMod(p, 'seguimento');
+  return Promise.all([
+    tasksP || sb.from('tasks').select('*').eq('project_id', p.id),
     sb.from('props').select('id, name, status, removed').eq('project_id', p.id),
     sb.from('project_questions').select('*').eq('project_id', p.id).order('created_at'),
     loadPeople(),
     sb.from('boards').select('id, data').eq('project_id', p.id).eq('kind', 'timeline').limit(1),
     isMusic ? musicStats(p.id) : Promise.resolve(null),
   ]);
+}
+export async function mountSituation(box, p, base, { onChange } = {}) {
+  box.innerHTML = '<p class="muted">A preparar o ponto de situação…</p>';
+  const isMusic = hasMod(p, 'seguimento'); const withProps = hasMod(p, 'aderecos');
+  const pre = p._preSit; p._preSit = null; // os dados pedidos pela visão geral só servem a primeira vez
+  const [{ data: tasks }, { data: props }, { data: questions }, people, { data: tl }, ms] = await (pre || situationData(p));
   const st = { showResolved: false, questions: questions || [] };
   const all = tasks || [];
   const open = all.filter((t) => t.status !== 'done');
@@ -89,7 +96,7 @@ export async function mountSituation(box, p, base, { onChange } = {}) {
           : `<div class="empty-box sm"><p>${all.length ? 'Está tudo feito.' : 'Ainda não há tarefas.'}</p><a class="btn ghost" href="${base}/tarefas">${ICON.plus} Distribuir tarefas</a></div>`}
         </section></div>
 
-        <div data-blk="crono"><section class="panel"><h2 class="h3">Cronograma</h2>${timelineHtml(p, phases)}</section></div>
+        <div data-blk="crono"><section class="panel"><h2 class="h3">Cronograma</h2>${timelineHtml(p, phases, tl?.[0]?.data?.items || [])}</section></div>
           ${depts.length ? `<div data-blk="depts"><section class="panel"><h2 class="h3">Por departamento</h2><ul class="ov-depts">${depts.map((d) => { const dt = all.filter((t) => t.department === d.id); const done = dt.filter((t) => t.status === 'done').length; const q = qOpen.filter((x) => x.department === d.id).length;
               return `<li style="--g:${esc(d.color)}"><div class="row between small"><span><i class="dot"></i>${esc(d.name)}</span><span class="muted">${dt.length ? `${done}/${dt.length}` : '—'}${q ? ` · ${plural(q, 'questão', 'questões')}` : ''}</span></div><div class="bar"><i style="width:${dt.length ? Math.round((done / dt.length) * 100) : 0}%"></i></div></li>`; }).join('')}</ul></section></div>` : ''}
 

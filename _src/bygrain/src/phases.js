@@ -1,0 +1,209 @@
+import { sb, esc, toast, modal, phaseOf, ICON } from './lib.js';
+
+// Fases do projeto: Pré-produção, Produção e Pós-produção. O seletor em cima do banner mostra só as páginas e
+// ferramentas dessa fase (no menu do lado e na visão geral). Cada página/ferramenta tem fases por defeito e a equipa
+// pode mudá-las ("Organizar fases"), guardado em projects.layouts.phases = { 'mod:guiao': ['pre'], 'tool:<id>': [...] }.
+// A fase escolhida fica guardada só neste navegador, por projeto.
+
+export const PHASES = [['pre', 'Pré-produção'], ['prod', 'Produção'], ['pos', 'Pós-produção']];
+// a ficção tem uma quarta etapa: Distribuição (festivais, mostras, salas)
+export const hasDist = (kind) => kind === 'ficcao';
+export const phasesFor = (p) => (hasDist(p?.kind) ? [...PHASES, ['dist', 'Distribuição']] : PHASES);
+export const stageOptions = (kind) => (hasDist(kind) ? [...PHASES, ['dist', 'Distribuição']] : PHASES);
+// Etapas ligadas no projeto: um projeto nasce só com a etapa em que está (normalmente pré-produção); as outras
+// juntam-se quando a equipa quiser, com o + da barra das etapas. Guardado em projects.layouts.stages.
+// Projetos de antes disto (sem layouts.stages): ligadas da pré-produção até à etapa atual.
+export function stagesOn(p) {
+  const all = phasesFor(p).map(([k]) => k), saved = p?.layouts?.stages;
+  if (Array.isArray(saved) && saved.length) { const on = all.filter((k) => saved.includes(k)); if (on.length) return on; }
+  const cur = legacyCurrent(p); const i = Math.max(0, all.indexOf(cur));
+  return all.slice(0, i + 1);
+}
+export const activePhases = (p) => { const on = stagesOn(p); return phasesFor(p).filter(([k]) => on.includes(k)); };
+export const missingPhases = (p) => { const on = stagesOn(p); return phasesFor(p).filter(([k]) => !on.includes(k)); };
+const STAGE_INFO = {
+  pre: 'Guião, décors, elenco, storyboard, planificação, orçamento e tudo o que se prepara antes de filmar.',
+  prod: 'Os dias de rodagem: folhas de serviço, transportes, relatórios de câmara e de som, continuidade.',
+  pos: 'Montagem, cor, som, música, versões e entregas.',
+  dist: 'Festivais, mostras, salas e a Tabela Distribuição.',
+};
+export async function setStages(p, list) {
+  const order = phasesFor(p).map(([k]) => k), stages = order.filter((k) => list.includes(k));
+  const layouts = { ...(p.layouts || {}), stages };
+  const { error } = await sb.from('projects').update({ layouts }).eq('id', p.id);
+  if (error) { toast('Não foi possível guardar: ' + error.message); return false; }
+  p.layouts = layouts; return true;
+}
+export function stagesMenu(p, after) {
+  const on = stagesOn(p), list = phasesFor(p);
+  const m = modal(`<h2>Etapas do projeto</h2><p class="muted small">O projeto começa só com a etapa em que está. Liga as outras quando chegar a altura: cada etapa traz as suas páginas e ferramentas. Desligar uma etapa só a esconde, não apaga nada.</p>
+    <div class="stg-list">${list.map(([k, l], i) => `<label class="stg-o"><input type="checkbox" value="${k}" ${on.includes(k) ? 'checked' : ''}><span class="stg-n">${i + 1}</span><span><b>${esc(l)}</b><small>${esc(STAGE_INFO[k] || '')}</small></span></label>`).join('')}</div>
+    <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button type="button" class="btn primary" data-save>Guardar</button></div>`);
+  m.el.querySelector('[data-save]').addEventListener('click', async () => {
+    const v = [...m.el.querySelectorAll('.stg-o input:checked')].map((x) => x.value);
+    if (!v.length) return toast('O projeto precisa de pelo menos uma etapa.');
+    const added = v.filter((k) => !on.includes(k));
+    if (await setStages(p, v)) {
+      m.close();
+      if (!v.includes(selPhase(p))) setSelPhase(p, 'all');
+      if (added.length === 1) setSelPhase(p, added[0]);
+      toast(added.length ? `${added.map(phaseLabel).join(', ')} ${added.length > 1 ? 'juntaram-se' : 'juntou-se'} ao projeto.` : 'Etapas guardadas.');
+      after();
+    }
+  });
+}
+const ALL = ['pre', 'prod', 'pos'];
+// Tudo o que existia até 17 out 2026 é de pré-produção (as ferramentas de produção e pós-produção vêm a seguir).
+const PRE = ['pre'];
+const MOD_DEF = {};
+const KIND_DEF = {};
+
+export const modKey = (k) => `mod:${k}`;
+export const toolKey = (b) => `tool:${b.id}`;
+const defOf = (key, kind) => (key.startsWith('mod:') ? MOD_DEF[key.slice(4)] || PRE : KIND_DEF[kind] || PRE);
+export function phasesOf(p, key, kind) {
+  const o = p.layouts?.phases?.[key];
+  return Array.isArray(o) ? o : defOf(key, kind);
+}
+const LS = (p) => `portal-phase:${p.id}`;
+export function selPhase(p) { try { const v = localStorage.getItem(LS(p)); return activePhases(p).some(([k]) => k === v) ? v : 'all'; } catch { return 'all'; } }
+export function setSelPhase(p, v) { try { if (v === 'all') localStorage.removeItem(LS(p)); else localStorage.setItem(LS(p), v); } catch { /* sem memória do navegador */ } }
+export const shows = (p, key, kind) => { const s = selPhase(p), ph = phasesOf(p, key, kind); return s === 'all' ? ph.some((k) => stagesOn(p).includes(k)) : ph.includes(s); };
+export const phaseLabel = (k) => [...PHASES, ['dist', 'Distribuição']].find(([x]) => x === k)?.[1] || 'Tudo';
+
+// fase em que o projeto está agora: a que foi escolhida (projects.stage) ou, sem isso, pelas datas do projeto
+function legacyCurrent(p) {
+  const tl = tlPhase(p); if (tl) return tl;
+  if (p?.stage && phasesFor(p).some(([k]) => k === p.stage)) return p.stage;
+  const l = phaseOf(p || {}).label;
+  return l === 'Produção' ? 'prod' : l?.startsWith?.('Pós-produção') ? 'pos' : 'pre';
+}
+export function currentPhase(p) {
+  const tl = tlPhase(p); if (tl) return tl;
+  if (p.stage && phasesFor(p).some(([k]) => k === p.stage)) return p.stage;
+  const l = phaseOf(p).label;
+  return l === 'Pré-produção' ? 'pre' : l === 'Produção' ? 'prod' : l.startsWith('Pós-produção') ? 'pos' : null;
+}
+
+// fases do cronograma de produção (boards.data.phases: pre, prod, post e, na ficção, dist): hoje está em qual?
+const TL_KEY = { pre: 'pre', prod: 'prod', pos: 'post', dist: 'dist' };
+function tlPhase(p) {
+  const ph = p._tlPhases; if (!ph) return null;
+  const today = new Date().toISOString().slice(0, 10);
+  const list = phasesFor(p).map(([k]) => [k, ph[TL_KEY[k]]]).filter(([, r]) => Array.isArray(r) && r[0]);
+  if (!list.length) return null;
+  const inside = list.find(([, [a, b]]) => today >= a && today <= (b || a)); if (inside) return inside[0];
+  if (today < list[0][1][0]) return list[0][0];
+  const started = list.filter(([, [a]]) => a <= today); return started.length ? started[started.length - 1][0] : list[0][0];
+}
+export const fromTimeline = (p) => !!tlPhase(p);
+// barra de progresso de cada etapa pelas datas do cronograma
+function tlFill(p, k) {
+  const r = p._tlPhases?.[TL_KEY[k]]; if (!Array.isArray(r) || !r[0]) return null;
+  const today = Date.now(); const a = Date.parse(r[0] + 'T00:00:00'); const b = Date.parse((r[1] || r[0]) + 'T23:59:59');
+  return Math.max(0, Math.min(1, (today - a) / Math.max(1, b - a)));
+}
+
+// a fase que se está a ver ainda não chegou? (fase escolhida depois da fase atual do projeto)
+function curIndex(p) {
+  const list = activePhases(p); const cur = currentPhase(p);
+  if (cur) return list.findIndex(([k]) => k === cur);
+  return p.starts_on && p.ends_on && phaseOf(p).pct >= 1 ? list.findIndex(([k]) => k === 'pos') : 0; // sem datas ou ainda não começou: pré-produção
+}
+export function aheadOf(p) {
+  const s = selPhase(p); if (s === 'all') return null;
+  const list = activePhases(p); const i = list.findIndex(([k]) => k === s); const ci = curIndex(p); if (ci < 0) return null;
+  return i > ci ? { sel: s, cur: list[ci]?.[0] || 'pre' } : null;
+}
+export function aheadNotice(p) {
+  const a = aheadOf(p); if (!a) return '';
+  return `<section class="ahead-note" role="status"><div class="an-ic">${ICON.lock || ''}</div><div class="an-t">
+      <h2>O projeto ainda não se encontra em ${esc(phaseLabel(a.sel).toLowerCase())}.</h2>
+      <p class="muted">Neste momento está em <b>${esc(phaseLabel(a.cur).toLowerCase())}</b>. Quando chegar a esta etapa, as ferramentas de ${esc(phaseLabel(a.sel).toLowerCase())} aparecem aqui.</p>
+      <div class="row wrap-gap"><button type="button" class="btn ghost" data-ahead-go="${a.cur}">Ver ${esc(phaseLabel(a.cur).toLowerCase())}</button>${p._tlHref ? `<a class="btn ghost" href="${esc(p._tlHref)}">Ver as datas no cronograma</a>` : p.canEdit !== false ? `<button type="button" class="btn primary" data-ahead-set="${a.sel}">Passar o projeto para ${esc(phaseLabel(a.sel).toLowerCase())}</button>` : ''}</div>
+    </div></section>`;
+}
+export function bindAhead(root, p, onChange, onPhase) {
+  root.querySelectorAll('[data-ahead-go]').forEach((b) => b.addEventListener('click', () => { setSelPhase(p, b.dataset.aheadGo); (onPhase || onChange)(); }));
+  root.querySelectorAll('[data-ahead-set]').forEach((b) => b.addEventListener('click', async () => {
+    const stage = b.dataset.aheadSet;
+    if (!stagesOn(p).includes(stage)) await setStages(p, [...stagesOn(p), stage]);
+    const { error } = await sb.from('projects').update({ stage }).eq('id', p.id);
+    if (error) return toast(error.message);
+    p.stage = stage; toast(`O projeto passou para ${phaseLabel(stage).toLowerCase()}.`); onChange();
+  }));
+}
+
+// barra do projeto, por baixo do cabeçalho em todas as páginas do projeto: nome + etapas como barra de progresso
+const SPAN = { pre: [0, 1 / 3], prod: [1 / 3, 2 / 3], pos: [2 / 3, 1] };
+export function projectStrip(p, base, extra = '') {
+  const s = selPhase(p); const cur = currentPhase(p); const pct = phaseOf(p).pct || 0; const hasDates = !!(p.starts_on && p.ends_on);
+  const list = activePhases(p); const ci = list.findIndex(([k]) => k === cur); const more = missingPhases(p);
+  // com a fase escolhida: as anteriores ficam feitas, a atual a meio (ou pelas datas), as seguintes vazias
+  const fill = (k) => {
+    if (fromTimeline(p)) { const f = tlFill(p, k); if (f != null) return f; }
+    if (p.stage && ci >= 0) { const i = list.findIndex(([x]) => x === k); if (i < ci) return 1; if (i > ci) return 0; if (hasDates && SPAN[k]) { const [a, b] = SPAN[k]; return Math.max(0.08, Math.min(0.95, (pct - a) / (b - a))); } return 0.5; }
+    if (!hasDates || !SPAN[k]) return 0; const [a, b] = SPAN[k]; return Math.max(0, Math.min(1, (pct - a) / (b - a)));
+  };
+  return `<div class="proj-strip" role="navigation" aria-label="Etapas do projeto"><div class="ps-in">
+    <div class="ps-head"><a class="ps-name" href="${base}" title="Visão geral">${esc(p.name)}</a>${extra}</div>
+    <div class="ps-steps" role="tablist" style="--n:${list.length}">${list.map(([k, l], i) => { const f = fill(k); return `<button type="button" role="tab" class="ps-step ${k === cur ? 'now' : ''} ${f >= 1 ? 'done' : ''}" aria-selected="${s === k}" data-phase="${k}" title="${s === k ? 'Ver todas as fases' : `Ver só ${esc(l.toLowerCase())}`}">
+        <span class="ps-l"><span class="ps-n">${f >= 1 ? '✓' : i + 1}</span>${esc(l)}${k === cur ? '<i class="phase-now" title="O projeto está nesta fase"></i>' : ''}</span>
+        <span class="ps-bar"><i style="width:${Math.round(f * 100)}%"></i></span></button>`; }).join('')}${p.canEdit !== false ? `<button type="button" class="ps-add" data-stages title="${more.length ? `Juntar ${esc(more.map(([, l]) => l.toLowerCase()).join(', '))}` : 'Etapas do projeto'}" aria-label="Etapas do projeto">${more.length ? `+ ${esc(more[0][1])}` : ICON.more || '⋯'}</button>` : ''}</div>
+  </div></div>`;
+}
+export function bindStrip(root, p, { onChange, onPhase, items }) {
+  root.querySelectorAll('.proj-strip [data-phase]').forEach((b) => b.addEventListener('click', () => { const k = b.dataset.phase; setSelPhase(p, k !== 'all' && selPhase(p) === k ? 'all' : k); (onPhase || onChange)(); }));
+  root.querySelector('.proj-strip [data-phaseorg]')?.addEventListener('click', () => organizePhases(p, items(), onChange));
+  root.querySelector('.proj-strip [data-stages]')?.addEventListener('click', () => stagesMenu(p, onPhase || onChange));
+  root.querySelector('.proj-strip [data-stage]')?.addEventListener('change', async (e) => {
+    const stage = e.target.value || null;
+    const { error } = await sb.from('projects').update({ stage }).eq('id', p.id);
+    if (error) return toast(error.message);
+    p.stage = stage; toast(stage ? `O projeto está em ${phaseLabel(stage).toLowerCase()}.` : 'A fase passa a vir das datas do projeto.'); onChange();
+  });
+}
+
+export function phaseBar(p) {
+  const s = selPhase(p); const cur = currentPhase(p);
+  return `<nav class="phase-bar" aria-label="Fases do projeto">
+    <div class="phase-seg" role="tablist">${[['all', 'Tudo'], ...PHASES].map(([k, l]) => `<button type="button" role="tab" aria-selected="${s === k}" data-phase="${k}">${esc(l)}${k === cur ? '<i class="phase-now" title="O projeto está nesta fase"></i>' : ''}</button>`).join('')}</div>
+    <button type="button" class="link-btn small phase-org" data-phaseorg>Organizar fases</button>
+  </nav>`;
+}
+export function bindPhaseBar(root, p, { onChange, items }) {
+  root.querySelectorAll('[data-phase]').forEach((b) => b.addEventListener('click', () => { setSelPhase(p, b.dataset.phase); onChange(); }));
+  root.querySelector('[data-phaseorg]')?.addEventListener('click', () => organizePhases(p, items(), onChange));
+}
+
+// items: [{ key, label, kind, group }]
+export function organizePhases(p, items, after) {
+  const cur = Object.fromEntries(items.map((it) => [it.key, [...phasesOf(p, it.key, it.kind)]]));
+  const groups = [...new Set(items.map((it) => it.group))];
+  const m = modal(`<h2>Organizar fases</h2><p class="muted small">Escolhe em que fases aparece cada página e ferramenta. Vale para toda a equipa.</p>
+    <div class="phase-org-t" style="--n:${activePhases(p).length}"><div class="pot-h"><span></span>${activePhases(p).map(([, l]) => `<span>${esc(l)}</span>`).join('')}</div>
+    ${groups.map((g) => `<p class="pot-g">${esc(g)}</p>${items.filter((it) => it.group === g).map((it) => `<div class="pot-r" data-key="${esc(it.key)}"><span>${esc(it.label)}</span>${activePhases(p).map(([k]) => `<label><input type="checkbox" value="${k}" ${cur[it.key].includes(k) ? 'checked' : ''} aria-label="${esc(it.label)} em ${esc(phaseLabel(k))}"></label>`).join('')}</div>`).join('')}`).join('')}</div>
+    <div class="row between wrap-gap"><button type="button" class="link-btn small" data-reset>Repor o que vem por defeito</button><div class="row"><button type="button" class="btn ghost" data-close>Cancelar</button><button type="button" class="btn primary" data-save>Guardar</button></div></div>`, { wide: true });
+  m.el.querySelector('[data-reset]').addEventListener('click', async () => { await save(p, null); m.close(); after(); });
+  m.el.querySelector('[data-save]').addEventListener('click', async () => {
+    const phases = { ...(p.layouts?.phases || {}) };
+    m.el.querySelectorAll('[data-key]').forEach((r) => {
+      const it = items.find((x) => x.key === r.dataset.key); const v = [...r.querySelectorAll('input:checked')].map((i) => i.value);
+      const off = cur[it.key].filter((k) => !stagesOn(p).includes(k)); // fases de etapas desligadas ficam como estavam
+      const val = v.length || off.length ? [...v, ...off] : ALL; // só se guarda o que é diferente do que vem por defeito
+      if (val.join() === defOf(it.key, it.kind).join()) delete phases[it.key]; else phases[it.key] = val;
+    });
+    if (await save(p, phases)) { m.close(); toast('Fases guardadas.'); after(); }
+  });
+}
+export async function setToolPhase(p, boardId, phase) {
+  const phases = { ...(p.layouts?.phases || {}), [`tool:${boardId}`]: [phase] };
+  return save(p, phases);
+}
+async function save(p, phases) {
+  const layouts = { ...(p.layouts || {}) };
+  if (phases) layouts.phases = phases; else delete layouts.phases;
+  const { error } = await sb.from('projects').update({ layouts }).eq('id', p.id);
+  if (error) { toast('Não foi possível guardar: ' + error.message); return false; }
+  p.layouts = layouts; return true;
+}

@@ -8,6 +8,7 @@ import { sb, esc, toast, modal, ICON, KINDS } from './lib.js';
 export const MODULES = {
   orcamento: { label: 'Orçamento', icon: 'money', desc: 'Tabela de custos por secções, comparada com o orçamento geral. Só aparece a quem tem acesso.' },
   seguimento: { label: 'Seguimento', icon: 'music', desc: 'Parte a música ou o filme em secções, cada uma com décors, atores, figurantes e planos. Pre-vis e música no topo.' },
+  tratamento: { label: 'Tratamento', icon: 'note', desc: 'O tratamento ou dossiê do projeto em PDF, lido página a página, com versões.' },
   guiao: { label: 'Guião', icon: 'note', desc: 'Importa o guião (PDF, Final Draft, Fountain) e separa cenas, personagens e décors sozinho.' },
   cenas: { label: 'Cenas', icon: 'list', desc: 'Breakdown cena a cena, com planos, tarefas e notas.' },
   elenco: { label: 'Atores e figurantes', scriptLabel: 'Personagens', icon: 'team', desc: 'Uma página por pessoa: papel, contacto, notas e onde aparece.' },
@@ -17,20 +18,21 @@ export const MODULES = {
   planificacao: { label: 'Planificação', icon: 'board', desc: 'Lista de planos para a rodagem.' },
   equipamento: { label: 'Equipamento', icon: 'camera', desc: 'Câmaras, objetivas, luzes, frames, maquinaria e elétrico do projeto, com especificações, quantidades e rental. Os mapas de luz usam esta lista.' },
   aderecos: { label: 'Adereços', icon: 'prop', desc: 'Lista e grelha de adereços com fotos, estado, custo, fornecedor e pacotes de aluguer.' },
+  figurino: { label: 'Figurino', icon: 'hanger', desc: 'Uma página por ator: moodboard, medidas, figurinos com fotos de referência e provas de guarda-roupa.' },
   marketing: { label: 'Marketing', icon: 'megaphone', desc: 'Calendário de lançamentos e conteúdos (videoclipes, teasers, TikToks, capas…), com responsável, estado e página própria para cada um.' },
   tarefas: { label: 'Tarefas', icon: 'task', desc: 'Tarefas do projeto, por pessoa e departamento.' },
 };
 // ordem no menu
-export const ORDER = ['orcamento', 'seguimento', 'guiao', 'cenas', 'elenco', 'decors', 'storyboard', 'shotlist', 'planificacao', 'equipamento', 'aderecos', 'marketing', 'tarefas'];
+export const ORDER = ['orcamento', 'tratamento', 'seguimento', 'guiao', 'cenas', 'elenco', 'decors', 'storyboard', 'shotlist', 'planificacao', 'equipamento', 'aderecos', 'figurino', 'marketing', 'tarefas'];
 // o seguimento e as cenas usam a mesma lista de secções/cenas: um projeto usa um ou outro
 const SCRIPT = ['guiao', 'cenas', 'planificacao'];
 
 export const TEMPLATES = {
-  videoclipe: ['orcamento', 'seguimento', 'elenco', 'decors', 'storyboard', 'shotlist', 'equipamento', 'aderecos', 'tarefas'],
-  ficcao: ['orcamento', 'guiao', 'cenas', 'elenco', 'decors', 'storyboard', 'planificacao', 'equipamento', 'aderecos', 'tarefas'],
-  campanha: ['orcamento', 'seguimento', 'elenco', 'decors', 'storyboard', 'shotlist', 'equipamento', 'aderecos', 'tarefas'],
+  videoclipe: ['orcamento', 'seguimento', 'elenco', 'decors', 'storyboard', 'shotlist', 'equipamento', 'aderecos', 'figurino', 'tarefas'],
+  ficcao: ['orcamento', 'guiao', 'cenas', 'elenco', 'decors', 'storyboard', 'planificacao', 'equipamento', 'aderecos', 'figurino', 'tarefas'],
+  campanha: ['orcamento', 'seguimento', 'elenco', 'decors', 'storyboard', 'shotlist', 'equipamento', 'aderecos', 'figurino', 'tarefas'],
   branded: ['orcamento', 'seguimento', 'decors', 'shotlist', 'equipamento', 'aderecos', 'tarefas'],
-  documentario: ['orcamento', 'elenco', 'decors', 'equipamento', 'tarefas'],
+  documentario: ['orcamento', 'tratamento', 'elenco', 'decors', 'equipamento', 'tarefas'],
   album: ['orcamento', 'marketing', 'tarefas'],
   default: ['orcamento', 'tarefas'],
 };
@@ -79,16 +81,25 @@ export async function autoModules(p) {
   const c = async (t, extra) => { let q = sb.from(t).select('id', { count: 'exact', head: true }).eq('project_id', p.id); if (extra) q = extra(q); const { count } = await q; return count || 0; };
   const [loc, ch, sh, pr, sc, ge] = await Promise.all([c('locations'), c('characters'), c('shots'), c('props', (q) => q.eq('removed', false)), c('scenes'), c('gear')]);
   const want = [];
-  if (loc) want.push('decors'); if (ch) want.push('elenco'); if (sh) want.push('storyboard', ...(scriptMode(p) ? [] : ['shotlist'])); if (pr) want.push('aderecos'); if (ge) want.push('equipamento');
+  if (loc) want.push('decors'); if (ch) want.push('elenco', 'figurino'); if (sh) want.push('storyboard', ...(scriptMode(p) ? [] : ['shotlist'])); if (pr) want.push('aderecos'); if (ge) want.push('equipamento');
   if (sc && !hasMod(p, 'seguimento') && !hasMod(p, 'cenas')) want.push(scriptMode(p) ? 'cenas' : 'seguimento');
   if (want.length) await ensureModules(p, want, { user: false });
 }
+
+// páginas que ainda se podem juntar a este projeto (sem as que chocam com o seguimento/cenas)
+export function addableModules(p) {
+  if (p.is_central) return [];
+  const s = state(p);
+  return ORDER.filter((k) => !s.list.includes(k) && k !== 'cenas' && !(k === 'seguimento' && SCRIPT.some((x) => s.list.includes(x))) && !(SCRIPT.includes(k) && s.list.includes('seguimento')));
+}
+const normQ = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
 // "+" ao lado do nome do projeto
 export function modulesModal(p) {
   const draw = (m) => {
     const s = state(p);
-    m.el.querySelector('[data-mods]').innerHTML = ORDER.map((k) => {
+    const q = normQ(m.el.querySelector('[data-modq]')?.value);
+    m.el.querySelector('[data-mods]').innerHTML = ORDER.filter((k) => !q || normQ(`${modLabel(p, k)} ${MODULES[k].desc}`).includes(q)).map((k) => {
       const on = s.list.includes(k);
       const noScript = k === 'cenas' && !p._hasScript;
       const clash = noScript || (!on && ((k === 'seguimento' && SCRIPT.some((x) => s.list.includes(x))) || (SCRIPT.includes(k) && s.list.includes('seguimento'))));
@@ -97,13 +108,16 @@ export function modulesModal(p) {
         <span class="mod-t"><strong>${esc(modLabel(p, k))}</strong><small>${esc(noScript ? 'Fica disponível depois de importares um guião. Junta a página Guião e importa-o: as cenas aparecem sozinhas.' : clash ? (k === 'seguimento' ? 'Este projeto usa cenas de guião. Tira Guião, Cenas e Planificação para usar o seguimento.' : 'Este projeto usa o seguimento. Tira-o para trabalhar com guião e cenas.') : MODULES[k].desc)}</small></span>
         ${noScript ? '<span class="perm-tag">Precisa de guião</span>' : on ? `<button type="button" class="btn ghost" data-off="${k}">Tirar</button>` : `<button type="button" class="btn ${clash ? 'ghost' : 'primary'}" data-on="${k}" ${clash ? 'disabled' : ''}>${ICON.plus} Juntar</button>`}
       </div>`;
-    }).join('');
+    }).join('') || '<p class="muted small">Nenhuma página com esse nome.</p>';
     m.el.querySelectorAll('[data-on]').forEach((b) => b.addEventListener('click', async () => { await ensureModules(p, [b.dataset.on], { quiet: true }); draw(m); }));
     m.el.querySelectorAll('[data-off]').forEach((b) => b.addEventListener('click', async () => { const s2 = state(p); await persist(p, s2.list.filter((k) => k !== b.dataset.off), [...s2.removed, b.dataset.off]); draw(m); }));
   };
   const m = modal(`<h2>Páginas do projeto</h2><p class="muted small">Visão geral, Equipa e Detalhes existem sempre. Tirar uma página só a esconde do menu: o que lá estava não se perde.</p>
+    <input type="search" class="mod-q" data-modq placeholder="Procurar página (ex: marketing, figurino, guião)…" aria-label="Procurar página" autocomplete="off">
     <div class="mod-list" data-mods></div>
     <div class="row between wrap-gap"><button type="button" class="link-btn small" data-tpl>Repor o modelo de ${esc((KINDS[p.kind] || p.kind).toLowerCase())}</button><button type="button" class="btn primary" data-close>Feito</button></div>`, { wide: true });
+  m.el.querySelector('[data-modq]').addEventListener('input', () => draw(m));
+  setTimeout(() => m.el.querySelector('[data-modq]')?.focus(), 30);
   m.el.querySelector('[data-tpl]').addEventListener('click', async () => { await persist(p, TEMPLATES[p.kind] || TEMPLATES.default, []); draw(m); });
   draw(m);
 }

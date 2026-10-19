@@ -1,4 +1,4 @@
-import { DB_SCHEMA, sb, BUCKET, esc, signedUrls, uploadImage, toast, modal, confirmBox, ICON } from './lib.js';
+import { DB_SCHEMA, sb, BUCKET, esc, signedUrl, signedUrls, uploadImage, toast, modal, confirmBox, ICON } from './lib.js';
 import { ytId } from './music.js';
 
 // Board infinito à maneira do Milanote: cada cartão é uma linha própria na base de dados,
@@ -10,6 +10,21 @@ const SIZE = { note: [280, 180], title: [520, 72], palette: [320, 150], list: [2
 // ---------- formatação de texto (notas, títulos, listas) ----------
 // Alinhamento, letra e tamanho valem para o cartão inteiro. Negrito, itálico, sublinhado e cor valem para o
 // texto selecionado (a escrever) ou para o cartão inteiro (sem seleção). Fontes grátis do Google Fonts.
+// cartão copiado com Ctrl+C (fica entre boards enquanto a página estiver aberta)
+let CLIP = null;
+async function copyToSystem(it) {
+  const mark = CLIP.mark;
+  try {
+    if (it.kind === 'image' && it.data?.path && window.ClipboardItem && navigator.clipboard?.write) {
+      const url = await signedUrl(it.data.path);
+      const png = await new Promise((res, rej) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => { const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; c.getContext('2d').drawImage(im, 0, 0); c.toBlob((b) => (b ? res(b) : rej()), 'image/png'); }; im.onerror = rej; im.src = url; });
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': png, 'text/plain': new Blob([mark], { type: 'text/plain' }) })]);
+      return;
+    }
+    await navigator.clipboard.writeText(mark);
+  } catch { try { await navigator.clipboard.writeText(mark); } catch { /* sem acesso: o Ctrl+V dentro do Studio continua a funcionar pelo CLIP */ } }
+}
+
 export const FONTS = [['', 'Predefinida'], ['Instrument Sans', 'Instrument Sans'], ['Inter', 'Inter'], ['Montserrat', 'Montserrat'], ['Archivo Black', 'Archivo Black'], ['Bebas Neue', 'Bebas Neue'],
   ['Playfair Display', 'Playfair Display'], ['DM Serif Display', 'DM Serif Display'], ['Lora', 'Lora'], ['Instrument Serif', 'Instrument Serif'], ['Space Mono', 'Space Mono'], ['Courier Prime', 'Courier Prime'], ['Caveat', 'Caveat (à mão)']];
 const SIZES = [['s', 'Pequeno', 0.8], ['m', 'Normal', 1], ['l', 'Grande', 1.35], ['xl', 'Muito grande', 1.8]];
@@ -19,7 +34,7 @@ let fontsLoaded = false;
 function loadFonts() {
   if (fontsLoaded) return; fontsLoaded = true;
   const l = document.createElement('link'); l.rel = 'stylesheet';
-  l.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Montserrat:ital,wght@0,400;0,700;1,400&family=Archivo+Black&family=Bebas+Neue&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Serif+Display:ital@0;1&family=Lora:ital,wght@0,400;0,700;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Caveat:wght@400;700&display=swap';
+  l.href = 'https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;600;700&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;700&family=Montserrat:ital,wght@0,400;0,700;1,400&family=Archivo+Black&family=Bebas+Neue&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Serif+Display:ital@0;1&family=Lora:ital,wght@0,400;0,700;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Caveat:wght@400;700&display=swap';
   document.head.append(l);
 }
 // só deixa passar formatação simples (nada de scripts, links ou estilos estranhos)
@@ -375,14 +390,39 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
 
   // ponto onde a ferramenta foi largada (arrastar da barra); fica à espera do primeiro cartão criado
   let dropAt = null;
+  // juntar um board: ligar um que já existe no projeto (moodboards de figurino e de décors, boards de outras ferramentas) ou criar um novo
+  async function newChild() {
+    const { data: b, error } = await sb.from('boards').insert({ project_id: projectId, parent_id: boardId, title: 'Novo board' }).select().single();
+    if (error) return toast(error.message);
+    return create('board', null, { board_id: b.id, title: 'Novo board' });
+  }
+  async function boardMenu() {
+    const { data: all } = await sb.from('boards').select('id, title, kind, parent_id, data').eq('project_id', projectId).in('kind', ['board', 'wrd']).order('title');
+    const here = new Set([...items.values()].filter((x) => x.kind === 'board').map((x) => x.data?.board_id));
+    // não deixa ligar o próprio board nem os de cima (dava uma volta sem fim)
+    const up = new Set([boardId]); let cur = (all || []).find((b) => b.id === boardId);
+    while (cur?.parent_id) { up.add(cur.parent_id); cur = (all || []).find((b) => b.id === cur.parent_id); }
+    const list = (all || []).filter((b) => !up.has(b.id));
+    const label = (b) => (b.kind === 'wrd' ? (b.data?.location_id ? 'Moodboard de décor' : 'Moodboard de figurino') : b.parent_id ? 'Board dentro de outro' : 'Board');
+    const m = modal(`<h2>Juntar um board</h2>
+      <button type="button" class="btn primary bm-new" data-new>${ICON.plus} Criar um board novo aqui</button>
+      <div class="field"><label for="bmq">Ou liga um que já existe</label><input id="bmq" type="search" placeholder="Procurar (ex: Moodboard, figurino, nome do ator…)" autocomplete="off"></div>
+      <ul class="bm-list" data-list></ul>
+      <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button></div>`);
+    const draw = () => {
+      const q = m.el.querySelector('#bmq').value.trim().toLowerCase();
+      const xs = list.filter((b) => !q || `${b.title} ${label(b)}`.toLowerCase().includes(q));
+      m.el.querySelector('[data-list]').innerHTML = xs.length ? xs.map((b) => `<li><button type="button" data-b="${b.id}" ${here.has(b.id) ? 'disabled' : ''}><b>${esc(b.title || 'Board')}</b><small class="muted">${esc(label(b))}${here.has(b.id) ? ' · já está neste board' : ''}</small></button></li>`).join('') : '<li class="muted small">Nenhum board com esse nome.</li>';
+      m.el.querySelectorAll('[data-b]').forEach((x) => x.addEventListener('click', () => { const b = list.find((y) => y.id === x.dataset.b); m.close(); create('board', null, { board_id: b.id, title: b.title || 'Board', link: true }); }));
+    };
+    m.el.querySelector('#bmq').addEventListener('input', draw);
+    m.el.querySelector('[data-new]').addEventListener('click', () => { m.close(); newChild(); });
+    draw(); setTimeout(() => m.el.querySelector('#bmq')?.focus(), 50);
+  }
   async function add(kind, opts = {}) {
     dropAt = opts.at || null;
-    if (kind === 'image') return pickImages();
-    if (kind === 'board') {
-      const { data: b, error } = await sb.from('boards').insert({ project_id: projectId, parent_id: boardId, title: 'Novo board' }).select().single();
-      if (error) return toast(error.message);
-      return create('board', null, { board_id: b.id, title: 'Novo board' });
-    }
+    if (kind === 'image') return imageMenu();
+    if (kind === 'board') return boardMenu();
     if ((kind === 'video' || kind === 'audio') && !opts.fresh) return pickMedia(kind);
     if (kind === 'video') {
       const m = modal(`<h2>Pre-vis ou vídeo</h2><p class="muted small">Toca dentro do board.</p><form class="stack"><div class="field"><label for="vurl">Link do YouTube</label><input id="vurl" type="url" placeholder="https://youtu.be/…" required></div><div class="field"><label for="vtit">Nome</label><input id="vtit" value="Pre-vis"></div><div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Juntar</button></div></form>`);
@@ -414,6 +454,77 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     if (it && (kind === 'note' || kind === 'title')) startEdit(it.id, world.querySelector(`[data-id="${it.id}"] .txt`));
   }
 
+  // capa de um board: carregar do computador ou escolher uma das imagens desse board (ou voltar à automática)
+  async function coverMenu(it) {
+    const d = it.data || {};
+    const m = modal(`<h2>Capa do board</h2>
+      <button type="button" class="btn primary bm-new" data-up>${ICON.open} Carregar do computador</button>
+      <p class="muted small">Ou escolhe uma imagem de dentro de "${esc(d.title || 'Board')}":</p>
+      <div class="im-grid" data-grid><p class="muted small">A carregar…</p></div>
+      <div class="row between"><button type="button" class="btn ghost" data-auto ${d.cover ? '' : 'disabled'}>Capa automática (a primeira imagem)</button><button type="button" class="btn ghost" data-close>Fechar</button></div>`, { wide: true });
+    const setCover = (path) => { it.data = { ...it.data, cover: path || null }; if (!path) delete it.data.cover; save(it, ['data']); cardEl(it); toast(path ? 'Capa mudada.' : 'Capa automática.'); };
+    m.el.querySelector('[data-up]').addEventListener('click', () => {
+      m.close();
+      const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+      inp.onchange = async () => { try { toast('A enviar a capa…'); const up = await uploadImage(projectId, 'board', inp.files[0]); urls = { ...urls, ...(await signedUrls([up.path])) }; setCover(up.path); } catch (e) { toast(e.message || String(e)); } };
+      inp.click();
+    });
+    m.el.querySelector('[data-auto]').addEventListener('click', () => { m.close(); setCover(null); });
+    const { data: imgs } = d.board_id ? await sb.from('board_items').select('data').eq('board_id', d.board_id).eq('kind', 'image').order('z') : { data: [] };
+    const paths = [...new Set((imgs || []).map((x) => x.data?.path).filter(Boolean))];
+    const u = await signedUrls(paths); urls = { ...urls, ...u };
+    const grid = m.el.querySelector('[data-grid]');
+    grid.innerHTML = paths.length ? paths.map((pth) => `<button type="button" class="im-t ${d.cover === pth ? 'on' : ''}" data-p="${esc(pth)}">${u[pth] ? `<img src="${esc(u[pth])}" alt="" loading="lazy">` : ''}</button>`).join('') : '<p class="muted small">Este board ainda não tem imagens. Carrega uma do computador.</p>';
+    grid.querySelectorAll('[data-p]').forEach((b) => b.addEventListener('click', () => { m.close(); setCover(b.dataset.p); }));
+  }
+  // juntar imagens: do computador, ou uma que já está no projeto (boards, storyboard, elenco, décors, adereços, figurino)
+  async function imageMenu() {
+    const at0 = dropAt;
+    const m = modal(`<h2>Juntar imagem</h2>
+      <button type="button" class="btn primary bm-new" data-up>${ICON.open} Carregar do computador</button>
+      <div class="field"><label for="imq">Ou escolhe uma imagem do projeto</label><input id="imq" type="search" placeholder="Procurar (ex: storyboard, figurino, nome do décor…)" autocomplete="off"></div>
+      <div class="im-grid" data-grid><p class="muted small">A juntar as imagens do projeto…</p></div>
+      <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button type="button" class="btn primary" data-ok disabled>Juntar</button></div>`, { wide: true });
+    m.el.querySelector('[data-up]').addEventListener('click', () => { m.close(); dropAt = at0; pickImages(); });
+    const [bi, sh, ch, lo, pr, bs] = await Promise.all([
+      sb.from('board_items').select('board_id, data').eq('project_id', projectId).eq('kind', 'image').limit(400),
+      sb.from('shots').select('code, image_path').eq('project_id', projectId).not('image_path', 'is', null),
+      sb.from('characters').select('name, info').eq('project_id', projectId),
+      sb.from('locations').select('name, photos').eq('project_id', projectId),
+      sb.from('props').select('name, refs').eq('project_id', projectId),
+      sb.from('boards').select('id, title').eq('project_id', projectId),
+    ]);
+    const bt = new Map((bs.data || []).map((b) => [b.id, b.title]));
+    const out = []; const seen = new Set();
+    const put = (path, label, shared = true) => { if (!path || seen.has(path)) return; seen.add(path); out.push({ path, label, shared }); };
+    (bi.data || []).forEach((x) => put(x.data?.path, `Board · ${bt.get(x.board_id) || ''}`, false));
+    (sh.data || []).forEach((x) => put(x.image_path, `Storyboard · plano ${x.code || ''}`));
+    (ch.data || []).forEach((c) => { put(c.info?.photo, `Elenco · ${c.name}`); (c.info?.wardrobe?.costumes || []).forEach((k) => (k.photos || []).forEach((ph) => put(ph.path, `Figurino · ${c.name} · ${k.name || ''}`))); (c.info?.wardrobe?.fittings || []).forEach((ph) => put(ph.path, `Prova de guarda-roupa · ${c.name}`)); });
+    (lo.data || []).forEach((l) => (l.photos || []).forEach((ph) => put(ph.path, `Décor · ${l.name}`)));
+    (pr.data || []).forEach((x) => (x.refs || []).forEach((ph) => put(ph.path, `Adereço · ${x.name}`)));
+    const u = await signedUrls(out.map((x) => x.path));
+    urls = { ...urls, ...u };
+    const chosen = new Set();
+    const grid = m.el.querySelector('[data-grid]'); const ok = m.el.querySelector('[data-ok]');
+    const draw = () => {
+      const q = m.el.querySelector('#imq').value.trim().toLowerCase();
+      const xs = out.filter((x) => u[x.path] && (!q || x.label.toLowerCase().includes(q)));
+      grid.innerHTML = xs.length ? xs.map((x) => `<button type="button" class="im-t ${chosen.has(x.path) ? 'on' : ''}" data-p="${esc(x.path)}" title="${esc(x.label)}"><img src="${esc(u[x.path])}" alt="" loading="lazy"><small>${esc(x.label)}</small></button>`).join('') : `<p class="muted small">${out.length ? 'Nenhuma imagem com esse nome.' : 'Ainda não há imagens no projeto.'}</p>`;
+      grid.querySelectorAll('[data-p]').forEach((b) => b.addEventListener('click', () => { const pth = b.dataset.p; if (chosen.has(pth)) chosen.delete(pth); else chosen.add(pth); b.classList.toggle('on'); ok.disabled = !chosen.size; ok.textContent = chosen.size > 1 ? `Juntar ${chosen.size} imagens` : 'Juntar'; }));
+    };
+    m.el.querySelector('#imq').addEventListener('input', draw);
+    ok.addEventListener('click', async () => {
+      const picks = out.filter((x) => chosen.has(x.path)); m.close();
+      let off = 0;
+      for (const x of picks) {
+        const dim = await new Promise((res) => { const im = new Image(); im.onload = () => res({ w: im.naturalWidth || 320, h: im.naturalHeight || 240 }); im.onerror = () => res({ w: 320, h: 240 }); im.src = u[x.path]; });
+        const pt = at0 ? { x: at0.x + off, y: at0.y + off } : null;
+        await create('image', pt, { path: x.path, w: dim.w, h: dim.h, ...(x.shared ? { shared: true } : {}) }, [320, Math.round(320 * (dim.h / dim.w))]);
+        off += 30;
+      }
+    });
+    draw(); setTimeout(() => m.el.querySelector('#imq')?.focus(), 50);
+  }
   function pickImages() {
     const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = true;
     inp.onchange = () => addImages([...inp.files]);
@@ -468,7 +579,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     }
     it.data = d; save(it, ['data']);
     if (f === 'item' || it.kind === 'board') cardEl(it);
-    if (it.kind === 'board' && f === 'title' && d.board_id) sb.from('boards').update({ title: text || 'Board' }).eq('id', d.board_id).then(() => {});
+    if (it.kind === 'board' && f === 'title' && d.board_id && !d.link) sb.from('boards').update({ title: text || 'Board' }).eq('id', d.board_id).then(() => {});
   }
 
   // ---------- botões dentro dos cartões ----------
@@ -499,13 +610,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
         inp.click(); return;
       }
       case 'openboard': return d.board_id && onOpenBoard(d.board_id);
-      case 'cover': {
-        const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
-        inp.onchange = async () => {
-          try { toast('A enviar a capa…'); const up = await uploadImage(projectId, 'board', inp.files[0]); urls = { ...urls, ...(await signedUrls([up.path])) }; it.data = { ...it.data, cover: up.path }; save(it, ['data']); cardEl(it); toast('Capa mudada.'); } catch (e) { toast(e.message || String(e)); }
-        };
-        inp.click(); return;
-      }
+      case 'cover': return coverMenu(it);
       case 'link': case 'media': return;
       case 'play': st.playing = it.id; cardEl(it); return;
       default: return;
@@ -611,6 +716,15 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   stage.addEventListener('drop', (e) => { e.preventDefault(); root.querySelector('.drop-hint').hidden = true; addImages([...e.dataTransfer.files], toWorld(e.clientX, e.clientY)); });
   const onPaste = (e) => {
     if (st.editing || /INPUT|TEXTAREA/.test(document.activeElement?.tagName) || document.querySelector('#modal.open')) return;
+    // cartão copiado com Ctrl+C (neste board ou noutro): cola uma cópia igual, com a mesma imagem
+    const mark = e.clipboardData?.getData('text/plain')?.trim();
+    if (CLIP && mark === CLIP.mark) {
+      e.preventDefault(); CLIP.n = (CLIP.n || 0) + 1;
+      const same = CLIP.board === boardId; const off = same ? 30 * CLIP.n : 0;
+      const r = stage.getBoundingClientRect(); const c = toWorld(r.left + r.width / 2, r.top + r.height / 2);
+      const it = CLIP.item; create(it.kind, same ? { x: it.x + it.w / 2 + off, y: it.y + it.h / 2 + off } : c, JSON.parse(JSON.stringify(it.data)), [it.w, it.h]);
+      return;
+    }
     const files = [...(e.clipboardData?.files || [])];
     if (files.length) { e.preventDefault(); addImages(files); return; }
     const t = e.clipboardData?.getData('text/plain')?.trim();
@@ -634,13 +748,20 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     if (mod && (e.key === '=' || e.key === '+')) { e.preventDefault(); zoomBy(1.2); }
     else if (mod && e.key === '-') { e.preventDefault(); zoomBy(1 / 1.2); }
     else if (mod && e.key === '0') { e.preventDefault(); fit(); }
-    else if (mod && e.key.toLowerCase() === 'd' && st.sel) {
+    else if (mod && e.key.toLowerCase() === 'c' && st.sel && !st.editing && !String(window.getSelection?.() || '')) {
+      // copiar o cartão: fica pronto para colar (Ctrl+V) aqui ou noutro board; uma imagem vai também
+      // para a área de transferência do computador, para a colares num plano, noutra app, etc.
+      const it = items.get(st.sel); if (!it || it.kind === 'board') return;
+      e.preventDefault();
+      CLIP = { mark: `portal-card:${Date.now().toString(36)}`, item: JSON.parse(JSON.stringify({ kind: it.kind, data: it.data, x: it.x, y: it.y, w: it.w, h: it.h })), board: boardId, n: 0 };
+      copyToSystem(it).then(() => toast(it.kind === 'image' ? 'Imagem copiada.' : 'Copiado. Cola com Ctrl+V.'));
+    } else if (mod && e.key.toLowerCase() === 'd' && st.sel) {
       e.preventDefault(); const it = items.get(st.sel); if (!it || it.kind === 'board') return;
       create(it.kind, { x: it.x + it.w / 2 + 30, y: it.y + it.h / 2 + 30 }, JSON.parse(JSON.stringify(it.data)), [it.w, it.h]);
     } else if ((e.key === 'Delete' || e.key === 'Backspace') && st.sel) {
       // apaga o cartão selecionado, mesmo que o foco tenha ficado num botão da barra
       e.preventDefault(); const it = items.get(st.sel); if (!it) return;
-      if (it.kind === 'board' && !(await confirmBox(`Apagar o board "${it.data?.title || 'Board'}" e tudo o que tem dentro?`, 'Apagar'))) return;
+      if (it.kind === 'board' && !it.data?.link && !(await confirmBox(`Apagar o board "${it.data?.title || 'Board'}" e tudo o que tem dentro?`, 'Apagar'))) return;
       await remove(it);
     } else if (e.key === 'Escape') {
       if (st.sel) select(null); else onUp && onUp();
@@ -656,7 +777,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     items.delete(it.id); world.querySelector(`[data-id="${it.id}"]`)?.remove(); st.sel = null; placeBar();
     const { error } = await sb.from('board_items').delete().eq('id', it.id);
     if (error) return toast(error.message);
-    if (it.kind === 'board' && it.data?.board_id) await sb.from('boards').delete().eq('id', it.data.board_id);
+    if (it.kind === 'board' && it.data?.board_id && !it.data.link) await sb.from('boards').delete().eq('id', it.data.board_id);
     // imagens e áudio: o ficheiro só é apagado ao sair do board, para o Ctrl+Z poder trazer o cartão de volta
     if ((it.kind === 'image' || it.kind === 'audio') && it.data?.path) { pending.set(it.id, it); toast('Apagado. Ctrl+Z para desfazer.'); return; }
     toast('Apagado.');
@@ -665,6 +786,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   // apaga o ficheiro de uma imagem/áudio que saiu do board (se mais nada no projeto o usar)
   async function cleanupFiles(it) {
     const path = it.data?.path; if (!path) return;
+    if (it.kind === 'image' && it.data.shared) return; // vem do storyboard, do elenco, dos décors…: o ficheiro é deles
     if (it.kind === 'image') { const { count } = await sb.from('board_items').select('id', { count: 'exact', head: true }).eq('project_id', projectId).eq('data->>path', path); if (!count) await sb.storage.from(BUCKET).remove([path]); return; }
     if (it.kind !== 'audio' || it.data.shared) return;
     const [{ count }, { data: pr }, { data: tools }] = await Promise.all([

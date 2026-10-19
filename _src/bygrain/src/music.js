@@ -1,5 +1,9 @@
+import { onWrite } from './undo.js';
+import { moodboardPanel, bindMoodboard } from './moodboard.js';
+import { placeProps } from './sceneinfo.js';
+import { geoPanel } from './placegeo.js';
 import { sb, BUCKET, esc, toast, confirmBox, modal, ICON, signedUrls, signedUrl, uploadImage } from './lib.js';
-import { entMode, entUrls, modeToggle, bindMode, entItems, photoField, bindPhoto, placePhotos, bindPlacePhotos } from './entview.js';
+import { entMode, entUrls, modeToggle, bindMode, entItems, photoField, bindPhoto, bindEdits, placePhotos, bindPlacePhotos } from './entview.js';
 import { shotCard, bindShots, shotViewer } from './fiction.js';
 import { mountTasks } from './tasks.js';
 import { mountLayout, fullscreenButton } from './layout.js';
@@ -21,7 +25,17 @@ export function parseT(v) {
 }
 export const fmtT = (n) => { if (n == null) return ''; n = Math.round(n); const m = Math.floor(n / 60), s = n % 60; return `${m}:${String(s).padStart(2, '0')}`; };
 
+// os dados da página ficam em memória enquanto ninguém grava nestas tabelas (navegar entre páginas fica imediato)
+const memo = new Map();
+onWrite((t) => { if (['scenes', 'characters', 'locations', 'shots', 'boards', 'shot_groups'].includes(t)) memo.clear(); });
 async function load(pid) {
+  const m = memo.get(pid);
+  if (m && Date.now() - m.t < 45000) return m.f;
+  const f = await loadNow(pid);
+  memo.set(pid, { t: Date.now(), f });
+  return f;
+}
+async function loadNow(pid) {
   const [sc, ch, lo, sh, gr] = await Promise.all([
     sb.from('scenes').select('*').eq('project_id', pid).order('position'),
     sb.from('characters').select('*').eq('project_id', pid).order('position'),
@@ -280,7 +294,7 @@ async function section(main, p, f, sid, base, cleanup) {
     <section class="panel"><h2 class="h3">Tarefas desta secção</h2><div data-tasks></div></section>
     <div class="row end"><button type="button" class="btn ghost danger-text" data-del>${ICON.trash} Apagar secção</button></div>`;
   const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: 'scene', id: s.id } }); cleanup(() => t.destroy());
-  const saveNotes = debounce((v) => sb.from('scenes').update({ notes: v }).eq('id', s.id));
+  const saveNotes = debounce((v) => sb.from('scenes').update({ notes: v }).eq('id', s.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message)));
   main.querySelector('[data-notes]').addEventListener('input', (e) => saveNotes(e.target.value));
   bindShots(main, p, f, s, shots, urls, base);
   // referências da secção: imagens (botão, arrastar ou colar com o rato por cima do painel)
@@ -385,7 +399,8 @@ async function entityList(main, p, f, kind, base) {
   const mk = isPlace ? 'places' : 'people'; const mode = entMode(mk);
   const urls = await entUrls([isPlace ? f.locations : f.characters]);
   const item = (e) => { const n = sectionsWith(f, kind, e.id).length; return { e, href: `${base}/${path}/${e.id}`, title: e.name, sub: isPlace ? esc(e.info?.address || 'Sem morada') : esc(e.actor || (e.info?.extra ? 'Figurante' : 'Sem nome real')), meta: n ? `${n} ${n === 1 ? 'secção' : 'secções'}` : '<span class="muted">Ainda em nenhuma secção</span>' }; };
-  const view = (list) => entItems(list.map(item), { mode, urls, place: isPlace });
+  const all = [];
+  const view = (list) => { const its = list.map(item).map((x) => ({ ...x, edit: isPlace ? { table: 'locations', field: 'info.address', placeholder: 'Morada ou link do Google Maps', label: 'Morada' } : { table: 'characters', field: 'actor', placeholder: x.e.info?.extra ? 'Nome real (opcional)' : 'Nome real', label: 'Nome real' } })); all.push(...its); return entItems(its, { mode, urls, place: isPlace }); };
   const people = f.characters.filter((c) => !c.info?.extra), extras = f.characters.filter((c) => c.info?.extra);
   const any = isPlace ? f.locations.length : f.characters.length;
   main.innerHTML = `<div class="row between wrap-gap"><h1 class="h1 pm-title">${isPlace ? 'Décors' : 'Atores e figurantes'}</h1>
@@ -394,6 +409,7 @@ async function entityList(main, p, f, kind, base) {
       : `<h2 class="h3">Artista e elenco</h2>${people.length ? view(people) : '<p class="muted small">Ninguém ainda.</p>'}
          <h2 class="h3">Figurantes</h2>${extras.length ? view(extras) : '<p class="muted small">Ninguém ainda.</p>'}`}`;
   bindMode(main, mk, () => entityList(main, p, f, kind, base));
+  bindEdits(main, all);
   main.querySelectorAll('[data-add]').forEach((b) => b.addEventListener('click', () => {
     const k = b.dataset.add;
     const m = modal(`<h2>${k === 'place' ? 'Novo décor' : k === 'extra' ? 'Novo figurante' : 'Novo ator ou atriz'}</h2><form class="stack"><div class="field"><label for="nm">Nome</label><input id="nm" required></div><div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Criar</button></div></form>`);
@@ -415,7 +431,7 @@ async function entityPage(main, p, f, kind, id, base, cleanup) {
   const secs = sectionsWith(f, kind, id);
   const info = { ...(e.info || {}) };
   const fields = isPlace ? [['address', 'Morada / localização', 'Onde fica, como se chega, contacto do local'], ['notes', 'Notas', 'Autorizações, horários, luz natural, som, estacionamento…']]
-    : [['role', 'Papel no clipe', 'ex: o artista, a mulher do bar, dançarina'], ['contact', 'Contacto', 'Telefone, email, agência'], ['notes', 'Notas', 'Guarda-roupa, cabelo e maquilhagem, disponibilidade…']];
+    : [['role', 'Papel no clipe', 'ex: o artista, a mulher do bar, dançarina'], ['phone', 'Telefone', '912 345 678'], ['email', 'Email', ''], ['contact', 'Agência ou outro contacto', 'Agência, representante…'], ['notes', 'Notas', 'Guarda-roupa, cabelo e maquilhagem, disponibilidade…']];
   main.innerHTML = `
     <nav class="row between wrap-gap"><a href="${base}/${path}" class="link-btn">${ICON.back} ${isPlace ? 'Décors' : 'Atores e figurantes'}</a></nav>
     <header class="row between wrap-gap"><div><span class="small muted">${isPlace ? 'Décor' : info.extra ? 'Figurante' : 'Ator ou atriz'}</span><input class="title-in h1" data-name value="${esc(e.name)}" aria-label="Nome"></div>
@@ -424,17 +440,27 @@ async function entityPage(main, p, f, kind, id, base, cleanup) {
       <section class="panel stack">
         ${isPlace ? '' : await photoField(e)}
         ${isPlace ? '' : `<div class="field"><label for="ea">Nome real</label><input id="ea" data-actor value="${esc(e.actor || '')}" placeholder="Quem faz"></div>${''}<label class="row small"><input type="checkbox" data-extra ${info.extra ? 'checked' : ''}> É figurante</label>`}
-        ${fields.map(([k, l, ph]) => `<div class="field"><label for="ei-${k}">${l}</label><textarea id="ei-${k}" data-info="${k}" rows="${k === 'notes' ? 4 : 2}" placeholder="${esc(ph)}">${esc(info[k] || '')}</textarea></div>`).join('')}
+        ${isPlace ? '' : '<div class="grid2">'}${fields.filter(([k]) => k === 'phone' || k === 'email').map(([k, l, ph]) => `<div class="field"><label for="ei-${k}">${l}</label><input id="ei-${k}" data-info="${k}" type="${k === 'phone' ? 'tel' : 'email'}" ${k === 'phone' ? 'inputmode="tel"' : ''} placeholder="${esc(ph)}" value="${esc(info[k] || '')}"></div>`).join('')}${isPlace ? '' : '</div>'}
+        ${fields.filter(([k]) => k !== 'phone' && k !== 'email').map(([k, l, ph]) => `<div class="field"><label for="ei-${k}">${l}</label><textarea id="ei-${k}" data-info="${k}" rows="${k === 'notes' ? 4 : 2}" placeholder="${esc(ph)}">${esc(info[k] || '')}</textarea></div>`).join('')}
       </section>
       <section class="panel"><h2 class="h3">Aparece em</h2>
         ${secs.length ? `<ul class="ent-secs">${secs.map((s) => { const i = f.scenes.indexOf(s); return `<li><a href="${base}/seguimento/${s.id}"><i class="seg-dot" style="--sc:${SEG_COLORS[i % SEG_COLORS.length]}"></i><span>${esc(s.heading || 'Sem nome')}</span><span class="muted small">${esc([s.starts_at, s.ends_at].filter(Boolean).join('–'))}</span></a></li>`; }).join('')}</ul>` : '<p class="muted small">Ainda em nenhuma secção. Junta-o dentro de uma secção do seguimento.</p>'}
       </section>
     </div>
+    ${!isPlace && !info.extra ? '<section class="panel" data-wsum></section>' : ''}
+    ${isPlace ? moodboardPanel(e) : ''}
+    ${isPlace ? '<section class="panel geo-panel" data-geo></section>' : ''}
+    ${isPlace ? '<section class="panel dp-props" data-dprops><p class="muted small">A carregar adereços…</p></section>' : ''}
     ${isPlace ? await placePhotos(e) : ''}
     <section class="panel"><h2 class="h3">Tarefas</h2><div data-tasks></div></section>`;
   const table = isPlace ? 'locations' : 'characters';
   if (isPlace) bindPlacePhotos(main, p, e, redrawPage); else bindPhoto(main, p, 'characters', e, redrawPage);
-  const save = debounce((patch) => sb.from(table).update(patch).eq('id', e.id).then(({ error }) => error && toast(error.message)), 500);
+  if (!isPlace && !info.extra) import('./wardrobe.js').then(({ wardrobeSummary }) => wardrobeSummary(main.querySelector('[data-wsum]'), p, e, base, []));
+  if (isPlace) { bindMoodboard(main, p, { table: 'locations', row: e, key: 'location_id', base }); placeProps(main.querySelector('[data-dprops]'), p, e, secs.map((s) => s.id), base); geoPanel(main.querySelector('[data-geo]'), p, e); }
+  // junta tudo o que mudou (nome, ator, campos) e grava de uma vez: antes só ficava a última alteração
+  let pending = {};
+  const flush = debounce(() => { const patch = pending; pending = {}; sb.from(table).update(patch).eq('id', e.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message)); }, 500);
+  const save = (patch) => { pending = { ...pending, ...patch }; flush(); };
   main.querySelector('[data-name]').addEventListener('input', (ev) => { e.name = ev.target.value; save({ name: e.name }); });
   main.querySelector('[data-actor]')?.addEventListener('input', (ev) => { e.actor = ev.target.value; save({ actor: e.actor }); });
   main.querySelector('[data-extra]')?.addEventListener('change', async (ev) => {
@@ -444,7 +470,7 @@ async function entityPage(main, p, f, kind, id, base, cleanup) {
     await Promise.all(secs.map((s) => { const c = (s.character_ids || []).filter((x) => x !== id), x = (s.extra_ids || []).filter((y) => y !== id); (info.extra ? x : c).push(id); s.character_ids = c; s.extra_ids = x; return sb.from('scenes').update({ character_ids: c, extra_ids: x }).eq('id', s.id); }));
     toast(info.extra ? 'Agora é figurante.' : 'Agora está no elenco.');
   });
-  main.querySelectorAll('[data-info]').forEach((t) => t.addEventListener('input', () => { info[t.dataset.info] = t.value; e.info = { ...info }; save({ info: e.info }); }));
+  main.querySelectorAll('[data-info]').forEach((t) => t.addEventListener('input', () => { info[t.dataset.info] = t.value; e.info = { ...(e.info || {}), [t.dataset.info]: t.value }; save({ info: e.info }); }));
   main.querySelector('[data-del]').addEventListener('click', async () => {
     if (!(await confirmBox(`Apagar "${e.name}"? Sai também das secções onde está.`, 'Apagar'))) return;
     const key = isPlace ? ['location_ids'] : ['character_ids', 'extra_ids'];

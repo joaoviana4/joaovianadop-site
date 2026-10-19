@@ -133,9 +133,12 @@ function pop(html) {
 }
 
 // lista (do projeto, ou de todos os meus projetos)
-async function fetchRows({ projectId = null, limit = 60, before = null } = {}) {
+async function fetchRows({ projectId = null, limit = 60, before = null, actor = '', t = '', board = '' } = {}) {
   let qy = sb.from('activity').select('*').order('updated_at', { ascending: false }).limit(limit);
   if (projectId) qy = qy.eq('project_id', projectId);
+  if (actor) qy = qy.eq('actor_id', actor);
+  if (t) qy = qy.eq('t', t);
+  if (board) qy = qy.eq('board_id', board);
   if (before) qy = qy.lt('updated_at', before);
   const { data } = await qy;
   await hydrate(data || []);
@@ -169,19 +172,33 @@ async function openPanel() {
 }
 
 // página "Atividade" de um projeto: tudo, incluindo as minhas alterações
+const PAGES = [['budget', 'Orçamento'], ['task', 'Tarefas'], ['scene', 'Cenas / secções'], ['shot', 'Planos'], ['script', 'Guião'], ['prop', 'Adereços'], ['character', 'Elenco'], ['location', 'Décors'], ['gear', 'Equipamento'], ['marketing', 'Marketing'], ['question', 'Questões de produção'], ['team', 'Equipa'], ['details', 'Detalhes do projeto'], ['board', 'Ferramentas (todas)']];
 export async function activityPage(main, p) {
+  const { loadPeople } = await import('./tasks.js');
+  const people = await loadPeople().catch(() => []);
+  const tools = (p._boards || []).filter((b) => b.kind !== 'mkt');
+  const f = { actor: '', page: '' };
   main.innerHTML = `<div class="row between wrap-gap"><div><h1 class="h1 pm-title">Atividade</h1><p class="muted">Quem mexeu em quê neste projeto. Alterações seguidas da mesma pessoa na mesma coisa aparecem juntas.</p></div></div>
+    <div class="row wrap-gap act-filters">
+      <select data-fa aria-label="Pessoa"><option value="">Todas as pessoas</option>${people.map((x) => `<option value="${x.id}">${esc(x.id === state.user.id ? `${x.display_name} (tu)` : x.display_name)}</option>`).join('')}</select>
+      <select data-fp aria-label="Página"><option value="">Todas as páginas</option>${PAGES.map(([k, l]) => `<option value="t:${k}">${esc(l)}</option>`).join('')}${tools.length ? `<optgroup label="Ferramentas">${tools.map((b) => `<option value="b:${b.id}">${esc(b.title)}</option>`).join('')}</optgroup>` : ''}</select>
+    </div>
     <section class="panel"><ul class="act-list" data-list><li class="muted">A carregar…</li></ul><div class="row" data-more></div></section>`;
   const el = main.querySelector('[data-list]'); const more = main.querySelector('[data-more]');
   let rows = [];
-  const load = async () => {
-    const got = await fetchRows({ projectId: p.id, limit: 80, before: rows.length ? rows[rows.length - 1].updated_at : null });
+  const q = () => ({ actor: f.actor, t: f.page.startsWith('t:') ? f.page.slice(2) : '', board: f.page.startsWith('b:') ? f.page.slice(2) : '' });
+  const match = (a) => { const x = q(); return (!x.actor || a.actor_id === x.actor) && (!x.t || a.t === x.t) && (!x.board || a.board_id === x.board); };
+  const load = async (reset) => {
+    if (reset) { rows = []; el.innerHTML = '<li class="muted">A carregar…</li>'; }
+    const got = await fetchRows({ projectId: p.id, limit: 80, before: rows.length ? rows[rows.length - 1].updated_at : null, ...q() });
     rows = [...rows, ...got];
-    el.innerHTML = rows.length ? rows.map((a) => rowHtml(a, { showProject: false, seen: st.seen })).join('') : '<li class="muted">Ainda não há atividade neste projeto.</li>';
+    el.innerHTML = rows.length ? rows.map((a) => rowHtml(a, { showProject: false, seen: st.seen })).join('') : `<li class="muted">${f.actor || f.page ? 'Nada com estes filtros.' : 'Ainda não há atividade neste projeto.'}</li>`;
     more.innerHTML = got.length === 80 ? '<button type="button" class="btn ghost" data-mo>Ver mais</button>' : '';
-    more.querySelector('[data-mo]')?.addEventListener('click', load);
+    more.querySelector('[data-mo]')?.addEventListener('click', () => load(false));
   };
+  main.querySelector('[data-fa]').addEventListener('change', (e) => { f.actor = e.target.value; load(true); });
+  main.querySelector('[data-fp]').addEventListener('change', (e) => { f.page = e.target.value; load(true); });
   await load();
-  const live = (a) => { if (a.project_id !== p.id || !document.body.contains(el)) { st.listeners.delete(live); return; } rows = [a, ...rows.filter((r) => r.id !== a.id)]; el.innerHTML = rows.map((r) => rowHtml(r, { showProject: false, seen: st.seen })).join(''); };
+  const live = (a) => { if (a.project_id !== p.id || !document.body.contains(el)) { st.listeners.delete(live); return; } if (!match(a)) return; rows = [a, ...rows.filter((r) => r.id !== a.id)]; el.innerHTML = rows.map((r) => rowHtml(r, { showProject: false, seen: st.seen })).join(''); };
   st.listeners.add(live);
 }

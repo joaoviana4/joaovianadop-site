@@ -1,29 +1,32 @@
 import './style.css';
 import { daysUntil } from './lib.js';
 import { loadHidden, hideProject, unhideProject } from './lib.js';
-import { IS_STUDIO, sb, BUCKET, state, esc, $, loadProfile, isStaff, isAdmin, toast, modal, confirmBox, ICON, LOGO, KINDS, ROLES, phaseOf, greeting, initials, signedUrls, uploadImage, callFn, authPw, MIN_PW, fmtDate, dueInfo, registerSW, BASE, PROJECT_COLS, hasPerm } from './lib.js';
+import { IS_STUDIO, sb, BUCKET, state, esc, $, loadProfile, isStaff, isAdmin, toast, modal, confirmBox, ICON, LOGO, KINDS, ROLES, phaseOf, greeting, initials, signedUrls, uploadImage, callFn, authPw, MIN_PW, fmtDate, dueInfo, registerSW, isInstalled, installApp, BASE, PROJECT_COLS, hasPerm, leadsOf } from './lib.js';
 import { renderAuth } from './auth.js';
 import { activityButton, bindActivity, activityPage } from './activity.js';
-import { mountBoard } from './board.js';
-import { mountTasks, loadPeople, clearPeopleCache } from './tasks.js';
+import { visField, bindVis, readVis } from './vis.js';
+import { onWrite, setWriteGuard } from './undo.js';
+import { aheadNotice, bindAhead, aheadOf, stageOptions, projectStrip, bindStrip, phaseBar, bindPhaseBar, shows, modKey, toolKey, selPhase, setSelPhase, phaseLabel, phasesOf, setToolPhase, stagesOn } from './phases.js';
+import { projectSearch } from './psearch.js';
+import { mountTasks, loadPeople, clearPeopleCache, addTaskModal } from './tasks.js';
 import { TOOL_KINDS, tableTool, timelineTool, tableTemplate } from './tools.js';
 import { isFolder, loadChildren, rollup, childrenSection, budgetChildrenPanel } from './folders.js';
 import { mountTaskCenter } from './taskcenter.js';
 import { clipPage, CLIP_PAGES, mediaTool } from './music.js';
-import { mountSituation } from './overview.js';
+import { mountSituation, situationData } from './overview.js';
 import { clearFullscreen } from './layout.js';
 import { newLightmapData } from './lmdata.js';
 // páginas pesadas só carregam quando são abertas (o site arranca mais depressa)
 const lazy = {
-  finance: () => import('./finance.js'), lightmap: () => import('./lightmap.js'), lmhub: () => import('./lmhub.js'), gear: () => import('./gear.js'),
+  finance: () => import('./finance.js'), lightmap: () => import('./lightmap.js'), lmhub: () => import('./lmhub.js'), wardrobe: () => import('./wardrobe.js'), gear: () => import('./gear.js'),
   props: () => import('./props.js'), budget: () => import('./budget.js'), shotlist: () => import('./shotlist.js'),
   shot: () => import('./shot.js'), marketing: () => import('./marketing.js'), callsheet: () => import('./callsheet.js'), transport: () => import('./transport.js'),
 };
 // pré-carrega em segundo plano depois de o site abrir, para a primeira abertura também ser rápida
 setTimeout(() => { const idle = window.requestIdleCallback || ((f) => setTimeout(f, 1500)); idle(() => Object.values(lazy).forEach((f) => f().catch(() => {}))); }, 4000);
 import { joinProject, leaveProject, lockPage, boardPresence, onPresence, whoLabel } from './presence.js';
-import { budgetWhoChip, budgetAccessPanel, globalPermsPanel } from './perms.js';
-import { MODULES, TEMPLATES, modulesOf, hasMod, scriptMode, modLabel, modPath, modulesModal, autoModules, ensureModules } from './modules.js';
+import { budgetWhoChip, budgetAccessPanel, globalPermsPanel, budgetAccess } from './perms.js';
+import { MODULES, TEMPLATES, modulesOf, hasMod, scriptMode, modLabel, modPath, modulesModal, autoModules, ensureModules, addableModules } from './modules.js';
 import { FICTION_PAGES, FICTION_DEPTS, fictionPage, fictionStats } from './fiction.js';
 
 const app = $('#app');
@@ -54,6 +57,9 @@ async function boot() {
   }
   document.body.className = '';
   route();
+  // depois da primeira página, vai buscando em segundo plano o código das páginas mais usadas
+  const idle = window.requestIdleCallback || ((f) => setTimeout(f, 1500));
+  idle(() => { import('./board.js').catch(() => {}); });
 }
 window.addEventListener('hashchange', () => state.user && route());
 boot();
@@ -63,6 +69,7 @@ function go(hash) { if (location.hash === hash) route(); else location.hash = ha
 async function route() {
   state.ctx = { project: null };
   teardown();
+  setReadOnly(null);
   const h = location.hash.replace(/^#\/?/, '');
   const parts = h.split('/').filter(Boolean);
   if (parts[0] === 'p' && parts[1]) return parts[2] === 'b' ? boardView(parts[1], parts[3]) : parts[2] === 'f' ? toolPage(parts[1], parts[3]) : projectPage(parts[1], parts[2] || 'geral', parts[3]);
@@ -113,18 +120,31 @@ function accountMenu() {
     <div class="acct-card"><span class="avatar lg" style="--c:${esc(p.color)}">${esc(initials(p.display_name))}</span>
       <div><strong>${esc(p.display_name)}</strong><div class="muted">${esc(p.username ? '@' + p.username : p.email)} · ${esc(ROLES[p.role])}</div></div></div>
     <div class="menu-list">
-      <button type="button" data-a="name">${ICON.team} Mudar o meu nome</button>
+      <button type="button" data-a="name">${ICON.team} O meu nome e telefone</button>
       <button type="button" data-a="pw">${ICON.info} Mudar palavra-passe</button>
       <a href="${BASE}tasks/" target="_blank" rel="noopener">${ICON.task} Abrir a app de tarefas (telemóvel)</a>
+      ${isInstalled() ? '' : `<button type="button" data-a="install">${ICON.open} Instalar no computador</button>`}
       <button type="button" data-a="out">${ICON.logout} Sair</button>
     </div>
     <div class="row end"><button class="btn ghost" data-close>Fechar</button></div>`);
   m.el.querySelector('[data-a=out]').addEventListener('click', async () => { m.close(); await sb.auth.signOut(); });
+  m.el.querySelector('[data-a=install]')?.addEventListener('click', async () => {
+    const r = await installApp(); m.close();
+    if (r === 'ok') return toast('Pronto: o PØRTAL Studio ficou instalado como app.');
+    if (r === 'no') return;
+    const mac = /Mac/.test(navigator.platform) && !/Chrome|Edg/.test(navigator.userAgent);
+    modal(`<h2>Instalar no computador</h2>
+      ${mac ? `<p><b>Safari (Mac):</b> menu <b>Ficheiro › Adicionar à Dock</b>. A app fica na Dock e no Launchpad, numa janela própria.</p>` : ''}
+      <p><b>Chrome ou Edge (Windows e Mac):</b> carrega no ícone de instalar à direita da barra de endereço (um ecrã com uma seta), ou no menu ⋮ › <b>Transmitir, guardar e partilhar › Instalar página como app</b>.</p>
+      ${mac ? '' : `<p><b>Safari (Mac):</b> menu <b>Ficheiro › Adicionar à Dock</b>.</p>`}
+      <p class="muted small">Abre numa janela própria, com ícone na barra de tarefas ou na Dock, e atualiza-se sozinha.</p>
+      <div class="row end"><button type="button" class="btn primary" data-close>Percebi</button></div>`);
+  });
   m.el.querySelector('[data-a=pw]').addEventListener('click', () => { m.close(); changePassword(); });
   m.el.querySelector('[data-a=name]').addEventListener('click', () => {
     m.close();
-    const n = modal(`<h2>O teu nome</h2><form class="stack"><div class="field"><label for="dn">Nome</label><input id="dn" value="${esc(p.display_name)}" required></div><div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Guardar</button></div></form>`);
-    n.el.querySelector('form').addEventListener('submit', async (e) => { e.preventDefault(); const v = n.el.querySelector('#dn').value.trim(); if (!v) return; await sb.from('profiles').update({ display_name: v }).eq('id', p.id); clearPeopleCache(); p.display_name = v; n.close(); route(); });
+    const n = modal(`<h2>Os teus dados</h2><form class="stack"><div class="field"><label for="dn">Nome</label><input id="dn" value="${esc(p.display_name)}" required></div><div class="field"><label for="dph">Telefone</label><input id="dph" type="tel" inputmode="tel" value="${esc(p.phone || '')}"><span class="muted small">Aparece nas folhas de contactos e de serviço dos projetos onde estás.</span></div><div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Guardar</button></div></form>`);
+    n.el.querySelector('form').addEventListener('submit', async (e) => { e.preventDefault(); const v = n.el.querySelector('#dn').value.trim(); if (!v) return; const ph = n.el.querySelector('#dph').value.trim() || null; await sb.from('profiles').update({ display_name: v, phone: ph }).eq('id', p.id); clearPeopleCache(); p.display_name = v; p.phone = ph; n.close(); route(); });
   });
 }
 function changePassword() {
@@ -191,7 +211,7 @@ async function homePage() {
     loadHidden(),
   ]);
   // "atribuídos a mim": sou membro do projeto ou tenho tarefas lá
-  const mineSet = new Set([...(myMem || []).map((m) => m.project_id), ...(tasks || []).filter((t) => t.assignee_id === state.user.id).map((t) => t.project_id), ...(projects || []).filter((x) => x.lead_id === state.user.id || x.manager_id === state.user.id).map((x) => x.id)]);
+  const mineSet = new Set([...(myMem || []).map((m) => m.project_id), ...(tasks || []).filter((t) => t.assignee_id === state.user.id).map((t) => t.project_id), ...(projects || []).filter((x) => leadsOf(x).includes(state.user.id)).map((x) => x.id)]);
   const norm = (x) => (x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const sorters = { recent: (a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''), az: (a, b) => a.name.localeCompare(b.name, 'pt'), due: (a, b) => (a.ends_on || '9999').localeCompare(b.ends_on || '9999') || a.name.localeCompare(b.name, 'pt') };
   // projetos dentro de uma pasta (ex.: videoclipes de um álbum) aparecem dentro dela; numa pesquisa aparecem soltos
@@ -320,6 +340,7 @@ async function newProject(opts = {}) {
       <div class="field"><label for="pk">Tipo</label><select id="pk" name="kind">${Object.entries(KINDS).filter(([k]) => k !== 'central' && (!parent || k !== 'album')).map(([k, v]) => `<option value="${k}" ${parent && k === 'videoclipe' ? 'selected' : ''}>${v}</option>`).join('')}</select><span class="muted small" data-foldhint hidden>Uma pasta junta vários projetos (ex.: os videoclipes de um álbum). Tem um orçamento geral, e o orçamento de cada projeto lá dentro conta para ele.</span></div>
       <div class="field" data-parentf><label for="pp">Dentro de</label><select id="pp" name="parent_id"><option value="">— nenhuma pasta —</option>${(folders || []).map((f) => `<option value="${f.id}" ${parent?.id === f.id ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select></div>
       <div class="grid2"><div class="field"><label for="ps">Começa</label><input id="ps" name="starts_on" type="date"></div><div class="field"><label for="pe">Entrega</label><input id="pe" name="ends_on" type="date"></div></div>
+      <fieldset class="stage-pick"><legend>Em que fase está o projeto?</legend><div class="stage-opts" data-stages></div></fieldset>
       <fieldset class="start-choice"><legend>Começar com</legend>
         <label class="sc-opt"><input type="radio" name="start" value="tpl" checked><span><strong>Modelo de <span data-kname></span></strong><small data-tplpages></small></span></label>
         <label class="sc-opt"><input type="radio" name="start" value="zero"><span><strong>Do zero</strong><small>Só Visão geral, Equipa e Detalhes. As outras páginas juntas-as depois com o + ao lado do nome do projeto, ou aparecem sozinhas quando houver dados para elas.</small></span></label>
@@ -329,12 +350,17 @@ async function newProject(opts = {}) {
     </form>`);
   const syncTpl = () => { const k = m.el.querySelector('#pk').value; m.el.querySelector('[data-kname]').textContent = (KINDS[k] || k).toLowerCase(); m.el.querySelector('[data-tplpages]').textContent = (TEMPLATES[k] || TEMPLATES.default).map((x) => (x === 'elenco' && k === 'ficcao' ? MODULES.elenco.scriptLabel : MODULES[x].label)).join(' · '); };
   const syncFold = () => { const k = m.el.querySelector('#pk').value; m.el.querySelector('[data-parentf]').hidden = k === 'album' || !(folders || []).length; m.el.querySelector('[data-foldhint]').hidden = k !== 'album'; };
-  m.el.querySelector('#pk').addEventListener('change', () => { syncTpl(); syncFold(); }); syncTpl(); syncFold();
+  const syncStage = () => {
+    const k = m.el.querySelector('#pk').value; const box = m.el.querySelector('[data-stages]'); const cur = box.querySelector('input:checked')?.value || 'pre';
+    const opts = stageOptions(k); box.closest('fieldset').hidden = k === 'album';
+    box.innerHTML = opts.map(([v, l], i) => `<label class="stage-o"><input type="radio" name="stage" value="${v}" ${v === cur || (!opts.some(([x]) => x === cur) && i === 0) ? 'checked' : ''}><span><b>${i + 1}</b>${esc(l)}</span></label>`).join('');
+  };
+  m.el.querySelector('#pk').addEventListener('change', () => { syncTpl(); syncFold(); syncStage(); }); syncTpl(); syncFold(); syncStage();
   m.el.querySelector('form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target));
     const modules = { list: f.start === 'zero' ? [] : [...(TEMPLATES[f.kind] || TEMPLATES.default)], removed: [] };
-    const { data, error } = await sb.from('projects').insert({ name: f.name.trim(), client: f.client.trim(), kind: f.kind, parent_id: f.kind !== 'album' && f.parent_id ? f.parent_id : null, starts_on: f.starts_on || null, ends_on: f.ends_on || null, modules, ...(f.kind === 'ficcao' ? { departments: FICTION_DEPTS } : {}) }).select(PROJECT_COLS).single();
+    const { data, error } = await sb.from('projects').insert({ name: f.name.trim(), client: f.client.trim(), kind: f.kind, stage: f.kind === 'album' ? null : f.stage || 'pre', ...(f.kind === 'album' ? {} : { layouts: { stages: stageOptions(f.kind).map(([k]) => k).slice(0, Math.max(1, stageOptions(f.kind).findIndex(([k]) => k === (f.stage || 'pre')) + 1)) } }), parent_id: f.kind !== 'album' && f.parent_id ? f.parent_id : null, starts_on: f.starts_on || null, ends_on: f.ends_on || null, modules, ...(f.kind === 'ficcao' ? { departments: FICTION_DEPTS } : {}) }).select(PROJECT_COLS).single();
     if (error) return toast(error.message);
     await sb.from('project_members').insert({ project_id: data.id, user_id: state.user.id });
     if (f.value) await sb.from('project_budgets').upsert({ project_id: data.id, value: Number(f.value) });
@@ -350,10 +376,10 @@ function detailsForm(p) {
     <div class="grid2">
       <div class="field"><label for="dk">Tipo</label><select id="dk" name="kind">${Object.entries(KINDS).filter(([k]) => k !== 'central').map(([k, v]) => `<option value="${k}" ${p.kind === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
       <div class="field"><label for="dst">Estado</label><select id="dst" name="status"><option value="active" ${p.status === 'active' ? 'selected' : ''}>Em curso</option><option value="done" ${p.status === 'done' ? 'selected' : ''}>Finalizado</option><option value="archived" ${p.status === 'archived' ? 'selected' : ''}>Arquivo</option></select></div>
+      <div class="field"><label for="dsg">Fase</label><select id="dsg" name="stage"><option value="">Pelas datas</option>${stageOptions(p.kind).map(([k, l]) => `<option value="${k}" ${p.stage === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
       <div class="field"><label for="ds">Começa</label><input id="ds" name="starts_on" type="date" value="${esc(p.starts_on || '')}"></div>
       <div class="field"><label for="de">Entrega</label><input id="de" name="ends_on" type="date" value="${esc(p.ends_on || '')}"></div>
-      <div class="field"><label for="dlead">Líder do projeto</label><select id="dlead" name="lead_id" data-person="${esc(p.lead_id || '')}"><option value="">— ninguém —</option></select></div>
-      <div class="field"><label for="dman">Encarregue do projeto</label><select id="dman" name="manager_id" data-person="${esc(p.manager_id || '')}"><option value="">— ninguém —</option></select></div>
+      <div class="field" style="grid-column:1/-1"><label>Líderes do projeto</label><div class="pm-leads in-form" data-leadsform></div></div>
       ${p._folders && p._folders.length ? `<div class="field"><label for="dpar">Dentro da pasta</label><select id="dpar" name="parent_id"><option value="">— nenhuma —</option>${p._folders.map((f) => `<option value="${f.id}" ${f.id === p.parent_id ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select></div>` : ''}
       ${p.canBudget ? `<div class="field"><label for="dv">Orçamento (€) <span class="muted small">${ICON.lock} privado</span></label><input id="dv" name="value" type="number" step="0.01" min="0" inputmode="decimal" value="${esc(p.value ?? '')}"></div>` : ''}
     </div>
@@ -369,6 +395,7 @@ function detailsForm(p) {
   </form>`;
 }
 function bindDetails(root, p, after) {
+  { const lf = root.querySelector('[data-leadsform]'); if (lf) drawLeads(lf, p); }
   const pSel = root.querySelectorAll('select[data-person]');
   if (pSel.length) loadPeople().then((people) => pSel.forEach((sel) => { const cur = sel.dataset.person; sel.insertAdjacentHTML('beforeend', people.filter((x) => x.role !== 'guest' || x.id === cur).map((x) => `<option value="${x.id}" ${x.id === cur ? 'selected' : ''}>${esc(x.display_name)}</option>`).join('')); }));
   const form = root.querySelector('[data-details]');
@@ -400,7 +427,8 @@ function bindDetails(root, p, after) {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(form));
     const patch = { departments: depts.filter((d) => d.name.trim()), updated_at: new Date().toISOString() };
-    if (!p.is_central) Object.assign(patch, { name: f.name.trim(), client: f.client.trim(), kind: f.kind, status: f.status, starts_on: f.starts_on || null, ends_on: f.ends_on || null, lead_id: f.lead_id || null, manager_id: f.manager_id || null });
+    if (!p.is_central) if (!p.is_central && f.stage && !stagesOn(p).includes(f.stage)) patch.layouts = { ...(p.layouts || {}), stages: [...stagesOn(p), f.stage] };
+    if (!p.is_central) Object.assign(patch, { name: f.name.trim(), client: f.client.trim(), kind: f.kind, status: f.status, stage: f.stage || null, starts_on: f.starts_on || null, ends_on: f.ends_on || null });
     if ('parent_id' in f) patch.parent_id = f.kind === 'album' ? null : (f.parent_id || null);
     const { data, error } = await sb.from('projects').update(patch).eq('id', p.id).select(PROJECT_COLS).single();
     if (error) return toast(error.message);
@@ -417,8 +445,11 @@ function projectDetailsModal(p, after) {
 
 // ---------- equipa do projeto e convites ----------
 async function projectTeam(root, p) {
+  // a equipa sem conta e quem vê o orçamento pedem-se já, ao mesmo tempo que o resto
+  const crewP = p.is_central ? null : sb.from('project_crew').select('*').eq('project_id', p.id).order('created_at');
+  const accP = p.canBudget ? budgetAccess(p) : null;
   const [{ data: members }, people, { data: invites }] = await Promise.all([
-    sb.from('project_members').select('user_id, added_at, depts, job').eq('project_id', p.id),
+    sb.from('project_members').select('user_id, added_at, depts, job, phone, email, can_edit').eq('project_id', p.id),
     loadPeople(),
     isStaff() ? sb.from('invites').select('id, email, created_at, expires_at, used_at').eq('project_id', p.id).order('created_at', { ascending: false }) : Promise.resolve({ data: [] }),
   ]);
@@ -438,21 +469,21 @@ async function projectTeam(root, p) {
     </section>` : ''}
     ${p.is_central ? '' : `<section class="stack">
       <h3 class="h3">Convidados externos</h3>
-      ${guests.length ? `<ul class="people">${guests.map((x) => `<li><span class="avatar sm" style="--c:${esc(x.color)}">${esc(initials(x.display_name))}</span><span>${esc(x.display_name)}</span>${isStaff() ? `<button type="button" class="link-btn danger-text" data-rmguest="${x.id}">Tirar do projeto</button>` : ''}</li>`).join('')}</ul>` : '<p class="muted small">Ainda ninguém de fora.</p>'}
+      ${guests.length ? `<ul class="people">${guests.map((x) => { const gm = (members || []).find((m) => m.user_id === x.id); return `<li><span class="avatar sm" style="--c:${esc(x.color)}">${esc(initials(x.display_name))}</span><span>${esc(x.display_name)}</span>${isStaff() && p.canEdit !== false ? `<select class="acc-sel" data-gacc="${x.id}" aria-label="Acesso de ${esc(x.display_name)}"><option value="1" ${gm?.can_edit !== false ? 'selected' : ''}>Pode editar</option><option value="0" ${gm?.can_edit === false ? 'selected' : ''}>Só leitura</option></select><button type="button" class="link-btn danger-text" data-rmguest="${x.id}">Tirar do projeto</button>` : gm?.can_edit === false ? '<span class="ro-tag">Só leitura</span>' : ''}</li>`; }).join('')}</ul>` : '<p class="muted small">Ainda ninguém de fora.</p>'}
     </section>
-    ${isStaff() ? `<section class="stack">
+    ${isStaff() && p.canEdit !== false ? `<section class="stack">
       <h3 class="h3">Convidar pessoa externa</h3>
       <p class="muted small">Gera um código que só funciona uma vez, para este email e este projeto. Vale 14 dias.</p>
-      <form class="row" data-invite><input type="email" name="email" placeholder="email@exemplo.com" aria-label="Email da pessoa" required><button class="btn primary">Gerar código</button></form>
+      <form class="row wrap-gap" data-invite><input type="email" name="email" placeholder="email@exemplo.com" aria-label="Email da pessoa" required><select name="acc" aria-label="Acesso" class="acc-sel"><option value="1">Pode editar</option><option value="0">Só leitura</option></select><button class="btn primary">Gerar código</button></form>
       <div data-code></div>
       ${inv.length ? `<ul class="invites">${inv.map((i) => `<li><span>${esc(i.email)}</span><span class="muted small">${istate(i)}</span>${!i.used_at ? `<button type="button" class="icon-btn" data-rminv="${i.id}" aria-label="Anular convite">${ICON.trash}</button>` : ''}</li>`).join('')}</ul>` : ''}
     </section>` : ''}`}`;
-  const acc = root.querySelector('[data-budgetacc]'); if (acc) budgetAccessPanel(acc, p);
-  const crewEl = root.querySelector('[data-crew]'); if (crewEl) crewPanel(crewEl, p, people, members || [], () => projectTeam(root, p));
+  const acc = root.querySelector('[data-budgetacc]'); if (acc) budgetAccessPanel(acc, p, undefined, accP);
+  const crewEl = root.querySelector('[data-crew]'); if (crewEl) crewPanel(crewEl, p, people, members || [], () => projectTeam(root, p), crewP);
   root.querySelector('[data-invite]')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = e.target.email.value.trim();
-    const { data: code, error } = await sb.rpc('create_invite', { p_project: p.id, p_email: email });
+    const { data: code, error } = await sb.rpc('create_invite_as', { p_project: p.id, p_email: email, p_can_edit: e.target.acc.value !== '0' });
     if (error) return toast(error.message);
     const url = location.origin + BASE;
     const msg = `Olá! Foste convidado para o projeto "${p.name}" no byGrain Studio.\n\n1. Entra em ${url}\n2. Escolhe "Tenho um código"\n3. Usa o email ${email} e o código ${code}\n\nO código só funciona uma vez e vale 14 dias.`;
@@ -460,6 +491,10 @@ async function projectTeam(root, p) {
     root.querySelector('[data-copy]').addEventListener('click', async () => { try { await navigator.clipboard.writeText(msg); toast('Copiado.'); } catch { root.querySelector('.code-box textarea').select(); } });
     e.target.reset();
   });
+  root.querySelectorAll('[data-gacc]').forEach((sel) => sel.addEventListener('change', async () => {
+    const { error } = await sb.from('project_members').update({ can_edit: sel.value !== '0' }).eq('project_id', p.id).eq('user_id', sel.dataset.gacc);
+    toast(error ? error.message : sel.value === '0' ? 'Passa a ter acesso só de leitura.' : 'Passa a poder editar.');
+  }));
   root.querySelectorAll('[data-rmguest]').forEach((b) => b.addEventListener('click', async () => {
     if (!(await confirmBox('Tirar esta pessoa do projeto?', 'Tirar'))) return;
     await sb.from('project_members').delete().eq('project_id', p.id).eq('user_id', b.dataset.rmguest); projectTeam(root, p);
@@ -469,19 +504,19 @@ async function projectTeam(root, p) {
 
 // ---------- equipa do projeto por departamento ----------
 // Pessoas da Grain (project_members) e pessoas sem conta (project_crew), cada uma com função e departamentos.
-async function crewPanel(el, p, people, members, reload) {
-  const { data: crewRows } = await sb.from('project_crew').select('*').eq('project_id', p.id).order('created_at');
+async function crewPanel(el, p, people, members, reload, crewP) {
+  const { data: crewRows } = await (crewP || sb.from('project_crew').select('*').eq('project_id', p.id).order('created_at'));
   const depts = p.departments || [];
   const byId = new Map(people.map((x) => [x.id, x]));
   const list = [
-    ...members.filter((m) => byId.has(m.user_id) && byId.get(m.user_id).role !== 'guest').map((m) => { const x = byId.get(m.user_id); return { t: 'm', id: m.user_id, name: x.display_name, color: x.color, job: m.job || '', depts: m.depts || [], sub: ROLES[x.role] }; }),
-    ...(crewRows || []).map((c) => ({ t: 'c', id: c.id, name: c.name, color: '#5A5A66', job: c.job || '', depts: c.depts || [], sub: [c.email, c.phone].filter(Boolean).join(' · ') || 'sem conta no studio', email: c.email, phone: c.phone })),
+    ...members.filter((m) => byId.has(m.user_id) && byId.get(m.user_id).role !== 'guest').map((m) => { const x = byId.get(m.user_id); const phone = m.phone || x.phone || ''; return { t: 'm', id: m.user_id, canEdit: m.can_edit !== false, name: x.display_name, color: x.color, job: m.job || '', depts: m.depts || [], sub: [phone, m.email].filter(Boolean).join(' · ') || ROLES[x.role], phone, email: m.email || '' }; }),
+    ...(crewRows || []).map((c) => ({ t: 'c', id: c.id, name: c.name, color: '#5A5A66', job: c.job || '', depts: c.depts || [], sub: [c.phone, c.email].filter(Boolean).join(' · ') || 'sem conta no studio', email: c.email, phone: c.phone })),
   ];
-  const canEdit = isStaff();
+  const canEdit = isStaff() && p.canEdit !== false;
   const dchip = (id) => { const d = depts.find((x) => x.id === id); return d ? `<span class="dchip" style="--dc:${esc(d.color)}">${esc(d.name)}</span>` : ''; };
   const row = (x) => `<li class="crew-row"><span class="avatar sm" style="--c:${esc(x.color)}">${esc(initials(x.name))}</span>
     <span class="crew-n"><b>${esc(x.name)}</b><small class="muted">${esc(x.job || x.sub || '')}${x.job && x.sub ? ` · ${esc(x.sub)}` : ''}</small></span>
-    <span class="crew-d">${x.depts.map(dchip).join('')}</span>
+    <span class="crew-d">${x.depts.map(dchip).join('')}${x.t === 'm' && !x.canEdit ? '<span class="ro-tag" title="Vê o projeto mas não muda nada">Só leitura</span>' : ''}</span>
     ${canEdit ? `<span class="crew-a"><button type="button" class="link-btn" data-cedit="${x.t}:${x.id}">Editar</button><button type="button" class="link-btn danger-text" data-crm="${x.t}:${x.id}">Tirar</button></span>` : ''}</li>`;
   const groups = depts.map((d) => ({ d, xs: list.filter((x) => x.depts.includes(d.id)) }));
   const none = list.filter((x) => !x.depts.some((id) => depts.some((d) => d.id === id)));
@@ -495,9 +530,15 @@ async function crewPanel(el, p, people, members, reload) {
     const m = modal(`<h2>${isNew ? 'Adicionar pessoa' : esc(x.name)}</h2><form class="stack" data-cf>
       ${isNew ? `<div class="seg dark" role="tablist"><button type="button" role="tab" aria-selected="true" data-ct="m">Da Grain</button><button type="button" role="tab" aria-selected="false" data-ct="c">Sem conta</button></div>
         <div class="field" data-for="m"><label for="cu">Pessoa</label><select id="cu" name="user_id">${free.map((y) => `<option value="${y.id}">${esc(y.display_name)}${inProj(y.id) ? ' — já está no projeto' : ''}</option>`).join('')}</select></div>
-        <div data-for="c" hidden class="grid2"><div class="field"><label for="cn2">Nome</label><input id="cn2" name="name"></div><div class="field"><label for="ce">Email</label><input id="ce" name="email" type="email"></div><div class="field"><label for="cp">Telefone</label><input id="cp" name="phone" inputmode="tel"></div></div>`
-        : x.t === 'c' ? `<div class="grid2"><div class="field"><label for="cn2">Nome</label><input id="cn2" name="name" value="${esc(x.name)}" required></div><div class="field"><label for="ce">Email</label><input id="ce" name="email" type="email" value="${esc(x.email || '')}"></div><div class="field"><label for="cp">Telefone</label><input id="cp" name="phone" value="${esc(x.phone || '')}"></div></div>` : ''}
+        <div data-for="c" hidden class="field"><label for="cn2">Nome</label><input id="cn2" name="name"></div>`
+        : x.t === 'c' ? `<div class="field"><label for="cn2">Nome</label><input id="cn2" name="name" value="${esc(x.name)}" required></div>` : ''}
+      <div class="grid2"><div class="field"><label for="cp">Telefone</label><input id="cp" name="phone" type="tel" inputmode="tel" value="${esc(x?.phone || '')}" placeholder="912 345 678"></div><div class="field"><label for="ce">Email</label><input id="ce" name="email" type="email" value="${esc(x?.email || '')}"></div></div>
+      <p class="muted small">O contacto fica associado a esta pessoa: aparece sozinho na folha de contactos, na folha de serviço e no mapa de transportes.</p>
       <div class="field"><label for="cj">Função</label><input id="cj" name="job" value="${esc(x?.job || '')}" placeholder="Ex.: Gaffer, 1.º AC, Produtora" list="crew-jobs"></div>
+      ${isNew || x.t === 'm' ? `<fieldset class="acc-pick" ${isNew ? 'data-for="m"' : ''}><legend>Acesso ao projeto</legend>
+        <label><input type="radio" name="acc" value="1" ${!x || x.canEdit ? 'checked' : ''}><span><b>Pode editar</b><small>Cria, muda e apaga nas páginas que vê.</small></span></label>
+        <label><input type="radio" name="acc" value="0" ${x && !x.canEdit ? 'checked' : ''}><span><b>Só leitura</b><small>Vê as páginas que lhe estão abertas, sem mudar nada. Pode marcar as tarefas que são dele.</small></span></label>
+        <small class="muted">Os administradores da Grain e os líderes do projeto podem sempre editar.</small></fieldset>` : ''}
       <fieldset class="dpick"><legend>Departamentos</legend>${depts.length ? depts.map((d) => `<label><input type="checkbox" name="dept" value="${esc(d.id)}" ${x?.depts.includes(d.id) || (isNew && preDept === d.id) ? 'checked' : ''}><span style="--dc:${esc(d.color)}">${esc(d.name)}</span></label>`).join('') : '<p class="muted small">Este projeto ainda não tem departamentos (Detalhes → Departamentos e cores).</p>'}</fieldset>
       <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">${isNew ? 'Adicionar' : 'Guardar'}</button></div></form>
       <datalist id="crew-jobs">${['Realização', 'Produção', 'Direção de fotografia', '1.º assistente de câmara', '2.º assistente de câmara', 'Gaffer', 'Eletricista', 'Maquinista', 'Direção de arte', 'Adereços', 'Guarda-roupa', 'Cabelos e maquilhagem', 'Som direto', 'Montagem', 'Cor', 'Assistente de produção', 'Making of'].map((j) => `<option value="${j}">`).join('')}</datalist>`, { wide: true });
@@ -505,17 +546,19 @@ async function crewPanel(el, p, people, members, reload) {
     m.el.querySelectorAll('[data-ct]').forEach((b) => b.addEventListener('click', () => { tab = b.dataset.ct; m.el.querySelectorAll('[data-ct]').forEach((y) => y.setAttribute('aria-selected', y === b)); m.el.querySelectorAll('[data-for]').forEach((y) => { y.hidden = y.dataset.for !== tab; }); }));
     m.el.querySelector('[data-cf]').addEventListener('submit', async (e) => {
       e.preventDefault(); const fd = new FormData(e.target); const dsel = fd.getAll('dept'); const job = (fd.get('job') || '').trim() || null;
+      const phone = (fd.get('phone') || '').trim() || null; const email = (fd.get('email') || '').trim() || null;
+      const can_edit = fd.get('acc') !== '0';
       let r;
       if (isNew && tab === 'm') {
         const uid = fd.get('user_id'); if (!uid) return toast('Escolhe uma pessoa.');
         const cur = inProj(uid);
         // quem já está no projeto: junta os departamentos novos aos que já tinha
-        r = cur ? await sb.from('project_members').update({ depts: [...new Set([...(cur.depts || []), ...dsel])], job: job || cur.job || null }).eq('project_id', p.id).eq('user_id', uid)
-          : await sb.from('project_members').insert({ project_id: p.id, user_id: uid, depts: dsel, job });
+        r = cur ? await sb.from('project_members').update({ depts: [...new Set([...(cur.depts || []), ...dsel])], job: job || cur.job || null, phone: phone || cur.phone || null, email: email || cur.email || null, can_edit }).eq('project_id', p.id).eq('user_id', uid)
+          : await sb.from('project_members').insert({ project_id: p.id, user_id: uid, depts: dsel, job, phone, email, can_edit });
       }
-      else if (isNew) { const name = (fd.get('name') || '').trim(); if (!name) return toast('Escreve o nome.'); r = await sb.from('project_crew').insert({ project_id: p.id, name, email: (fd.get('email') || '').trim() || null, phone: (fd.get('phone') || '').trim() || null, depts: dsel, job }); }
-      else if (x.t === 'm') r = await sb.from('project_members').update({ depts: dsel, job }).eq('project_id', p.id).eq('user_id', x.id);
-      else r = await sb.from('project_crew').update({ name: (fd.get('name') || '').trim() || x.name, email: (fd.get('email') || '').trim() || null, phone: (fd.get('phone') || '').trim() || null, depts: dsel, job }).eq('id', x.id);
+      else if (isNew) { const name = (fd.get('name') || '').trim(); if (!name) return toast('Escreve o nome.'); r = await sb.from('project_crew').insert({ project_id: p.id, name, email, phone, depts: dsel, job }); }
+      else if (x.t === 'm') r = await sb.from('project_members').update({ depts: dsel, job, phone, email, can_edit }).eq('project_id', p.id).eq('user_id', x.id);
+      else r = await sb.from('project_crew').update({ name: (fd.get('name') || '').trim() || x.name, email, phone, depts: dsel, job }).eq('id', x.id);
       if (r.error) return toast(r.error.message);
       m.close(); toast(isNew ? 'Adicionado à equipa.' : 'Guardado.'); reload();
     });
@@ -535,17 +578,69 @@ async function crewPanel(el, p, people, members, reload) {
 const projBase = (p) => (p.is_central ? '#/central' : `#/p/${p.id}`);
 const toolHref = (p, b) => `${projBase(p)}/${(b.kind || 'board') === 'board' ? 'b' : 'f'}/${b.id}`;
 
-async function loadProject(id) {
+// projetos já abertos ficam em memória 60 s: mudar de página dentro do projeto não volta a pedir tudo.
+// Qualquer gravação nas tabelas do projeto apaga esta memória; a página do orçamento pede sempre de novo.
+const projCache = new Map();
+onWrite((t) => { if (['projects', 'project_budgets', 'boards', 'scripts', 'budget_access', 'project_members', 'community_members', 'communities'].includes(t)) projCache.clear(); });
+// ---------- só leitura ----------
+// Quem está no projeto como leitor (project_members.can_edit = false) vê tudo o que lhe está aberto mas não muda
+// nada: a base de dados recusa (RLS) e aqui escondem-se os botões de criar/apagar e os campos ficam só de leitura.
+const RO_OK = new Set(['activity', 'activity_seen', 'profiles', 'push_subscriptions', 'project_pins', 'project_hidden', 'presence']);
+let roObs = null; let roRaf = 0;
+const RO_DATA = /^(add|new|rm|del|remove|trash|up$|upload|cadd|crm|cedit|edit|import|analy|apply|use$|reset|mods$|pick$|url$|cover|change|move|dup|tpl|create|save|rename|plus|drop$|clear|sec|split|merge|restore|approve|toggleshot|shot$|addshot)/i;
+const RO_TEXT = /^\s*(\+|novo|nova|adicionar|juntar|apagar|tirar|guardar|carregar|importar|analisar|mudar|editar|recomeçar|criar|duplicar|eliminar|remover|substituir|repor)/i;
+function roScan() {
+  roRaf = 0;
+  const root = document.querySelector('.proj-main'); if (!root) return;
+  root.querySelectorAll('button:not([data-ro-ok]), a.btn').forEach((b) => {
+    if (b.closest('.pk, .sr-head, .sr-tools, [data-ro-ok]')) return;
+    const keys = Object.keys(b.dataset);
+    if (keys.some((k) => RO_DATA.test(k)) || RO_TEXT.test(b.textContent || '') || /apagar|tirar|remover/i.test(b.getAttribute('aria-label') || '')) b.hidden = true;
+  });
+  root.querySelectorAll('input:not([type=search]):not([type=checkbox]):not([type=radio]):not([readonly]), textarea:not([readonly])').forEach((i) => { if (!i.closest('[data-ro-ok], .pk')) i.readOnly = true; });
+  root.querySelectorAll('td select, .field select, form select, [data-row] select, select[data-k], select[data-f]').forEach((x) => { if (!x.closest('[data-ro-ok]')) x.disabled = true; });
+  root.querySelectorAll('[contenteditable="true"]').forEach((x) => x.setAttribute('contenteditable', 'false'));
+  root.querySelectorAll('[draggable="true"]').forEach((x) => x.setAttribute('draggable', 'false'));
+}
+function setReadOnly(p) {
+  const ro = !!(p && p.canEdit === false);
+  document.body.classList.toggle('readonly', ro);
+  setWriteGuard(ro ? (table, kind) => (RO_OK.has(table) || (table === 'tasks' && kind === 'update') ? null : 'Tens acesso só de leitura neste projeto.') : null);
+  if (ro && !roObs) { roObs = new MutationObserver(() => { if (!roRaf) roRaf = requestAnimationFrame(roScan); }); roObs.observe(document.getElementById('app') || document.body, { childList: true, subtree: true }); roRaf = requestAnimationFrame(roScan); }
+  if (!ro && roObs) { roObs.disconnect(); roObs = null; }
+}
+
+async function loadProject(id, { fresh = false } = {}) {
+  const c = projCache.get(id);
+  if (!fresh && c && Date.now() - c.t < 60000) {
+    const p = c.p;
+    state.ctx = { project: p };
+    setReadOnly(p);
+    return p;
+  }
+  const p = await loadProjectNow(id);
+  if (p) projCache.set(id, { t: Date.now(), p }); else projCache.delete(id);
+  setReadOnly(p);
+  return p;
+}
+async function loadProjectNow(id) {
   // tudo de uma vez (antes eram 4 idas à base de dados, uma atrás da outra)
-  const [{ data: p }, { data: fin }, { data: grant }, { count: nScripts }, { data: boards }] = await Promise.all([
-    sb.from('projects').select(PROJECT_COLS).eq('id', id).maybeSingle(),
+  const [{ data: p }, { data: fin }, { data: grant }, { count: nScripts }, { data: boards }, { data: canEdit }, { data: tl }] = await Promise.all([
+    // o projeto-pai (álbum) vem no mesmo pedido
+    sb.from('projects').select(`${PROJECT_COLS}, parent:parent_id(id, name, kind, deleted_at)`).eq('id', id).maybeSingle()
+      .then((r) => (r.error ? sb.from('projects').select(PROJECT_COLS).eq('id', id).maybeSingle() : r)),
     // o orçamento só chega a quem tem acesso (a base de dados devolve vazio aos outros)
     sb.from('project_budgets').select('value, budget, updated_at, approved_at').eq('project_id', id).maybeSingle(),
     sb.from('budget_access').select('user_id').eq('project_id', id).eq('user_id', state.user.id).maybeSingle(),
-    sb.from('scripts').select('id', { count: 'exact', head: true }).eq('project_id', id),
-    sb.from('boards').select('id, parent_id, title, group_id, position, created_at, kind').eq('project_id', id).order('position').order('created_at'),
+    sb.from('scripts').select('id', { count: 'exact', head: true }).eq('project_id', id).neq('kind', 'tratamento'),
+    sb.from('boards').select('id, parent_id, title, group_id, position, created_at, kind, visible_to, created_by').eq('project_id', id).order('position').order('created_at'),
+    sb.rpc('can_edit_project', { p: id }),
+    // as fases e datas do cronograma de produção dizem em que etapa o projeto está
+    sb.from('boards').select('id, phases:data->phases').eq('project_id', id).eq('kind', 'timeline').order('position').limit(1),
   ]);
   if (!p || p.deleted_at) return null;
+  p.canEdit = canEdit !== false;
+  { const t = (tl || [])[0]; const ph = t ? t.phases || t.data?.phases || null : null; p._tlPhases = ph && typeof ph === 'object' ? ph : null; p._tlHref = t ? `${projBase(p)}/f/${t.id}` : null; }
   p._hasScript = (nScripts || 0) > 0;
   p.canBudget = !p.is_central && (hasPerm('budget') || !!grant);
   p.value = p.canBudget ? fin?.value ?? null : null;
@@ -553,7 +648,8 @@ async function loadProject(id) {
   p._budgetAt = p.canBudget ? fin?.updated_at ?? null : null;
   p._approvedAt = p.canBudget ? fin?.approved_at ?? null : null;
   p._boards = boards || [];
-  if (p.parent_id) { const { data: par } = await sb.from('projects').select('id, name, kind, deleted_at').eq('id', p.parent_id).maybeSingle(); p._parent = par && !par.deleted_at ? par : null; }
+  if (p.parent_id) { let par = Array.isArray(p.parent) ? p.parent[0] : p.parent; if (par === undefined || (par && !par.id)) ({ data: par } = await sb.from('projects').select('id, name, kind, deleted_at').eq('id', p.parent_id).maybeSingle()); p._parent = par && !par.deleted_at ? par : null; }
+  delete p.parent;
   return p;
 }
 function notFound() {
@@ -575,17 +671,27 @@ async function ensureDept(p, key) {
   if (error) { toast(error.message); return key; }
   p.departments = deps; return key;
 }
+// ao lado do nome do projeto, na barra das etapas: "Só leitura" e o + das páginas (antes estavam no menu do lado)
+const stripExtra = (p) => `${p.canEdit === false ? '<span class="ro-badge" title="Podes ver tudo o que te está aberto, mas não mudar nada">Só leitura</span>' : ''}${isStaff() && p.canEdit !== false ? `<button type="button" class="icon-btn sm pn-mods" data-mods title="Páginas do projeto" aria-label="Juntar ou tirar páginas">${ICON.plus}</button>` : ''}`;
 function boardGroups(p) {
   // os mapas de luz não aparecem um a um: ficam todos na página "Mapas de luz" do departamento Imagem
-  const top = p._boards.filter((b) => !b.parent_id && b.kind !== 'mkt' && b.kind !== 'lightmap');
+  const top = p._boards.filter((b) => !b.parent_id && b.kind !== 'mkt' && b.kind !== 'wrd' && b.kind !== 'lightmap');
   const hasMaps = p._boards.some((b) => b.kind === 'lightmap');
   const groups = (p.departments || []).map((d) => ({ ...d, boards: top.filter((b) => b.group_id === d.id), pages: [] }));
   const need = (key, mod) => { if (p.is_central || !(mod === 'mapas' ? hasMaps || ['equipamento', 'storyboard', 'shotlist'].some((k) => hasMod(p, k)) : hasMod(p, mod))) return; let g = groups.find((x) => x.id === (deptOf(p, key)?.id || key)); if (!g) { g = { id: key, ...FIXED_DEPTS[key], boards: [], pages: [], virtual: true }; groups.push(g); } g.pages.push(mod); };
-  need('imagem', 'equipamento'); need('imagem', 'mapas'); need('arte', 'aderecos');
+  need('imagem', 'equipamento'); need('imagem', 'mapas'); need('arte', 'aderecos'); need('arte', 'figurino');
   const known = new Set(groups.map((g) => g.id));
   const other = top.filter((b) => !b.group_id || !known.has(b.group_id));
   if (other.length) groups.push({ id: '', name: 'Outros', color: '#8A8A99', boards: other, pages: [] });
   return groups;
+}
+// tudo o que pode ter fase: páginas do projeto, páginas fixas dos departamentos e ferramentas
+function phaseItems(p) {
+  const pages = modulesOf(p).filter((k) => k !== 'orcamento' || p.canBudget).map((k) => ({ key: modKey(k), label: modLabel(p, k), group: 'Páginas' }));
+  const gs = boardGroups(p);
+  const deptPages = gs.flatMap((g) => (g.pages || []).filter((k) => !pages.some((x) => x.key === modKey(k))).map((k) => ({ key: modKey(k), label: `${pageMeta(k).label}`, group: g.name })));
+  const tools = gs.flatMap((g) => g.boards.map((b) => ({ key: toolKey(b), label: b.title, kind: b.kind, group: g.name })));
+  return [...pages, ...deptPages, ...tools];
 }
 // páginas fixas dentro de um departamento (módulos e a página dos mapas de luz)
 const pageMeta = (k) => (k === 'mapas' ? { label: 'Mapas de luz', icon: 'bulb' } : MODULES[k]);
@@ -593,18 +699,20 @@ const pageMeta = (k) => (k === 'mapas' ? { label: 'Mapas de luz', icon: 'bulb' }
 function projectNav(p, active) {
   const base = projBase(p);
   navState.p = p; navState.active = active;
-  const mods = p.is_central ? [['tarefas', 'Tarefas', ICON.task]] : modulesOf(p).filter((k) => (k !== 'orcamento' || p.canBudget) && k !== 'equipamento' && k !== 'aderecos').map((k) => [modPath(p, k), modLabel(p, k), ICON[MODULES[k].icon]]);
+  const ph = p.is_central ? 'all' : selPhase(p);
+  const mods = p.is_central ? [['tarefas', 'Tarefas', ICON.task]] : modulesOf(p).filter((k) => (k !== 'orcamento' || p.canBudget) && k !== 'equipamento' && k !== 'aderecos' && k !== 'figurino' && shows(p, modKey(k))).map((k) => [modPath(p, k), modLabel(p, k), ICON[MODULES[k].icon]]);
   const pages = [['geral', 'Visão geral', ICON.home], ...(p.is_central && isStaff() ? [['financas', 'Finanças', ICON.money]] : []), ...mods, ['atividade', 'Atividade', ICON.bell], ['equipa', p.is_central ? 'Equipa' : 'Equipa e convites', ICON.team], ...(isStaff() ? [['detalhes', 'Detalhes', ICON.info]] : [])];
   return `
     ${p._parent ? `<a class="pn-parent" href="#/p/${p._parent.id}">${ICON.back}<span>${esc(p._parent.name)}</span></a>` : ''}
-    <div class="pn-h"><div><strong>${esc(p.name)}</strong>${p.client ? `<span class="muted small">${esc(p.client)}</span>` : ''}</div>${!p.is_central && isStaff() ? `<button type="button" class="icon-btn sm pn-mods" data-mods title="Páginas do projeto" aria-label="Juntar ou tirar páginas">${ICON.plus}</button>` : ''}</div>
+    ${p.is_central ? `<div class="pn-h"><div><strong>${esc(p.name)}</strong>${p.client ? `<span class="muted small">${esc(p.client)}</span>` : ''}</div>${p.canEdit === false ? '<span class="ro-badge" title="Podes ver tudo o que te está aberto, mas não mudar nada">Só leitura</span>' : ''}${!p.is_central && isStaff() && p.canEdit !== false ? `<button type="button" class="icon-btn sm pn-mods" data-mods title="Páginas do projeto" aria-label="Juntar ou tirar páginas">${ICON.plus}</button>` : ''}</div>` : ''}
+    <button type="button" class="pn-search" data-psearch title="Procurar no projeto (Ctrl+K)">${ICON.search}<span>Procurar</span><kbd>Ctrl K</kbd></button>
     <div class="pn-online" data-online></div>
     ${pages.map(([k, l, ic]) => `<a class="side-a" href="${base}${k === 'geral' ? '' : '/' + k}" ${active === k ? 'aria-current="page"' : ''}>${ic}<span>${l}</span></a>`).join('')}
-    <div class="pn-sec"><span>Ferramentas</span><button type="button" class="icon-btn sm" data-newboard="" aria-label="Nova ferramenta">${ICON.plus}</button></div>
-    ${boardGroups(p).map((g) => `<div class="pn-group" style="--g:${esc(g.color)}">
-      <div class="pn-gh"><i></i><span>${esc(g.name)}</span>${g.id ? `<button type="button" class="icon-btn sm" data-newboard="${esc(g.id)}" aria-label="Novo board em ${esc(g.name)}">${ICON.plus}</button>` : ''}</div>
+    <div class="pn-sec"><span>Ferramentas</span>${p.canEdit !== false ? `<button type="button" class="icon-btn sm" data-newboard="" aria-label="Nova ferramenta">${ICON.plus}</button>` : ''}</div>
+    ${boardGroups(p).map((g) => ({ ...g, pages: p.is_central ? g.pages || [] : (g.pages || []).filter((k) => shows(p, modKey(k))), boards: p.is_central ? g.boards : g.boards.filter((b) => shows(p, toolKey(b), b.kind)) })).filter((g) => ph === 'all' || g.pages.length || g.boards.length).map((g) => `<div class="pn-group" style="--g:${esc(g.color)}">
+      <div class="pn-gh"><i></i><span>${esc(g.name)}</span>${g.id && p.canEdit !== false ? `<button type="button" class="icon-btn sm" data-newboard="${esc(g.id)}" aria-label="Novo board em ${esc(g.name)}">${ICON.plus}</button>` : ''}</div>
       ${(g.pages || []).map((k) => `<a class="side-a sub" href="${base}/${k}" ${active === k ? 'aria-current="page"' : ''}>${ICON[pageMeta(k).icon]}<span>${esc(pageMeta(k).label)}</span></a>`).join('')}
-      ${g.boards.map((b) => `<a class="side-a sub" href="${toolHref(p, b)}" ${active === b.id ? 'aria-current="page"' : ''}>${(TOOL_KINDS[b.kind] || TOOL_KINDS.board).icon}<span>${esc(b.title)}</span></a>`).join('')}
+      ${g.boards.map((b) => `<a class="side-a sub" href="${toolHref(p, b)}" ${active === b.id ? 'aria-current="page"' : ''}>${(TOOL_KINDS[b.kind] || TOOL_KINDS.board).icon}<span>${esc(b.title)}</span>${b.visible_to?.length ? `<i class="vis-lock" title="Só algumas pessoas veem">${ICON.lock}</i>` : ''}</a>`).join('')}
     </div>`).join('')}`;
 }
 const navState = { p: null, active: null };
@@ -613,7 +721,12 @@ window.addEventListener('bg-modules', () => {
   const nav = document.querySelector('.proj-nav'); if (!nav || !navState.p) return;
   nav.innerHTML = projectNav(navState.p, navState.active); bindProjectNav(nav, navState.p);
 });
+// a barra do projeto fica no mesmo sítio ao mudar de página (antes voltava sempre ao topo)
+const navScroll = new Map();
 function bindProjectNav(root, p) {
+  { const nav = root.querySelector('.proj-nav'); if (nav) { const y = navScroll.get(p.id); if (y) { nav.scrollTop = y; requestAnimationFrame(() => { nav.scrollTop = y; }); } nav.addEventListener('scroll', () => navScroll.set(p.id, nav.scrollTop), { passive: true }); } }
+  root.querySelector('[data-psearch]')?.addEventListener('click', () => projectSearch(p, projBase(p)));
+  if (!window.__psKey) { window.__psKey = true; document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && navState.p && document.querySelector('[data-psearch]')) { e.preventDefault(); if (!document.querySelector('#modal.open')) projectSearch(navState.p, projBase(navState.p)); } }); }
   const box = root.querySelector('[data-online]');
   if (box) {
     joinProject(p.id);
@@ -625,70 +738,134 @@ function bindProjectNav(root, p) {
     onCleanup(off);
   }
   root.querySelector('[data-mods]')?.addEventListener('click', () => modulesModal(p));
+  if (!p.is_central) bindStrip(root, p, { onChange: () => route(), onPhase: () => go(projBase(p)), items: () => phaseItems(p) });
   root.querySelectorAll('[data-newboard]').forEach((b) => b.addEventListener('click', () => newBoard(p, b.dataset.newboard)));
 }
 
+const TOOL_HINTS = { board: 'moodboard quadro referencias cartoes imagens', table: 'folha lista contactos entregas elenco', timeline: 'calendario datas prazos plano', lightmap: 'luz iluminacao planta', budget: 'custos dinheiro valores', media: 'musica previs video audio', callsheet: 'folha de servico dia de rodagem horarios', transport: 'carros viagens boleias', distribution: 'festivais mostras submissoes premios trailer filme links' };
+// ferramentas e páginas mais próprias de cada departamento (aparecem primeiro em "Nova ferramenta")
+// cada ferramenta: [tipo, nome sugerido, modelo de tabela]; páginas: chaves de MODULES
+const TPL_NAMES = { blank: 'Tabela', deliverables: 'Entregas', props: 'Adereços por cena', cast: 'Elenco', contacts: 'Contactos' };
+const tplNamesOf = (t) => TPL_NAMES[t] || 'Tabela';
+const DEPT_TOOLS = [
+  [/^pos|post|montagem|edic|^som|sonoplast|^cor$|color|vfx|grafism|distribu/, { tools: [['media', 'Música e pre-vis'], ['distribution', 'Tabela Distribuição'], ['timeline', 'Cronograma de pós']], pages: [] }],
+  [/realiza|criativ|direc|dire[cç][aã]o art[ií]stica/, { tools: [['board', 'Moodboard'], ['board', 'Referências'], ['timeline', 'Cronograma']], pages: ['storyboard', 'shotlist', 'tratamento'] }],
+  [/produ/, { tools: [['table', 'Contactos', 'contacts'], ['timeline', 'Cronograma'], ['callsheet', 'Folha de serviço'], ['transport', 'Mapa de transportes'], ['budget', 'Orçamento'], ['table', 'Entregas', 'deliverables']], pages: ['orcamento', 'planificacao'] }],
+  [/imagem|fotograf|camara|luz|ilumina/, { tools: [['lightmap', 'Mapa de luz'], ['board', 'Referências de imagem']], pages: ['equipamento', 'storyboard', 'shotlist'] }],
+  [/arte|cenograf|adere/, { tools: [['board', 'Moodboard de arte']], pages: ['aderecos', 'figurino'] }],
+  [/guarda|figurin|wardrobe|caracteriza|maquilh|cabel/, { tools: [['board', 'Moodboard de figurino']], pages: ['figurino'] }],
+  [/marketing|comunica|redes|social/, { tools: [['distribution', 'Tabela Distribuição'], ['board', 'Moodboard']], pages: ['marketing'] }],
+];
 function newBoard(p, groupId = '', kind = 'board') {
   const fic = scriptMode(p);
+  const dept = groupId ? ((p.departments || []).find((d) => d.id === groupId) || FIXED_DEPTS[groupId] || null) : null;
+  const dname = dept ? normName(dept.name) : '';
+  const rec = dept ? (DEPT_TOOLS.find(([re]) => re.test(dname) || re.test(normName(groupId)))?.[1] || null) : null;
+  const recTools = rec ? rec.tools.filter(([k]) => TOOL_KINDS[k]) : [];
+  const recPages = rec ? rec.pages.filter((k) => MODULES[k] && (hasMod(p, k) || addableModules(p).includes(k))) : [];
+  const hasRec = !!(recTools.length || recPages.length);
+  const kindRadio = (k, label, extra = '', checked = false, hint = '') => `<label class="tool-k" data-q="${esc(`${label} ${TOOL_KINDS[k].label} ${TOOL_HINTS[k] || ''} ${hint}`)}"><input type="radio" name="kind" value="${k}" ${extra} ${checked ? 'checked' : ''}><span>${TOOL_KINDS[k].icon}${esc(label)}</span></label>`;
+  const pageBtn = (k) => hasMod(p, k) ? `<button type="button" class="tool-pg on" data-openmod="${k}" data-q="${esc(`${modLabel(p, k)} ${MODULES[k].desc}`)}" title="Já existe neste projeto: abrir">${ICON[MODULES[k].icon] || ''}<span>${esc(modLabel(p, k))}</span><small>abrir</small></button>`
+    : `<button type="button" class="tool-pg" data-addmod="${k}" data-q="${esc(`${modLabel(p, k)} ${MODULES[k].desc}`)}" title="${esc(MODULES[k].desc)}">${ICON[MODULES[k].icon] || ''}<span>${esc(modLabel(p, k))}</span></button>`;
+  const otherPages = addableModules(p).filter((k) => !recPages.includes(k));
   // os adereços têm uma única página por projeto (Arte › Adereços), por isso não há modelo de tabela de adereços
-  const tpls = [['blank', 'Em branco'], ['deliverables', 'Entregas (peças, formatos, plataformas)'], ...(fic ? [['cast', 'Elenco']] : [])];
+  const tpls = [['blank', 'Em branco'], ['contacts', 'Folha de contactos (equipa e elenco)'], ['deliverables', 'Entregas (peças, formatos, plataformas)'], ['cast', fic ? 'Elenco' : 'Atores e figurantes']];
   const m = modal(`<h2>Nova ferramenta</h2>
     <form class="stack">
-      <div class="tool-kinds" role="radiogroup" aria-label="Ferramenta">${Object.entries(TOOL_KINDS).map(([k, v]) => `<label class="tool-k"><input type="radio" name="kind" value="${k}" ${k === kind ? 'checked' : ''}><span>${v.icon}${v.label}</span></label>`).join('')}</div>
+      <input type="search" class="tool-q" data-toolq placeholder="Procurar ferramenta ou página…" aria-label="Procurar ferramenta" autocomplete="off">
+      ${hasRec ? `<div class="tool-rec" data-trec><p class="tool-rec-h"><i style="background:${esc(dept.color || 'var(--blue)')}"></i>Para ${esc(dept.name)}</p>
+        ${recTools.length ? `<div class="tool-kinds" role="radiogroup" aria-label="Ferramentas de ${esc(dept.name)}">${recTools.map(([k, label, tpl], i) => kindRadio(k, label, `data-title="${esc(label)}" ${tpl ? `data-tpl="${tpl}"` : ''}`, i === 0)).join('')}</div>` : ''}
+        ${recPages.length ? `<div class="tool-pl">${recPages.map(pageBtn).join('')}</div>` : ''}</div>
+        <button type="button" class="tool-more" data-tmore aria-expanded="false"><span>Outras ferramentas</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>` : ''}
+      <div class="tool-others" data-tothers ${hasRec ? 'hidden' : ''}>
+        <div class="tool-kinds" role="radiogroup" aria-label="Ferramenta">${Object.keys(TOOL_KINDS).map((k) => kindRadio(k, TOOL_KINDS[k].label, '', !hasRec && k === kind)).join('')}</div>
+        ${otherPages.length ? `<div class="tool-pages" data-tpages><p class="small muted">Ou junta uma página ao projeto</p><div class="tool-pl">${otherPages.map(pageBtn).join('')}</div></div>` : ''}
+      </div>
+      <p class="small muted" data-toolnone hidden>Nada com esse nome.</p>
       <div class="field"><label for="bn">Nome</label><input id="bn" name="title" placeholder="ex: Moodboard, Storyboard, Plano de rodagem" required></div>
       <div class="field" data-tplf hidden><label for="bt">Modelo</label><select id="bt" name="tpl">${tpls.map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
       <div class="field"><label for="bg">Departamento</label><select id="bg" name="group_id"><option value="">Nenhum</option>${(p.departments || []).map((d) => `<option value="${esc(d.id)}" ${d.id === groupId ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}${groupId && FIXED_DEPTS[groupId] && !deptOf(p, groupId) ? `<option value="${groupId}" selected>${FIXED_DEPTS[groupId].name}</option>` : ''}</select></div>
       <p class="small muted" data-propsnote hidden>Os adereços têm uma página única por projeto, em Arte. ${hasMod(p, 'aderecos') ? `<a href="${projBase(p)}/aderecos">Abrir Adereços</a>` : '<button type="button" class="link-btn" data-addprops>Juntar a página de Adereços</button>'}</p>
+      <div data-vis></div>
       <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Criar e abrir</button></div>
     </form>`);
   const form = m.el.querySelector('form');
+  visField([]).then((h) => { const v = m.el.querySelector('[data-vis]'); if (v) { v.innerHTML = h; bindVis(form); } });
   const propsNote = () => { const g = form.elements.group_id.value; const arte = deptOf(p, 'arte'); m.el.querySelector('[data-propsnote]').hidden = !(g && (g === 'arte' || g === arte?.id)) && !/^\s*adere/i.test(form.elements.title.value); };
   form.elements.group_id.addEventListener('change', propsNote); form.elements.title.addEventListener('input', propsNote); setTimeout(propsNote);
   m.el.querySelector('[data-addprops]')?.addEventListener('click', async () => { await ensureModules(p, ['aderecos']); m.close(); go(`${projBase(p)}/aderecos`); });
+  const nq = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const tq = m.el.querySelector('[data-toolq]');
+  tq.addEventListener('input', () => {
+    const q = nq(tq.value.trim()); let n = 0;
+    const oth = m.el.querySelector('[data-tothers]'); const more = m.el.querySelector('[data-tmore]');
+    if (more) { oth.hidden = !q && more.getAttribute('aria-expanded') !== 'true'; more.hidden = !!q; }
+    m.el.querySelectorAll('.tool-k, .tool-pg').forEach((el) => { const ok = !q || nq(el.dataset.q).includes(q); el.hidden = !ok; if (ok) n++; });
+    const tp = m.el.querySelector('[data-tpages]'); if (tp) tp.hidden = !!q && !tp.querySelector('.tool-pg:not([hidden])');
+    m.el.querySelector('[data-toolnone]').hidden = n > 0;
+    const vis = [...m.el.querySelectorAll('.tool-k:not([hidden]) input')];
+    if (q && vis.length && !vis.some((i) => i.checked)) { vis[0].checked = true; sync(); }
+  });
+  tq.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); const k = m.el.querySelector('.tool-k:not([hidden]) input'); if (k) { k.checked = true; sync(); form.elements.title.focus(); } else m.el.querySelector('.tool-pg:not([hidden])')?.click(); } });
+  setTimeout(() => tq.focus(), 30);
+  m.el.querySelector('[data-tmore]')?.addEventListener('click', (e) => { const b = e.currentTarget; const open = b.getAttribute('aria-expanded') !== 'true'; b.setAttribute('aria-expanded', open); m.el.querySelector('[data-tothers]').hidden = !open; });
+  m.el.querySelectorAll('[data-openmod]').forEach((b) => b.addEventListener('click', () => { m.close(); go(`${projBase(p)}/${modPath(p, b.dataset.openmod)}`); }));
+  m.el.querySelectorAll('[data-addmod]').forEach((b) => b.addEventListener('click', async () => { const k = b.dataset.addmod; await ensureModules(p, [k]); m.close(); go(`${projBase(p)}/${modPath(p, k)}`); }));
   const ttl = form.elements.title;
   const sync = () => {
-    const k = form.elements.kind.value; m.el.querySelector('[data-tplf]').hidden = k !== 'table'; if (!ttl.dataset.touched) ttl.value = k === 'board' ? '' : TOOL_KINDS[k].label;
+    const r = form.querySelector('[name=kind]:checked'); const k = r?.value || 'board';
+    m.el.querySelector('[data-tplf]').hidden = k !== 'table';
+    if (r?.dataset.tpl) form.elements.tpl.value = r.dataset.tpl;
+    if (!ttl.dataset.touched) ttl.value = r?.dataset.title || (k === 'board' ? '' : k === 'table' ? (tplNamesOf(form.elements.tpl.value)) : TOOL_KINDS[k].label);
     const sel = form.elements.group_id; const img = deptOf(p, 'imagem');
     if (k === 'lightmap') { if (!img && !sel.querySelector('option[value="imagem"]')) sel.insertAdjacentHTML('beforeend', '<option value="imagem">Imagem</option>'); sel.value = img?.id || 'imagem'; sel.disabled = true; } else sel.disabled = false;
   };
   ttl.addEventListener('input', () => (ttl.dataset.touched = '1'));
   form.querySelectorAll('[name=kind]').forEach((r) => r.addEventListener('change', sync)); sync();
-  const tplNames = { blank: 'Tabela', deliverables: 'Entregas', props: 'Adereços por cena', cast: 'Elenco' };
+  const tplNames = TPL_NAMES;
   form.elements.tpl.addEventListener('change', () => { if (!ttl.dataset.touched) ttl.value = tplNames[form.elements.tpl.value]; });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(form));
+    f.kind ||= 'board';
     if (/^\s*adere/i.test(f.title) && f.kind !== 'budget') { toast('Os adereços têm uma página única por projeto, em Arte › Adereços.'); if (!hasMod(p, 'aderecos')) await ensureModules(p, ['aderecos']); m.close(); return go(`${projBase(p)}/aderecos`); }
     if (f.kind === 'lightmap') f.group_id = await ensureDept(p, 'imagem');
     else if (f.group_id === 'imagem' && !deptOf(p, 'imagem')) f.group_id = await ensureDept(p, 'imagem');
     else if (f.group_id === 'arte' && !deptOf(p, 'arte')) f.group_id = await ensureDept(p, 'arte');
-    const data = f.kind === 'table' ? await tableTemplate(p, f.tpl) : f.kind === 'lightmap' ? newLightmapData() : f.kind === 'callsheet' ? { sheets: [(await lazy.callsheet()).newCallsheet(p, 1)] } : f.kind === 'transport' ? (await lazy.transport()).newTransport(p) : {};
-    const { data: row, error } = await sb.from('boards').insert({ project_id: p.id, title: f.title.trim(), group_id: f.group_id || null, position: p._boards.length, kind: f.kind, data }).select().single();
+    const data = f.kind === 'table' ? await tableTemplate(p, f.tpl) : f.kind === 'lightmap' ? newLightmapData() : f.kind === 'callsheet' ? { sheets: [(await lazy.callsheet()).newCallsheet(p, 1)] } : f.kind === 'transport' ? (await lazy.transport()).newTransport(p) : f.kind === 'distribution' ? (await import('./distribution.js')).newDistribution() : {};
+    const { data: row, error } = await sb.from('boards').insert({ project_id: p.id, title: f.title.trim(), group_id: f.group_id || null, position: p._boards.length, kind: f.kind, data, visible_to: readVis(form) }).select().single();
     if (error) return toast(error.message);
+    const sph = p.is_central ? 'all' : selPhase(p);
+    if (sph !== 'all' && !phasesOf(p, toolKey(row), row.kind).includes(sph)) await setToolPhase(p, row.id, sph);
     m.close(); go(toolHref(p, row));
   });
 }
 
 // ---------- ferramentas (tabela, cronograma, mapa de luz) ----------
+const TOOL_MOD = { budget: () => lazy.budget(), callsheet: () => lazy.callsheet(), transport: () => lazy.transport(), distribution: () => import('./distribution.js') };
 async function toolPage(projectId, toolId) {
-  const p = await loadProject(projectId);
+  const cached = projCache.get(projectId)?.p;
+  const k0 = cached?._boards?.find((b) => b.id === toolId)?.kind; if (k0 && TOOL_MOD[k0]) TOOL_MOD[k0]().catch(() => {});
+  const [p, { data: tool }] = await Promise.all([loadProject(projectId), sb.from('boards').select('*').eq('id', toolId).maybeSingle()]);
   if (!p) return notFound();
-  const { data: tool } = await sb.from('boards').select('*').eq('id', toolId).maybeSingle();
+  if (tool && TOOL_MOD[tool.kind]) TOOL_MOD[tool.kind]().catch(() => {});
   if (!tool) return go(projBase(p));
   if (tool.kind === 'board') return go(toolHref(p, tool));
   if (tool.kind === 'lightmap') return lightmapView(p, tool);
   const d = (p.departments || []).find((x) => x.id === tool.group_id);
-  app.innerHTML = `<div class="page">${header(p.is_central ? 'central' : '')}
+  app.innerHTML = `<div class="page ${p.is_central ? '' : 'has-strip'}">${header(p.is_central ? 'central' : '')}${p.is_central ? '' : projectStrip(p, projBase(p), stripExtra(p))}
     <div class="proj-layout">
       <nav class="proj-nav" aria-label="Projeto">${projectNav(p, tool.id)}</nav>
-      <main class="proj-main" data-main>
+      <main class="proj-main" data-main>${p.is_central ? '' : aheadNotice(p)}
         <div class="row between wrap-gap"><div><span class="small muted">${(TOOL_KINDS[tool.kind] || {}).label || ''}${d ? ` · ${esc(d.name)}` : ''}</span><h1 class="h1">${esc(tool.title)}</h1></div>
-          <button type="button" class="btn ghost" data-topt>${ICON.dots} Opções</button></div>
+          <div class="row wrap-gap"><button type="button" class="btn ghost" data-tooltask>${ICON.plus} Adicionar tarefa</button><button type="button" class="btn ghost" data-topt>${ICON.dots} Opções</button></div></div>
         <div data-tool></div>
       </main>
     </div></div>`;
   bindHeader(app); bindProjectNav(app, p);
+  if (!p.is_central) bindAhead(app, p, () => go(projBase(p)), () => go(projBase(p)));
   app.querySelector('[data-topt]').addEventListener('click', () => boardOptions(p, tool, () => toolPage(projectId, toolId)));
+  app.querySelector('[data-tooltask]')?.addEventListener('click', () => addTaskModal({ projectId: p.id, departments: p.departments || [], entity: { type: 'board', id: tool.id }, where: tool.title }));
   const box = app.querySelector('[data-tool]');
   joinProject(p.id);
   { const lk = lockPage(`${p.id}:f:${tool.id}`, app.querySelector('[data-main]'), { reopen: () => route() }); onCleanup(() => lk.destroy()); }
@@ -698,6 +875,7 @@ async function toolPage(projectId, toolId) {
   if (tool.kind === 'media') mediaTool(box, p, tool);
   if (tool.kind === 'callsheet') (await lazy.callsheet()).callsheetTool(box, p, tool);
   if (tool.kind === 'transport') (await lazy.transport()).transportTool(box, p, tool);
+  if (tool.kind === 'distribution') (await import('./distribution.js')).distributionTool(box, p, tool);
   if (tool.kind === 'lightmap') {
     const { data: chars } = await sb.from('characters').select('name, actor').eq('project_id', p.id).order('position');
     const lm = (await lazy.lightmap()).lightmapTool(box, p, tool, { characters: (chars || []).map((c) => c.name), base: projBase(p) });
@@ -710,15 +888,19 @@ function boardOptions(p, b, after) {
     <form class="stack">
       <div class="field"><label for="bn">Nome</label><input id="bn" name="title" value="${esc(b.title)}" required></div>
       <div class="field"><label for="bg">Departamento</label><select id="bg" name="group_id" ${b.kind === 'lightmap' ? 'disabled title="Os mapas de luz ficam sempre em Imagem"' : ''}><option value="">Nenhum</option>${(p.departments || []).map((d) => `<option value="${esc(d.id)}" ${d.id === b.group_id ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></div>
+      <div data-vis></div>
       <div class="row between">
         <button type="button" class="btn ghost danger-text" data-del>${ICON.trash} Apagar</button>
         <div class="row"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Guardar</button></div>
       </div>
     </form>`);
+  const canVis = isStaff() || b.created_by === state.user?.id;
+  if (canVis) visField(b.visible_to || []).then((h) => { const v = m.el.querySelector('[data-vis]'); if (v) { v.innerHTML = h; bindVis(m.el.querySelector('form')); } });
   m.el.querySelector('form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target));
-    const { error } = await sb.from('boards').update({ title: f.title.trim(), ...(b.kind === 'lightmap' ? {} : { group_id: f.group_id || null }) }).eq('id', b.id);
+    const vis = canVis && e.target.querySelector('[name=vis]') ? { visible_to: readVis(e.target) } : {};
+    const { error } = await sb.from('boards').update({ title: f.title.trim(), ...(b.kind === 'lightmap' ? {} : { group_id: f.group_id || null }), ...vis }).eq('id', b.id);
     if (error) return toast(error.message);
     m.close(); after();
   });
@@ -732,22 +914,33 @@ function boardOptions(p, b, after) {
 }
 
 async function projectPage(projectId, page, sub) {
-  const p = await loadProject(projectId);
+  const p = await loadProject(projectId, { fresh: ['orcamento', 'detalhes'].includes(page) });
   if (!p) return notFound();
   state.ctx = { project: p };
   if (page === 'detalhes' && !isStaff()) page = 'geral';
   if (page !== 'geral') setTimeout(() => autoModules(p), 0);
-  app.innerHTML = `<div class="page">${header(p.is_central ? 'central' : '')}
+  app.innerHTML = `<div class="page ${p.is_central ? '' : 'has-strip'}">${header(p.is_central ? 'central' : '')}${p.is_central ? '' : projectStrip(p, projBase(p), stripExtra(p))}
     <div class="proj-layout">
       <nav class="proj-nav" aria-label="Projeto">${projectNav(p, page)}</nav>
-      <main class="proj-main" data-main></main>
+      <main class="proj-main ${!p.is_central && aheadOf(p) && page === 'geral' ? 'ov-ahead' : ''}">${p.is_central ? '' : aheadNotice(p)}<div data-main></div></main>
     </div></div>`;
   bindHeader(app); bindProjectNav(app, p);
+  if (!p.is_central) bindAhead(app, p, () => go(projBase(p)), () => go(projBase(p)));
   const main = app.querySelector('[data-main]');
+  // tarefa ligada a esta página (ou à cena / pessoa / décor / plano / adereço aberto): botão no canto superior direito
+  if (!p.is_central && p.canEdit !== false) app.querySelector('.topbar-r')?.insertAdjacentHTML('afterbegin', `<button type="button" class="btn ghost sm task-top" data-pagetask>${ICON.plus}<span>Adicionar tarefa</span></button>`);
+  app.querySelector('[data-pagetask]')?.addEventListener('click', () => {
+    const ENT = { cenas: 'scene', seguimento: 'scene', personagens: 'character', elenco: 'character', figurino: 'character', decors: 'location', plano: 'shot', aderecos: 'prop', marketing: 'marketing' };
+    const entity = sub && ENT[page] ? { type: ENT[page], id: sub } : ['tarefas', 'geral'].includes(page) ? null : { type: `page:${page}`, id: null };
+    const label = (pageMeta(page)?.label || { geral: 'Visão geral', atividade: 'Atividade', equipa: 'Equipa', detalhes: 'Detalhes', plano: 'Plano' }[page] || page);
+    const h = main.querySelector('h1, .title-in, .scene-h h1');
+    const where = !entity ? '' : sub ? `${label} · ${(h?.value || h?.textContent || '').trim()}` : label;
+    addTaskModal({ projectId: p.id, departments: p.departments || [], entity, where });
+  });
   const titles = { tarefas: 'Tarefas', equipa: p.is_central ? 'Equipa' : 'Equipa e convites', detalhes: 'Detalhes' };
   joinProject(p.id);
   // páginas de trabalho: só uma janela edita de cada vez (as outras ficam só a ver)
-  if (['orcamento', 'seguimento', 'decors', 'elenco', 'personagens', 'aderecos', 'cenas', 'guiao', 'planificacao', 'detalhes', 'shotlist', 'storyboard', 'financas', 'plano', 'equipamento'].includes(page)) {
+  if (['orcamento', 'seguimento', 'decors', 'elenco', 'personagens', 'aderecos', 'cenas', 'guiao', 'planificacao', 'detalhes', 'shotlist', 'storyboard', 'financas', 'plano', 'equipamento', 'figurino', 'tratamento'].includes(page)) {
     const lk = lockPage(`${p.id}:${page}:${sub || ''}`, main, { reopen: () => route() });
     onCleanup(() => lk.destroy());
   }
@@ -777,6 +970,8 @@ async function projectPage(projectId, page, sub) {
   }
   if (['orcamento', 'financas'].includes(page)) { main.innerHTML = `<div class="empty-box"><p>${ICON.lock} Não tens acesso a esta parte.</p><p class="muted small">Pede a um administrador.</p></div>`; return; }
   if (page === 'aderecos' && !p.is_central) return (await lazy.props()).propsPage(main, p, sub, projBase(p), onCleanup);
+  if (page === 'figurino' && !p.is_central) return (await lazy.wardrobe()).wardrobePage(main, p, sub, projBase(p), onCleanup);
+  if (page === 'tratamento' && !p.is_central) return (await import('./treatment.js')).treatmentPage(main, p, projBase(p), onCleanup);
   main.innerHTML = `<h1 class="h1 pm-title">${esc(titles[page] || '')}</h1><div class="panel" data-body></div>`;
   const body = main.querySelector('[data-body]');
   if (page === 'tarefas') { body.classList.remove('panel'); body.classList.add('tc'); const t = mountTaskCenter(body, { projectId: p.id }); onCleanup(() => t.destroy()); }
@@ -794,20 +989,27 @@ function budgetUsed(p) {
 
 async function projectOverview(main, p) {
   const base = projBase(p);
-  const kids = isFolder(p) ? await loadChildren(p) : null;
-  p._kidsAlloc = kids ? rollup(kids).alloc : 0;
-  const [{ data: tasks }, { data: items }, people] = await Promise.all([
-    sb.from('tasks').select('*').eq('project_id', p.id).neq('status', 'done'),
-    sb.from('board_items').select('board_id, kind, data').eq('project_id', p.id),
-    loadPeople(),
+  // tudo ao mesmo tempo (antes eram 4 ou 5 esperas seguidas)
+  // (um pedido do Supabase só corre quando se espera por ele, e corre de novo a cada espera: Promise.resolve faz um só)
+  const allTasksP = Promise.resolve(sb.from('tasks').select('*').eq('project_id', p.id));
+  const itemsP = Promise.resolve(sb.from('board_items').select('board_id, kind, data').eq('project_id', p.id));
+  if (!p.is_central) p._preSit = situationData(p, allTasksP); // a caixa do ponto de situação começa já a pedir os seus dados
+  const thumbsP = itemsP.then(({ data }) => signedUrls((data || []).filter((i) => i.kind === 'image').map((i) => i.data?.path).slice(0, 40)));
+  const [kids, { data: allTasks }, { data: items }, people, coverMap, fs, thumbs] = await Promise.all([
+    isFolder(p) ? loadChildren(p) : null,
+    allTasksP, itemsP, loadPeople(),
+    p.cover_path ? signedUrls([p.cover_path]) : {},
+    hasMod(p, 'cenas') ? fictionStats(p) : null,
+    thumbsP,
   ]);
-  const cover = p.cover_path ? (await signedUrls([p.cover_path]))[p.cover_path] : null;
-  const fs = hasMod(p, 'cenas') ? await fictionStats(p) : null;
-  const imgPaths = (items || []).filter((i) => i.kind === 'image').map((i) => i.data?.path);
-  const thumbs = await signedUrls(imgPaths.slice(0, 40));
+  p._kidsAlloc = kids ? rollup(kids).alloc : 0;
+  const tasks = (allTasks || []).filter((t) => t.status !== 'done');
+  const cover = p.cover_path ? coverMap[p.cover_path] : null;
   const ph = phaseOf(p);
-  const top = p._boards.filter((b) => !b.parent_id && b.kind !== 'mkt' && b.kind !== 'lightmap');
-  const nMaps = p._boards.filter((b) => b.kind === 'lightmap').length;
+  const top = p._boards.filter((b) => !b.parent_id && b.kind !== 'mkt' && b.kind !== 'wrd' && b.kind !== 'lightmap');
+  const nMaps = p._boards.filter((b) => b.kind === 'lightmap').length && (p.is_central || shows(p, modKey('mapas'))) ? p._boards.filter((b) => b.kind === 'lightmap').length : 0;
+  const allTop = top.length;
+  if (!p.is_central) top.splice(0, top.length, ...top.filter((b) => shows(p, toolKey(b), b.kind)));
   const count = (id) => (items || []).filter((i) => i.board_id === id).length;
   const thumbOf = (id) => { const im = (items || []).find((i) => i.board_id === id && i.kind === 'image' && thumbs[i.data?.path]); return im ? thumbs[im.data.path] : null; };
   const deptMap = new Map((p.departments || []).map((d) => [d.id, d]));
@@ -821,7 +1023,7 @@ async function projectOverview(main, p) {
         <p class="pm-sub">${[p.client, p.starts_on && p.ends_on ? `${fmtDate(p.starts_on)} – ${fmtDate(p.ends_on)}` : ''].filter(Boolean).map(esc).join(' · ')}</p>
         ${!p.is_central ? `<div class="pm-leads" data-leads></div>` : ''}
         ${p.canBudget && hasMod(p, 'orcamento') ? (() => { const used = budgetUsed(p) + (p._kidsAlloc || 0); const over = p.value != null && used > p.value; return `<button type="button" class="pm-budget ${over ? 'over' : ''}" data-budget title="Só quem tem acesso ao orçamento vê isto"><span>${ICON.lock} Orçamento${p._approvedAt ? ' <em class="appr">✓ aprovado</em>' : ''}</span>${p.value != null ? `<strong>${eur.format(p.value)}</strong>${used ? `<small>${eur.format(used)} na tabela${over ? ` · ${eur.format(used - p.value)} acima` : ''}</small>` : ''}` : '<strong class="muted-w">Definir</strong>'}</button>`; })() : ''}
-        ${ph.label ? `<div class="pm-phase"><div class="row between small"><span>${esc(ph.label)}</span><span>${Math.round(ph.pct * 100)}%</span></div><div class="bar light"><i style="width:${Math.round(ph.pct * 100)}%"></i></div></div>` : ''}
+        ${ph.label || p.stage ? `<div class="pm-phase"><div class="row between small"><span>${esc(p.stage ? phaseLabel(p.stage) : ph.label)}</span><span>${Math.round(ph.pct * 100)}%</span></div><div class="bar light"><i style="width:${Math.round(ph.pct * 100)}%"></i></div></div>` : ''}
       </div>
     </section>
     ${fs ? `<div class="stats">${[['cenas', 'Cenas', fs.scenes], ['personagens', 'Personagens', fs.characters], ['decors', 'Décors', fs.locations], ['storyboard', 'Planos', fs.shots]].map(([k, l, n]) => `<a class="stat" href="${base}/${k}"><strong>${n}</strong><span>${l}</span></a>`).join('')}${fs.scenes ? '' : `<a class="stat cta" href="${base}/guiao"><strong>${ICON.plus}</strong><span>Importar guião</span></a>`}</div>` : ''}
@@ -836,10 +1038,10 @@ async function projectOverview(main, p) {
           <article class="board-card" style="--g:${esc(d?.color || '#8A8A99')}">
             <a href="${toolHref(p, b)}" class="proj-link" aria-label="Abrir ${esc(b.title)}"></a>
             <div class="bc-cover" ${th ? `style="background-image:url('${esc(th)}')"` : ''}>${th ? '' : (TOOL_KINDS[b.kind] || TOOL_KINDS.board).icon}</div>
-            <div class="bc-body"><strong>${esc(b.title)}</strong><span class="small muted">${d ? `<i class="dot"></i>${esc(d.name)} · ` : ''}${(b.kind || 'board') === 'board' ? `${count(b.id)} ${count(b.id) === 1 ? 'cartão' : 'cartões'}` : esc((TOOL_KINDS[b.kind] || {}).label || '')}</span></div>
+            <div class="bc-body"><strong>${esc(b.title)}${b.visible_to?.length ? ` <i class="vis-lock" title="Visível só para ${b.visible_to.length} ${b.visible_to.length === 1 ? 'pessoa' : 'pessoas'}">${ICON.lock}</i>` : ''}</strong><span class="small muted">${d ? `<i class="dot"></i>${esc(d.name)} · ` : ''}${(b.kind || 'board') === 'board' ? `${count(b.id)} ${count(b.id) === 1 ? 'cartão' : 'cartões'}` : esc((TOOL_KINDS[b.kind] || {}).label || '')}</span></div>
             <button type="button" class="icon-btn bc-more" data-bopt="${b.id}" aria-label="Opções de ${esc(b.title)}">${ICON.dots}</button>
           </article>`; }).join('')}${nMaps ? `<article class="board-card" style="--g:${esc(deptOf(p, 'imagem')?.color || '#2FB67C')}"><a href="${base}/mapas" class="proj-link" aria-label="Abrir os mapas de luz"></a><div class="bc-cover">${ICON.bulb}</div><div class="bc-body"><strong>Mapas de luz</strong><span class="small muted"><i class="dot"></i>Imagem · ${nMaps} ${nMaps === 1 ? 'mapa' : 'mapas'}</span></div></article>` : ''}</div>`
-        : `<div class="empty-box"><p>Ainda não há ferramentas neste projeto.</p><p class="muted small">Boards para o tratamento, o moodboard ou um brainstorm (abrem em ecrã inteiro), tabelas, cronograma e mapas de luz.</p><button type="button" class="btn primary" data-nb>${ICON.plus} Criar a primeira</button></div>`}
+        : allTop ? `<div class="empty-box"><p>Nenhuma ferramenta em ${esc(phaseLabel(selPhase(p)).toLowerCase())}.</p><p class="muted small">Muda de fase em cima, ou usa "Organizar fases" para escolher onde cada ferramenta aparece.</p></div>` : `<div class="empty-box"><p>Ainda não há ferramentas neste projeto.</p><p class="muted small">Boards para o tratamento, o moodboard ou um brainstorm (abrem em ecrã inteiro), tabelas, cronograma e mapas de luz.</p><button type="button" class="btn primary" data-nb>${ICON.plus} Criar a primeira</button></div>`}
       </section>
       ${p.is_central ? `<aside class="pm-side">
         <section class="panel">
@@ -870,21 +1072,26 @@ async function projectOverview(main, p) {
 
 // ---------- Central: visão geral dos projetos ----------
 const eur = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
-// líder e encarregue do projeto: aparecem no topo do projeto; quem é da equipa pode mudar ali mesmo
+// líderes do projeto (um ou mais): aparecem no topo do projeto e nos detalhes; quem é da equipa pode mudar ali mesmo
 async function drawLeads(el, p) {
   const people = await loadPeople(); const by = (id) => people.find((x) => x.id === id);
-  const chip = (k, label) => { const x = by(p[k]); return `<button type="button" class="pm-lead ${x ? '' : 'empty'}" data-lk="${k}" ${isStaff() ? '' : 'disabled'} title="${isStaff() ? `Mudar ${label.toLowerCase()}` : label}"><small>${label}</small>${x ? `<span class="avatar sm" style="--c:${esc(x.color)}">${esc(initials(x.display_name))}</span><b>${esc(x.display_name)}</b>` : `<b class="muted-w">${isStaff() ? 'Atribuir' : '—'}</b>`}</button>`; };
-  el.innerHTML = chip('lead_id', 'Líder') + chip('manager_id', 'Encarregue');
-  el.querySelectorAll('[data-lk]').forEach((b) => b.addEventListener('click', () => {
-    const k = b.dataset.lk; const label = k === 'lead_id' ? 'Líder do projeto' : 'Encarregue do projeto';
-    const m = modal(`<h2>${label}</h2><p class="muted small">${k === 'lead_id' ? 'Quem lidera e responde pelo projeto.' : 'Quem trata do projeto no dia a dia.'}</p><div class="lead-pick">${[{ id: '', display_name: 'Ninguém' }, ...people.filter((x) => x.role !== 'guest')].map((x) => `<button type="button" class="lead-opt ${(p[k] || '') === x.id ? 'on' : ''}" data-pid="${x.id}">${x.id ? `<span class="avatar sm" style="--c:${esc(x.color)}">${esc(initials(x.display_name))}</span>` : '<span class="avatar sm none">—</span>'}<span>${esc(x.display_name)}</span></button>`).join('')}</div><div class="row end"><button type="button" class="btn ghost" data-close>Fechar</button></div>`);
-    m.el.querySelectorAll('[data-pid]').forEach((o) => o.addEventListener('click', async () => {
-      const v = o.dataset.pid || null;
-      const { error } = await sb.from('projects').update({ [k]: v }).eq('id', p.id);
+  const ids = leadsOf(p);
+  const chip = (x) => `<span class="pm-lead"><small>Líder</small><span class="avatar sm" style="--c:${esc(x.color)}">${esc(initials(x.display_name))}</span><b>${esc(x.display_name)}</b></span>`;
+  el.innerHTML = `${ids.map(by).filter(Boolean).map(chip).join('')}${isStaff() ? `<button type="button" class="pm-lead ${ids.length ? 'add' : 'empty'}" data-lk title="Escolher os líderes do projeto">${ids.length ? '+ Líder' : '<small>Líder</small><b>Atribuir</b>'}</button>` : ids.length ? '' : '<span class="pm-lead empty"><small>Líder</small><b>—</b></span>'}`;
+  el.querySelector('[data-lk]')?.addEventListener('click', () => {
+    const sel = new Set(ids);
+    const m = modal(`<h2>Líderes do projeto</h2><p class="muted small">Quem lidera e responde pelo projeto. Podem ser várias pessoas.</p><div class="lead-pick">${people.filter((x) => x.role !== 'guest').map((x) => `<button type="button" class="lead-opt ${sel.has(x.id) ? 'on' : ''}" data-pid="${x.id}"><span class="avatar sm" style="--c:${esc(x.color)}">${esc(initials(x.display_name))}</span><span>${esc(x.display_name)}</span></button>`).join('')}</div>
+      <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button type="button" class="btn primary" data-ok>Guardar</button></div>`);
+    m.el.querySelectorAll('[data-pid]').forEach((o) => o.addEventListener('click', () => { const id = o.dataset.pid; if (sel.has(id)) sel.delete(id); else sel.add(id); o.classList.toggle('on', sel.has(id)); }));
+    m.el.querySelector('[data-ok]').addEventListener('click', async () => {
+      // pela ordem em que estavam, os novos no fim
+      const list = [...ids.filter((id) => sel.has(id)), ...[...sel].filter((id) => !ids.includes(id))];
+      const { error } = await sb.from('projects').update({ lead_ids: list, lead_id: list[0] || null }).eq('id', p.id);
       if (error) return toast(error.message);
-      p[k] = v; m.close(); toast('Guardado.'); drawLeads(el, p);
-    }));
-  }));
+      p.lead_ids = list; p.lead_id = list[0] || null; m.close(); toast('Guardado.');
+      document.querySelectorAll('[data-leads], [data-leadsform]').forEach((x) => drawLeads(x, p));
+    });
+  });
 }
 
 const coState = { ym: new Date().toISOString().slice(0, 7) };
@@ -906,7 +1113,7 @@ async function centralOverview(box) {
   const avatars = (pid) => { const l = who(pid); return l.length ? `<span class="av-stack">${l.slice(0, 4).map((x) => `<span class="avatar sm" title="${esc(x.display_name)}" style="--c:${esc(x.color)}">${esc(initials(x.display_name))}</span>`).join('')}${l.length > 4 ? `<span class="avatar sm more">+${l.length - 4}</span>` : ''}</span>` : '<span class="muted small">—</span>'; };
   const open = (pid) => (tasks || []).filter((t) => t.project_id === pid && t.status !== 'done').length;
   const pname = (id) => people.find((x) => x.id === id)?.display_name;
-  const leadCell = (x) => (x.lead_id || x.manager_id ? `${x.lead_id ? `<b>${esc(pname(x.lead_id) || '—')}</b>` : '<span class="muted">sem líder</span>'}${x.manager_id ? `<br><span class="muted">${esc(pname(x.manager_id) || '')}</span>` : ''}` : '<span class="muted">—</span>');
+  const leadCell = (x) => { const ns = leadsOf(x).map(pname).filter(Boolean); return ns.length ? `<b>${ns.map(esc).join(', ')}</b>` : '<span class="muted">sem líder</span>'; };
   const val = (v) => (v == null ? '<span class="muted">—</span>' : eur.format(v));
   const valOf = (x) => { const par = parentOf(x); if (par) return `<span class="muted" title="Já incluído no orçamento geral de ${esc(par.name)}">${x.value == null ? '—' : eur.format(x.value)} <small>(em ${esc(par.name)})</small></span>`; if (isFolder(x) && x.value == null) { const k = eff(x); return k ? `${eur.format(k)} <small class="muted">(soma dos projetos)</small>` : val(null); } return val(x.value); };
 
@@ -925,7 +1132,7 @@ async function centralOverview(box) {
   box.innerHTML = `
     <section class="co-sec">
       <div class="co-h"><h2 class="h2">Projetos em curso</h2><span class="muted">${ongoing.length} ${ongoing.length === 1 ? 'projeto' : 'projetos'}${money ? ` · <strong class="co-total">${eur.format(sum(ongoing))}</strong>` : ''}</span></div>
-      <div class="panel table-wrap">${ongoing.length ? `<table class="table co-table"><thead><tr><th>Projeto</th>${money ? '<th class="num">Orçamento</th>' : ''}<th>Líder · encarregue</th><th>Atribuídos</th><th>Estado</th><th class="num">Tarefas</th><th>Entrega</th></tr></thead><tbody>
+      <div class="panel table-wrap">${ongoing.length ? `<table class="table co-table"><thead><tr><th>Projeto</th>${money ? '<th class="num">Orçamento</th>' : ''}<th>Líderes</th><th>Atribuídos</th><th>Estado</th><th class="num">Tarefas</th><th>Entrega</th></tr></thead><tbody>
         ${ongoing.map((x) => `<tr class="click-row" data-href="#/p/${x.id}"><td${parentOf(x) ? ' class="co-child"' : ''}><a href="#/p/${x.id}" class="co-name"><strong>${esc(x.name)}</strong><span class="small muted">${esc(x.client || '')}${x.client ? ' · ' : ''}${esc(KINDS[x.kind] || x.kind)}</span></a></td>${money ? `<td class="num">${valOf(x)}</td>` : ''}<td class="small co-lead">${leadCell(x)}</td><td>${avatars(x.id)}</td><td>${stateCell(x)}</td><td class="num">${open(x.id) || '<span class="muted">0</span>'}</td><td class="small">${x.ends_on ? fmtDate(x.ends_on) : '<span class="muted">—</span>'}</td></tr>`).join('')}
       </tbody>${money ? `<tfoot><tr><td><strong>Total</strong></td><td class="num"><strong>${eur.format(sum(ongoing))}</strong></td><td colspan="5"></td></tr></tfoot>` : ''}</table>` : '<p class="empty-note">Não há projetos em curso.</p>'}</div>
     </section>
@@ -979,6 +1186,7 @@ async function lightmapView(p, tool) {
 
 // ---------- board em ecrã inteiro ----------
 async function boardView(projectId, boardId) {
+  const boardMod = import('./board.js'); // o código do board chega ao mesmo tempo que os dados
   const p = await loadProject(projectId);
   if (!p) return notFound();
   const boards = p._boards;
@@ -1040,12 +1248,15 @@ async function boardView(projectId, boardId) {
   joinProject(p.id);
   const bp = boardPresence(cur.id);
   onCleanup(() => bp.leave());
+  const { mountBoard } = await boardMod;
+  if (!app.querySelector('.pv-board')) return;
   const board = mountBoard(app.querySelector('.pv-board'), {
     projectId: p.id, boardId: cur.id, presence: bp,
     onOpenBoard: (id) => go(`${base}/b/${id}`),
     onUp: async () => {
       if (cur.parent_id) return go(`${base}/b/${cur.parent_id}`);
       // board de um item de marketing: volta para a página do item
+      if (cur.kind === 'wrd') { const { data: wb } = await sb.from('boards').select('data').eq('id', cur.id).maybeSingle(); if (wb?.data?.location_id) return go(`${base}/decors/${wb.data.location_id}`); return go(`${base}/figurino${wb?.data?.character_id ? '/' + wb.data.character_id : ''}`); }
       if (cur.kind === 'mkt') { const { data: mi } = await sb.from('marketing_items').select('id').eq('board_id', cur.id).maybeSingle(); if (mi) return go(`${base}/marketing/${mi.id}`); }
       go(base);
     },
