@@ -2406,3 +2406,10 @@ body.readonly .proj-main input[readonly]:focus, body.readonly .proj-main textare
 .tool-others { display: flex; flex-direction: column; gap: 12px; }
 .tool-pg.on { border-style: solid; }
 .tool-pg small { color: var(--muted); font-size: 11px; margin-left: 2px; }
+.dist-wrap { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.dist-wrap > * { margin-top: 0 !important; margin-bottom: 0 !important; }
+.dist-wrap.fs-on { padding: 20px 24px 32px; }
+.dist-wrap.fs-on .dist-links > .row { padding-right: 220px; }
+.dist-wrap.fs-on .dist-tw { flex: 1 1 auto; overflow: auto; }
+.dist-wrap.fs-on .dist-t thead th { position: sticky; top: 0; z-index: 3; background: var(--panel); }
+.dist-wrap.fs-on .dist-t thead th:first-child { z-index: 4; }
