@@ -1884,7 +1884,7 @@ body.tool-dragging, body.tool-dragging * { cursor: grabbing !important; user-sel
 .ent-row strong, .ent-row span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ent-row > svg { width: 16px; height: 16px; color: var(--muted); }
 .ent-th { width: 44px; height: 44px; border-radius: 8px; background: var(--panel2); display: flex; align-items: center; justify-content: center; overflow: hidden; color: var(--muted); }
-.ent-th img { width: 100%; height: 100%; object-fit: cover; }
+.ent-th img { width: 100%; height: 100%; object-fit: contain; background: var(--panel2); }
 .ent-th svg { width: 20px; height: 20px; opacity: .6; }
 .ent-th b { font-size: 13px; opacity: .7; }
 @media (max-width: 640px) { .ent-row { grid-template-columns: 40px minmax(0, 1fr) 20px; } .ent-row > span { display: none; } }
@@ -1951,7 +1951,7 @@ body.tool-dragging, body.tool-dragging * { cursor: grabbing !important; user-sel
 
 /* figurino */
 .wr-head { display: flex; align-items: center; gap: 16px; margin: 6px 0 18px; flex-wrap: wrap; }
-.wr-ph { width: 72px; height: 72px; border-radius: 14px; overflow: hidden; background: var(--panel2); display: grid; place-items: center; color: var(--muted); flex: none; }
+.wr-ph { width: 96px; aspect-ratio: 3 / 4; height: auto; border-radius: 12px; overflow: hidden; background: var(--panel2); display: grid; place-items: center; color: var(--muted); flex: none; }
 .wr-ph img { width: 100%; height: 100%; object-fit: contain; }
 .wr-head > div { flex: 1; min-width: 200px; }
 .wr-grid { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 18px; align-items: start; margin-bottom: 18px; }
@@ -2035,7 +2035,7 @@ body.tool-dragging, body.tool-dragging * { cursor: grabbing !important; user-sel
 .si-card { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .si-h { display: flex; align-items: center; gap: 10px; }
 .si-av { width: 44px; height: 44px; border-radius: 50%; overflow: hidden; background: var(--panel2); display: flex; align-items: center; justify-content: center; flex: none; }
-.si-av img { width: 100%; height: 100%; object-fit: cover; }
+.si-av img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 15%; }
 .si-av b { font-size: 14px; opacity: .7; }
 .si-n { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .si-n a { color: var(--text); text-decoration: none; }
@@ -2569,7 +2569,7 @@ body.readonly .proj-main input[readonly]:focus, body.readonly .proj-main textare
 .an-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
 .an-grid.sm { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
 .an-th { position: relative; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel); color: var(--text); text-decoration: none; }
-.an-th img, .an-noimg { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; object-position: top; display: block; background: var(--panel2); }
+.an-th img, .an-noimg { width: 100%; aspect-ratio: 3 / 4; object-fit: contain; display: block; background: var(--panel2); }
 .an-th:hover { border-color: var(--line2); }
 .an-cap { display: flex; flex-direction: column; padding: 6px 8px; font-size: 12px; }
 .an-th .an-badge { position: absolute; top: 6px; left: 6px; }
@@ -2582,7 +2582,7 @@ body.readonly .proj-main input[readonly]:focus, body.readonly .proj-main textare
 .an-plans { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
 .an-plan { display: grid; grid-template-columns: 56px 1fr auto; gap: 12px; align-items: center; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); text-decoration: none; }
 .an-plan:hover { border-color: var(--line2); }
-.an-pimg img, .an-pimg { width: 56px; height: 72px; object-fit: cover; object-position: top; border-radius: 6px; background: var(--panel2); display: block; }
+.an-pimg img, .an-pimg { width: 56px; height: 72px; object-fit: contain; border-radius: 6px; background: var(--panel2); display: block; }
 .an-pmain { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .an-pmain small { font-size: 12px; }
 .an-pflags { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
