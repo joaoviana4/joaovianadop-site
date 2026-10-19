@@ -16,13 +16,19 @@ export const TOOL_KINDS = {
 const uid = () => Math.random().toString(36).slice(2, 10);
 const debounce = (fn, ms = 700) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 
+import { projectContacts } from './contacts.js';
 // ---------- modelos de tabela ----------
 export async function tableTemplate(p, tpl) {
   const col = (name, type = 'text') => ({ id: uid(), name, type });
   if (tpl === 'cast') {
-    const cols = [col('Personagem'), col('Ator ou atriz'), col('Contacto'), col('Disponibilidade'), col('Confirmado', 'check')];
-    const { data } = await sb.from('characters').select('name, actor').eq('project_id', p.id).order('position');
-    return { columns: cols, rows: (data || []).map((c) => ({ id: uid(), cells: { [cols[0].id]: c.name, [cols[1].id]: c.actor } })) };
+    const cols = [col('Personagem'), col('Ator ou atriz'), col('Telefone'), col('Email'), col('Disponibilidade'), col('Confirmado', 'check')];
+    const { data } = await sb.from('characters').select('name, actor, info').eq('project_id', p.id).order('position');
+    return { columns: cols, rows: (data || []).map((c) => ({ id: uid(), cells: { [cols[0].id]: c.name, [cols[1].id]: c.actor, [cols[2].id]: c.info?.phone || '', [cols[3].id]: c.info?.email || '' } })) };
+  }
+  if (tpl === 'contacts') {
+    const cols = [col('Nome'), col('Função'), col('Departamento'), col('Telefone'), col('Email')];
+    const list = await projectContacts(p);
+    return { columns: cols, rows: list.map((c) => ({ id: uid(), cells: { [cols[0].id]: c.name, [cols[1].id]: c.job, [cols[2].id]: c.dept, [cols[3].id]: c.phone, [cols[4].id]: c.email } })) };
   }
   if (tpl === 'props') {
     const cols = [col('Cena'), col('Adereço'), col('Estado'), col('Responsável'), col('Notas')];
@@ -77,7 +83,27 @@ export function tableTool(main, p, tool) {
     tableShortcuts(main.querySelector('table.sheet'), { rowBelow: (id) => insRow(at(id) + 1), rowAbove: (id) => insRow(Math.max(0, at(id))), colRight: (id) => insCol(id, 1), colLeft: (id) => insCol(id, 0) });
   }
   bindUndoKeys(main, hist);
-  main.innerHTML = `<div class="row end"><button type="button" class="btn ghost" data-pdf>${ICON.open} Exportar PDF</button></div><div class="tbl-wrap" data-tbl></div>`;
+  main.innerHTML = `<div class="row end"><button type="button" class="btn ghost" data-people title="Junta a equipa e o elenco com os contactos que já estão no projeto">${ICON.team} Pessoas do projeto</button><button type="button" class="btn ghost" data-pdf>${ICON.open} Exportar PDF</button></div><div class="tbl-wrap" data-tbl></div>`;
+  // folha de contactos: junta as pessoas do projeto (e preenche telefones/emails que faltem nas que já lá estão)
+  main.querySelector('[data-people]').addEventListener('click', async () => {
+    const list = await projectContacts(p);
+    if (!list.length) return toast('Ainda não há pessoas no projeto (equipa e convites, ou atores e figurantes).');
+    const find = (re) => data.columns.find((c) => re.test(String(c.name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()));
+    const cName = find(/^(nome|pessoa|quem|ator|atriz)/) || data.columns.find((c) => (c.type || 'text') === 'text');
+    const map = [[cName, 'name'], [find(/personagem/), 'role'], [find(/func|cargo|papel/), 'job'], [find(/departamento|dept/), 'dept'], [find(/telef|telem|contacto|phone|tlm/), 'phone'], [find(/e-?mail/), 'email']].filter(([c]) => c);
+    if (!cName) return toast('A tabela precisa de uma coluna para o nome.');
+    if (!map.some(([, k]) => k === 'phone')) { data.columns.push({ id: uid(), name: 'Telefone', type: 'text' }); map.push([data.columns[data.columns.length - 1], 'phone']); }
+    const norm = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    snap('juntar pessoas do projeto');
+    let added = 0, filled = 0;
+    list.forEach((c) => {
+      const row = data.rows.find((r) => norm(r.cells?.[cName.id]) && (norm(r.cells[cName.id]) === norm(c.name) || (c.role && norm(r.cells[cName.id]) === norm(c.role))));
+      if (row) { map.forEach(([col, k]) => { if (!row.cells[col.id] && c[k]) { row.cells[col.id] = c[k]; filled++; } }); return; }
+      data.rows.push({ id: uid(), cells: Object.fromEntries(map.filter(([, k]) => c[k]).map(([col, k]) => [col.id, c[k]])) }); added++;
+    });
+    draw(); save();
+    toast(added || filled ? `${added ? `${added} ${added === 1 ? 'pessoa juntada' : 'pessoas juntadas'}` : ''}${added && filled ? ' · ' : ''}${filled ? `${filled} ${filled === 1 ? 'campo preenchido' : 'campos preenchidos'}` : ''}.` : 'Já estão todos na tabela.');
+  });
   draw();
   main.querySelector('[data-pdf]').addEventListener('click', () => exportPdf({
     title: tool.title, subtitle: p.name, landscape: data.columns.length > 5,

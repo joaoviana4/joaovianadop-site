@@ -10,7 +10,7 @@ const SICON = { todo: ICON.circle, doing: ICON.half, done: ICON.done };
 let peopleCache = null;
 export async function loadPeople(fresh = false) {
   if (!fresh && peopleCache && Date.now() - peopleCache.t < 120000) return (await peopleCache.p).map((x) => ({ ...x }));
-  const p = sb.from('profiles').select('id, display_name, username, role, color').order('display_name').then(({ data }) => data || []);
+  const p = sb.from('profiles').select('id, display_name, username, role, color, phone').order('display_name').then(({ data }) => data || []);
   peopleCache = { t: Date.now(), p };
   p.catch(() => { peopleCache = null; });
   return (await p).map((x) => ({ ...x }));

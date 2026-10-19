@@ -113,7 +113,7 @@ function accountMenu() {
     <div class="acct-card"><span class="avatar lg" style="--c:${esc(p.color)}">${esc(initials(p.display_name))}</span>
       <div><strong>${esc(p.display_name)}</strong><div class="muted">${esc(p.username ? '@' + p.username : p.email)} · ${esc(ROLES[p.role])}</div></div></div>
     <div class="menu-list">
-      <button type="button" data-a="name">${ICON.team} Mudar o meu nome</button>
+      <button type="button" data-a="name">${ICON.team} O meu nome e telefone</button>
       <button type="button" data-a="pw">${ICON.info} Mudar palavra-passe</button>
       <a href="${BASE}tasks/" target="_blank" rel="noopener">${ICON.task} Abrir a app de tarefas (telemóvel)</a>
       <button type="button" data-a="out">${ICON.logout} Sair</button>
@@ -123,8 +123,8 @@ function accountMenu() {
   m.el.querySelector('[data-a=pw]').addEventListener('click', () => { m.close(); changePassword(); });
   m.el.querySelector('[data-a=name]').addEventListener('click', () => {
     m.close();
-    const n = modal(`<h2>O teu nome</h2><form class="stack"><div class="field"><label for="dn">Nome</label><input id="dn" value="${esc(p.display_name)}" required></div><div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Guardar</button></div></form>`);
-    n.el.querySelector('form').addEventListener('submit', async (e) => { e.preventDefault(); const v = n.el.querySelector('#dn').value.trim(); if (!v) return; await sb.from('profiles').update({ display_name: v }).eq('id', p.id); clearPeopleCache(); p.display_name = v; n.close(); route(); });
+    const n = modal(`<h2>Os teus dados</h2><form class="stack"><div class="field"><label for="dn">Nome</label><input id="dn" value="${esc(p.display_name)}" required></div><div class="field"><label for="dph">Telefone</label><input id="dph" type="tel" inputmode="tel" value="${esc(p.phone || '')}"><span class="muted small">Aparece nas folhas de contactos e de serviço dos projetos onde estás.</span></div><div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Guardar</button></div></form>`);
+    n.el.querySelector('form').addEventListener('submit', async (e) => { e.preventDefault(); const v = n.el.querySelector('#dn').value.trim(); if (!v) return; const ph = n.el.querySelector('#dph').value.trim() || null; await sb.from('profiles').update({ display_name: v, phone: ph }).eq('id', p.id); clearPeopleCache(); p.display_name = v; p.phone = ph; n.close(); route(); });
   });
 }
 function changePassword() {
@@ -418,7 +418,7 @@ function projectDetailsModal(p, after) {
 // ---------- equipa do projeto e convites ----------
 async function projectTeam(root, p) {
   const [{ data: members }, people, { data: invites }] = await Promise.all([
-    sb.from('project_members').select('user_id, added_at, depts, job').eq('project_id', p.id),
+    sb.from('project_members').select('user_id, added_at, depts, job, phone, email').eq('project_id', p.id),
     loadPeople(),
     isStaff() ? sb.from('invites').select('id, email, created_at, expires_at, used_at').eq('project_id', p.id).order('created_at', { ascending: false }) : Promise.resolve({ data: [] }),
   ]);
@@ -474,8 +474,8 @@ async function crewPanel(el, p, people, members, reload) {
   const depts = p.departments || [];
   const byId = new Map(people.map((x) => [x.id, x]));
   const list = [
-    ...members.filter((m) => byId.has(m.user_id) && byId.get(m.user_id).role !== 'guest').map((m) => { const x = byId.get(m.user_id); return { t: 'm', id: m.user_id, name: x.display_name, color: x.color, job: m.job || '', depts: m.depts || [], sub: ROLES[x.role] }; }),
-    ...(crewRows || []).map((c) => ({ t: 'c', id: c.id, name: c.name, color: '#5A5A66', job: c.job || '', depts: c.depts || [], sub: [c.email, c.phone].filter(Boolean).join(' · ') || 'sem conta no studio', email: c.email, phone: c.phone })),
+    ...members.filter((m) => byId.has(m.user_id) && byId.get(m.user_id).role !== 'guest').map((m) => { const x = byId.get(m.user_id); const phone = m.phone || x.phone || ''; return { t: 'm', id: m.user_id, name: x.display_name, color: x.color, job: m.job || '', depts: m.depts || [], sub: [phone, m.email].filter(Boolean).join(' · ') || ROLES[x.role], phone, email: m.email || '' }; }),
+    ...(crewRows || []).map((c) => ({ t: 'c', id: c.id, name: c.name, color: '#5A5A66', job: c.job || '', depts: c.depts || [], sub: [c.phone, c.email].filter(Boolean).join(' · ') || 'sem conta no studio', email: c.email, phone: c.phone })),
   ];
   const canEdit = isStaff();
   const dchip = (id) => { const d = depts.find((x) => x.id === id); return d ? `<span class="dchip" style="--dc:${esc(d.color)}">${esc(d.name)}</span>` : ''; };
@@ -495,8 +495,10 @@ async function crewPanel(el, p, people, members, reload) {
     const m = modal(`<h2>${isNew ? 'Adicionar pessoa' : esc(x.name)}</h2><form class="stack" data-cf>
       ${isNew ? `<div class="seg dark" role="tablist"><button type="button" role="tab" aria-selected="true" data-ct="m">Da Grain</button><button type="button" role="tab" aria-selected="false" data-ct="c">Sem conta</button></div>
         <div class="field" data-for="m"><label for="cu">Pessoa</label><select id="cu" name="user_id">${free.map((y) => `<option value="${y.id}">${esc(y.display_name)}${inProj(y.id) ? ' — já está no projeto' : ''}</option>`).join('')}</select></div>
-        <div data-for="c" hidden class="grid2"><div class="field"><label for="cn2">Nome</label><input id="cn2" name="name"></div><div class="field"><label for="ce">Email</label><input id="ce" name="email" type="email"></div><div class="field"><label for="cp">Telefone</label><input id="cp" name="phone" inputmode="tel"></div></div>`
-        : x.t === 'c' ? `<div class="grid2"><div class="field"><label for="cn2">Nome</label><input id="cn2" name="name" value="${esc(x.name)}" required></div><div class="field"><label for="ce">Email</label><input id="ce" name="email" type="email" value="${esc(x.email || '')}"></div><div class="field"><label for="cp">Telefone</label><input id="cp" name="phone" value="${esc(x.phone || '')}"></div></div>` : ''}
+        <div data-for="c" hidden class="field"><label for="cn2">Nome</label><input id="cn2" name="name"></div>`
+        : x.t === 'c' ? `<div class="field"><label for="cn2">Nome</label><input id="cn2" name="name" value="${esc(x.name)}" required></div>` : ''}
+      <div class="grid2"><div class="field"><label for="cp">Telefone</label><input id="cp" name="phone" type="tel" inputmode="tel" value="${esc(x?.phone || '')}" placeholder="912 345 678"></div><div class="field"><label for="ce">Email</label><input id="ce" name="email" type="email" value="${esc(x?.email || '')}"></div></div>
+      <p class="muted small">O contacto fica associado a esta pessoa: aparece sozinho na folha de contactos, na folha de serviço e no mapa de transportes.</p>
       <div class="field"><label for="cj">Função</label><input id="cj" name="job" value="${esc(x?.job || '')}" placeholder="Ex.: Gaffer, 1.º AC, Produtora" list="crew-jobs"></div>
       <fieldset class="dpick"><legend>Departamentos</legend>${depts.length ? depts.map((d) => `<label><input type="checkbox" name="dept" value="${esc(d.id)}" ${x?.depts.includes(d.id) || (isNew && preDept === d.id) ? 'checked' : ''}><span style="--dc:${esc(d.color)}">${esc(d.name)}</span></label>`).join('') : '<p class="muted small">Este projeto ainda não tem departamentos (Detalhes → Departamentos e cores).</p>'}</fieldset>
       <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">${isNew ? 'Adicionar' : 'Guardar'}</button></div></form>
@@ -505,17 +507,18 @@ async function crewPanel(el, p, people, members, reload) {
     m.el.querySelectorAll('[data-ct]').forEach((b) => b.addEventListener('click', () => { tab = b.dataset.ct; m.el.querySelectorAll('[data-ct]').forEach((y) => y.setAttribute('aria-selected', y === b)); m.el.querySelectorAll('[data-for]').forEach((y) => { y.hidden = y.dataset.for !== tab; }); }));
     m.el.querySelector('[data-cf]').addEventListener('submit', async (e) => {
       e.preventDefault(); const fd = new FormData(e.target); const dsel = fd.getAll('dept'); const job = (fd.get('job') || '').trim() || null;
+      const phone = (fd.get('phone') || '').trim() || null; const email = (fd.get('email') || '').trim() || null;
       let r;
       if (isNew && tab === 'm') {
         const uid = fd.get('user_id'); if (!uid) return toast('Escolhe uma pessoa.');
         const cur = inProj(uid);
         // quem já está no projeto: junta os departamentos novos aos que já tinha
-        r = cur ? await sb.from('project_members').update({ depts: [...new Set([...(cur.depts || []), ...dsel])], job: job || cur.job || null }).eq('project_id', p.id).eq('user_id', uid)
-          : await sb.from('project_members').insert({ project_id: p.id, user_id: uid, depts: dsel, job });
+        r = cur ? await sb.from('project_members').update({ depts: [...new Set([...(cur.depts || []), ...dsel])], job: job || cur.job || null, phone: phone || cur.phone || null, email: email || cur.email || null }).eq('project_id', p.id).eq('user_id', uid)
+          : await sb.from('project_members').insert({ project_id: p.id, user_id: uid, depts: dsel, job, phone, email });
       }
-      else if (isNew) { const name = (fd.get('name') || '').trim(); if (!name) return toast('Escreve o nome.'); r = await sb.from('project_crew').insert({ project_id: p.id, name, email: (fd.get('email') || '').trim() || null, phone: (fd.get('phone') || '').trim() || null, depts: dsel, job }); }
-      else if (x.t === 'm') r = await sb.from('project_members').update({ depts: dsel, job }).eq('project_id', p.id).eq('user_id', x.id);
-      else r = await sb.from('project_crew').update({ name: (fd.get('name') || '').trim() || x.name, email: (fd.get('email') || '').trim() || null, phone: (fd.get('phone') || '').trim() || null, depts: dsel, job }).eq('id', x.id);
+      else if (isNew) { const name = (fd.get('name') || '').trim(); if (!name) return toast('Escreve o nome.'); r = await sb.from('project_crew').insert({ project_id: p.id, name, email, phone, depts: dsel, job }); }
+      else if (x.t === 'm') r = await sb.from('project_members').update({ depts: dsel, job, phone, email }).eq('project_id', p.id).eq('user_id', x.id);
+      else r = await sb.from('project_crew').update({ name: (fd.get('name') || '').trim() || x.name, email, phone, depts: dsel, job }).eq('id', x.id);
       if (r.error) return toast(r.error.message);
       m.close(); toast(isNew ? 'Adicionado à equipa.' : 'Guardado.'); reload();
     });
@@ -631,7 +634,7 @@ function bindProjectNav(root, p) {
 function newBoard(p, groupId = '', kind = 'board') {
   const fic = scriptMode(p);
   // os adereços têm uma única página por projeto (Arte › Adereços), por isso não há modelo de tabela de adereços
-  const tpls = [['blank', 'Em branco'], ['deliverables', 'Entregas (peças, formatos, plataformas)'], ...(fic ? [['cast', 'Elenco']] : [])];
+  const tpls = [['blank', 'Em branco'], ['contacts', 'Folha de contactos (equipa e elenco)'], ['deliverables', 'Entregas (peças, formatos, plataformas)'], ['cast', fic ? 'Elenco' : 'Atores e figurantes']];
   const m = modal(`<h2>Nova ferramenta</h2>
     <form class="stack">
       <div class="tool-kinds" role="radiogroup" aria-label="Ferramenta">${Object.entries(TOOL_KINDS).map(([k, v]) => `<label class="tool-k"><input type="radio" name="kind" value="${k}" ${k === kind ? 'checked' : ''}><span>${v.icon}${v.label}</span></label>`).join('')}</div>
@@ -653,7 +656,7 @@ function newBoard(p, groupId = '', kind = 'board') {
   };
   ttl.addEventListener('input', () => (ttl.dataset.touched = '1'));
   form.querySelectorAll('[name=kind]').forEach((r) => r.addEventListener('change', sync)); sync();
-  const tplNames = { blank: 'Tabela', deliverables: 'Entregas', props: 'Adereços por cena', cast: 'Elenco' };
+  const tplNames = { blank: 'Tabela', deliverables: 'Entregas', props: 'Adereços por cena', cast: 'Elenco', contacts: 'Contactos' };
   form.elements.tpl.addEventListener('change', () => { if (!ttl.dataset.touched) ttl.value = tplNames[form.elements.tpl.value]; });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();

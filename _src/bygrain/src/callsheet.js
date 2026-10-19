@@ -1,4 +1,5 @@
 import { sb, esc, toast, modal, confirmBox, ICON, signedUrl } from './lib.js';
+import { projectContacts, nameWithPhone } from './contacts.js';
 import { CS_MODELS } from './csmodels.js';
 
 // Folha de serviço (call sheet) de um dia de rodagem, no estilo do modelo "A Forma e o Silêncio":
@@ -58,7 +59,7 @@ function sheetHtml(d, edit) {
     <div class="cs-title">${f('title', 'NOME DO PROJETO', 'b')}</div>
     <div class="cs-day"><span>${edit ? `<input type="date" class="cs-in" data-p="date" value="${esc(d.date || '')}">` : esc(fmtDay(d.date))}</span><span class="b">DIA ${f('day', '1', 'cs-num')} DE ${f('days', '3', 'cs-num')}</span></div>
     <div class="cs-top">
-      <table class="cs-box cs-contacts">${d.contacts.map((c, i) => `<tr><th>${f(`contacts.${i}.role`, 'Função')}</th><td>${f(`contacts.${i}.value`, 'Nome - telefone')}${x(`data-rm="contacts:${c.id}"`)}</td></tr>`).join('')}${edit ? `<tr><td colspan="2">${add('data-addc', 'contacto')}</td></tr>` : ''}</table>
+      <table class="cs-box cs-contacts">${d.contacts.map((c, i) => `<tr><th>${f(`contacts.${i}.role`, 'Função')}</th><td>${f(`contacts.${i}.value`, 'Nome - telefone')}${x(`data-rm="contacts:${c.id}"`)}</td></tr>`).join('')}${edit ? `<tr><td colspan="2">${add('data-addc', 'contacto')} ${add('data-pickc', 'da equipa')}</td></tr>` : ''}</table>
       <div class="cs-box cs-call"><div class="cs-callh">CALL: ${f('call', '08:00', 'cs-num')}H - ${f('place', 'Local')}</div><div class="cs-addr"><b>MORADA:</b> ${link('address')}</div></div>
       <div class="cs-box cs-weather"><div class="cs-h">METEOROLOGIA</div><div>${f('weather.text', 'ex: Nublado')}</div><div class="cs-temps"><span class="t-min">${f('weather.min', '12°', 'cs-num')}</span><span class="t-max">${f('weather.max', '20°', 'cs-num')}</span></div></div>
     </div>
@@ -109,7 +110,7 @@ function studioHtml(d) {
     <div class="cst-grid">
       <section class="cst-card"><h3>Contactos</h3>
         <div class="cst-list">${d.contacts.map((c, i) => `<div class="cst-li"><div class="cst-lic">${f(`contacts.${i}.role`, 'Função', 'cst-role')}${f(`contacts.${i}.value`, 'Nome - telefone', 'cst-val')}</div>${x(`data-rm="contacts:${c.id}"`)}</div>`).join('')}</div>
-        ${add('data-addc', 'Contacto')}</section>
+        <div class="row wrap-gap">${add('data-addc', 'Contacto')}${add('data-pickc', 'Da equipa e elenco')}</div></section>
       <section class="cst-card"><h3>Horários</h3>
         <div class="cst-times">${d.times.map((t, i) => `<div class="cst-time">${f(`times.${i}.label`, 'Hora')}${f(`times.${i}.value`, '00:00', 'cst-tv')}${x(`data-rm="times:${t.id}"`)}</div>`).join('')}</div>
         ${add('data-addt', 'Hora')}
@@ -223,6 +224,18 @@ export function callsheetTool(main, p, tool) {
     });
     const on = (sel, fn) => main.querySelectorAll(sel).forEach((b) => b.addEventListener('click', () => { fn(b); save(); draw(); }));
     on('[data-addc]', () => d.contacts.push({ id: uid(), role: '', value: '' }));
+    // contactos da equipa e do elenco: escolhe-se a pessoa e entra "Nome - telefone" com a função
+    main.querySelectorAll('[data-pickc]').forEach((b) => b.addEventListener('click', async () => {
+      const list = await projectContacts(p);
+      if (!list.length) return toast('Ainda não há pessoas com contacto no projeto. Junta-as em Equipa e convites ou em Atores e figurantes.');
+      const m = modal(`<h2>Juntar contactos</h2><p class="muted small">Quem já tem telefone na equipa ou no elenco. Para mudar um número, muda-o na pessoa e volta a juntar.</p>
+        <div class="cs-cpick">${list.map((c, i) => `<label class="cs-cpi"><input type="checkbox" value="${i}" ${d.contacts.some((x) => x.value === nameWithPhone(c)) ? 'checked disabled' : ''}><span><b>${esc(c.name)}</b><small class="muted">${esc([c.job, c.phone || 'sem telefone'].filter(Boolean).join(' · '))}</small></span></label>`).join('')}</div>
+        <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button type="button" class="btn primary" data-ok>Juntar</button></div>`, { wide: true });
+      m.el.querySelector('[data-ok]').addEventListener('click', () => {
+        [...m.el.querySelectorAll('input:checked:not(:disabled)')].forEach((cb) => { const c = list[+cb.value]; d.contacts.push({ id: uid(), role: c.kind === 'crew' ? (c.job || c.dept || '') : c.role ? `${c.role}${c.kind === 'extra' ? ' (figurante)' : ''}` : 'Elenco', value: nameWithPhone(c) }); });
+        m.close(); save(); draw();
+      });
+    }));
     on('[data-addt]', () => d.times.push({ id: uid(), label: '', value: '' }));
     on('[data-addd]', () => d.depts.push({ id: uid(), name: '', time: '' }));
     on('[data-addcast]', () => d.cast.push({ id: uid(), name: '', role: '', scene: '', call: '', out: '', obs: '' }));
@@ -307,7 +320,7 @@ async function pickShots(p, d, after, elsewhere = new Map()) {
     castIds.forEach((cid) => {
       const c = (chars || []).find((y) => y.id === cid); if (!c || d.cast.some((y) => y.char_id === cid)) return;
       const scs = secs.filter((s) => [...(s.character_ids || []), ...(s.extra_ids || [])].includes(cid)).map((s) => (p._hasScript ? s.number : s.heading)).join(', ');
-      d.cast.push({ id: uid(), char_id: cid, name: c.actor || c.name, role: c.info?.extra ? 'Figurante' : c.actor ? c.name : (c.info?.role || ''), scene: scs, call: d.call || '', out: '', obs: '' });
+      d.cast.push({ id: uid(), char_id: cid, name: c.actor || c.name, role: c.info?.extra ? 'Figurante' : c.actor ? c.name : (c.info?.role || ''), scene: scs, call: d.call || '', out: '', obs: c.info?.phone ? `Tel. ${c.info.phone}` : '' });
     });
     m.close(); after();
     toast(`${chosen.length} ${chosen.length === 1 ? 'plano juntado' : 'planos juntados'}${loc ? `, décor: ${loc.name}` : ''}.`);

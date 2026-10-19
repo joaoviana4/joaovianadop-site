@@ -358,12 +358,14 @@ async function personagem(main, p, f, id, base, cleanup) {
     <header class="ent-h"><h1 class="h1">${esc(c.name)}</h1><button type="button" class="icon-btn" data-delent aria-label="Apagar personagem">${ICON.trash}</button></header>
     <div class="pm-grid"><div class="pm-boards stack">
       <section class="panel stack">${await photoField(c)}<div class="field"><label for="actor">Ator ou atriz</label><input id="actor" data-actor value="${esc(c.actor)}"></div>
+        <div class="grid2"><div class="field"><label for="cph">Telefone</label><input id="cph" data-cinfo="phone" type="tel" inputmode="tel" placeholder="912 345 678" value="${esc(c.info?.phone || '')}"></div><div class="field"><label for="cem">Email</label><input id="cem" data-cinfo="email" type="email" value="${esc(c.info?.email || '')}"></div></div>
         ${blocks(c, [['descricao', 'Descrição'], ['guarda_roupa', 'Guarda-roupa'], ['caracterizacao', 'Caracterização']])}</section>
       <section class="panel"><h2 class="h3">Tarefas</h2><div data-tasks></div></section>
     </div><aside class="pm-side"><section class="panel"><h2 class="h3">Onde entra (${scenes.length})</h2>${sceneLinks(scenes, f, base)}</section></aside></div>`;
   const saveActor = debounce((v) => sb.from('characters').update({ actor: v }).eq('id', c.id));
   main.querySelector('[data-actor]').addEventListener('input', (e) => saveActor(e.target.value));
   bindBlocks(main, 'characters', c);
+  { const saveI = debounce(() => sb.from('characters').update({ info: c.info }).eq('id', c.id), 600); main.querySelectorAll('[data-cinfo]').forEach((t) => t.addEventListener('input', () => { c.info = { ...(c.info || {}), [t.dataset.cinfo]: t.value.trim() }; saveI(); })); }
   bindPhoto(main, p, 'characters', c, () => personagem(main, p, f, id, base, cleanup));
   const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: 'character', id: c.id } }); cleanup(() => t.destroy());
   main.querySelector('[data-delent]').addEventListener('click', async () => {
