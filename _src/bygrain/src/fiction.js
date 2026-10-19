@@ -2,6 +2,9 @@ import { sb, BUCKET, esc, toast, modal, confirmBox, ICON, signedUrl, signedUrls,
 import { entMode, entUrls, modeToggle, bindMode, entItems, photoField, bindPhoto } from './entview.js';
 import { parseScript, fileToText, eighthsLabel } from './script.js';
 import { mountTasks } from './tasks.js';
+import { mountReader } from './scriptview.js';
+import { sceneInfo } from './sceneinfo.js';
+import { analyzeScriptModal, applyBreakdown, quickBreakdown } from './scriptan.js';
 import { newLightmapData } from './lmdata.js';
 import { ensureModules } from './modules.js';
 
@@ -27,7 +30,7 @@ async function load(pid) {
     sb.from('characters').select('*').eq('project_id', pid).order('position'),
     sb.from('locations').select('*').eq('project_id', pid).order('position'),
     sb.from('shots').select('*').eq('project_id', pid).order('position'),
-    sb.from('scripts').select('id, version, filename, file_path, is_current, created_at').eq('project_id', pid).order('version', { ascending: false }),
+    sb.from('scripts').select('id, version, filename, file_path, is_current, created_at').eq('project_id', pid).neq('kind', 'tratamento').order('version', { ascending: false }),
   ]);
   return { scenes: sc.data || [], characters: ch.data || [], locations: lo.data || [], shots: sh.data || [], scripts: sp.data || [] };
 }
@@ -47,26 +50,22 @@ export async function fictionPage(main, p, page, sub, base, cleanup) {
 function guiao(main, p, f, _sub, base) {
   const cur = f.scripts.find((s) => s.is_current) || f.scripts[0];
   main.innerHTML = `
-    <div class="row between wrap-gap"><h1 class="h1 pm-title">Guião</h1>${f.scripts.length ? `<button type="button" class="btn primary" data-imp>${ICON.plus} Importar nova versão</button>` : ''}</div>
+    <div class="row between wrap-gap"><h1 class="h1 pm-title">Guião</h1>${f.scripts.length ? `<span class="row wrap-gap"><button type="button" class="btn ghost" data-analyze>Analisar o guião</button><button type="button" class="btn primary" data-imp>${ICON.plus} Importar nova versão</button></span>` : ''}</div>
     ${f.scripts.length ? '' : `<div class="drop-box" data-drop>
       <strong>Importa o guião</strong>
       <p class="muted">PDF, Fountain, Final Draft (.fdx) ou texto. A app separa as cenas, as personagens e os décors.</p>
       <div class="row wrap-gap"><button type="button" class="btn primary" data-imp>${ICON.open} Escolher ficheiro</button><button type="button" class="btn ghost" data-paste>Colar texto</button></div>
       <p class="muted small">Também podes largar o ficheiro aqui.</p>
     </div>`}
-    ${f.scripts.length ? `<section class="panel">
-      <h2 class="h3">Ficheiros do guião</h2>
-      <ul class="versions">${f.scripts.map((s) => `<li>
-        <span class="v-tag ${s.is_current ? 'on' : ''}">v${s.version}</span>
-        <span class="v-name"><strong>${esc(s.filename || 'Texto colado')}</strong><small class="muted">${fmtDate(s.created_at)}${s.is_current ? ' · em uso' : ''}</small></span>
-        ${s.file_path ? `<button type="button" class="link-btn" data-open="${esc(s.file_path)}">Abrir original</button>` : ''}
-        ${!s.is_current ? `<button type="button" class="link-btn" data-use="${s.id}">Usar esta versão</button>` : ''}
-      </li>`).join('')}</ul>
-      <p class="muted small">${f.scenes.length} cenas · ${f.characters.length} personagens · ${f.locations.length} décors</p>
-    </section>
-    <section class="panel"><div class="row between"><h2 class="h3">Texto${cur ? ` (v${cur.version})` : ''}</h2></div><pre class="script-view" data-text>A carregar…</pre></section>` : ''}`;
+    ${f.scripts.length ? `<div class="sr-head">
+      <label class="sr-ver"><span class="muted small">Versão</span><select data-ver aria-label="Versão do guião">${f.scripts.map((s) => `<option value="${s.id}" ${s.id === cur?.id ? 'selected' : ''}>v${s.version} · ${esc(s.filename || 'Texto colado')} · ${fmtDate(s.created_at)}${s.is_current ? ' · em uso' : ''}</option>`).join('')}</select></label>
+      <button type="button" class="btn ghost sm" data-use hidden>Usar esta versão</button>
+      <span class="muted small sr-stats">${f.scenes.length} cenas · ${f.characters.length} personagens · ${f.locations.length} décors</span>
+    </div>
+    <div data-reader class="sr-wrap"></div>` : ''}`;
   const pick = () => { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.pdf,.fountain,.fdx,.txt,.md,application/pdf,text/plain'; inp.onchange = () => inp.files[0] && importFile(inp.files[0]); inp.click(); };
   main.querySelectorAll('[data-imp]').forEach((b) => b.addEventListener('click', pick));
+  main.querySelector('[data-analyze]')?.addEventListener('click', () => analyzeScriptModal(p, f, () => { location.hash = `${base}/cenas`; }));
   main.querySelector('[data-paste]')?.addEventListener('click', () => {
     const m = modal(`<h2>Colar o guião</h2><form class="stack"><div class="field"><label for="st">Texto do guião</label><textarea id="st" rows="14" class="mono" placeholder="INT. CASA - NOITE&#10;&#10;..."></textarea></div><div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Continuar</button></div></form>`, { wide: true });
     m.el.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); const t = m.el.querySelector('#st').value; m.close(); preview(t, null); });
@@ -77,16 +76,25 @@ function guiao(main, p, f, _sub, base) {
     drop.addEventListener('dragleave', () => drop.classList.remove('over'));
     drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); const file = e.dataTransfer.files[0]; file && importFile(file); });
   }
-  main.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', async () => { const u = await signedUrl(b.dataset.open); u && window.open(u, '_blank', 'noopener'); }));
+  let reader = null;
+  const showVersion = async (id) => {
+    reader?.destroy();
+    const { data } = await sb.from('scripts').select('*').eq('id', id).single();
+    const box = main.querySelector('[data-reader]'); if (!box || !data) return;
+    reader = mountReader(box, { version: data, sceneHref: data.is_current ? (n) => { const sc = f.scenes.find((x) => String(x.number) === String(n)); return sc ? `${base}/cenas/${sc.id}` : `${base}/cenas`; } : null });
+    const use = main.querySelector('[data-use]'); use.hidden = !!data.is_current; use.dataset.use = data.id;
+  };
+  if (cur) showVersion(cur.id);
+  window.addEventListener('hashchange', () => reader?.destroy(), { once: true });
+  main.querySelector('[data-ver]')?.addEventListener('change', (e) => showVersion(e.target.value));
   main.querySelectorAll('[data-use]').forEach((b) => b.addEventListener('click', async () => {
     if (!(await confirmBox('Usar esta versão? As cenas são atualizadas pelo número; os planos e o storyboard ficam onde estão.', 'Usar esta versão'))) return;
     const { data } = await sb.from('scripts').select('*').eq('id', b.dataset.use).single();
     await applyScript(p, f, parseScript(data.body));
-    await sb.from('scripts').update({ is_current: false }).eq('project_id', p.id);
+    await sb.from('scripts').update({ is_current: false }).eq('project_id', p.id).neq('kind', 'tratamento');
     await sb.from('scripts').update({ is_current: true }).eq('id', data.id);
     toast(`Versão v${data.version} em uso.`); location.hash = `${base}/guiao`; window.dispatchEvent(new HashChangeEvent('hashchange'));
   }));
-  if (cur) sb.from('scripts').select('body').eq('id', cur.id).single().then(({ data }) => { const el = main.querySelector('[data-text]'); if (el) el.textContent = data?.body || ''; });
 
   async function importFile(file) {
     try { toast('A ler o guião…', 8000); const t = await fileToText(file); preview(t, file); }
@@ -111,7 +119,7 @@ function guiao(main, p, f, _sub, base) {
           const { error } = await sb.storage.from(BUCKET).upload(file_path, file, { contentType: file.type || 'application/octet-stream' });
           if (error) file_path = null;
         }
-        await sb.from('scripts').update({ is_current: false }).eq('project_id', p.id);
+        await sb.from('scripts').update({ is_current: false }).eq('project_id', p.id).neq('kind', 'tratamento');
         const { error } = await sb.from('scripts').insert({ project_id: p.id, version, filename: file?.name || '', file_path, body: text, is_current: true });
         if (error) throw error;
         await applyScript(p, f, r);
@@ -139,6 +147,12 @@ async function applyScript(p, f, r) {
   });
   if (ins.length) { const { error } = await sb.from('scenes').insert(ins); if (error) throw error; }
   if (ups.length) { const { error } = await sb.from('scenes').upsert(ups); if (error) throw error; }
+  // personagens também pelas apresentações e pelos nomes nas ações, figurantes e figurino (análise rápida)
+  try {
+    const { data: fresh } = await sb.from('scenes').select('*').eq('project_id', p.id).order('position');
+    f.scenes = fresh || f.scenes; f.characters = [...chars.values()];
+    await applyBreakdown(p, f, quickBreakdown(f));
+  } catch { /* a análise rápida pode ser refeita à mão */ }
   p._hasScript = true;
   await ensureModules(p, ['cenas', ...(r.characters.length ? ['elenco'] : []), ...(r.locations.length ? ['decors'] : [])]);
 }
@@ -148,10 +162,11 @@ function cenas(main, p, f, sub, base, cleanup) {
   if (sub) return cena(main, p, f, sub, base, cleanup);
   const nShots = (id) => f.shots.filter((s) => s.scene_id === id).length;
   main.innerHTML = `
-    <div class="row between wrap-gap"><h1 class="h1 pm-title">Cenas</h1><button type="button" class="btn ghost" data-add>${ICON.plus} Cena</button></div>
+    <div class="row between wrap-gap"><h1 class="h1 pm-title">Cenas</h1><span class="row wrap-gap">${f.scenes.length ? '<button type="button" class="btn ghost" data-analyze>Analisar personagens e figurino</button>' : ''}<button type="button" class="btn ghost" data-add>${ICON.plus} Cena</button></span></div>
     ${f.scenes.length ? `<div class="panel table-wrap"><table class="table"><thead><tr><th>Nº</th><th>Cena</th><th>Momento</th><th>Personagens</th><th>Páginas</th><th>Planos</th></tr></thead><tbody>
       ${f.scenes.map((s) => `<tr class="click-row" data-href="${base}/cenas/${s.id}"><td><a href="${base}/cenas/${s.id}"><strong>${esc(s.number)}</strong></a></td><td>${esc(sceneTitle(s, f))}</td><td class="muted">${esc(s.time_of_day)}</td><td class="small">${esc(nameList(s.character_ids, f).join(', '))}</td><td class="muted">${eighthsLabel(s.eighths)}</td><td>${nShots(s.id) || '<span class="muted">—</span>'}</td></tr>`).join('')}
     </tbody></table></div>` : `<div class="empty-box"><p>Ainda não há cenas.</p><p class="muted small">Importa o guião para as separar automaticamente, ou cria-as à mão.</p><a class="btn primary" href="${base}/guiao">Importar guião</a></div>`}`;
+  main.querySelector('[data-analyze]')?.addEventListener('click', () => analyzeScriptModal(p, f, () => cenas(main, p, f, null, base, cleanup)));
   main.querySelectorAll('[data-href]').forEach((tr) => tr.addEventListener('click', (e) => { if (!e.target.closest('a')) location.hash = tr.dataset.href; }));
   main.querySelector('[data-add]').addEventListener('click', () => {
     const m = modal(`<h2>Nova cena</h2><form class="stack"><div class="grid2"><div class="field"><label for="sn">Número</label><input id="sn" value="${f.scenes.length + 1}" required></div><div class="field"><label for="sie">INT / EXT</label><select id="sie"><option>INT</option><option>EXT</option><option>INT/EXT</option></select></div></div>
@@ -196,7 +211,8 @@ async function cena(main, p, f, sid, base, cleanup) {
       <span class="row">${prev ? `<a class="btn ghost" href="${base}/cenas/${prev.id}" aria-label="Cena anterior">${ICON.back} ${esc(prev.number)}</a>` : ''}${next ? `<a class="btn ghost" href="${base}/cenas/${next.id}" aria-label="Cena seguinte">${esc(next.number)} ${ICON.chev}</a>` : ''}</span></nav>
     <header class="scene-h"><span class="scene-n">${esc(s.number)}</span><div><h1 class="h2">${esc(s.heading || sceneTitle(s, f))}</h1>
       <div class="chips">${loc ? `<a class="chip" href="${base}/decors/${loc.id}">${ICON.home}${esc(loc.name)}</a>` : ''}${s.time_of_day ? `<span class="chip">${esc(s.time_of_day)}</span>` : ''}${s.eighths ? `<span class="chip">${eighthsLabel(s.eighths)} pág.</span>` : ''}
-      ${(s.character_ids || []).map((id) => { const c = f.characters.find((x) => x.id === id); return c ? `<a class="chip" href="${base}/personagens/${c.id}">${esc(c.name)}</a>` : ''; }).join('')}</div></div></header>
+</div></div></header>
+    <div data-sinfo class="si"></div>
     <section><div class="row between"><h2 class="h3">Planos</h2><span class="muted small">${shots.length} ${shots.length === 1 ? 'plano' : 'planos'}</span></div>
       <div class="shots" data-shots>${shots.map((x) => shotCard(x, urls[x.image_path], base)).join('')}<button type="button" class="shot-add" data-addshot>${ICON.plus}<span>Plano</span></button></div></section>
     <details class="panel"><summary class="h3">Texto da cena</summary><pre class="script-view">${esc(s.body || 'Sem texto.')}</pre></details>
@@ -205,6 +221,7 @@ async function cena(main, p, f, sid, base, cleanup) {
   const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: 'scene', id: s.id } }); cleanup(() => t.destroy());
   const saveNotes = debounce((v) => sb.from('scenes').update({ notes: v }).eq('id', s.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message)));
   main.querySelector('[data-notes]').addEventListener('input', (e) => saveNotes(e.target.value));
+  sceneInfo(main.querySelector('[data-sinfo]'), p, f, s, base);
   bindShots(main, p, f, s, shots, urls, base);
 }
 

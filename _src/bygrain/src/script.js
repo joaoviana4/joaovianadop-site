@@ -98,43 +98,56 @@ export function fdxToText(xml) {
   return out.join('\n').replace(/\n{3,}/g, '\n\n');
 }
 
-// PDF: junta os pedaços de texto por linha (posição vertical) e marca linhas em branco pelos saltos.
-export async function pdfToText(file) {
+// Abre um PDF com o pdf.js (o mesmo para ler o texto e para mostrar as páginas no leitor do guião).
+export async function openPdf(src) {
   const pdfjs = await import('pdfjs-dist');
   const worker = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
   pdfjs.GlobalWorkerOptions.workerSrc = worker;
-  const pdf = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
+  const pdf = await pdfjs.getDocument(src).promise;
+  return { pdfjs, pdf };
+}
+
+// Texto de uma página: junta os pedaços de texto por linha (posição vertical) e marca linhas em branco pelos saltos.
+export async function pdfPageText(page) {
   const out = [];
-  for (let pn = 1; pn <= pdf.numPages; pn++) {
-    const page = await pdf.getPage(pn);
-    const tc = await page.getTextContent();
-    const rows = new Map();
-    tc.items.forEach((it) => {
-      if (!it.str) return;
-      const y = Math.round(it.transform[5] / 2) * 2;
-      const x = it.transform[4];
-      if (!rows.has(y)) rows.set(y, []);
-      rows.get(y).push({ x, s: it.str, w: it.width });
-    });
-    const ys = [...rows.keys()].sort((a, b) => b - a);
-    const gaps = []; for (let i = 1; i < ys.length; i++) gaps.push(ys[i - 1] - ys[i]);
-    const lh = gaps.length ? gaps.sort((a, b) => a - b)[Math.floor(gaps.length * 0.3)] || 12 : 12;
-    let prevY = null;
-    ys.forEach((y, idx) => {
-      const parts = rows.get(y).sort((a, b) => a.x - b.x);
-      let line = ''; let end = null;
-      parts.forEach((p) => { if (end !== null && p.x - end > 2) line += ' '; line += p.s; end = p.x + p.w; });
-      line = line.replace(/\s+/g, ' ').trim();
-      // números de página no topo ou no fundo
-      if ((idx === 0 || idx === ys.length - 1) && /^\d+\.?$/.test(line)) return;
-      if (/^\(?(CONTINUED|CONTINUA|CONT['’]?D)\)?:?$/i.test(line)) return;
-      if (prevY !== null && prevY - y > lh * 1.6) out.push('');
-      out.push(line); prevY = y;
-    });
-    out.push('');
-  }
+  const tc = await page.getTextContent();
+  const rows = new Map();
+  tc.items.forEach((it) => {
+    if (!it.str) return;
+    const y = Math.round(it.transform[5] / 2) * 2;
+    const x = it.transform[4];
+    if (!rows.has(y)) rows.set(y, []);
+    rows.get(y).push({ x, s: it.str, w: it.width });
+  });
+  const ys = [...rows.keys()].sort((a, b) => b - a);
+  const gaps = []; for (let i = 1; i < ys.length; i++) gaps.push(ys[i - 1] - ys[i]);
+  const lh = gaps.length ? gaps.sort((a, b) => a - b)[Math.floor(gaps.length * 0.3)] || 12 : 12;
+  let prevY = null;
+  ys.forEach((y, idx) => {
+    const parts = rows.get(y).sort((a, b) => a.x - b.x);
+    let line = ''; let end = null;
+    parts.forEach((p) => { if (end !== null && p.x - end > 2) line += ' '; line += p.s; end = p.x + p.w; });
+    line = line.replace(/\s+/g, ' ').trim();
+    // números de página no topo ou no fundo
+    if ((idx === 0 || idx === ys.length - 1) && /^\d+\.?$/.test(line)) return;
+    if (/^\(?(CONTINUED|CONTINUA|CONT['’]?D)\)?:?$/i.test(line)) return;
+    if (prevY !== null && prevY - y > lh * 1.6) out.push('');
+    out.push(line); prevY = y;
+  });
+  out.push('');
   return out.join('\n');
 }
+
+export async function pdfToText(file) {
+  const { pdf } = await openPdf({ data: await file.arrayBuffer() });
+  const out = [];
+  for (let pn = 1; pn <= pdf.numPages; pn++) out.push(await pdfPageText(await pdf.getPage(pn)));
+  return out.join('\n');
+}
+
+// Cabeçalho de cena (INT. / EXT. em maiúsculas, ou ".CABEÇALHO" forçado do Fountain)
+export const isSceneHeading = (line) => { const t = String(line || '').trim(); return /^\.[^.]/.test(t) || (isUpper(t) && HEAD.test(t)); };
+export { isUpper, TRANS };
 
 export async function fileToText(file) {
   const name = file.name.toLowerCase();
@@ -149,3 +162,27 @@ export function eighthsLabel(n) {
   const p = Math.floor(n / 8), r = n % 8;
   return [p ? String(p) : '', r ? `${r}/8` : ''].filter(Boolean).join(' ') || '0';
 }
+
+// Classifica as linhas de um guião: cabeçalho, ação, nome (deixa), parêntese, diálogo, transição.
+// Devolve [{ t: 'head'|'action'|'char'|'paren'|'dlg'|'trans'|'center'|'blank', s }]
+export function classifyLines(raw) {
+  const lines = String(raw || '').replace(/\r\n?/g, '\n').split('\n');
+  const out = [];
+  let inDlg = false;
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i].trim();
+    if (!l) { inDlg = false; out.push({ t: 'blank' }); continue; }
+    if (isSceneHeading(l)) { inDlg = false; out.push({ t: 'head', s: l.replace(/^\.(?!\.)/, '').replace(/#[^#]*#\s*$/, '').trim() }); continue; }
+    const prevBlank = i === 0 || !lines[i - 1].trim();
+    const next = (lines[i + 1] || '').trim();
+    if (/^>.*<$/.test(l)) { out.push({ t: 'center', s: l.slice(1, -1).trim() }); continue; }
+    if (l.startsWith('>') || (isUpper(l) && TRANS.test(l) && prevBlank)) { inDlg = false; out.push({ t: 'trans', s: l.replace(/^>\s*/, '') }); continue; }
+    const bare = l.replace(CUE_STRIP, ' ').replace(/\(.*?\)/g, '').replace(/\^$/, '').trim();
+    if (prevBlank && next && (l.startsWith('@') || (bare.length >= 2 && isUpper(bare) && l.length <= 45 && !/[.!?:,;]$/.test(bare) && !/^\d+\.?$/.test(l) && !/^(INT|EXT)\b/.test(bare)))) { inDlg = true; out.push({ t: 'char', s: l.replace(/^@/, ''), name: cueName(l) }); continue; }
+    if (inDlg && /^\(.*\)$/.test(l)) { out.push({ t: 'paren', s: l }); continue; }
+    if (inDlg) { out.push({ t: 'dlg', s: l }); continue; }
+    out.push({ t: 'action', s: l.replace(/^!/, '') });
+  }
+  return out;
+}
+export const cueName = (line) => String(line || '').replace(/^@/, '').replace(/\^$/, '').replace(CUE_STRIP, ' ').replace(/\(.*?\)/g, '').replace(/[:\s]+$/, '').replace(/\s+/g, ' ').trim();
