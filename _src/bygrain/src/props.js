@@ -1,3 +1,4 @@
+import { onWrite } from './undo.js';
 import { sb, esc, toast, modal, confirmBox, ICON, signedUrls, uploadImage } from './lib.js';
 import { mountTasks } from './tasks.js';
 import { scriptMode } from './modules.js';
@@ -14,7 +15,17 @@ const debounce = (fn, ms = 600) => { let t; return (...a) => { clearTimeout(t); 
 const eur = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 });
 export const RENTED = new Set(['alugado', 'emprestado']);
 
+// os dados da página ficam em memória enquanto ninguém grava nestas tabelas (navegar entre páginas fica imediato)
+const memo = new Map();
+onWrite((t) => { if (['props', 'scenes', 'characters', 'locations', 'prop_bundles'].includes(t)) memo.clear(); });
 async function load(pid) {
+  const m = memo.get(pid);
+  if (m && Date.now() - m.t < 45000) return m.f;
+  const f = await loadNow(pid);
+  memo.set(pid, { t: Date.now(), f });
+  return f;
+}
+async function loadNow(pid) {
   const [pr, sc, ch, lo, bu] = await Promise.all([
     sb.from('props').select('*').eq('project_id', pid).order('name'),
     sb.from('scenes').select('id, number, heading, body, character_ids, location_id, position').eq('project_id', pid).order('position'),

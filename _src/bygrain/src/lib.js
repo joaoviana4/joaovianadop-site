@@ -139,6 +139,10 @@ export async function callFn(name, body) {
 
 // ---------- ficheiros ----------
 const urlCache = new Map();
+// os links assinados (válidos 6 h) sobrevivem a recarregar a página: as imagens voltam a sair da cache do browser
+try { const saved = JSON.parse(sessionStorage.getItem('portal-urls') || '[]'); saved.forEach(([k, v]) => { if (v?.exp > Date.now()) urlCache.set(k, v); }); } catch { /* sem armazenamento */ }
+let urlSaveT = 0;
+const saveUrls = () => { clearTimeout(urlSaveT); urlSaveT = setTimeout(() => { try { sessionStorage.setItem('portal-urls', JSON.stringify([...urlCache.entries()].slice(-1500))); } catch { /* cheio ou bloqueado */ } }, 800); };
 // imagens que já são links da web (ex.: projetos de demonstração) não passam pelo armazenamento
 const isWeb = (p) => /^https?:\/\//.test(p || '');
 // 'vf:<caminho>' = fotografia do Viewfinder (balde photos do BlackCat); o resto = ficheiros do projeto
@@ -164,6 +168,7 @@ export async function signedUrls(paths) {
       const { data } = await sb.storage.from(bk).createSignedUrls(list.map((x) => x[1]), 3600 * 6);
       const back = new Map(list.map(([p, key]) => [key, p]));
       (data || []).forEach((d) => d.signedUrl && urlCache.set(back.get(d.path) || d.path, { url: d.signedUrl, exp: Date.now() + 3600 * 5 * 1000 }));
+      saveUrls();
     }));
   }
   return Object.fromEntries(paths.filter(Boolean).map((p) => [p, isWeb(p) ? p : urlCache.get(p)?.url]));
