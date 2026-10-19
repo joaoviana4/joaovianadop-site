@@ -492,8 +492,8 @@ async function storyboard(main, p, f, base) {
       <div class="sb-tools">${moveOpts(y)}<button type="button" class="icon-btn sm" data-delshot="${y.id}" title="Apagar plano" aria-label="Apagar plano">${ICON.trash}</button></div>
     </div>`;
   const sec = (sid, title, color, shots, href, sub) => `<section class="sb-sec" style="--sc:${color}" data-drop="${sid}">
-      <div class="sb-h"><i class="seg-dot"></i>${href ? `<a href="${href}"><strong>${esc(title)}</strong></a>` : `<strong>${esc(title)}</strong>`}${sub ? `<span class="muted small">${esc(sub)}</span>` : ''}<span class="muted small">· ${shots.length} ${shots.length === 1 ? 'plano' : 'planos'}</span>${sid ? `<button type="button" class="icon-btn sm sb-secdel" data-delsec="${sid}" title="Apagar secção" aria-label="Apagar a secção ${esc(title)}">${ICON.trash}</button>` : ''}</div>
-      ${shots.length ? `<div class="sb-grid">${shots.map(card).join('')}</div>` : `<p class="sb-empty muted small">Arrasta planos para aqui${href ? ` ou <a href="${href}">junta-os na secção</a>` : ''}.</p>`}
+      <div class="sb-h"><i class="seg-dot"></i>${href ? `<a href="${href}"><strong>${esc(title)}</strong></a>` : `<strong>${esc(title)}</strong>`}${sub ? `<span class="muted small">${esc(sub)}</span>` : ''}<span class="muted small">· ${shots.length} ${shots.length === 1 ? 'plano' : 'planos'}</span><button type="button" class="btn ghost sm sb-addshot" data-addshot="${sid}">${ICON.plus} Plano</button>${sid ? `<button type="button" class="icon-btn sm sb-secdel" data-delsec="${sid}" title="Apagar secção" aria-label="Apagar a secção ${esc(title)}">${ICON.trash}</button>` : ''}</div>
+      ${shots.length ? `<div class="sb-grid">${shots.map(card).join('')}</div>` : `<p class="sb-empty muted small">Ainda sem planos: "+ Plano" ou arrasta um plano para aqui.</p>`}
     </section>`;
   const loose = f.shots.filter((y) => !y.scene_id || !f.scenes.some((s2) => s2.id === y.scene_id));
   const byPos = (a, b) => (a.position || 0) - (b.position || 0);
@@ -501,8 +501,30 @@ async function storyboard(main, p, f, base) {
     ${f.scenes.length ? trackHtml(f.scenes, p.music?.duration, { base, f, compact: true }) : ''}
     ${L.items.map((x) => sec(x.s.id, x.s.heading || 'Sem nome', x.col, f.shots.filter((y) => y.scene_id === x.s.id).sort(byPos), `${base}/seguimento/${x.s.id}`, x.a != null ? fmtT(x.a) + (x.b != null ? '–' + fmtT(x.b) : '') : '')).join('')}
     ${loose.length ? sec('', 'Sem secção', '#8A8A99', loose.sort(byPos), null, 'da shotlist, ainda por arrumar') : ''}
-    ${!f.scenes.length && !f.shots.length ? `<div class="empty-box"><p>Ainda não há planos.</p><p class="muted small">Junta-os numa secção do seguimento ou na shotlist.</p><a class="btn primary" href="${base}/seguimento">Abrir o seguimento</a></div>` : ''}`;
+    ${!f.scenes.length && !f.shots.length ? `<div class="empty-box"><p>Ainda não há planos.</p><p class="muted small">Começa aqui: cria uma secção (ex: Intro, Refrão, Cena 1) e junta-lhe planos, ou junta logo um plano solto.</p><div class="row wrap-gap"><button type="button" class="btn primary" data-addsec>${ICON.plus} Secção</button><button type="button" class="btn ghost" data-addshot="">${ICON.plus} Plano</button></div></div>`
+      : `<div class="row wrap-gap sb-foot"><button type="button" class="btn ghost" data-addsec>${ICON.plus} Secção</button>${loose.length ? '' : `<button type="button" class="btn ghost" data-addshot="">${ICON.plus} Plano sem secção</button>`}</div>`}`;
   const redraw = () => storyboard(main, p, f, base);
+  // juntar secções e planos daqui, sem ter de ir ao seguimento
+  main.querySelectorAll('[data-addsec]').forEach((b) => b.addEventListener('click', () => {
+    const m = modal(`<h2>Nova secção</h2><form class="stack"><div class="field"><label for="sbn">Nome</label><input id="sbn" placeholder="ex: Intro, Refrão, Cena 1" required autocomplete="off"></div>
+      <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Criar</button></div></form>`);
+    m.el.querySelector('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const n = f.scenes.reduce((mx, x) => Math.max(mx, Number(x.number) || 0), 0) + 1;
+      const { data, error } = await sb.from('scenes').insert({ project_id: p.id, number: String(n), heading: m.el.querySelector('#sbn').value.trim(), position: f.scenes.length, character_ids: [] }).select().single();
+      if (error) return toast(error.message);
+      f.scenes.push(data); m.close(); toast('Secção criada. Junta-lhe planos com "+ Plano".'); redraw();
+    });
+  }));
+  main.querySelectorAll('[data-addshot]').forEach((b) => b.addEventListener('click', async () => {
+    const sid = b.dataset.addshot || null; const sc = f.scenes.find((x) => x.id === sid);
+    const xs = f.shots.filter((y) => (y.scene_id || null) === sid);
+    const pre = sc ? `${sc.number}.` : ''; const used = new Set(xs.map((y) => y.code));
+    let k = xs.reduce((mx, y) => { const v = String(y.code || '').startsWith(pre) ? parseInt(String(y.code).slice(pre.length), 10) : 0; return v > mx ? v : mx; }, 0) + 1; while (used.has(pre + k)) k++;
+    const { data, error } = await sb.from('shots').insert({ project_id: p.id, scene_id: sid, code: pre + k, position: Math.max(0, ...xs.map((y) => y.position || 0)) + 1 }).select().single();
+    if (error) return toast(error.message);
+    f.shots.push(data); ensureModules(p, ['storyboard'], { quiet: true }); toast(`Plano ${data.code} criado. Cola uma imagem com Ctrl+V por cima dele, ou abre-o.`); redraw();
+  }));
   const moveTo = async (id, to) => {
     const sh = f.shots.find((x) => x.id === id); if (!sh) return;
     const pos = Math.max(0, ...f.shots.filter((y) => (y.scene_id || null) === to).map((y) => y.position || 0)) + 1;

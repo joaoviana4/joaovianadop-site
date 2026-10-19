@@ -2668,3 +2668,5 @@ a.pv-mark { text-decoration: none; display: inline-flex; }
 .ovm-d.today a { box-shadow: 0 0 0 1px var(--ok) inset; }
 .ovm-d em { position: absolute; top: 8px; right: 10px; font-style: normal; font-size: 11px; font-weight: 600; color: var(--ok); }
 .ovm-d em.late { color: var(--late); }
+.sb-h .sb-addshot { margin-left: 6px; font-family: var(--sans); font-weight: 600; }
+.sb-foot { margin-top: 8px; }

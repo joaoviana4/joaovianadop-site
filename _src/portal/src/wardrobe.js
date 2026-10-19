@@ -6,6 +6,7 @@ import { entMode, entUrls, modeToggle, bindMode, entItems } from './entview.js';
 //  · as medidas
 //  · figurinos (Figurino 1, 2… com nome editável, notas e fotos de referência)
 //  · fotos das provas de guarda-roupa
+//  · o board geral do figurino (do projeto inteiro) e um board por figurino, como o moodboard
 // Tudo fica em characters.info.wardrobe = { board_id, measures: {k: v}, costumes: [{id, name, notes, photos:[{path}]}], fittings: [{path, caption}] }.
 
 const MEASURES = [
@@ -26,9 +27,24 @@ export async function wardrobePage(main, p, sub, base, cleanup) {
   const mode = entMode('wardrobe');
   const cnt = (c) => { const w = W(c); const n = w.costumes.length; return n ? `${n} ${n === 1 ? 'figurino' : 'figurinos'}` : '<span class="muted">Ainda sem figurinos</span>'; };
   const items = chars.map((c) => ({ e: c, href: `${base}/figurino/${c.id}`, title: c.actor || c.name, sub: esc(c.actor ? c.name : c.info?.extra ? 'Figurante' : 'Personagem'), meta: cnt(c) }));
-  main.innerHTML = `<div class="row between wrap-gap"><div><h1 class="h1 pm-title">Figurino</h1><p class="muted">Uma página por ator: moodboard, medidas, figurinos com referências e as provas de guarda-roupa.</p></div>${chars.length ? modeToggle('wardrobe') : ''}</div>
+  main.innerHTML = `<div class="row between wrap-gap"><div><h1 class="h1 pm-title">Figurino</h1><p class="muted">Uma página por ator: moodboard, medidas, figurinos com referências e as provas de guarda-roupa.</p></div><div class="row wrap-gap"><button type="button" class="btn primary" data-genboard>${ICON.board} Board geral do figurino</button>${chars.length ? modeToggle('wardrobe') : ''}</div></div>
     ${chars.length ? entItems(items, { mode, urls }) : `<div class="empty-box"><p>Ainda não há atores nem personagens.</p><p class="muted small">Junta-os em ${p.kind === 'ficcao' ? 'Personagens (ou importa o guião)' : 'Atores e figurantes'}; aparecem aqui sozinhos.</p></div>`}`;
   bindMode(main, 'wardrobe', () => wardrobePage(main, p, sub, base, cleanup));
+  main.querySelector('[data-genboard]').addEventListener('click', async () => {
+    const id = await openBoard(p, (b) => b.data?.general, { title: 'Figurino (geral)', data: { general: true } });
+    if (id) location.hash = `${base}/b/${id}`;
+  });
+}
+
+// boards do figurino: ficam fora da lista de ferramentas (kind 'wrd'); cria-se na primeira vez que se abre
+async function openBoard(p, match, { title, data, known }) {
+  if (known) { const { data: ex } = await sb.from('boards').select('id').eq('id', known).maybeSingle(); if (ex) return ex.id; }
+  const { data: list } = await sb.from('boards').select('id, data').eq('project_id', p.id).eq('kind', 'wrd');
+  const found = (list || []).find(match); if (found) return found.id;
+  const grp = (p.departments || []).find((d) => d.id === 'arte') ? 'arte' : null;
+  const { data: b, error } = await sb.from('boards').insert({ project_id: p.id, kind: 'wrd', title, group_id: grp, data }).select('id').single();
+  if (error) { toast(error.message); return null; }
+  return b.id;
 }
 
 async function personPage(main, p, c, base, cleanup) {
@@ -57,7 +73,7 @@ async function personPage(main, p, c, base, cleanup) {
       <section class="stack wr-costumes">
         <div class="row between"><h2 class="h3">Figurinos</h2><button type="button" class="btn ghost" data-cadd>${ICON.plus} Figurino</button></div>
         ${w.costumes.length ? w.costumes.map((x, i) => `<article class="panel stack wr-cost" data-ci="${i}">
-          <div class="row between"><input class="title-in h3 wr-cname" data-cname="${i}" value="${esc(x.name)}" aria-label="Nome do figurino"><button type="button" class="icon-btn" data-crm="${i}" aria-label="Apagar figurino">${ICON.trash}</button></div>
+          <div class="row between"><input class="title-in h3 wr-cname" data-cname="${i}" value="${esc(x.name)}" aria-label="Nome do figurino"><div class="row"><button type="button" class="btn ghost sm" data-cboard="${i}" title="Board deste figurino, em ecrã inteiro">${ICON.board} Board</button><button type="button" class="icon-btn" data-crm="${i}" aria-label="Apagar figurino">${ICON.trash}</button></div></div>
           <textarea data-cnotes="${i}" rows="2" placeholder="Peças, cores, tecidos, cenas onde entra…">${esc(x.notes || '')}</textarea>
           <div class="row between"><span class="label">Referências</span><button type="button" class="link-btn small" data-cph="${i}">${ICON.plus} Fotos</button></div>
           <div class="photo-grid wr-photos" data-cdrop="${i}">${(x.photos || []).map((ph, j) => img(ph, `${i}:${j}`, 'data-cphrm')).join('') || '<p class="muted small">Larga aqui fotos de referência, ou cola com Ctrl+V depois de carregares neste figurino.</p>'}</div>
@@ -81,6 +97,14 @@ async function personPage(main, p, c, base, cleanup) {
     }
     location.hash = `${base}/b/${bid}`;
   });
+  // board de cada figurino
+  main.querySelectorAll('[data-cboard]').forEach((btn) => btn.addEventListener('click', async () => {
+    const x = w.costumes[+btn.dataset.cboard];
+    const id = await openBoard(p, (b) => b.data?.costume_id === x.id, { title: `${x.name} (${title})`, data: { character_id: c.id, costume_id: x.id }, known: x.board_id });
+    if (!id) return;
+    if (x.board_id !== id) { x.board_id = id; await saveNow(); }
+    location.hash = `${base}/b/${id}`;
+  }));
   // medidas
   main.querySelectorAll('[data-m]').forEach((el) => el.addEventListener('input', () => { w.measures[el.dataset.m] = el.value; save(); }));
   main.querySelector('[data-xadd]').addEventListener('click', async () => { w.extraMeasures = [...(w.extraMeasures || []), { name: 'Medida', value: '' }]; await saveNow(); redraw(); });

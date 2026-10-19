@@ -205,21 +205,7 @@ function cenas(main, p, f, sub, base, cleanup) {
     </tbody></table></div>` : `<div class="empty-box"><p>Ainda não há cenas.</p><p class="muted small">Importa o guião para as separar automaticamente, ou cria-as à mão.</p><a class="btn primary" href="${base}/guiao">Importar guião</a></div>`}`;
   main.querySelector('[data-analyze]')?.addEventListener('click', () => analyzeScriptModal(p, f, () => cenas(main, p, f, null, base, cleanup)));
   main.querySelectorAll('[data-href]').forEach((tr) => tr.addEventListener('click', (e) => { if (!e.target.closest('a')) location.hash = tr.dataset.href; }));
-  main.querySelector('[data-add]').addEventListener('click', () => {
-    const m = modal(`<h2>Nova cena</h2><form class="stack"><div class="grid2"><div class="field"><label for="sn">Número</label><input id="sn" value="${f.scenes.length + 1}" required></div><div class="field"><label for="sie">INT / EXT</label><select id="sie"><option>INT</option><option>EXT</option><option>INT/EXT</option></select></div></div>
-      <div class="field"><label for="sl">Décor</label><input id="sl" list="locs" required><datalist id="locs">${f.locations.map((l) => `<option value="${esc(l.name)}">`).join('')}</datalist></div>
-      <div class="field"><label for="st">Momento do dia</label><input id="st" placeholder="DIA, NOITE…"></div>
-      <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Criar</button></div></form>`);
-    m.el.querySelector('form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const name = m.el.querySelector('#sl').value.trim().toUpperCase(); const ie = m.el.querySelector('#sie').value; const t = m.el.querySelector('#st').value.trim().toUpperCase();
-      let loc = f.locations.find((l) => l.name.toUpperCase() === name);
-      if (!loc) { const { data } = await sb.from('locations').insert({ project_id: p.id, name, position: f.locations.length }).select().single(); loc = data; }
-      const { data, error } = await sb.from('scenes').insert({ project_id: p.id, number: m.el.querySelector('#sn').value.trim(), int_ext: ie, time_of_day: t, location_id: loc?.id, heading: `${ie}. ${name}${t ? ' - ' + t : ''}`, position: f.scenes.length }).select().single();
-      if (error) return toast(error.message);
-      m.close(); location.hash = `${base}/cenas/${data.id}`;
-    });
-  });
+  main.querySelector('[data-add]').addEventListener('click', () => newSceneModal(p, f, base));
 }
 
 export function shotCard(sh, url, base) {
@@ -272,6 +258,23 @@ async function cena(main, p, f, sid, base, cleanup) {
     cleanup(() => r.destroy());
   })();
   bindShots(main, p, f, s, shots, urls, base);
+}
+
+// criar uma cena à mão (sem guião): número, interior/exterior, décor e momento do dia
+function newSceneModal(p, f, base, after) {
+    const m = modal(`<h2>Nova cena</h2><form class="stack"><div class="grid2"><div class="field"><label for="sn">Número</label><input id="sn" value="${f.scenes.length + 1}" required></div><div class="field"><label for="sie">INT / EXT</label><select id="sie"><option>INT</option><option>EXT</option><option>INT/EXT</option></select></div></div>
+      <div class="field"><label for="sl">Décor</label><input id="sl" list="locs" required><datalist id="locs">${f.locations.map((l) => `<option value="${esc(l.name)}">`).join('')}</datalist></div>
+      <div class="field"><label for="st">Momento do dia</label><input id="st" placeholder="DIA, NOITE…"></div>
+      <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Criar</button></div></form>`);
+    m.el.querySelector('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = m.el.querySelector('#sl').value.trim().toUpperCase(); const ie = m.el.querySelector('#sie').value; const t = m.el.querySelector('#st').value.trim().toUpperCase();
+      let loc = f.locations.find((l) => l.name.toUpperCase() === name);
+      if (!loc) { const { data } = await sb.from('locations').insert({ project_id: p.id, name, position: f.locations.length }).select().single(); loc = data; }
+      const { data, error } = await sb.from('scenes').insert({ project_id: p.id, number: m.el.querySelector('#sn').value.trim(), int_ext: ie, time_of_day: t, location_id: loc?.id, heading: `${ie}. ${name}${t ? ' - ' + t : ''}`, position: f.scenes.length }).select().single();
+      if (error) return toast(error.message);
+      m.close(); f.scenes.push(data); if (after) after(data); else location.hash = `${base}/cenas/${data.id}`;
+    });
 }
 
 function nextCode(scene, shots) {
@@ -520,7 +523,8 @@ async function storyboard(main, p, f, _sub, base) {
       <div class="sb-grid">${xs.map((x) => `<div class="sb-shot sb-ed" data-sbshot="${x.id}"><a class="sb-img" href="${base}/plano/${x.id}" title="Abrir o plano">${urls[x.image_path] ? `<img src="${esc(urls[x.image_path])}" alt="">` : ICON.image}</a><button type="button" class="icon-btn sm sb-up" data-sbup="${x.id}" title="${x.image_path ? 'Trocar a imagem' : 'Juntar imagem'} (ou arrasta para aqui)" aria-label="Trocar a imagem">${ICON.image}</button>
         <a class="sb-meta" href="${base}/plano/${x.id}"><span><strong>${esc(x.code)}</strong> <span class="muted small">${esc([x.framing, x.movement].filter(Boolean).join(' · '))}</span></span>${x.description ? `<span class="small sb-d">${esc(x.description)}</span>` : ''}</a></div>`).join('')}
         <button type="button" class="sb-add" data-sbadd="${s.id}">${ICON.plus}<span>Plano</span></button></div></section>`; }).join('')
-    : `<p class="empty-note">Ainda não há cenas. Importa o guião primeiro.</p>`}`;
+    : `<div class="empty-box"><p>Ainda não há cenas.</p><p class="muted small">Importa o guião para as criar sozinho, ou cria uma cena aqui e começa a juntar planos.</p><div class="row wrap-gap"><button type="button" class="btn primary" data-sbscene>${ICON.plus} Cena</button><a class="btn ghost" href="${base}/guiao">Importar o guião</a></div></div>`}
+    ${f.scenes.length ? `<div class="row"><button type="button" class="btn ghost" data-sbscene>${ICON.plus} Cena</button></div>` : ''}`;
     const setImg = async (x, file) => {
       try { toast('A enviar a imagem…'); const up = await uploadImage(p.id, 'storyboard', file); const { error } = await sb.from('shots').update({ image_path: up.path, updated_at: new Date().toISOString() }).eq('id', x.id); if (error) return toast(error.message); x.image_path = up.path; Object.assign(urls, await signedUrls([up.path])); draw(); } catch (e) { toast(e.message || String(e)); }
     };
@@ -531,6 +535,7 @@ async function storyboard(main, p, f, _sub, base) {
       el.addEventListener('drop', (e) => { e.preventDefault(); el.classList.remove('drop'); const file = [...e.dataTransfer.files].find((y) => y.type.startsWith('image/')); if (file) setImg(f.shots.find((y) => y.id === el.dataset.sbshot), file); });
       el.addEventListener('mouseenter', () => { hover = el.dataset.sbshot; }); el.addEventListener('mouseleave', () => { if (hover === el.dataset.sbshot) hover = null; });
     });
+    main.querySelectorAll('[data-sbscene]').forEach((b) => b.addEventListener('click', () => newSceneModal(p, f, base, () => draw())));
     main.querySelectorAll('[data-sbadd]').forEach((b) => b.addEventListener('click', async () => {
       const sc = f.scenes.find((x) => x.id === b.dataset.sbadd); const xs = f.shots.filter((x) => x.scene_id === sc.id);
       const { data, error } = await sb.from('shots').insert({ project_id: p.id, scene_id: sc.id, code: nextCode(sc, xs), position: xs.length }).select().single();
