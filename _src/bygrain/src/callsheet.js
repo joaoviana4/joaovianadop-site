@@ -410,9 +410,12 @@ async function pickShots(p, d, after, elsewhere = new Map()) {
     if (!ids.length) return m.close();
     const chosen = ordered.filter((x) => ids.includes(x.id));
     const secIds = new Set();
+    const dayPeople = new Set();
     chosen.forEach((x) => {
       const s = (scenes || []).find((y) => y.id === x.scene_id); if (s) secIds.add(s.id);
-      const people = s ? [...(s.character_ids || []), ...(s.extra_ids || [])] : [];
+      // quem está no plano (escolhido na página do plano); se não estiver escolhido, toda a gente da cena
+      const people = (x.cast_ids?.length || x.set_ids?.length) ? [...(x.cast_ids || []), ...(x.set_ids || [])] : s ? [...(s.character_ids || []), ...(s.extra_ids || [])] : [];
+      people.forEach((id) => dayPeople.add(id));
       const idx = people.map((pid) => (chars || []).findIndex((c) => c.id === pid) + 1).filter((n) => n > 0);
       const cells = {
         cena: s ? (p._hasScript ? s.number : s.heading) : '', efeito: s ? [s.int_ext, s.time_of_day].filter(Boolean).join('/') : '', crono: '',
@@ -429,7 +432,7 @@ async function pickShots(p, d, after, elsewhere = new Map()) {
     if (loc && !d.place) d.place = loc.name;
     // a morada vem sempre do décor (a que está escrita na página do décor), se o local da folha for esse décor
     if (loc && placeAddr(p, loc) && same(d.place, loc.name)) d.address = placeAddr(p, loc);
-    const castIds = [...new Set(secs.flatMap((s) => [...(s.character_ids || []), ...(s.extra_ids || [])]))];
+    const castIds = [...dayPeople];
     castIds.forEach((cid) => {
       const c = (chars || []).find((y) => y.id === cid); if (!c || d.cast.some((y) => y.char_id === cid)) return;
       const scs = secs.filter((s) => [...(s.character_ids || []), ...(s.extra_ids || [])].includes(cid)).map((s) => (p._hasScript ? s.number : s.heading)).join(', ');

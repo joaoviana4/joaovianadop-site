@@ -2156,3 +2156,15 @@ body.tool-dragging, body.tool-dragging * { cursor: grabbing !important; user-sel
 .tp-g button { background: var(--panel2); border: 0; border-radius: 7px; color: var(--text); font: inherit; font-size: 13px; padding: 7px 0; cursor: pointer; font-variant-numeric: tabular-nums; }
 .tp-g button:hover { background: color-mix(in srgb, var(--blue) 18%, var(--panel2)); }
 .tp-g button.on { background: var(--blue); color: #fff; }
+.sr.sr-mini { height: min(78vh, 900px); min-height: 420px; }
+.sr.sr-mini .sr-toggle { display: none; }
+.sr-page[hidden] { display: none; }
+.cast-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin-top: 8px; }
+.cp { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font: inherit; cursor: pointer; position: relative; }
+.cp small { color: var(--muted); font-size: 12px; min-height: 1em; }
+.cp-s { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-top: 4px; }
+.cp.frame { border-color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); }
+.cp.frame .cp-s { color: var(--blue); }
+.cp.set { border-style: dashed; border-color: #E3B341; }
+.cp.set .cp-s { color: #B8860B; }
+.cp-bar { margin-top: 10px; align-items: center; }
