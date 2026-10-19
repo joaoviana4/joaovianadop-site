@@ -1,3 +1,5 @@
+import { moodboardPanel, bindMoodboard } from './moodboard.js';
+import { placeProps } from './sceneinfo.js';
 import { sb, BUCKET, esc, toast, confirmBox, modal, ICON, signedUrls, signedUrl, uploadImage } from './lib.js';
 import { entMode, entUrls, modeToggle, bindMode, entItems, photoField, bindPhoto, placePhotos, bindPlacePhotos } from './entview.js';
 import { shotCard, bindShots, shotViewer } from './fiction.js';
@@ -431,10 +433,13 @@ async function entityPage(main, p, f, kind, id, base, cleanup) {
         ${secs.length ? `<ul class="ent-secs">${secs.map((s) => { const i = f.scenes.indexOf(s); return `<li><a href="${base}/seguimento/${s.id}"><i class="seg-dot" style="--sc:${SEG_COLORS[i % SEG_COLORS.length]}"></i><span>${esc(s.heading || 'Sem nome')}</span><span class="muted small">${esc([s.starts_at, s.ends_at].filter(Boolean).join('–'))}</span></a></li>`; }).join('')}</ul>` : '<p class="muted small">Ainda em nenhuma secção. Junta-o dentro de uma secção do seguimento.</p>'}
       </section>
     </div>
+    ${isPlace ? moodboardPanel(e) : ''}
+    ${isPlace ? '<section class="panel dp-props" data-dprops><p class="muted small">A carregar adereços…</p></section>' : ''}
     ${isPlace ? await placePhotos(e) : ''}
     <section class="panel"><h2 class="h3">Tarefas</h2><div data-tasks></div></section>`;
   const table = isPlace ? 'locations' : 'characters';
   if (isPlace) bindPlacePhotos(main, p, e, redrawPage); else bindPhoto(main, p, 'characters', e, redrawPage);
+  if (isPlace) { bindMoodboard(main, p, { table: 'locations', row: e, key: 'location_id', base }); placeProps(main.querySelector('[data-dprops]'), p, e, secs.map((s) => s.id), base); }
   // junta tudo o que mudou (nome, ator, campos) e grava de uma vez: antes só ficava a última alteração
   let pending = {};
   const flush = debounce(() => { const patch = pending; pending = {}; sb.from(table).update(patch).eq('id', e.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message)); }, 500);

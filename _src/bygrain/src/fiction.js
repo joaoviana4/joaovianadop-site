@@ -3,7 +3,8 @@ import { entMode, entUrls, modeToggle, bindMode, entItems, photoField, bindPhoto
 import { parseScript, fileToText, eighthsLabel } from './script.js';
 import { mountTasks } from './tasks.js';
 import { mountReader } from './scriptview.js';
-import { sceneInfo } from './sceneinfo.js';
+import { sceneInfo, placeProps } from './sceneinfo.js';
+import { moodboardPanel, bindMoodboard } from './moodboard.js';
 import { analyzeScriptModal, applyBreakdown, quickBreakdown } from './scriptan.js';
 import { newLightmapData } from './lmdata.js';
 import { ensureModules } from './modules.js';
@@ -420,9 +421,12 @@ async function decor(main, p, f, id, base, cleanup) {
       <section class="panel"><div class="row between"><h2 class="h3">Fotos de repérage</h2><button type="button" class="btn ghost" data-addph>${ICON.plus} Fotos</button></div>
         <div class="photo-grid" data-photos>${photos.map((ph, i) => `<figure><img src="${esc(urls[ph.path] || '')}" alt=""><button type="button" class="icon-btn sm" data-rmph="${i}" aria-label="Tirar foto">${ICON.close}</button></figure>`).join('') || '<p class="muted small">Ainda sem fotos. Também podes largá-las aqui ou colar com Ctrl+V.</p>'}</div></section>
       <section class="panel"><div class="row between"><h2 class="h3">Mapas de luz da montagem base</h2><button type="button" class="btn ghost" data-newlm>${ICON.bulb} Mapa de luz</button></div><div data-lms class="muted small">A carregar…</div></section>
+      <section class="panel dp-props" data-dprops><p class="muted small">A carregar adereços…</p></section>
       <section class="panel"><h2 class="h3">Tarefas</h2><div data-tasks></div></section>
-    </div><aside class="pm-side"><section class="panel"><h2 class="h3">Cenas neste décor (${scenes.length})</h2>${sceneLinks(scenes, f, base)}</section></aside></div>`;
+    </div><aside class="pm-side">${moodboardPanel(l)}<section class="panel"><h2 class="h3">Cenas neste décor (${scenes.length})</h2>${sceneLinks(scenes, f, base)}</section></aside></div>`;
   bindBlocks(main, 'locations', l);
+  bindMoodboard(main, p, { table: 'locations', row: l, key: 'location_id', base });
+  placeProps(main.querySelector('[data-dprops]'), p, l, scenes.map((s) => s.id), base);
   { const sv = debounce((v) => sb.from('locations').update({ name: v }).eq('id', l.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message))); main.querySelector('[data-ename]').addEventListener('input', (e) => { l.name = e.target.value; if (l.name.trim()) sv(l.name.trim()); }); }
   const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: 'location', id: l.id } }); cleanup(() => t.destroy());
   sb.from('boards').select('id, title').eq('project_id', p.id).eq('kind', 'lightmap').eq('data->>location_id', l.id).then(({ data }) => {

@@ -1051,7 +1051,7 @@ async function boardView(projectId, boardId) {
     onUp: async () => {
       if (cur.parent_id) return go(`${base}/b/${cur.parent_id}`);
       // board de um item de marketing: volta para a página do item
-      if (cur.kind === 'wrd') { const { data: wb } = await sb.from('boards').select('data').eq('id', cur.id).maybeSingle(); return go(`${base}/figurino${wb?.data?.character_id ? '/' + wb.data.character_id : ''}`); }
+      if (cur.kind === 'wrd') { const { data: wb } = await sb.from('boards').select('data').eq('id', cur.id).maybeSingle(); if (wb?.data?.location_id) return go(`${base}/decors/${wb.data.location_id}`); return go(`${base}/figurino${wb?.data?.character_id ? '/' + wb.data.character_id : ''}`); }
       if (cur.kind === 'mkt') { const { data: mi } = await sb.from('marketing_items').select('id').eq('board_id', cur.id).maybeSingle(); if (mi) return go(`${base}/marketing/${mi.id}`); }
       go(base);
     },
