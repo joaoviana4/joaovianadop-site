@@ -255,7 +255,16 @@ export async function budgetPage(main, p) {
       if (dot) { const r = b.rows.find((x) => x.id === dot.closest('[data-row]').dataset.row); colorPop(dot, r.color, (c) => { snapshot('cor da linha'); if (c) r.color = c; else delete r.color; save(); draw(); }); return; }
       if (!e.target.closest('[data-rm]')) return;
       const id = e.target.closest('[data-row]').dataset.row; const r = b.rows.find((x) => x.id === id);
-      snapshot(r.kind === 'section' ? 'apagar secção' : 'apagar linha'); b.rows = b.rows.filter((x) => x.id !== id); save(); draw();
+      if (r.kind !== 'section') { snapshot('apagar linha'); b.rows = b.rows.filter((x) => x.id !== id); save(); draw(); return; }
+      // apagar uma secção apaga também as linhas dela (até à secção seguinte); dá para ficar só sem o cabeçalho
+      const i0 = b.rows.indexOf(r); let i1 = i0 + 1; while (i1 < b.rows.length && b.rows[i1].kind !== 'section') i1++;
+      const kids = b.rows.slice(i0 + 1, i1);
+      const doAll = () => { snapshot('apagar secção'); b.rows.splice(i0, i1 - i0); save(); draw(); toast(`Secção apagada${kids.length ? ` com ${kids.length} ${kids.length === 1 ? 'linha' : 'linhas'}` : ''}. Ctrl+Z para voltar atrás.`); };
+      if (!kids.length) return doAll();
+      const m = modal(`<h2>Apagar a secção "${esc(r.title || 'sem nome')}"?</h2><p>Esta secção tem ${kids.length} ${kids.length === 1 ? 'linha' : 'linhas'}. Apagam-se também, com os valores todos.</p>
+        <div class="row between wrap-gap"><button type="button" class="btn ghost" data-only>Só o cabeçalho</button><div class="row"><button type="button" class="btn ghost" data-close>Cancelar</button><button type="button" class="btn danger" data-all>Apagar a secção e as linhas</button></div></div>`);
+      m.el.querySelector('[data-all]').addEventListener('click', () => { m.close(); doAll(); });
+      m.el.querySelector('[data-only]').addEventListener('click', () => { m.close(); snapshot('apagar cabeçalho'); b.rows = b.rows.filter((x) => x.id !== id); save(); draw(); });
     });
     main.querySelector('[data-addrow]').addEventListener('click', () => { snapshot('juntar linha'); b.rows.push({ id: uid(), kind: 'item', cells: {} }); save(); draw(); main.querySelector('tbody tr:last-child [data-cell]')?.focus(); });
     main.querySelector('[data-addsec]').addEventListener('click', () => { snapshot('juntar secção'); b.rows.push({ id: uid(), kind: 'section', title: 'Nova secção' }); save(); draw(); const s = main.querySelector('tbody tr:last-child [data-sec]'); s?.focus(); s?.select(); });
