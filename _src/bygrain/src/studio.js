@@ -26,7 +26,7 @@ const lazy = {
 setTimeout(() => { const idle = window.requestIdleCallback || ((f) => setTimeout(f, 1500)); idle(() => Object.values(lazy).forEach((f) => f().catch(() => {}))); }, 4000);
 import { joinProject, leaveProject, lockPage, boardPresence, onPresence, whoLabel } from './presence.js';
 import { budgetWhoChip, budgetAccessPanel, globalPermsPanel } from './perms.js';
-import { MODULES, TEMPLATES, modulesOf, hasMod, scriptMode, modLabel, modPath, modulesModal, autoModules, ensureModules } from './modules.js';
+import { MODULES, TEMPLATES, modulesOf, hasMod, scriptMode, modLabel, modPath, modulesModal, autoModules, ensureModules, addableModules } from './modules.js';
 import { FICTION_PAGES, FICTION_DEPTS, fictionPage, fictionStats } from './fiction.js';
 
 const app = $('#app');
@@ -668,13 +668,17 @@ function bindProjectNav(root, p) {
   root.querySelectorAll('[data-newboard]').forEach((b) => b.addEventListener('click', () => newBoard(p, b.dataset.newboard)));
 }
 
+const TOOL_HINTS = { board: 'moodboard quadro referencias cartoes imagens', table: 'folha lista contactos entregas elenco', timeline: 'calendario datas prazos plano', lightmap: 'luz iluminacao planta', budget: 'custos dinheiro valores', media: 'musica previs video audio', callsheet: 'folha de servico dia de rodagem horarios', transport: 'carros viagens boleias', distribution: 'festivais mostras submissoes premios trailer filme links' };
 function newBoard(p, groupId = '', kind = 'board') {
   const fic = scriptMode(p);
   // os adereços têm uma única página por projeto (Arte › Adereços), por isso não há modelo de tabela de adereços
   const tpls = [['blank', 'Em branco'], ['contacts', 'Folha de contactos (equipa e elenco)'], ['deliverables', 'Entregas (peças, formatos, plataformas)'], ['cast', fic ? 'Elenco' : 'Atores e figurantes']];
   const m = modal(`<h2>Nova ferramenta</h2>
     <form class="stack">
-      <div class="tool-kinds" role="radiogroup" aria-label="Ferramenta">${Object.entries(TOOL_KINDS).map(([k, v]) => `<label class="tool-k"><input type="radio" name="kind" value="${k}" ${k === kind ? 'checked' : ''}><span>${v.icon}${v.label}</span></label>`).join('')}</div>
+      <input type="search" class="tool-q" data-toolq placeholder="Procurar ferramenta ou página…" aria-label="Procurar ferramenta" autocomplete="off">
+      <div class="tool-kinds" role="radiogroup" aria-label="Ferramenta">${Object.entries(TOOL_KINDS).map(([k, v]) => `<label class="tool-k" data-q="${esc(`${v.label} ${TOOL_HINTS[k] || ''}`)}"><input type="radio" name="kind" value="${k}" ${k === kind ? 'checked' : ''}><span>${v.icon}${v.label}</span></label>`).join('')}</div>
+      ${addableModules(p).length ? `<div class="tool-pages" data-tpages><p class="small muted">Ou junta uma página ao projeto</p><div class="tool-pl">${addableModules(p).map((k) => `<button type="button" class="tool-pg" data-addmod="${k}" data-q="${esc(`${modLabel(p, k)} ${MODULES[k].desc}`)}" title="${esc(MODULES[k].desc)}">${ICON[MODULES[k].icon] || ''}<span>${esc(modLabel(p, k))}</span></button>`).join('')}</div></div>` : ''}
+      <p class="small muted" data-toolnone hidden>Nada com esse nome.</p>
       <div class="field"><label for="bn">Nome</label><input id="bn" name="title" placeholder="ex: Moodboard, Storyboard, Plano de rodagem" required></div>
       <div class="field" data-tplf hidden><label for="bt">Modelo</label><select id="bt" name="tpl">${tpls.map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
       <div class="field"><label for="bg">Departamento</label><select id="bg" name="group_id"><option value="">Nenhum</option>${(p.departments || []).map((d) => `<option value="${esc(d.id)}" ${d.id === groupId ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}${groupId && FIXED_DEPTS[groupId] && !deptOf(p, groupId) ? `<option value="${groupId}" selected>${FIXED_DEPTS[groupId].name}</option>` : ''}</select></div>
@@ -687,6 +691,19 @@ function newBoard(p, groupId = '', kind = 'board') {
   const propsNote = () => { const g = form.elements.group_id.value; const arte = deptOf(p, 'arte'); m.el.querySelector('[data-propsnote]').hidden = !(g && (g === 'arte' || g === arte?.id)) && !/^\s*adere/i.test(form.elements.title.value); };
   form.elements.group_id.addEventListener('change', propsNote); form.elements.title.addEventListener('input', propsNote); setTimeout(propsNote);
   m.el.querySelector('[data-addprops]')?.addEventListener('click', async () => { await ensureModules(p, ['aderecos']); m.close(); go(`${projBase(p)}/aderecos`); });
+  const nq = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const tq = m.el.querySelector('[data-toolq]');
+  tq.addEventListener('input', () => {
+    const q = nq(tq.value.trim()); let n = 0;
+    m.el.querySelectorAll('.tool-k, .tool-pg').forEach((el) => { const ok = !q || nq(el.dataset.q).includes(q); el.hidden = !ok; if (ok) n++; });
+    const tp = m.el.querySelector('[data-tpages]'); if (tp) tp.hidden = !!q && !tp.querySelector('.tool-pg:not([hidden])');
+    m.el.querySelector('[data-toolnone]').hidden = n > 0;
+    const vis = [...m.el.querySelectorAll('.tool-k:not([hidden]) input')];
+    if (q && vis.length && !vis.some((i) => i.checked)) { vis[0].checked = true; sync(); }
+  });
+  tq.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); const k = m.el.querySelector('.tool-k:not([hidden]) input'); if (k) { k.checked = true; sync(); form.elements.title.focus(); } else m.el.querySelector('.tool-pg:not([hidden])')?.click(); } });
+  setTimeout(() => tq.focus(), 30);
+  m.el.querySelectorAll('[data-addmod]').forEach((b) => b.addEventListener('click', async () => { const k = b.dataset.addmod; await ensureModules(p, [k]); m.close(); go(`${projBase(p)}/${modPath(p, k)}`); }));
   const ttl = form.elements.title;
   const sync = () => {
     const k = form.elements.kind.value; m.el.querySelector('[data-tplf]').hidden = k !== 'table'; if (!ttl.dataset.touched) ttl.value = k === 'board' ? '' : TOOL_KINDS[k].label;

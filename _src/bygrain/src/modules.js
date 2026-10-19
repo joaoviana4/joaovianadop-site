@@ -86,11 +86,20 @@ export async function autoModules(p) {
   if (want.length) await ensureModules(p, want, { user: false });
 }
 
+// páginas que ainda se podem juntar a este projeto (sem as que chocam com o seguimento/cenas)
+export function addableModules(p) {
+  if (p.is_central) return [];
+  const s = state(p);
+  return ORDER.filter((k) => !s.list.includes(k) && k !== 'cenas' && !(k === 'seguimento' && SCRIPT.some((x) => s.list.includes(x))) && !(SCRIPT.includes(k) && s.list.includes('seguimento')));
+}
+const normQ = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
 // "+" ao lado do nome do projeto
 export function modulesModal(p) {
   const draw = (m) => {
     const s = state(p);
-    m.el.querySelector('[data-mods]').innerHTML = ORDER.map((k) => {
+    const q = normQ(m.el.querySelector('[data-modq]')?.value);
+    m.el.querySelector('[data-mods]').innerHTML = ORDER.filter((k) => !q || normQ(`${modLabel(p, k)} ${MODULES[k].desc}`).includes(q)).map((k) => {
       const on = s.list.includes(k);
       const noScript = k === 'cenas' && !p._hasScript;
       const clash = noScript || (!on && ((k === 'seguimento' && SCRIPT.some((x) => s.list.includes(x))) || (SCRIPT.includes(k) && s.list.includes('seguimento'))));
@@ -99,13 +108,16 @@ export function modulesModal(p) {
         <span class="mod-t"><strong>${esc(modLabel(p, k))}</strong><small>${esc(noScript ? 'Fica disponível depois de importares um guião. Junta a página Guião e importa-o: as cenas aparecem sozinhas.' : clash ? (k === 'seguimento' ? 'Este projeto usa cenas de guião. Tira Guião, Cenas e Planificação para usar o seguimento.' : 'Este projeto usa o seguimento. Tira-o para trabalhar com guião e cenas.') : MODULES[k].desc)}</small></span>
         ${noScript ? '<span class="perm-tag">Precisa de guião</span>' : on ? `<button type="button" class="btn ghost" data-off="${k}">Tirar</button>` : `<button type="button" class="btn ${clash ? 'ghost' : 'primary'}" data-on="${k}" ${clash ? 'disabled' : ''}>${ICON.plus} Juntar</button>`}
       </div>`;
-    }).join('');
+    }).join('') || '<p class="muted small">Nenhuma página com esse nome.</p>';
     m.el.querySelectorAll('[data-on]').forEach((b) => b.addEventListener('click', async () => { await ensureModules(p, [b.dataset.on], { quiet: true }); draw(m); }));
     m.el.querySelectorAll('[data-off]').forEach((b) => b.addEventListener('click', async () => { const s2 = state(p); await persist(p, s2.list.filter((k) => k !== b.dataset.off), [...s2.removed, b.dataset.off]); draw(m); }));
   };
   const m = modal(`<h2>Páginas do projeto</h2><p class="muted small">Visão geral, Equipa e Detalhes existem sempre. Tirar uma página só a esconde do menu: o que lá estava não se perde.</p>
+    <input type="search" class="mod-q" data-modq placeholder="Procurar página (ex: marketing, figurino, guião)…" aria-label="Procurar página" autocomplete="off">
     <div class="mod-list" data-mods></div>
     <div class="row between wrap-gap"><button type="button" class="link-btn small" data-tpl>Repor o modelo de ${esc((KINDS[p.kind] || p.kind).toLowerCase())}</button><button type="button" class="btn primary" data-close>Feito</button></div>`, { wide: true });
+  m.el.querySelector('[data-modq]').addEventListener('input', () => draw(m));
+  setTimeout(() => m.el.querySelector('[data-modq]')?.focus(), 30);
   m.el.querySelector('[data-tpl]').addEventListener('click', async () => { await persist(p, TEMPLATES[p.kind] || TEMPLATES.default, []); draw(m); });
   draw(m);
 }
