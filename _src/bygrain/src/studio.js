@@ -711,15 +711,44 @@ function bindProjectNav(root, p) {
 }
 
 const TOOL_HINTS = { board: 'moodboard quadro referencias cartoes imagens', table: 'folha lista contactos entregas elenco', timeline: 'calendario datas prazos plano', lightmap: 'luz iluminacao planta', budget: 'custos dinheiro valores', media: 'musica previs video audio', callsheet: 'folha de servico dia de rodagem horarios', transport: 'carros viagens boleias', distribution: 'festivais mostras submissoes premios trailer filme links' };
+// ferramentas e páginas mais próprias de cada departamento (aparecem primeiro em "Nova ferramenta")
+// cada ferramenta: [tipo, nome sugerido, modelo de tabela]; páginas: chaves de MODULES
+const TPL_NAMES = { blank: 'Tabela', deliverables: 'Entregas', props: 'Adereços por cena', cast: 'Elenco', contacts: 'Contactos' };
+const tplNamesOf = (t) => TPL_NAMES[t] || 'Tabela';
+const DEPT_TOOLS = [
+  [/^pos|post|montagem|edic|^som|sonoplast|^cor$|color|vfx|grafism|distribu/, { tools: [['media', 'Música e pre-vis'], ['distribution', 'Tabela Distribuição'], ['timeline', 'Cronograma de pós']], pages: [] }],
+  [/realiza|criativ|direc|dire[cç][aã]o art[ií]stica/, { tools: [['board', 'Moodboard'], ['board', 'Referências'], ['timeline', 'Cronograma']], pages: ['storyboard', 'shotlist', 'tratamento'] }],
+  [/produ/, { tools: [['table', 'Contactos', 'contacts'], ['timeline', 'Cronograma'], ['callsheet', 'Folha de serviço'], ['transport', 'Mapa de transportes'], ['budget', 'Orçamento'], ['table', 'Entregas', 'deliverables']], pages: ['orcamento', 'planificacao'] }],
+  [/imagem|fotograf|camara|luz|ilumina/, { tools: [['lightmap', 'Mapa de luz'], ['board', 'Referências de imagem']], pages: ['equipamento', 'storyboard', 'shotlist'] }],
+  [/arte|cenograf|adere/, { tools: [['board', 'Moodboard de arte']], pages: ['aderecos', 'figurino'] }],
+  [/guarda|figurin|wardrobe|caracteriza|maquilh|cabel/, { tools: [['board', 'Moodboard de figurino']], pages: ['figurino'] }],
+  [/marketing|comunica|redes|social/, { tools: [['distribution', 'Tabela Distribuição'], ['board', 'Moodboard']], pages: ['marketing'] }],
+];
 function newBoard(p, groupId = '', kind = 'board') {
   const fic = scriptMode(p);
+  const dept = groupId ? ((p.departments || []).find((d) => d.id === groupId) || FIXED_DEPTS[groupId] || null) : null;
+  const dname = dept ? normName(dept.name) : '';
+  const rec = dept ? (DEPT_TOOLS.find(([re]) => re.test(dname) || re.test(normName(groupId)))?.[1] || null) : null;
+  const recTools = rec ? rec.tools.filter(([k]) => TOOL_KINDS[k]) : [];
+  const recPages = rec ? rec.pages.filter((k) => MODULES[k] && (hasMod(p, k) || addableModules(p).includes(k))) : [];
+  const hasRec = !!(recTools.length || recPages.length);
+  const kindRadio = (k, label, extra = '', checked = false, hint = '') => `<label class="tool-k" data-q="${esc(`${label} ${TOOL_KINDS[k].label} ${TOOL_HINTS[k] || ''} ${hint}`)}"><input type="radio" name="kind" value="${k}" ${extra} ${checked ? 'checked' : ''}><span>${TOOL_KINDS[k].icon}${esc(label)}</span></label>`;
+  const pageBtn = (k) => hasMod(p, k) ? `<button type="button" class="tool-pg on" data-openmod="${k}" data-q="${esc(`${modLabel(p, k)} ${MODULES[k].desc}`)}" title="Já existe neste projeto: abrir">${ICON[MODULES[k].icon] || ''}<span>${esc(modLabel(p, k))}</span><small>abrir</small></button>`
+    : `<button type="button" class="tool-pg" data-addmod="${k}" data-q="${esc(`${modLabel(p, k)} ${MODULES[k].desc}`)}" title="${esc(MODULES[k].desc)}">${ICON[MODULES[k].icon] || ''}<span>${esc(modLabel(p, k))}</span></button>`;
+  const otherPages = addableModules(p).filter((k) => !recPages.includes(k));
   // os adereços têm uma única página por projeto (Arte › Adereços), por isso não há modelo de tabela de adereços
   const tpls = [['blank', 'Em branco'], ['contacts', 'Folha de contactos (equipa e elenco)'], ['deliverables', 'Entregas (peças, formatos, plataformas)'], ['cast', fic ? 'Elenco' : 'Atores e figurantes']];
   const m = modal(`<h2>Nova ferramenta</h2>
     <form class="stack">
       <input type="search" class="tool-q" data-toolq placeholder="Procurar ferramenta ou página…" aria-label="Procurar ferramenta" autocomplete="off">
-      <div class="tool-kinds" role="radiogroup" aria-label="Ferramenta">${Object.entries(TOOL_KINDS).map(([k, v]) => `<label class="tool-k" data-q="${esc(`${v.label} ${TOOL_HINTS[k] || ''}`)}"><input type="radio" name="kind" value="${k}" ${k === kind ? 'checked' : ''}><span>${v.icon}${v.label}</span></label>`).join('')}</div>
-      ${addableModules(p).length ? `<div class="tool-pages" data-tpages><p class="small muted">Ou junta uma página ao projeto</p><div class="tool-pl">${addableModules(p).map((k) => `<button type="button" class="tool-pg" data-addmod="${k}" data-q="${esc(`${modLabel(p, k)} ${MODULES[k].desc}`)}" title="${esc(MODULES[k].desc)}">${ICON[MODULES[k].icon] || ''}<span>${esc(modLabel(p, k))}</span></button>`).join('')}</div></div>` : ''}
+      ${hasRec ? `<div class="tool-rec" data-trec><p class="tool-rec-h"><i style="background:${esc(dept.color || 'var(--blue)')}"></i>Para ${esc(dept.name)}</p>
+        ${recTools.length ? `<div class="tool-kinds" role="radiogroup" aria-label="Ferramentas de ${esc(dept.name)}">${recTools.map(([k, label, tpl], i) => kindRadio(k, label, `data-title="${esc(label)}" ${tpl ? `data-tpl="${tpl}"` : ''}`, i === 0)).join('')}</div>` : ''}
+        ${recPages.length ? `<div class="tool-pl">${recPages.map(pageBtn).join('')}</div>` : ''}</div>
+        <button type="button" class="tool-more" data-tmore aria-expanded="false"><span>Outras ferramentas</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>` : ''}
+      <div class="tool-others" data-tothers ${hasRec ? 'hidden' : ''}>
+        <div class="tool-kinds" role="radiogroup" aria-label="Ferramenta">${Object.keys(TOOL_KINDS).map((k) => kindRadio(k, TOOL_KINDS[k].label, '', !hasRec && k === kind)).join('')}</div>
+        ${otherPages.length ? `<div class="tool-pages" data-tpages><p class="small muted">Ou junta uma página ao projeto</p><div class="tool-pl">${otherPages.map(pageBtn).join('')}</div></div>` : ''}
+      </div>
       <p class="small muted" data-toolnone hidden>Nada com esse nome.</p>
       <div class="field"><label for="bn">Nome</label><input id="bn" name="title" placeholder="ex: Moodboard, Storyboard, Plano de rodagem" required></div>
       <div class="field" data-tplf hidden><label for="bt">Modelo</label><select id="bt" name="tpl">${tpls.map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
@@ -737,6 +766,8 @@ function newBoard(p, groupId = '', kind = 'board') {
   const tq = m.el.querySelector('[data-toolq]');
   tq.addEventListener('input', () => {
     const q = nq(tq.value.trim()); let n = 0;
+    const oth = m.el.querySelector('[data-tothers]'); const more = m.el.querySelector('[data-tmore]');
+    if (more) { oth.hidden = !q && more.getAttribute('aria-expanded') !== 'true'; more.hidden = !!q; }
     m.el.querySelectorAll('.tool-k, .tool-pg').forEach((el) => { const ok = !q || nq(el.dataset.q).includes(q); el.hidden = !ok; if (ok) n++; });
     const tp = m.el.querySelector('[data-tpages]'); if (tp) tp.hidden = !!q && !tp.querySelector('.tool-pg:not([hidden])');
     m.el.querySelector('[data-toolnone]').hidden = n > 0;
@@ -745,20 +776,26 @@ function newBoard(p, groupId = '', kind = 'board') {
   });
   tq.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); const k = m.el.querySelector('.tool-k:not([hidden]) input'); if (k) { k.checked = true; sync(); form.elements.title.focus(); } else m.el.querySelector('.tool-pg:not([hidden])')?.click(); } });
   setTimeout(() => tq.focus(), 30);
+  m.el.querySelector('[data-tmore]')?.addEventListener('click', (e) => { const b = e.currentTarget; const open = b.getAttribute('aria-expanded') !== 'true'; b.setAttribute('aria-expanded', open); m.el.querySelector('[data-tothers]').hidden = !open; });
+  m.el.querySelectorAll('[data-openmod]').forEach((b) => b.addEventListener('click', () => { m.close(); go(`${projBase(p)}/${modPath(p, b.dataset.openmod)}`); }));
   m.el.querySelectorAll('[data-addmod]').forEach((b) => b.addEventListener('click', async () => { const k = b.dataset.addmod; await ensureModules(p, [k]); m.close(); go(`${projBase(p)}/${modPath(p, k)}`); }));
   const ttl = form.elements.title;
   const sync = () => {
-    const k = form.elements.kind.value; m.el.querySelector('[data-tplf]').hidden = k !== 'table'; if (!ttl.dataset.touched) ttl.value = k === 'board' ? '' : TOOL_KINDS[k].label;
+    const r = form.querySelector('[name=kind]:checked'); const k = r?.value || 'board';
+    m.el.querySelector('[data-tplf]').hidden = k !== 'table';
+    if (r?.dataset.tpl) form.elements.tpl.value = r.dataset.tpl;
+    if (!ttl.dataset.touched) ttl.value = r?.dataset.title || (k === 'board' ? '' : k === 'table' ? (tplNamesOf(form.elements.tpl.value)) : TOOL_KINDS[k].label);
     const sel = form.elements.group_id; const img = deptOf(p, 'imagem');
     if (k === 'lightmap') { if (!img && !sel.querySelector('option[value="imagem"]')) sel.insertAdjacentHTML('beforeend', '<option value="imagem">Imagem</option>'); sel.value = img?.id || 'imagem'; sel.disabled = true; } else sel.disabled = false;
   };
   ttl.addEventListener('input', () => (ttl.dataset.touched = '1'));
   form.querySelectorAll('[name=kind]').forEach((r) => r.addEventListener('change', sync)); sync();
-  const tplNames = { blank: 'Tabela', deliverables: 'Entregas', props: 'Adereços por cena', cast: 'Elenco', contacts: 'Contactos' };
+  const tplNames = TPL_NAMES;
   form.elements.tpl.addEventListener('change', () => { if (!ttl.dataset.touched) ttl.value = tplNames[form.elements.tpl.value]; });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(form));
+    f.kind ||= 'board';
     if (/^\s*adere/i.test(f.title) && f.kind !== 'budget') { toast('Os adereços têm uma página única por projeto, em Arte › Adereços.'); if (!hasMod(p, 'aderecos')) await ensureModules(p, ['aderecos']); m.close(); return go(`${projBase(p)}/aderecos`); }
     if (f.kind === 'lightmap') f.group_id = await ensureDept(p, 'imagem');
     else if (f.group_id === 'imagem' && !deptOf(p, 'imagem')) f.group_id = await ensureDept(p, 'imagem');
