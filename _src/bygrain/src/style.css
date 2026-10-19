@@ -2098,3 +2098,11 @@ body.tool-dragging, body.tool-dragging * { cursor: grabbing !important; user-sel
 .mb-panel .btn svg { width: 16px; height: 16px; }
 .si-pg { margin: 10px 0 6px; } .dp-props .si-props { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
 .pm-side > .mb-panel { margin-bottom: 14px; }
+.cs-pp { position: absolute; z-index: 60; max-height: 300px; overflow: auto; background: var(--panel); border: 1px solid var(--line2); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.18); padding: 4px; display: flex; flex-direction: column; }
+.cs-pp > p { margin: 8px 10px; }
+.cs-pp-i { display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; background: none; border: 0; color: var(--text); font: inherit; padding: 7px 10px; border-radius: 7px; cursor: pointer; }
+.cs-pp-i span:first-child { display: flex; flex-direction: column; min-width: 0; }
+.cs-pp-i small { color: var(--muted); font-size: 12px; }
+.cs-pp-i b { font-weight: 600; }
+.cs-pp-ph { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--muted); }
+.cs-pp-i.on, .cs-pp-i:hover { background: var(--panel2); }
