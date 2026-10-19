@@ -7,7 +7,7 @@ import { IS_STUDIO, sb, BUCKET, state, esc, $, loadProfile, isStaff, isAdmin, to
 import { renderAuth } from './auth.js';
 import { visField, bindVis, readVis } from './vis.js';
 import { onWrite, setWriteGuard } from './undo.js';
-import { aheadNotice, bindAhead, aheadOf, stageOptions, projectStrip, bindStrip, phaseBar, bindPhaseBar, shows, modKey, toolKey, selPhase, setSelPhase, phaseLabel, phasesOf, setToolPhase } from './phases.js';
+import { aheadNotice, bindAhead, aheadOf, stageOptions, projectStrip, bindStrip, phaseBar, bindPhaseBar, shows, modKey, toolKey, selPhase, setSelPhase, phaseLabel, phasesOf, setToolPhase, stagesOn } from './phases.js';
 import { projectSearch } from './psearch.js';
 import { mountTasks, loadPeople, clearPeopleCache, addTaskModal } from './tasks.js';
 import { TOOL_KINDS, tableTool, timelineTool, tableTemplate } from './tools.js';
@@ -406,7 +406,7 @@ async function newProject(opts = {}) {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target));
     const modules = { list: f.start === 'zero' ? [] : [...(TEMPLATES[f.kind] || TEMPLATES.default)], removed: [] };
-    const { data, error } = await sb.from('projects').insert({ community_id: commId, name: f.name.trim(), client: f.client.trim(), kind: f.kind, stage: f.kind === 'album' ? null : f.stage || 'pre', parent_id: f.kind !== 'album' && f.parent_id ? f.parent_id : null, starts_on: f.starts_on || null, ends_on: f.ends_on || null, modules, ...(f.kind === 'ficcao' ? { departments: FICTION_DEPTS } : {}) }).select(PROJECT_COLS).single();
+    const { data, error } = await sb.from('projects').insert({ community_id: commId, name: f.name.trim(), client: f.client.trim(), kind: f.kind, stage: f.kind === 'album' ? null : f.stage || 'pre', ...(f.kind === 'album' ? {} : { layouts: { stages: stageOptions(f.kind).map(([k]) => k).slice(0, Math.max(1, stageOptions(f.kind).findIndex(([k]) => k === (f.stage || 'pre')) + 1)) } }), parent_id: f.kind !== 'album' && f.parent_id ? f.parent_id : null, starts_on: f.starts_on || null, ends_on: f.ends_on || null, modules, ...(f.kind === 'ficcao' ? { departments: FICTION_DEPTS } : {}) }).select(PROJECT_COLS).single();
     if (error) return toast(error.message);
     await sb.from('project_members').insert({ project_id: data.id, user_id: state.user.id });
     if (f.value) await sb.from('project_budgets').upsert({ project_id: data.id, value: Number(f.value) });
@@ -474,6 +474,7 @@ function bindDetails(root, p, after) {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(form));
     const patch = { departments: depts.filter((d) => d.name.trim()), updated_at: new Date().toISOString() };
+    if (!p.is_central) if (!p.is_central && f.stage && !stagesOn(p).includes(f.stage)) patch.layouts = { ...(p.layouts || {}), stages: [...stagesOn(p), f.stage] };
     if (!p.is_central) Object.assign(patch, { name: f.name.trim(), client: f.client.trim(), kind: f.kind, status: f.status, stage: f.stage || null, starts_on: f.starts_on || null, ends_on: f.ends_on || null });
     if ('parent_id' in f) patch.parent_id = f.kind === 'album' ? null : (f.parent_id || null);
     const { data, error } = await sb.from('projects').update(patch).eq('id', p.id).select(PROJECT_COLS).single();
