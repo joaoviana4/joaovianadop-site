@@ -33,7 +33,11 @@ function totals(st) {
   return { total: all.size, filmed: [...done].filter((k) => all.has(k)).length };
 }
 export async function shootProgress(p) {
-  try { const st = await loadAll(p); const t = totals(st); return { ...t, days: st.days.length, daysDone: st.days.filter((d) => d.rows.length && d.rows.every((r) => st.marks.has(`${d.board.id}:${r.id}`))).length }; } catch { return null; }
+  try {
+    const st = await loadAll(p); const t = totals(st);
+    const list = st.days.map((d) => ({ day: d.sh.day || '', date: d.sh.date || '', place: d.sh.place || '', call: d.sh.call || '', board: d.board.id, i: d.i, total: d.rows.length, done: d.rows.filter((r) => st.marks.has(`${d.board.id}:${r.id}`)).length }));
+    return { ...t, days: list.length, daysDone: list.filter((x) => x.total && x.done === x.total).length, list };
+  } catch { return null; }
 }
 
 // opts.board: só os dias dessa folha de serviço (a ferramenta Folha de serviço na etapa Produção); opts.onEdit: passa a editar

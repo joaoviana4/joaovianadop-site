@@ -2650,3 +2650,21 @@ a.pv-mark { text-decoration: none; display: inline-flex; }
 .pv-menu { width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 8px; background: none; color: var(--text); cursor: pointer; }
 .pv-menu:hover, .pv-menu:focus-visible { background: rgba(127, 127, 127, .2); }
 .pv-menu svg { width: 18px; height: 18px; }
+
+/* visão geral: mapa de rodagem */
+.ov-map { gap: 16px; }
+.ovm-now { display: flex; flex-direction: column; gap: 2px; }
+.ovm-now strong { font-size: 26px; line-height: 1.15; }
+.ovm-now.ovm-today strong { color: var(--ok); }
+.ovm-now.ovm-pre strong, .ovm-now.ovm-pause strong { color: var(--soon); }
+.ovm-days { list-style: none; margin: 0; padding: 2px 0 6px; display: flex; gap: 8px; overflow-x: auto; }
+.ovm-d a { position: relative; display: grid; gap: 3px; min-width: 132px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); color: var(--text); text-decoration: none; background: var(--bg2); }
+.ovm-d a:hover { border-color: var(--line2); }
+.ovm-d small { font-size: 12px; }
+.ovm-place { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+.ovm-d.done a { opacity: .75; }
+.ovm-d.done b::after { content: ' ✓'; color: var(--ok); }
+.ovm-d.cur a, .ovm-d.today a { border-color: var(--text); }
+.ovm-d.today a { box-shadow: 0 0 0 1px var(--ok) inset; }
+.ovm-d em { position: absolute; top: 8px; right: 10px; font-style: normal; font-size: 11px; font-weight: 600; color: var(--ok); }
+.ovm-d em.late { color: var(--late); }

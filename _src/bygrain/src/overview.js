@@ -41,6 +41,42 @@ function timelineHtml(p, phases, items = []) {
     ${phases || its.length ? `<ul class="ov-phl">${phases ? PH.map(([k, l, c]) => phases[k] ? `<li style="--g:${c}"><i></i><span>${l}</span><span class="muted">${fmtDate(phases[k][0])} – ${fmtDate(phases[k][1])}</span></li>` : '').join('') : ''}${its.map((x) => `<li class="ms" style="--g:${esc(x.color || '#8A8A99')}"><i></i><span>${esc(x.name || 'Data')}</span><span class="muted">${fmtDate(x.start)}${x.end && x.end > x.start ? ' – ' + fmtDate(x.end) : ''}</span></li>`).join('')}</ul>` : ''}`;
 }
 
+// ---------- mapa de rodagem: onde estamos (pré-rodagem, dia X de N, pausa, terminada) e os dias todos ----------
+const dayLong = (iso) => { const d = new Date(iso + 'T00:00:00'); const s = d.toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' }); return s.charAt(0).toUpperCase() + s.slice(1); };
+const dayShort = (iso) => new Date(iso + 'T00:00:00').toLocaleDateString('pt-PT', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '');
+export function shootStatus(shoot, today = todayISO()) {
+  const L = shoot?.list || []; const n = L.length;
+  if (!n) return { kind: 'none', big: 'Sem dias de rodagem', label: 'Os dias aparecem aqui quando houver folhas de serviço com planos.' };
+  const lab = (d) => `Dia ${d.day || L.indexOf(d) + 1}`;
+  const dated = L.filter((d) => d.date);
+  const todayD = dated.find((d) => d.date === today);
+  if (todayD) return { kind: 'today', cur: todayD, big: `${lab(todayD)} de ${n}`, label: `Hoje${todayD.place ? ` · ${todayD.place}` : ''}${todayD.call ? ` · call ${todayD.call}h` : ''}` };
+  if (dated.length) {
+    const first = dated[0], last = dated[dated.length - 1], next = dated.find((d) => d.date > today);
+    const days = (iso) => Math.round((new Date(iso + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000);
+    if (today < first.date) { const k = days(first.date); return { kind: 'pre', cur: first, big: 'Pré-rodagem', label: `${k === 1 ? 'Falta 1 dia' : `Faltam ${k} dias`} para o ${lab(first).toLowerCase()} · ${dayLong(first.date)}${first.place ? ` · ${first.place}` : ''}` }; }
+    if (today > last.date && !L.some((d) => !d.date)) { const left = (shoot.total || 0) - (shoot.filmed || 0); return { kind: 'end', big: 'Rodagem terminada', label: left > 0 ? `${left === 1 ? 'Ficou 1 plano' : `Ficaram ${left} planos`} por marcar como filmado` : `${n} ${n === 1 ? 'dia' : 'dias'} filmados` }; }
+    if (next) { const k = days(next.date); return { kind: 'pause', cur: next, big: 'Pausa na rodagem', label: `O ${lab(next).toLowerCase()} é ${k === 1 ? 'amanhã' : `daqui a ${k} dias`} · ${dayLong(next.date)}${next.place ? ` · ${next.place}` : ''}` }; }
+  }
+  // sem datas: o primeiro dia que ainda tem planos por filmar
+  const open = L.find((d) => d.total && d.done < d.total);
+  if (!open) return { kind: 'end', big: 'Rodagem terminada', label: 'Todos os planos das folhas estão marcados como filmados.' };
+  const started = L.some((d) => d.done > 0);
+  return { kind: started ? 'today' : 'pre', cur: open, big: started ? `${lab(open)} de ${n}` : 'Pré-rodagem', label: started ? `${open.total - open.done} ${open.total - open.done === 1 ? 'plano' : 'planos'} por filmar neste dia (sem data na folha de serviço)` : 'Ainda nenhum plano foi marcado como filmado. Junta as datas às folhas de serviço para o mapa contar os dias.' };
+}
+function shootMap(shoot, base) {
+  const s = shootStatus(shoot); const L = shoot?.list || []; const today = todayISO();
+  return `<section class="panel ov-map">
+    <div class="row between wrap-gap"><div class="ovm-now ovm-${s.kind}"><span class="small muted">Mapa de rodagem</span><strong>${esc(s.big)}</strong><span>${esc(s.label)}</span></div>
+      <a class="btn ghost" href="${base}/rodagem">Abrir a rodagem</a></div>
+    ${L.length ? `<ol class="ovm-days">${L.map((d) => { const st = d.date === today ? 'today' : d.total && d.done === d.total ? 'done' : d.done ? 'part' : d.date && d.date < today ? 'late' : 'next'; const isCur = s.cur === d;
+      return `<li class="ovm-d ${st} ${isCur ? 'cur' : ''}"><a href="${base}/rodagem" data-rday="${L.indexOf(d)}">
+        <b>Dia ${esc(d.day || L.indexOf(d) + 1)}</b><small>${d.date ? esc(dayShort(d.date)) : 'sem data'}</small><small class="muted ovm-place">${esc(d.place || '')}</small>
+        <span class="rod-mini"><i style="width:${d.total ? Math.round((d.done / d.total) * 100) : 0}%"></i></span><small class="muted">${d.total ? `${d.done}/${d.total} planos` : 'sem planos'}</small>
+        ${st === 'today' ? '<em>Hoje</em>' : isCur && s.kind !== 'today' ? '<em>A seguir</em>' : st === 'late' ? '<em class="late">Por fechar</em>' : ''}</a></li>`; }).join('')}</ol>` : ''}
+  </section>`;
+}
+
 export function situationData(p, tasksP) {
   const isMusic = hasMod(p, 'seguimento');
   return Promise.all([
@@ -90,6 +126,7 @@ export async function mountSituation(box, p, base, { onChange } = {}) {
           <div class="bar big film"><i style="width:${sh ? Math.round((sh.filmed / sh.total) * 100) : 0}%"></i></div>
           <span class="muted small">${sh ? `${shoot.daysDone} de ${shoot.days} ${shoot.days === 1 ? 'dia de rodagem fechado' : 'dias de rodagem fechados'}` : 'Os planos marcados como filmados na Rodagem contam aqui.'}</span></div>` : ''}
       </section></div>
+      ${inProd ? `<div data-blk="mapa">${shootMap(shoot, base)}</div>` : ''}
       <div data-blk="kpis"><div class="ov-kpis">
         <a class="ov-kpi ${late.length ? 'warn' : ''}" href="${base}/tarefas"><span class="k-ic">${ICON.task}</span><strong>${open.length}</strong><span>${open.length === 1 ? 'tarefa por fazer' : 'tarefas por fazer'}</span>${late.length ? `<em>${plural(late.length, 'atrasada', 'atrasadas')}</em>` : all.length ? `<em class="ok">${all.length - open.length} de ${all.length} feitas</em>` : ''}</a>
         ${withProps ? `<a class="ov-kpi ${missing.length ? 'warn' : ''}" href="${base}/aderecos"><span class="k-ic">${ICON.prop}</span><strong>${missing.length}</strong><span>${missing.length === 1 ? 'adereço em falta' : 'adereços em falta'}</span>${P.length ? `<em class="${missing.length ? '' : 'ok'}">${P.length - missing.length} de ${P.length} prontos</em>` : '<em>sem lista ainda</em>'}</a>` : ''}
@@ -140,7 +177,7 @@ export async function mountSituation(box, p, base, { onChange } = {}) {
         </section></div>` : ''}
       </div>`;
     mountLayout(box.querySelector('[data-lay]'), { project: p, key: 'overview', title: 'vista geral', blocks: [
-      { id: 'prog', label: 'Progresso', pos: 'full' }, { id: 'kpis', label: 'Números do projeto', pos: 'full' }, { id: 'music', label: 'Seguimento', pos: 'full' },
+      { id: 'prog', label: 'Progresso', pos: 'full' }, { id: 'mapa', label: 'Mapa de rodagem', pos: 'full' }, { id: 'kpis', label: 'Números do projeto', pos: 'full' }, { id: 'music', label: 'Seguimento', pos: 'full' },
       { id: 'who', label: 'Quem tem o quê', pos: 'left' }, { id: 'crono', label: 'Cronograma', pos: 'right' }, { id: 'depts', label: 'Por departamento', pos: 'right' },
       { id: 'questions', label: 'Questões de produção', pos: 'left' }, { id: 'props', label: 'Adereços em falta', pos: 'right' },
     ] });
@@ -148,6 +185,7 @@ export async function mountSituation(box, p, base, { onChange } = {}) {
   };
 
   const bind = () => {
+    box.querySelectorAll('[data-rday]').forEach((a) => a.addEventListener('click', () => { try { localStorage.setItem(`bg-rod:${p.id}`, a.dataset.rday); } catch { /* nada */ } }));
     box.querySelector('[data-jump]')?.addEventListener('click', (e) => { e.preventDefault(); box.querySelector('#ov-q')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); box.querySelector('[data-qadd] input')?.focus({ preventScroll: true }); });
     box.querySelector('[data-qadd]').addEventListener('submit', async (e) => {
       e.preventDefault();
