@@ -6,6 +6,7 @@ import { renderAuth } from './auth.js';
 import { activityButton, bindActivity, activityPage } from './activity.js';
 import { visField, bindVis, readVis } from './vis.js';
 import { onWrite, setWriteGuard } from './undo.js';
+import { phaseBar, bindPhaseBar, shows, modKey, toolKey, selPhase, setSelPhase, phaseLabel, phasesOf, setToolPhase } from './phases.js';
 import { projectSearch } from './psearch.js';
 import { mountTasks, loadPeople, clearPeopleCache, addTaskModal } from './tasks.js';
 import { TOOL_KINDS, tableTool, timelineTool, tableTemplate } from './tools.js';
@@ -671,22 +672,32 @@ function boardGroups(p) {
   if (other.length) groups.push({ id: '', name: 'Outros', color: '#8A8A99', boards: other, pages: [] });
   return groups;
 }
+// tudo o que pode ter fase: páginas do projeto, páginas fixas dos departamentos e ferramentas
+function phaseItems(p) {
+  const pages = modulesOf(p).filter((k) => k !== 'orcamento' || p.canBudget).map((k) => ({ key: modKey(k), label: modLabel(p, k), group: 'Páginas' }));
+  const gs = boardGroups(p);
+  const deptPages = gs.flatMap((g) => (g.pages || []).filter((k) => !pages.some((x) => x.key === modKey(k))).map((k) => ({ key: modKey(k), label: `${pageMeta(k).label}`, group: g.name })));
+  const tools = gs.flatMap((g) => g.boards.map((b) => ({ key: toolKey(b), label: b.title, kind: b.kind, group: g.name })));
+  return [...pages, ...deptPages, ...tools];
+}
 // páginas fixas dentro de um departamento (módulos e a página dos mapas de luz)
 const pageMeta = (k) => (k === 'mapas' ? { label: 'Mapas de luz', icon: 'bulb' } : MODULES[k]);
 
 function projectNav(p, active) {
   const base = projBase(p);
   navState.p = p; navState.active = active;
-  const mods = p.is_central ? [['tarefas', 'Tarefas', ICON.task]] : modulesOf(p).filter((k) => (k !== 'orcamento' || p.canBudget) && k !== 'equipamento' && k !== 'aderecos' && k !== 'figurino').map((k) => [modPath(p, k), modLabel(p, k), ICON[MODULES[k].icon]]);
+  const ph = p.is_central ? 'all' : selPhase(p);
+  const mods = p.is_central ? [['tarefas', 'Tarefas', ICON.task]] : modulesOf(p).filter((k) => (k !== 'orcamento' || p.canBudget) && k !== 'equipamento' && k !== 'aderecos' && k !== 'figurino' && shows(p, modKey(k))).map((k) => [modPath(p, k), modLabel(p, k), ICON[MODULES[k].icon]]);
   const pages = [['geral', 'Visão geral', ICON.home], ...(p.is_central && isStaff() ? [['financas', 'Finanças', ICON.money]] : []), ...mods, ['atividade', 'Atividade', ICON.bell], ['equipa', p.is_central ? 'Equipa' : 'Equipa e convites', ICON.team], ...(isStaff() ? [['detalhes', 'Detalhes', ICON.info]] : [])];
   return `
     ${p._parent ? `<a class="pn-parent" href="#/p/${p._parent.id}">${ICON.back}<span>${esc(p._parent.name)}</span></a>` : ''}
     <div class="pn-h"><div><strong>${esc(p.name)}</strong>${p.client ? `<span class="muted small">${esc(p.client)}</span>` : ''}</div>${p.canEdit === false ? '<span class="ro-badge" title="Podes ver tudo o que te está aberto, mas não mudar nada">Só leitura</span>' : ''}${!p.is_central && isStaff() && p.canEdit !== false ? `<button type="button" class="icon-btn sm pn-mods" data-mods title="Páginas do projeto" aria-label="Juntar ou tirar páginas">${ICON.plus}</button>` : ''}</div>
     <button type="button" class="pn-search" data-psearch title="Procurar no projeto (Ctrl+K)">${ICON.search}<span>Procurar</span><kbd>Ctrl K</kbd></button>
+    ${ph !== 'all' ? `<div class="pn-phase"><span>A ver: <b>${esc(phaseLabel(ph))}</b></span><button type="button" class="icon-btn sm" data-phaseclear title="Ver tudo" aria-label="Ver todas as fases">${ICON.close}</button></div>` : ''}
     <div class="pn-online" data-online></div>
     ${pages.map(([k, l, ic]) => `<a class="side-a" href="${base}${k === 'geral' ? '' : '/' + k}" ${active === k ? 'aria-current="page"' : ''}>${ic}<span>${l}</span></a>`).join('')}
     <div class="pn-sec"><span>Ferramentas</span>${p.canEdit !== false ? `<button type="button" class="icon-btn sm" data-newboard="" aria-label="Nova ferramenta">${ICON.plus}</button>` : ''}</div>
-    ${boardGroups(p).map((g) => `<div class="pn-group" style="--g:${esc(g.color)}">
+    ${boardGroups(p).map((g) => ({ ...g, pages: p.is_central ? g.pages || [] : (g.pages || []).filter((k) => shows(p, modKey(k))), boards: p.is_central ? g.boards : g.boards.filter((b) => shows(p, toolKey(b), b.kind)) })).filter((g) => ph === 'all' || g.pages.length || g.boards.length).map((g) => `<div class="pn-group" style="--g:${esc(g.color)}">
       <div class="pn-gh"><i></i><span>${esc(g.name)}</span>${g.id && p.canEdit !== false ? `<button type="button" class="icon-btn sm" data-newboard="${esc(g.id)}" aria-label="Novo board em ${esc(g.name)}">${ICON.plus}</button>` : ''}</div>
       ${(g.pages || []).map((k) => `<a class="side-a sub" href="${base}/${k}" ${active === k ? 'aria-current="page"' : ''}>${ICON[pageMeta(k).icon]}<span>${esc(pageMeta(k).label)}</span></a>`).join('')}
       ${g.boards.map((b) => `<a class="side-a sub" href="${toolHref(p, b)}" ${active === b.id ? 'aria-current="page"' : ''}>${(TOOL_KINDS[b.kind] || TOOL_KINDS.board).icon}<span>${esc(b.title)}</span>${b.visible_to?.length ? `<i class="vis-lock" title="Só algumas pessoas veem">${ICON.lock}</i>` : ''}</a>`).join('')}
@@ -715,6 +726,7 @@ function bindProjectNav(root, p) {
     onCleanup(off);
   }
   root.querySelector('[data-mods]')?.addEventListener('click', () => modulesModal(p));
+  root.querySelector('[data-phaseclear]')?.addEventListener('click', () => { setSelPhase(p, 'all'); route(); });
   root.querySelectorAll('[data-newboard]').forEach((b) => b.addEventListener('click', () => newBoard(p, b.dataset.newboard)));
 }
 
@@ -811,6 +823,8 @@ function newBoard(p, groupId = '', kind = 'board') {
     const data = f.kind === 'table' ? await tableTemplate(p, f.tpl) : f.kind === 'lightmap' ? newLightmapData() : f.kind === 'callsheet' ? { sheets: [(await lazy.callsheet()).newCallsheet(p, 1)] } : f.kind === 'transport' ? (await lazy.transport()).newTransport(p) : f.kind === 'distribution' ? (await import('./distribution.js')).newDistribution() : {};
     const { data: row, error } = await sb.from('boards').insert({ project_id: p.id, title: f.title.trim(), group_id: f.group_id || null, position: p._boards.length, kind: f.kind, data, visible_to: readVis(form) }).select().single();
     if (error) return toast(error.message);
+    const sph = p.is_central ? 'all' : selPhase(p);
+    if (sph !== 'all' && !phasesOf(p, toolKey(row), row.kind).includes(sph)) await setToolPhase(p, row.id, sph);
     m.close(); go(toolHref(p, row));
   });
 }
@@ -979,12 +993,14 @@ async function projectOverview(main, p) {
   const cover = p.cover_path ? coverMap[p.cover_path] : null;
   const ph = phaseOf(p);
   const top = p._boards.filter((b) => !b.parent_id && b.kind !== 'mkt' && b.kind !== 'wrd' && b.kind !== 'lightmap');
-  const nMaps = p._boards.filter((b) => b.kind === 'lightmap').length;
+  const nMaps = p._boards.filter((b) => b.kind === 'lightmap').length && (p.is_central || shows(p, modKey('mapas'))) ? p._boards.filter((b) => b.kind === 'lightmap').length : 0;
+  const allTop = top.length;
+  if (!p.is_central) top.splice(0, top.length, ...top.filter((b) => shows(p, toolKey(b), b.kind)));
   const count = (id) => (items || []).filter((i) => i.board_id === id).length;
   const thumbOf = (id) => { const im = (items || []).find((i) => i.board_id === id && i.kind === 'image' && thumbs[i.data?.path]); return im ? thumbs[im.data.path] : null; };
   const deptMap = new Map((p.departments || []).map((d) => [d.id, d]));
   const next = (tasks || []).sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999')).slice(0, 6);
-  main.innerHTML = `
+  main.innerHTML = `${p.is_central ? '' : phaseBar(p)}
     <section class="pm-head" style="${cover ? `background-image:linear-gradient(rgba(12,12,18,.15),rgba(12,12,18,.75)),url('${esc(cover)}')` : ''}">
       <div class="grain-layer moving" aria-hidden="true"></div>
       <div class="pm-head-in">
@@ -1011,7 +1027,7 @@ async function projectOverview(main, p) {
             <div class="bc-body"><strong>${esc(b.title)}${b.visible_to?.length ? ` <i class="vis-lock" title="Visível só para ${b.visible_to.length} ${b.visible_to.length === 1 ? 'pessoa' : 'pessoas'}">${ICON.lock}</i>` : ''}</strong><span class="small muted">${d ? `<i class="dot"></i>${esc(d.name)} · ` : ''}${(b.kind || 'board') === 'board' ? `${count(b.id)} ${count(b.id) === 1 ? 'cartão' : 'cartões'}` : esc((TOOL_KINDS[b.kind] || {}).label || '')}</span></div>
             <button type="button" class="icon-btn bc-more" data-bopt="${b.id}" aria-label="Opções de ${esc(b.title)}">${ICON.dots}</button>
           </article>`; }).join('')}${nMaps ? `<article class="board-card" style="--g:${esc(deptOf(p, 'imagem')?.color || '#2FB67C')}"><a href="${base}/mapas" class="proj-link" aria-label="Abrir os mapas de luz"></a><div class="bc-cover">${ICON.bulb}</div><div class="bc-body"><strong>Mapas de luz</strong><span class="small muted"><i class="dot"></i>Imagem · ${nMaps} ${nMaps === 1 ? 'mapa' : 'mapas'}</span></div></article>` : ''}</div>`
-        : `<div class="empty-box"><p>Ainda não há ferramentas neste projeto.</p><p class="muted small">Boards para o tratamento, o moodboard ou um brainstorm (abrem em ecrã inteiro), tabelas, cronograma e mapas de luz.</p><button type="button" class="btn primary" data-nb>${ICON.plus} Criar a primeira</button></div>`}
+        : allTop ? `<div class="empty-box"><p>Nenhuma ferramenta em ${esc(phaseLabel(selPhase(p)).toLowerCase())}.</p><p class="muted small">Muda de fase em cima, ou usa "Organizar fases" para escolher onde cada ferramenta aparece.</p></div>` : `<div class="empty-box"><p>Ainda não há ferramentas neste projeto.</p><p class="muted small">Boards para o tratamento, o moodboard ou um brainstorm (abrem em ecrã inteiro), tabelas, cronograma e mapas de luz.</p><button type="button" class="btn primary" data-nb>${ICON.plus} Criar a primeira</button></div>`}
       </section>
       ${p.is_central ? `<aside class="pm-side">
         <section class="panel">
@@ -1021,6 +1037,7 @@ async function projectOverview(main, p) {
       </aside>` : ''}
     </div>`;
   main.querySelectorAll('[data-nb]').forEach((b) => b.addEventListener('click', () => newBoard(p)));
+  if (!p.is_central) bindPhaseBar(main, p, { onChange: () => route(), items: () => phaseItems(p) });
   main.querySelector('[data-budget]')?.addEventListener('click', () => go(`${base}/orcamento`));
   if (false) main.querySelector('[data-budget]')?.addEventListener('click', () => {
     const m = modal(`<h2>Orçamento do projeto</h2><form class="stack"><div class="field"><label for="bv">Orçamento (€)</label><input id="bv" type="number" step="0.01" min="0" inputmode="decimal" value="${esc(p.value ?? '')}"></div><div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Guardar</button></div></form>`);
