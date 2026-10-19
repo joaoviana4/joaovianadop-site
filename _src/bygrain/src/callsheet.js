@@ -1,6 +1,8 @@
 import { sb, esc, toast, modal, confirmBox, ICON, signedUrl } from './lib.js';
 import { projectContacts, nameWithPhone } from './contacts.js';
 import { placeAddr } from './placegeo.js';
+import { bindTimes } from './timepick.js';
+const TIME_P = /^(call|more\.(ready|wrap_est|sunrise|sunset)|depts\.\d+\.time|times\.\d+\.value|cast\.\d+\.(call|out)|vehicles\.\d+\.call)$/;
 import { CS_MODELS } from './csmodels.js';
 
 // Folha de serviço (call sheet) de um dia de rodagem, no estilo do modelo "A Forma e o Silêncio":
@@ -340,6 +342,7 @@ export function callsheetTool(main, p, tool) {
       });
     }));
     peoplePicker(main, p, d, save);
+    bindTimes([...main.querySelectorAll('[data-p]')].filter((el) => TIME_P.test(el.dataset.p)));
     main.querySelector('[data-geofill]')?.addEventListener('click', () => geoFill({ hosp: true, wx: true, loud: true }));
     ['place', 'address'].forEach((k) => main.querySelector(`[data-p="${k}"]`)?.addEventListener('change', () => geoFill({ hosp: true })));
     main.querySelector('[data-p="date"]')?.addEventListener('change', () => geoFill({ wx: true }));

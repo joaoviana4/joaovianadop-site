@@ -1,3 +1,4 @@
+import { bindTimes } from './timepick.js';
 import { sb, esc, toast, modal, confirmBox, ICON } from './lib.js';
 import { projectContacts, phoneFor } from './contacts.js';
 
@@ -108,6 +109,7 @@ export async function transportTool(main, p, tool) {
       if (k === 'seats') { const n = t.pax.filter(has).length; const sp = el.closest('.tr-seats'); sp.classList.toggle('over', n > t.seats); }
     }));
     main.querySelectorAll('[data-t="seats"]').forEach((el) => el.addEventListener('change', draw));
+    bindTimes([...main.querySelectorAll('[data-t="time"], [data-t="arrival"]')]);
     // condutor da equipa: o telefone vem sozinho (se ainda não estiver escrito)
     main.querySelectorAll('[data-t="driver"]').forEach((el) => el.addEventListener('change', () => {
       const t = trip(el); const ph = phoneFor(contacts, el.value);
