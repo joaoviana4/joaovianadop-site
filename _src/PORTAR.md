@@ -6,6 +6,8 @@
 - 17 out 2026: a pedido do João, o byGrain recebeu as notificações de atividade (tabelas `public.activity` e `public.activity_seen`, gatilhos `zz_activity` em 16 tabelas, `src/activity.js`). Os gatilhos nunca impedem guardar (apanham qualquer erro).
 - Cópia de segurança do byGrain: esquema `backup_20261016` na própria base de dados do byGrain (todas as tabelas, lista de ficheiros e contas) e um ZIP descarregado pelo João.
 
+- 19 out 2026: a pedido do João, o byGrain recebeu as alterações do Studio de 16–17 out (49 commits, sem as comunidades nem o logo da comunidade; notificações já lá estavam) e as etapas ligadas por projeto (`projects.layouts.stages`). Base de dados: colunas novas (migração `from_studio_columns`), `can_edit_project`, `create_invite_as`, `member_from_invite`, `board_visible` e regras restritivas de só leitura em `public` e no balde `files`. Os códigos dos planos antigos (3A, 3B…) não foram renumerados.
+
 O resto deste ficheiro descreve como o Studio nasceu do código do byGrain (ainda válido para `_src/portal`).
 
 ## Como funciona
