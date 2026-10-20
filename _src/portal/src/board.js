@@ -445,7 +445,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     const up = new Set([boardId]); let cur = (all || []).find((b) => b.id === boardId);
     while (cur?.parent_id) { up.add(cur.parent_id); cur = (all || []).find((b) => b.id === cur.parent_id); }
     const list = (all || []).filter((b) => !up.has(b.id));
-    const label = (b) => (b.kind === 'wrd' ? (b.data?.location_id ? 'Moodboard de décor' : 'Moodboard de figurino') : b.parent_id ? 'Board dentro de outro' : 'Board');
+    const label = (b) => (b.kind === 'wrd' ? (b.data?.location_id ? 'Moodboard de décor' : b.data?.page ? 'Board de uma página' : 'Moodboard de figurino') : b.parent_id ? 'Board dentro de outro' : 'Board');
     const m = modal(`<h2>Juntar um board</h2>
       <button type="button" class="btn primary bm-new" data-new>${ICON.plus} Criar um board novo aqui</button>
       <div class="field"><label for="bmq">Ou liga um que já existe</label><input id="bmq" type="search" placeholder="Procurar (ex: Moodboard, figurino, nome do ator…)" autocomplete="off"></div>

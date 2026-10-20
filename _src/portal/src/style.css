@@ -2523,7 +2523,16 @@ body.readonly .proj-main input[readonly]:focus, body.readonly .proj-main textare
 .an-t p { margin: 0; }
 .an-t .row { margin-top: 6px; }
 /* na visão geral, numa etapa futura, fica só o banner e o aviso */
-.ov-ahead > [data-main] > :not(.pm-head) { display: none !important; }
+.ov-ahead > [data-main] > :not(.pm-head):not(.cv-headblk):not(.cv) { display: none !important; }
+/* (visão geral em grelha) o banner fica, o aviso por baixo dele, o resto escondido */
+.proj-main.ov-ahead > .ahead-note { order: 1; }
+.ov-ahead > [data-main] > .cv { display: block !important; }
+.ov-ahead > [data-main] > .cv > .cv-tools { display: none !important; }
+.ov-ahead .cv-grid { height: auto !important; }
+.ov-ahead .cv-grid > .gi:not([data-gi="head"]) { display: none !important; }
+.ov-ahead .cv-grid > .gi[data-gi="head"] { position: relative !important; top: 0 !important; left: 0 !important; width: 100% !important; }
+.ov-ahead .cv-grid > .gi[data-gi="head"] > :is(.gi-edge, .gi-rs, .gi-del) { display: none !important; }
+.ov-ahead .cv-headblk > :not(.pm-head) { display: none !important; }
 .ps-head { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 0 1 auto; }
 .ps-head .ps-name { max-width: 240px; }
 /* sem o nome do projeto no menu do lado, a pesquisa sobe */
@@ -3167,3 +3176,11 @@ body.crs-busy, body.crs-busy * { user-select: none !important; -webkit-user-sele
 .k-image:has(> .crs-on), .card:has(> .crs-on) { overflow: visible !important; }
 main > .cv-headblk + .ov { margin-top: 18px; }
 .fs-anc { z-index: auto !important; isolation: auto !important; transform: none !important; contain: none !important; filter: none !important; will-change: auto !important; }
+.cv-bpick { width: 300px; max-height: min(520px, 80vh); overflow: auto; }
+.cv-bpick .cv-bnew { align-self: flex-start; margin: 8px 0 4px; }
+.cv-bpick .cv-bq { width: 100%; margin: 4px 0; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line2); background: var(--panel); color: var(--text); font: inherit; font-size: 13px; }
+.cv-bpk { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: none; color: var(--text); font: inherit; font-size: 13.5px; text-align: left; padding: 6px 8px; border-radius: 8px; cursor: pointer; }
+.cv-bpk:hover:not(:disabled) { background: rgba(127, 127, 127, .14); }
+.cv-bpk:disabled { opacity: .55; cursor: default; }
+.cv-bpk svg { width: 15px; height: 15px; flex: none; }
+.cv-bpk small { margin-left: auto; }

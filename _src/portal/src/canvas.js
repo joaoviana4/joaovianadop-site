@@ -217,6 +217,48 @@ export function mountCanvas(main, p, { key, native, render, here, pageLabel = 'p
     lp = { close };
   }
   onLeave(() => lp?.close());
+
+  // "Board": cria um board novo dentro desta página, ou mostra aqui um que já existe (é o mesmo board: o que se
+  // mudar aqui muda lá). Os boards novos ficam só nesta página (não aparecem na lista de ferramentas).
+  let bpk = null;
+  function boardPicker(btn) {
+    if (bpk) { bpk.close(); return; }
+    const pop = document.createElement('div'); pop.className = 'pm-tpop cv-layers cv-bpick'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', 'Juntar um board');
+    document.body.append(pop);
+    const onPage = new Set(extra().filter((x) => x.ref.kind === 'tool').map((x) => x.ref.id));
+    const list = (p._boards || []).filter((b) => ((b.kind || 'board') === 'board' || b.kind === 'wrd')).sort((a, b) => (a.title || '').localeCompare(b.title || '', 'pt'));
+    const norm = (x) => (x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    pop.innerHTML = `<div class="row between"><strong>Juntar um board</strong><button type="button" class="icon-btn sm" data-x aria-label="Fechar">${ICON.close}</button></div>
+      <button type="button" class="btn primary sm cv-bnew" data-bnew>${ICON.plus} Novo board</button>
+      ${list.length ? `<p class="muted small">Ou um que já existe (é o mesmo: o que mudares aqui muda lá):</p>${list.length > 7 ? '<input class="cv-bq" type="search" placeholder="Procurar board" aria-label="Procurar board" data-bq>' : ''}
+      <ol class="cvl-list" data-bl></ol>` : ''}`;
+    const drawList = (q = '') => {
+      const ul = pop.querySelector('[data-bl]'); if (!ul) return;
+      const rows = list.filter((b) => !q || norm(b.title).includes(norm(q)));
+      ul.innerHTML = rows.map((b) => `<li><button type="button" class="cvl-n cv-bpk" data-bid="${esc(b.id)}" ${onPage.has(b.id) ? 'disabled title="Já está nesta página"' : ''}>${ICON.board}<span>${esc(b.title || 'Board')}</span>${onPage.has(b.id) ? '<small class="muted">já está aqui</small>' : ''}</button></li>`).join('') || '<li class="muted small">Nenhum board com esse nome.</li>';
+      ul.querySelectorAll('[data-bid]').forEach((x) => x.addEventListener('click', () => { const b = list.find((y) => y.id === x.dataset.bid); close(); addExtra({ kind: 'tool', id: b.id }, b.title || 'Board', COLS); }));
+    };
+    drawList();
+    pop.querySelector('[data-bq]')?.addEventListener('input', (e) => drawList(e.target.value));
+    pop.querySelector('[data-x]').addEventListener('click', close);
+    pop.querySelector('[data-bnew]').addEventListener('click', async (e) => {
+      e.currentTarget.disabled = true;
+      const { data: b, error } = await sb.from('boards').insert({ project_id: p.id, kind: 'wrd', title: 'Board', data: { page: key } }).select('id, title, kind, parent_id, group_id, project_id').single();
+      if (error) { e.currentTarget.disabled = false; return toast('Não foi possível criar o board: ' + error.message); }
+      (p._boards ||= []).push(b);
+      close(); addExtra({ kind: 'tool', id: b.id }, 'Board', COLS);
+      toast('Board criado. Duplo clique no nome para o mudar; clica dentro para começar a juntar coisas.', 5000);
+    });
+    const r = btn.getBoundingClientRect();
+    const out = (ev) => { if (!pop.contains(ev.target) && !btn.contains(ev.target)) close(); };
+    const keyH = (ev) => { if (ev.key === 'Escape') close(); };
+    function close() { pop.remove(); bpk = null; document.removeEventListener('pointerdown', out, true); document.removeEventListener('keydown', keyH, true); }
+    pop.style.top = `${Math.max(12, Math.min(window.innerHeight - pop.offsetHeight - 12, r.top))}px`; pop.style.left = `${Math.max(12, r.left - pop.offsetWidth - 10)}px`;
+    setTimeout(() => { document.addEventListener('pointerdown', out, true); document.addEventListener('keydown', keyH, true); });
+    pop.querySelector('[data-bq]')?.focus();
+    bpk = { close };
+  }
+  onLeave(() => bpk?.close());
   function drawTools() {
     const clip = readClip(p);
     const own = native.filter((n) => n.label);
@@ -227,6 +269,7 @@ export function mountCanvas(main, p, { key, native, render, here, pageLabel = 'p
       <button type="button" data-note title="Juntar uma nota a esta ${esc(pageLabel)}">${ICON.note}<span>Nota</span></button>
       <button type="button" data-gen="image" title="Juntar uma imagem a esta ${esc(pageLabel)}">${ICON.image}<span>Imagem</span></button>
       <button type="button" data-gen="table" title="Juntar uma tabela a esta ${esc(pageLabel)}">${ICON.table || ICON.list}<span>Tabela</span></button>
+      <button type="button" data-addboard title="Juntar um board a esta ${esc(pageLabel)}: um novo ou um que já exista" aria-haspopup="dialog">${ICON.board}<span>Board</span></button>
       <button type="button" data-layers title="Camadas: escolhe o que fica por cima quando os elementos se sobrepõem" aria-haspopup="dialog">${LAYERS}<span>Camadas</span></button>
       <button type="button" data-pack title="Arrumar: encosta todos os elementos para cima, sem sobreposições">${PACK}<span>Arrumar</span></button>
       <button type="button" class="${clip ? '' : 'off'}" data-paste ${clip ? '' : 'disabled'} title="${clip ? `Colar «${esc(clip.title)}» aqui (Ctrl+V)` : 'Para colar: noutra página, passa o rato por cima de um elemento e carrega Ctrl+C (ou botão direito → Copiar)'}">${ICON.copy}<span>Colar</span></button>
@@ -243,6 +286,7 @@ export function mountCanvas(main, p, { key, native, render, here, pageLabel = 'p
     tools.querySelector('[data-paste]').addEventListener('click', () => paste());
     tools.querySelector('[data-pack]').addEventListener('click', () => grid.pack());
     tools.querySelector('[data-layers]').addEventListener('click', (e) => layersPanel(e.currentTarget));
+    tools.querySelector('[data-addboard]').addEventListener('click', (e) => boardPicker(e.currentTarget));
   }
   const paste = () => {
     const c = readClip(p); if (!c) return false;

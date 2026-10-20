@@ -1167,7 +1167,7 @@ async function renderRef(box, p, ref) {
     const { data: tool } = await sb.from('boards').select('*').eq('id', ref.id).maybeSingle();
     if (!tool) { box.innerHTML = '<p class="muted small">Esta ferramenta já não existe. Podes tirá-la daqui.</p>'; return; }
     box.innerHTML = `<div class="row between cv-th"><a href="${toolHref(p, tool)}"><strong>${esc(tool.title)}</strong></a><a class="small" href="${toolHref(p, tool)}">Abrir</a></div><div data-tb></div>`;
-    if (tool.kind === 'board' || tool.kind === 'wrd') { const { boardPreview } = await import('./boardview.js'); box.innerHTML = ''; boardPreview(box, p, { boardId: tool.id, title: tool.title, href: toolHref(p, tool), base: projBase(p) }); return; }
+    if (tool.kind === 'board' || tool.kind === 'wrd') { const { boardPreview } = await import('./boardview.js'); box.innerHTML = ''; boardPreview(box, p, { boardId: tool.id, title: tool.title, href: toolHref(p, tool), base: projBase(p), renamable: true, onRename: (v) => { tool.title = v; const b = p._boards?.find((x) => x.id === tool.id); if (b) b.title = v; } }); return; }
     if (tool.kind === 'lightmap') { box.querySelector('[data-tb]').innerHTML = `<a class="btn ghost" href="${toolHref(p, tool)}">${ICON.open} Abrir ${esc(tool.title)}</a>`; return; }
     return renderToolBody(box.querySelector('[data-tb]'), p, tool);
   }

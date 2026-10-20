@@ -33,8 +33,9 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
   const nameOf = (it) => titles[it.id] || it.label || '';
   // o título do elemento (o primeiro h2/h3 que não seja um botão ou link): mostra o nome dado pela equipa
   const headOf = (it) => [...it.el.querySelectorAll('h2, h3')].find((x) => !x.closest('button, a, [contenteditable="true"]')) || null;
+  // títulos com nome próprio (ex.: o nome de um board, que se muda no próprio board) não levam o nome da página
   const applyTitle = (it) => {
-    const h = headOf(it); if (!h) return;
+    const h = headOf(it); if (!h || h.closest('[data-ownname]')) return;
     if (!h.dataset.orig) h.dataset.orig = h.textContent;
     h.textContent = titles[it.id] || h.dataset.orig;
   };
@@ -46,7 +47,8 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
   }, 300);
   // mudar o nome: no próprio título (duplo clique) ou, se o elemento não tiver título, numa caixinha no canto
   function rename(it) {
-    const h = headOf(it); const inp = document.createElement('input');
+    let h = headOf(it); if (h?.closest('[data-ownname]')) h = null;
+    const inp = document.createElement('input');
     inp.className = h ? 'gi-in' : 'gi-in gi-in-float'; inp.value = nameOf(it); inp.setAttribute('aria-label', 'Nome do elemento');
     if (h) { h.hidden = true; h.after(inp); } else it.g.append(inp);
     inp.focus(); inp.select();
@@ -98,7 +100,7 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
       const h = headOf(it);
       if (t === g || t.classList.contains('gi-c') || t === it.el || (t.parentElement === it.el && !t.closest('input, textarea')) || (h && h.contains(t)) || t.closest('[data-gdrag]')) startDrag(e, it, false);
     });
-    g.addEventListener('dblclick', (e) => { const h = headOf(it); if (h && h.contains(e.target) && !e.target.closest(NODRAG)) rename(it); });
+    g.addEventListener('dblclick', (e) => { const h = headOf(it); if (h && !h.closest('[data-ownname]') && h.contains(e.target) && !e.target.closest(NODRAG)) rename(it); });
     g.addEventListener('contextmenu', (e) => {
       if (mobile() || e.target.closest('input, textarea, select, [contenteditable="true"], a')) return;
       e.preventDefault(); menu(it, e.clientX, e.clientY);
