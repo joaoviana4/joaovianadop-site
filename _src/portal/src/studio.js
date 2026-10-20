@@ -323,16 +323,44 @@ async function homePage(comm = null) {
       <div class="proj-cover" style="${covers[p.cover_path] ? `background-image:url('${esc(covers[p.cover_path])}')` : `background:${coverColor(p.id)}`}">
         <div class="grain-layer soft" aria-hidden="true"></div>
         <span class="tag dark">${esc(KINDS[p.kind] || p.kind)}</span>
-        <span class="on-cover-acts">${p.community_id ? `<button type="button" class="icon-btn on-cover ${pinned.has(p.id) ? 'on' : ''}" data-pin="${p.id}" title="${pinned.has(p.id) ? 'Tirar do meu início' : 'Fixar no meu início (continua a ser da comunidade)'}" aria-label="Fixar ${esc(p.name)}">${ICON.pin}</button>` : ''}<button type="button" class="icon-btn on-cover" data-hidep="${p.id}" title="Tirar da minha lista (os outros continuam a vê-lo)" aria-label="Tirar ${esc(p.name)} da minha lista">${ICON.hide}</button>${staff ? `<button type="button" class="icon-btn on-cover" data-more="${p.id}" aria-label="Opções de ${esc(p.name)}">${ICON.dots}</button>` : ''}</span>
+        <span class="on-cover-acts">${p.community_id ? `<button type="button" class="icon-btn on-cover ${pinned.has(p.id) ? 'on' : ''}" data-pin="${p.id}" title="${pinned.has(p.id) ? 'Tirar do meu início' : 'Fixar no meu início (continua a ser da comunidade)'}" aria-label="Fixar ${esc(p.name)}">${ICON.pin}</button>` : ''}<button type="button" class="icon-btn on-cover" data-hidep="${p.id}" title="Tirar da minha lista (os outros continuam a vê-lo)" aria-label="Tirar ${esc(p.name)} da minha lista">${ICON.hide}</button>${isAdmin() ? `<button type="button" class="icon-btn on-cover danger" data-trashp="${p.id}" title="Apagar (vai para a reciclagem durante 10 dias)" aria-label="Apagar ${esc(p.name)}">${ICON.trash}</button>` : ''}${staff ? `<button type="button" class="icon-btn on-cover" data-more="${p.id}" aria-label="Opções de ${esc(p.name)}">${ICON.dots}</button>` : ''}</span>
       </div>
       <div class="proj-body">
-        <div><div class="proj-name">${p.kind === 'album' ? `<span class="fold-ic">${ICON.board}</span>` : ''}${esc(p.name)}</div><div class="muted small">${esc(p.client || '—')}${par ? ` · em ${esc(par.name)}` : ''}</div>${!comm && p.community_id ? (() => { const c = commById(p.community_id); return c ? `<span class="comm-chip" style="--cc:${esc(c.color)}">${esc(c.name)}</span>` : ''; })() : ''}</div>
+        <div><div class="proj-name" ${staff ? `data-rename="${p.id}" title="Duplo clique para mudar o nome"` : ''}>${p.kind === 'album' ? `<span class="fold-ic">${ICON.board}</span>` : ''}<span class="pn-txt">${esc(p.name)}</span></div><div class="muted small">${esc(p.client || '—')}${par ? ` · em ${esc(par.name)}` : ''}</div>${!comm && p.community_id ? (() => { const c = commById(p.community_id); return c ? `<span class="comm-chip" style="--cc:${esc(c.color)}">${esc(c.name)}</span>` : ''; })() : ''}</div>
         ${p.kind === 'album' ? `<div class="fold-kids">${kids.length ? kids.slice(0, 4).map((k) => `<span>${esc(k.name)}</span>`).join('') + (kids.length > 4 ? `<span>+${kids.length - 4}</span>` : '') : '<span class="muted">Sem projetos lá dentro</span>'}</div>` : ''}
         <div class="proj-prog"><div class="row between small muted"><span>${esc(ph.label || 'Sem datas')}</span><span>${n} ${n === 1 ? 'tarefa aberta' : 'tarefas abertas'}</span></div>
         <div class="bar"><i style="width:${Math.round(ph.pct * 100)}%"></i></div></div>
       </div>
     </article>`;
   }).join('') : `<p class="empty-note">${homeState.q ? `Nenhum projeto com "${esc(homeState.q)}".` : homeState.mine ? 'Não estás atribuído a nenhum projeto aqui.' : homeState.tab === 'active' ? (staff ? 'Ainda não há projetos em curso. Cria o primeiro em "Novo projeto".' : 'Ainda não foste convidado para nenhum projeto em curso.') : 'Nada aqui.'}</p>`;
+  grid.querySelectorAll('[data-trashp]').forEach((b) => b.addEventListener('click', async (e) => {
+    e.preventDefault(); e.stopPropagation(); const p = list.find((x) => x.id === b.dataset.trashp);
+    if (!(await confirmBox(`Apagar "${p.name}"? Vai para a reciclagem e só é apagado de vez daqui a 10 dias. Até lá, qualquer pessoa da equipa o pode recuperar.`, 'Mandar para a reciclagem'))) return;
+    const { error } = await sb.rpc('trash_project', { p: p.id });
+    if (error) return toast(error.message);
+    projects = projects.filter((x) => x.id !== p.id); toast(`"${p.name}" foi para a reciclagem. Podes recuperá-lo durante 10 dias.`); drawGrid();
+  }));
+  // mudar o nome ali mesmo: duplo clique no nome
+  grid.querySelectorAll('[data-rename]').forEach((el) => {
+    // um clique abre o projeto (como o resto do cartão); dois cliques mudam o nome
+    let t = null;
+    el.addEventListener('click', (e) => { e.preventDefault(); if (el.querySelector('input')) return; clearTimeout(t); t = setTimeout(() => go(`#/p/${el.dataset.rename}`), 260); });
+    el.addEventListener('dblclick', (e) => {
+      e.preventDefault(); e.stopPropagation(); clearTimeout(t); if (el.querySelector('input')) return;
+      const p = list.find((x) => x.id === el.dataset.rename); const txt = el.querySelector('.pn-txt');
+      const inp = document.createElement('input'); inp.className = 'pn-rename'; inp.value = p.name; inp.setAttribute('aria-label', 'Nome do projeto');
+      txt.replaceWith(inp); el.closest('.proj-card').classList.add('renaming'); inp.focus(); inp.select();
+      let done = false;
+      const finish = async (ok) => {
+        if (done) return; done = true; const v = inp.value.trim();
+        if (ok && v && v !== p.name) { const { error } = await sb.from('projects').update({ name: v }).eq('id', p.id); if (error) toast(error.message); else { p.name = v; projCache.delete(p.id); toast('Nome mudado.'); } }
+        drawGrid();
+      };
+      inp.addEventListener('keydown', (k) => { k.stopPropagation(); if (k.key === 'Enter') finish(true); else if (k.key === 'Escape') finish(false); });
+      inp.addEventListener('click', (k) => { k.preventDefault(); k.stopPropagation(); });
+      inp.addEventListener('blur', () => finish(true));
+    });
+  });
   grid.querySelectorAll('[data-more]').forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); const p = list.find((x) => x.id === b.dataset.more); projectDetailsModal(p, () => homePage(comm)); }));
   grid.querySelectorAll('[data-pin]').forEach((b) => b.addEventListener('click', async (e) => {
     e.preventDefault(); const id = b.dataset.pin;
@@ -377,46 +405,73 @@ function coverColor(id) {
   return c[h % c.length];
 }
 
+// novo projeto, por passos: 1) nome e tipo; 2) fase e departamentos. O resto (artista, datas, líderes, capa,
+// orçamento) junta-se depois, dentro do projeto (Detalhes).
+const BASE_DEPTS = [{ id: 'criativo', name: 'Criativo', color: '#7C5CFF' }, { id: 'producao', name: 'Produção', color: '#F08A24' }, { id: 'imagem', name: 'Imagem', color: '#2FB67C' }, { id: 'pos', name: 'Pós-produção', color: '#E3B341' }, { id: 'digital', name: 'Digital', color: '#2AA8C9' }, { id: 'cliente', name: 'Cliente', color: '#E5579B' }];
+const DEPT_COLORS = ['#7C5CFF', '#F08A24', '#2FB67C', '#E3B341', '#2AA8C9', '#E5579B', '#1F8A8A', '#E5484D', '#8A8A99'];
 async function newProject(opts = {}) {
   const parent = opts.parent && opts.parent.id ? opts.parent : null;
   // o projeto fica na comunidade onde estou (ou na da pasta); fora de comunidades é pessoal
   const commId = parent ? parent.community_id || null : opts.comm?.id || CID();
   const fq = sb.from('projects').select('id, name').eq('kind', 'album').is('deleted_at', null).order('name');
   const { data: folders } = await (commId ? fq.eq('community_id', commId) : fq.is('community_id', null));
-  const m = modal(`<h2>${parent ? `Novo projeto em ${esc(parent.name)}` : 'Novo projeto'}</h2>${!parent ? `<p class="muted small">${commId ? `Na comunidade <b>${esc(commById(commId)?.name || '')}</b>: a equipa da comunidade tem acesso.` : 'Projeto pessoal: só tu e quem convidares.'}</p>` : ''}
-    <form class="stack">
-      <div class="field"><label for="pn">Nome</label><input id="pn" name="name" required></div>
-      <div class="field"><label for="pc">Artista ou marca</label><input id="pc" name="client"></div>
-      <div class="field"><label for="pk">Tipo</label><select id="pk" name="kind">${Object.entries(KINDS).filter(([k]) => k !== 'central' && (!parent || k !== 'album')).map(([k, v]) => `<option value="${k}" ${parent && k === 'videoclipe' ? 'selected' : ''}>${v}</option>`).join('')}</select><span class="muted small" data-foldhint hidden>Uma pasta junta vários projetos (ex.: os videoclipes de um álbum). Tem um orçamento geral, e o orçamento de cada projeto lá dentro conta para ele.</span></div>
-      <div class="field" data-parentf><label for="pp">Dentro de</label><select id="pp" name="parent_id"><option value="">— nenhuma pasta —</option>${(folders || []).map((f) => `<option value="${f.id}" ${parent?.id === f.id ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select></div>
-      <div class="grid2"><div class="field"><label for="ps">Começa</label><input id="ps" name="starts_on" type="date"></div><div class="field"><label for="pe">Entrega</label><input id="pe" name="ends_on" type="date"></div></div>
-      <fieldset class="stage-pick"><legend>Em que fase está o projeto?</legend><div class="stage-opts" data-stages></div></fieldset>
-      <fieldset class="start-choice"><legend>Começar com</legend>
-        <label class="sc-opt"><input type="radio" name="start" value="tpl" checked><span><strong>Modelo de <span data-kname></span></strong><small data-tplpages></small></span></label>
-        <label class="sc-opt"><input type="radio" name="start" value="zero"><span><strong>Do zero</strong><small>Só Visão geral, Equipa e Detalhes. As outras páginas juntas-as depois com o + ao lado do nome do projeto, ou aparecem sozinhas quando houver dados para elas.</small></span></label>
-      </fieldset>
-      ${(commId ? (commById(commId)?.my_role === 'admin' || (commById(commId)?.my_perms || []).includes('budget')) : true) ? `<div class="field"><label for="pv">Orçamento (€, opcional)</label><input id="pv" name="value" type="number" step="0.01" min="0" inputmode="decimal"><span class="muted small">${ICON.lock} Só quem tem acesso ao orçamento vê este valor.</span></div>` : ''}
-      <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Criar</button></div>
-    </form>`);
-  const syncTpl = () => { const k = m.el.querySelector('#pk').value; m.el.querySelector('[data-kname]').textContent = (KINDS[k] || k).toLowerCase(); m.el.querySelector('[data-tplpages]').textContent = (TEMPLATES[k] || TEMPLATES.default).map((x) => (x === 'elenco' && k === 'ficcao' ? MODULES.elenco.scriptLabel : MODULES[x].label)).join(' · '); };
-  const syncFold = () => { const k = m.el.querySelector('#pk').value; m.el.querySelector('[data-parentf]').hidden = k === 'album' || !(folders || []).length; m.el.querySelector('[data-foldhint]').hidden = k !== 'album'; };
-  const syncStage = () => {
-    const k = m.el.querySelector('#pk').value; const box = m.el.querySelector('[data-stages]'); const cur = box.querySelector('input:checked')?.value || 'pre';
-    const opts = stageOptions(k); box.closest('fieldset').hidden = k === 'album';
-    box.innerHTML = opts.map(([v, l], i) => `<label class="stage-o"><input type="radio" name="stage" value="${v}" ${v === cur || (!opts.some(([x]) => x === cur) && i === 0) ? 'checked' : ''}><span><b>${i + 1}</b>${esc(l)}</span></label>`).join('');
+  const st = { step: 1, name: '', kind: parent ? 'videoclipe' : 'videoclipe', parent_id: parent?.id || '', stage: 'pre', depts: null };
+  const kinds = Object.entries(KINDS).filter(([k]) => k !== 'central' && (!parent || k !== 'album'));
+  const m = modal('<div data-np></div>');
+  const box = m.el.querySelector('[data-np]');
+  const deptsFor = (k) => JSON.parse(JSON.stringify(k === 'ficcao' ? FICTION_DEPTS : BASE_DEPTS)).map((d) => ({ ...d, on: true }));
+  const draw = () => {
+    const where = !parent ? `<p class="muted small">${commId ? `Na comunidade <b>${esc(commById(commId)?.name || '')}</b>: a equipa da comunidade tem acesso.` : 'Projeto pessoal: só tu e quem convidares.'}</p>` : '';
+    const steps = st.kind === 'album' ? '' : `<ol class="np-steps"><li class="${st.step === 1 ? 'on' : 'done'}"><b>1</b>Nome e tipo</li><li class="${st.step === 2 ? 'on' : ''}"><b>2</b>Fase e departamentos</li></ol>`;
+    if (st.step === 1) {
+      box.innerHTML = `<h2>${parent ? `Novo projeto em ${esc(parent.name)}` : 'Novo projeto'}</h2>${where}${steps}
+        <form class="stack" data-s1>
+          <div class="field"><label for="pn">Nome do projeto</label><input id="pn" name="name" value="${esc(st.name)}" required autocomplete="off"></div>
+          <fieldset class="np-kinds"><legend>Tipo</legend>${kinds.map(([k, v]) => `<label class="np-k"><input type="radio" name="kind" value="${k}" ${st.kind === k ? 'checked' : ''}><span>${esc(v)}</span></label>`).join('')}</fieldset>
+          ${(folders || []).length ? `<div class="field" data-parentf ${st.kind === 'album' ? 'hidden' : ''}><label for="pp">Dentro de</label><select id="pp" name="parent_id"><option value="">— nenhuma pasta —</option>${folders.map((f) => `<option value="${f.id}" ${st.parent_id === f.id ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select></div>` : ''}
+          <p class="muted small" data-albhint ${st.kind === 'album' ? '' : 'hidden'}>Um álbum é uma pasta: junta os videoclipes e lançamentos do mesmo artista.</p>
+          <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">${st.kind === 'album' ? 'Criar álbum' : 'Seguinte'}</button></div>
+        </form>`;
+      const f = box.querySelector('[data-s1]');
+      f.querySelectorAll('[name=kind]').forEach((r) => r.addEventListener('change', () => { st.name = f.name.value; st.kind = r.value; st.parent_id = f.parent_id?.value || st.parent_id; st.depts = null; draw(); box.querySelector('#pn').focus(); }));
+      f.addEventListener('submit', (e) => { e.preventDefault(); st.name = f.name.value.trim(); st.parent_id = f.parent_id?.value || ''; if (!st.name) return; if (st.kind === 'album') return create(); st.step = 2; draw(); });
+      setTimeout(() => { const n = box.querySelector('#pn'); n?.focus(); n?.setSelectionRange(n.value.length, n.value.length); }, 30);
+      return;
+    }
+    if (!st.depts) st.depts = deptsFor(st.kind);
+    const opts = stageOptions(st.kind);
+    box.innerHTML = `<h2>${esc(st.name)}</h2>${steps}
+      <form class="stack" data-s2>
+        <fieldset class="stage-pick"><legend>Em que fase está o projeto?</legend><div class="stage-opts">${opts.map(([v, l], i) => `<label class="stage-o"><input type="radio" name="stage" value="${v}" ${st.stage === v ? 'checked' : ''}><span><b>${i + 1}</b>${esc(l)}</span></label>`).join('')}</div></fieldset>
+        <fieldset class="np-depts"><legend>Departamentos</legend><p class="muted small">Tira os que não precisas ou junta outros. Podes mudar depois em Detalhes.</p>
+          <div class="np-dl">${st.depts.map((d, i) => `<label class="np-d ${d.on ? '' : 'off'}"><input type="checkbox" data-di="${i}" ${d.on ? 'checked' : ''}><i style="background:${esc(d.color)}"></i><input class="np-dn" data-dn="${i}" value="${esc(d.name)}" aria-label="Nome do departamento"></label>`).join('')}</div>
+          <button type="button" class="link-btn small" data-dadd>${ICON.plus} Departamento</button></fieldset>
+        <div class="row between"><button type="button" class="btn ghost" data-back>${ICON.back || '←'} Voltar</button><button class="btn primary">Criar projeto</button></div>
+      </form>`;
+    const f = box.querySelector('[data-s2]');
+    f.querySelectorAll('[name=stage]').forEach((r) => r.addEventListener('change', () => { st.stage = r.value; }));
+    f.querySelectorAll('[data-di]').forEach((c) => c.addEventListener('change', () => { st.depts[+c.dataset.di].on = c.checked; c.closest('.np-d').classList.toggle('off', !c.checked); }));
+    f.querySelectorAll('[data-dn]').forEach((x) => x.addEventListener('input', () => { st.depts[+x.dataset.dn].name = x.value; }));
+    f.querySelector('[data-dadd]').addEventListener('click', () => { const n = st.depts.length; st.depts.push({ id: 'd' + Math.random().toString(36).slice(2, 7), name: 'Novo departamento', color: DEPT_COLORS[n % DEPT_COLORS.length], on: true }); draw(); const ins = box.querySelectorAll('[data-dn]'); const last = ins[ins.length - 1]; last?.focus(); last?.select(); });
+    f.querySelector('[data-back]').addEventListener('click', () => { st.step = 1; draw(); });
+    f.addEventListener('submit', (e) => { e.preventDefault(); create(); });
   };
-  m.el.querySelector('#pk').addEventListener('change', () => { syncTpl(); syncFold(); syncStage(); }); syncTpl(); syncFold(); syncStage();
-  m.el.querySelector('form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const f = Object.fromEntries(new FormData(e.target));
-    const modules = { list: f.start === 'zero' ? [] : [...(TEMPLATES[f.kind] || TEMPLATES.default)], removed: [] };
-    const { data, error } = await sb.from('projects').insert({ community_id: commId, name: f.name.trim(), client: f.client.trim(), kind: f.kind, stage: f.kind === 'album' ? null : f.stage || 'pre', ...(f.kind === 'album' ? {} : { layouts: { stages: stageOptions(f.kind).map(([k]) => k).slice(0, Math.max(1, stageOptions(f.kind).findIndex(([k]) => k === (f.stage || 'pre')) + 1)) } }), parent_id: f.kind !== 'album' && f.parent_id ? f.parent_id : null, starts_on: f.starts_on || null, ends_on: f.ends_on || null, modules, ...(f.kind === 'ficcao' ? { departments: FICTION_DEPTS } : {}) }).select(PROJECT_COLS).single();
-    if (error) return toast(error.message);
+  let busy = false;
+  const create = async () => {
+    if (busy) return; busy = true;
+    const kind = st.kind; const stage = kind === 'album' ? null : st.stage || 'pre';
+    const modules = { list: [...(TEMPLATES[kind] || TEMPLATES.default)], removed: [] };
+    const departments = kind === 'album' ? undefined : (st.depts || deptsFor(kind)).filter((d) => d.on && d.name.trim()).map(({ id, name, color }) => ({ id, name: name.trim(), color }));
+    const so = stageOptions(kind).map(([k]) => k);
+    const row = { community_id: commId, name: st.name, client: '', kind, stage, parent_id: kind !== 'album' && st.parent_id ? st.parent_id : null, modules,
+      ...(kind === 'album' ? {} : { layouts: { stages: so.slice(0, Math.max(1, so.indexOf(stage) + 1)) }, departments }) };
+    const { data, error } = await sb.from('projects').insert(row).select(PROJECT_COLS).single();
+    if (error) { busy = false; return toast(error.message); }
     await sb.from('project_members').insert({ project_id: data.id, user_id: state.user.id });
-    if (f.value) await sb.from('project_budgets').upsert({ project_id: data.id, value: Number(f.value) });
     clearPeopleCache();
     m.close(); go(`#/p/${data.id}`);
-  });
+  };
+  draw();
 }
 
 // ---------- detalhes do projeto ----------

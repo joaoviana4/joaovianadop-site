@@ -2501,7 +2501,7 @@ body.readonly .proj-main input[readonly]:focus, body.readonly .proj-main textare
 /* fase do projeto: escolha ao criar e na barra */
 .stage-pick { border: 0; padding: 0; margin: 0; }
 .stage-pick legend { font-size: 13px; font-weight: 600; margin-bottom: 6px; padding: 0; }
-.stage-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 6px; }
+.stage-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 6px; }
 .stage-o { cursor: pointer; }
 .stage-o input { position: absolute; opacity: 0; pointer-events: none; }
 .stage-o span { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--line2); border-radius: 10px; font-size: 13.5px; font-weight: 600; }
@@ -2958,3 +2958,32 @@ body:has(.pv-zoom) .mp { bottom: 70px; }
 .cvt-ui button { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line2); background: none; color: var(--muted); font: inherit; font-size: 12px; padding: 3px 9px; border-radius: 7px; cursor: pointer; }
 .cvt-ui button:hover { color: var(--text); }
 .cvt-ui button svg { width: 12px; height: 12px; }
+/* novo projeto, por passos */
+.np-steps { list-style: none; margin: 0 0 14px; padding: 0; display: flex; gap: 8px; }
+.np-steps li { flex: 1; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--panel2); color: var(--muted); font-size: 13px; font-weight: 600; }
+.np-steps li b { width: 20px; height: 20px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 11px; background: var(--line2); color: var(--text); flex: none; }
+.np-steps li.on { color: var(--text); box-shadow: inset 0 0 0 1.5px var(--blue); }
+.np-steps li.on b { background: var(--blue); color: #fff; }
+.np-steps li.done b { background: var(--ok); color: #fff; }
+.np-kinds { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px; }
+.np-kinds legend { font-size: 13px; font-weight: 600; margin-bottom: 6px; padding: 0; }
+.np-k { cursor: pointer; }
+.np-k input { position: absolute; opacity: 0; pointer-events: none; }
+.np-k span { display: block; padding: 10px 12px; border: 1px solid var(--line2); border-radius: 10px; font-size: 13.5px; font-weight: 600; text-align: center; }
+.np-k input:checked + span { border-color: var(--blue); background: color-mix(in srgb, var(--blue) 10%, transparent); }
+.np-k input:focus-visible + span { outline: 2px solid var(--blue); outline-offset: 2px; }
+.np-depts { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.np-depts legend { font-size: 13px; font-weight: 600; margin-bottom: 4px; padding: 0; }
+.np-depts p { margin: 0; }
+.np-dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; }
+.np-d { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--line2); border-radius: 10px; cursor: pointer; }
+.np-d.off { opacity: .45; }
+.np-d i { width: 12px; height: 12px; border-radius: 4px; flex: none; }
+.np-d input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--blue); flex: none; }
+.np-dn { border: 0 !important; background: none !important; padding: 2px 0 !important; min-height: 0 !important; font: inherit; font-size: 13.5px; color: var(--text); width: 100%; min-width: 0; }
+.np-dn:focus { outline: none; box-shadow: 0 1px 0 var(--blue); }
+/* início: mudar o nome e apagar no cartão do projeto */
+.proj-name[data-rename] { position: relative; z-index: 2; cursor: text; width: fit-content; max-width: 100%; }
+.proj-card.renaming .proj-link { pointer-events: none; }
+.pn-rename { font: inherit; font-weight: 700; font-size: inherit; width: 100%; min-width: 160px; padding: 2px 6px; margin: -3px -7px; border: 1.5px solid var(--blue); border-radius: 7px; background: var(--panel); color: var(--text); }
+.icon-btn.on-cover.danger:hover { color: #fff; background: var(--late); }
