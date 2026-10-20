@@ -9,10 +9,75 @@ export { IS_STUDIO, FLAVOR };
 export const SUPABASE_URL = FLAVOR.url;
 const SUPABASE_ANON = FLAVOR.anon;
 
+// Leituras repetidas: o mesmo pedido (GET/HEAD igual) feito por várias partes da página ao mesmo tempo, ou logo a
+// seguir, vai à base de dados uma só vez. Dura 2 s depois de chegar; qualquer gravação limpa tudo, para nunca se
+// mostrar algo velho depois de mudar alguma coisa. Também deixa pedir de antemão (warm) o que a página vai precisar.
+const readCache = new Map();
+const READ_TTL = 2000;
+// Última resposta boa de cada leitura (5 min). Quando o servidor demora (às vezes leva vários segundos a responder,
+// embora a base de dados responda em milissegundos), mostra-se logo o que já se tinha visto e, quando a resposta nova
+// chega e é diferente, a página volta a desenhar-se sozinha. Qualquer gravação ou mudança de outra pessoa limpa isto.
+const lastGood = new Map();
+const STALE_MS = 5 * 60 * 1000;
+const SLOW_MS = 700;
+export const clearReadCache = () => { readCache.clear(); lastGood.clear(); };
+let staleT = 0;
+const notifyStale = () => { clearTimeout(staleT); staleT = setTimeout(() => window.dispatchEvent(new Event('portal-stale')), 250); };
+// leitura com limite de tempo: se o servidor ficar pendurado, tenta outra vez em vez de deixar a página "A carregar…"
+function readFetch(input, init) {
+  if (init.signal) return fetch(input, init);
+  const attempt = (ms) => { const ac = new AbortController(); const t = setTimeout(() => ac.abort(), ms); return fetch(input, { ...init, signal: ac.signal }).finally(() => clearTimeout(t)); };
+  return attempt(6000).catch((e) => { if (e?.name === 'AbortError') return attempt(15000); throw e; });
+}
+function cachedFetch(input, init = {}) {
+  const url = typeof input === 'string' ? input : input.url;
+  const method = (init.method || (typeof input === 'string' ? 'GET' : input.method) || 'GET').toUpperCase();
+  if (!url.includes('/rest/v1/')) return fetch(input, init);
+  if (method !== 'GET' && method !== 'HEAD') { clearReadCache(); return fetch(input, init); }
+  const h = new Headers(init.headers || (typeof input === 'string' ? undefined : input.headers));
+  const key = [method, url, h.get('authorization'), h.get('accept'), h.get('accept-profile'), h.get('prefer'), h.get('range')].join('|');
+  const hit = readCache.get(key);
+  // pedido igual já a caminho (há menos de 8 s) ou acabado de chegar: serve-se o mesmo
+  if (hit && (hit.at ? Date.now() - hit.at < READ_TTL : Date.now() - hit.t0 < 8000)) return orStale(key, method, hit.p.then((r) => r.clone()));
+  const e = { at: 0, t0: Date.now(), p: null };
+  e.p = readFetch(input, init).then((r) => {
+    if (!r.ok) { readCache.delete(key); return r; }
+    e.at = Date.now();
+    // guarda uma cópia para as próximas visitas (texto + cabeçalhos que a biblioteca lê)
+    r.clone().text().then((body) => {
+      const prev = lastGood.get(key);
+      if (prev?.served && prev.body !== body) notifyStale();
+      lastGood.set(key, { body, status: r.status, ct: r.headers.get('content-type'), cr: r.headers.get('content-range'), at: Date.now() });
+      if (lastGood.size > 400) lastGood.delete(lastGood.keys().next().value);
+    }).catch(() => {});
+    return r;
+  }, (err) => { readCache.delete(key); throw err; });
+  readCache.set(key, e);
+  if (readCache.size > 300) readCache.delete(readCache.keys().next().value);
+  return orStale(key, method, e.p.then((r) => r.clone()));
+}
+// já se viu isto há pouco: se a resposta demorar, mostra-se o que se tinha
+function orStale(key, method, net) {
+  const old = lastGood.get(key);
+  if (!old || Date.now() - old.at > STALE_MS) return net;
+  return Promise.race([net, new Promise((res) => setTimeout(() => res(null), SLOW_MS))]).then((r) => {
+    if (r) return r;
+    old.served = true;
+    const headers = new Headers(); if (old.ct) headers.set('content-type', old.ct); if (old.cr) headers.set('content-range', old.cr);
+    return new Response(method === 'HEAD' ? null : old.body, { status: old.status, headers });
+  });
+}
+
 export const sb = createClient(SUPABASE_URL, SUPABASE_ANON, {
   auth: { persistSession: true, autoRefreshToken: true, storageKey: FLAVOR.storageKey },
   db: { schema: FLAVOR.schema },
+  global: { fetch: cachedFetch },
 });
+// mudanças feitas por outra pessoa (tempo real): o que se ler a seguir vem sempre fresco
+{
+  const ch = sb.channel.bind(sb);
+  sb.channel = (...a) => { const c = ch(...a); const on = c.on.bind(c); c.on = (type, filter, cb) => on(type, filter, typeof cb === 'function' ? (...x) => { clearReadCache(); return cb(...x); } : cb); return c; };
+}
 // Ctrl+Z em todas as páginas (undo.js)
 queueMicrotask(() => installUndo(sb, (m) => toast(m)));
 
@@ -36,6 +101,21 @@ window.addEventListener('beforeunload', (e) => {
   [...pendingSaves].forEach((x) => x.flush());
   e.preventDefault(); e.returnValue = '';
 });
+// ao sair de uma página: tira o que ela pendurou na janela (colar, copiar, redimensionar…). Sem isto, cada página
+// visitada ficava presa na memória e a reagir em segundo plano, e o Studio ia ficando mais lento ao longo do dia.
+const leaveFns = new Set();
+export const onLeave = (f) => { leaveFns.add(f); return f; };
+export function runLeave() { const fs = [...leaveFns]; leaveFns.clear(); fs.forEach((f) => { try { f(); } catch { /* nada */ } }); }
+// Depois de uma atualização do Studio, uma janela que já estava aberta pede peças de código que deixaram de existir
+// (ficava uma caixa vazia, ex.: o moodboard). Nesse caso a página recarrega sozinha, uma vez, com a versão nova.
+function reloadForUpdate() {
+  try { const t = Number(sessionStorage.getItem('portal-reload') || 0); if (Date.now() - t < 30000) return false; sessionStorage.setItem('portal-reload', String(Date.now())); } catch { /* nada */ }
+  Promise.race([settleSaves(4000), new Promise((r) => setTimeout(r, 4000))]).finally(() => location.reload());
+  return true;
+}
+const STALE = /dynamically imported module|Importing a module script failed|Failed to fetch dynamically|error loading dynamically/i;
+window.addEventListener('vite:preloadError', (e) => { if (reloadForUpdate()) e.preventDefault(); });
+window.addEventListener('unhandledrejection', (e) => { if (STALE.test(String(e.reason?.message || e.reason || ''))) reloadForUpdate(); });
 // ficheiros: sb.storage.from(BUCKET)
 export const BUCKET = FLAVOR.bucket;
 

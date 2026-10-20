@@ -38,7 +38,7 @@ function cachedFetch(input, init = {}) {
   const key = [method, url, h.get('authorization'), h.get('accept'), h.get('accept-profile'), h.get('prefer'), h.get('range')].join('|');
   const hit = readCache.get(key);
   // pedido igual já a caminho (há menos de 8 s) ou acabado de chegar: serve-se o mesmo
-  if (hit && (hit.at ? Date.now() - hit.at < READ_TTL : Date.now() - hit.t0 < 8000)) return hit.p.then((r) => r.clone());
+  if (hit && (hit.at ? Date.now() - hit.at < READ_TTL : Date.now() - hit.t0 < 8000)) return orStale(key, method, hit.p.then((r) => r.clone()));
   const e = { at: 0, t0: Date.now(), p: null };
   e.p = readFetch(input, init).then((r) => {
     if (!r.ok) { readCache.delete(key); return r; }
@@ -54,10 +54,12 @@ function cachedFetch(input, init = {}) {
   }, (err) => { readCache.delete(key); throw err; });
   readCache.set(key, e);
   if (readCache.size > 300) readCache.delete(readCache.keys().next().value);
-  const net = e.p.then((r) => r.clone());
+  return orStale(key, method, e.p.then((r) => r.clone()));
+}
+// já se viu isto há pouco: se a resposta demorar, mostra-se o que se tinha
+function orStale(key, method, net) {
   const old = lastGood.get(key);
   if (!old || Date.now() - old.at > STALE_MS) return net;
-  // já se viu isto há pouco: se a resposta demorar, mostra-se o que se tinha
   return Promise.race([net, new Promise((res) => setTimeout(() => res(null), SLOW_MS))]).then((r) => {
     if (r) return r;
     old.served = true;

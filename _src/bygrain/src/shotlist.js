@@ -1,4 +1,4 @@
-import { saveLater, sb, esc, toast, confirmBox, ICON } from './lib.js';
+import { saveLater, sb, esc, toast, confirmBox, ICON, onLeave } from './lib.js';
 import { exportPdf } from './pdf.js';
 import { ensureModules } from './modules.js';
 import { fullscreenButton } from './layout.js';
@@ -184,6 +184,6 @@ export async function shotlistPage(main, p, base) {
   };
   main.addEventListener('input', (e) => { e.target._dirty = true; }, true);
   main.addEventListener('focusin', (e) => { e.target._dirty = false; }, true);
-  document.addEventListener('keydown', onKey);
+  document.addEventListener('keydown', onKey); onLeave(() => document.removeEventListener('keydown', onKey));
   draw();
 }

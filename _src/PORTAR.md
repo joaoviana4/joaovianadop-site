@@ -8,6 +8,8 @@
 
 - 19 out 2026: a pedido do João, o byGrain recebeu as alterações do Studio de 16–17 out (49 commits, sem as comunidades nem o logo da comunidade; notificações já lá estavam) e as etapas ligadas por projeto (`projects.layouts.stages`). Base de dados: colunas novas (migração `from_studio_columns`), `can_edit_project`, `create_invite_as`, `member_from_invite`, `board_visible` e regras restritivas de só leitura em `public` e no balde `files`. Os códigos dos planos antigos (3A, 3B…) não foram renumerados.
 
+- 20 out 2026: a pedido do João, o byGrain recebeu as otimizações de velocidade do Studio: `project_boot` e `project_counts` (funções na base de dados do byGrain, esquema `public`), leituras iguais juntas, cópia das últimas respostas para quando o servidor demora (com atualização sozinha), pedidos pendurados repetidos ao fim de 6 s, limpeza dos ouvintes ao mudar de página e recarregar sozinho quando falta código de uma versão antiga.
+
 O resto deste ficheiro descreve como o Studio nasceu do código do byGrain (ainda válido para `_src/portal`).
 
 ## Como funciona

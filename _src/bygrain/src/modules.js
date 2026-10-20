@@ -85,7 +85,10 @@ export async function autoModules(p) {
   const last = autoSeen.get(p.id); if (last && Date.now() - last < 180000) return; autoSeen.set(p.id, Date.now());
   if (p.kind === 'album') ensureModules(p, ['marketing'], { user: false });
   const c = async (t, extra) => { let q = sb.from(t).select('id', { count: 'exact', head: true }).eq('project_id', p.id); if (extra) q = extra(q); const { count } = await q; return count || 0; };
-  const [loc, ch, sh, pr, sc, ge] = await Promise.all([c('locations'), c('characters'), c('shots'), c('props', (q) => q.eq('removed', false)), c('scenes'), c('gear')]);
+  // as seis contagens num só pedido (project_counts); se falhar, uma a uma como antes
+  const { data: n, error } = await sb.rpc('project_counts', { p: p.id }, { get: true });
+  const [loc, ch, sh, pr, sc, ge] = !error && n ? [n.locations, n.characters, n.shots, n.props, n.scenes, n.gear]
+    : await Promise.all([c('locations'), c('characters'), c('shots'), c('props', (q) => q.eq('removed', false)), c('scenes'), c('gear')]);
   const want = [];
   if (loc) want.push('decors'); if (ch) want.push('elenco', 'figurino'); if (sh) want.push('storyboard', ...(scriptMode(p) ? [] : ['shotlist'])); if (pr) want.push('aderecos'); if (ge) want.push('equipamento');
   if (sc && !hasMod(p, 'seguimento') && !hasMod(p, 'cenas')) want.push(scriptMode(p) ? 'cenas' : 'seguimento');

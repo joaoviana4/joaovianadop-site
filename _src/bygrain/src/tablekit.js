@@ -1,4 +1,4 @@
-import { esc } from './lib.js';
+import { esc, onLeave } from './lib.js';
 
 // Peças comuns às tabelas (orçamentos e tabelas): cores de colunas e linhas, e atalhos de teclado.
 //  Alt + ↓ / ↑   nova linha por baixo / por cima da linha onde está o rato (ou o cursor)
@@ -61,7 +61,7 @@ export function tableShortcuts(table, { rowBelow, rowAbove, section, colRight, c
     if (e.key === 'ArrowRight') colRight?.(col);
     if (e.key === 'ArrowLeft') colLeft?.(col);
   };
-  document.addEventListener('keydown', onKey);
+  document.addEventListener('keydown', onKey); onLeave(() => document.removeEventListener('keydown', onKey));
 }
 
 export const rowStyle = (r) => (r.color ? ` style="--rc:${esc(r.color)}"` : '');
@@ -100,7 +100,7 @@ export function bindUndoKeys(root, h) {
     if (a && a.matches('input, textarea, [contenteditable=true]') && (!root.contains(a) || a.dataset.dirty)) return;
     e.preventDefault(); if (undo) h.undo(); else h.redo();
   };
-  document.addEventListener('keydown', onKey);
+  document.addEventListener('keydown', onKey); onLeave(() => document.removeEventListener('keydown', onKey));
 }
 
 // ---------- mover linhas ----------

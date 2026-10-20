@@ -84,7 +84,8 @@ export function situationData(p, tasksP) {
     sb.from('props').select('id, name, status, removed').eq('project_id', p.id),
     sb.from('project_questions').select('*').eq('project_id', p.id).order('created_at'),
     loadPeople(),
-    sb.from('boards').select('id, data').eq('project_id', p.id).eq('kind', 'timeline').limit(1),
+    // as fases do cronograma já vieram com o projeto
+    p._tlPhases !== undefined ? { data: p._tlPhases ? [{ data: { phases: p._tlPhases } }] : [] } : sb.from('boards').select('id, data').eq('project_id', p.id).eq('kind', 'timeline').limit(1),
     isMusic ? musicStats(p.id) : Promise.resolve(null),
     import('./rodagem.js').then((m) => m.shootProgress(p)).catch(() => null),
   ]);

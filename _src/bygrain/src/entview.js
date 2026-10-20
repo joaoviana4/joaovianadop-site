@@ -1,4 +1,4 @@
-import { sb, esc, ICON, toast, signedUrl, signedUrls, uploadImage, initials } from './lib.js';
+import { sb, esc, ICON, toast, signedUrl, signedUrls, uploadImage, initials, onLeave } from './lib.js';
 
 // Atores, figurantes e décors em grelha (com foto) ou em lista. A escolha fica guardada por tipo.
 // Foto: décors → a primeira foto de repérage (locations.photos); pessoas → info.photo.
@@ -52,7 +52,7 @@ function onPasteImages(root, fn) {
     const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith('image/'));
     if (files.length) { e.preventDefault(); fn(files); }
   };
-  document.addEventListener('paste', h);
+  document.addEventListener('paste', h); onLeave(() => document.removeEventListener('paste', h));
 }
 
 // Foto de uma pessoa (atores, figurantes, personagens): guardada em info.photo

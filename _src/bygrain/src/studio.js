@@ -1,5 +1,5 @@
 import './style.css';
-import { settleSaves, daysUntil } from './lib.js';
+import { settleSaves, daysUntil, runLeave } from './lib.js';
 import { loadHidden, hideProject, unhideProject } from './lib.js';
 import { IS_STUDIO, sb, BUCKET, state, esc, $, loadProfile, isStaff, isAdmin, toast, modal, confirmBox, ICON, LOGO, KINDS, ROLES, phaseOf, greeting, initials, signedUrls, uploadImage, callFn, authPw, MIN_PW, fmtDate, dueInfo, todayISO, registerSW, isInstalled, installApp, BASE, PROJECT_COLS, hasPerm, leadsOf } from './lib.js';
 import { renderAuth } from './auth.js';
@@ -32,7 +32,7 @@ import { FICTION_PAGES, FICTION_DEPTS, fictionPage, fictionStats } from './ficti
 const app = $('#app');
 let cleanup = [];
 const onCleanup = (fn) => cleanup.push(fn);
-function teardown() { clearFullscreen(); cleanup.forEach((f) => { try { f(); } catch { /* nada */ } }); cleanup = []; }
+function teardown() { clearFullscreen(); runLeave(); cleanup.forEach((f) => { try { f(); } catch { /* nada */ } }); cleanup = []; }
 
 registerSW();
 // a roda do rato não muda valores sem querer nos campos numéricos
@@ -45,8 +45,27 @@ sb.auth.onAuthStateChange((ev) => {
   if (ev === 'SIGNED_OUT') { teardown(); boot(); }
 });
 
+// pede de antemão o que a página vai precisar, ao mesmo tempo que o resto (o leitor de pedidos em lib.js junta os iguais)
+function warmRoute() {
+  try {
+    const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
+    if (parts[0] !== 'p' || !/^[0-9a-f-]{36}$/.test(parts[1] || '')) return;
+    const id = parts[1];
+    warmProject(id);
+    const w = (q) => Promise.resolve(q).then(() => {}, () => {});
+    if (!parts[2]) {
+      w(sb.from('tasks').select('*').eq('project_id', id));
+      w(sb.from('board_items').select('board_id, kind, data').eq('project_id', id));
+      w(sb.from('props').select('id, name, status, removed').eq('project_id', id));
+      w(sb.from('project_questions').select('*').eq('project_id', id).order('created_at'));
+    }
+    if (parts[2] === 'f' && parts[3]) w(sb.from('boards').select('*').eq('id', parts[3]).maybeSingle());
+  } catch { /* só uma ajuda */ }
+}
+
 async function boot() {
   if (recovering) return;
+  queueMicrotask(warmRoute); // (depois de o módulo acabar de carregar)
   await loadProfile();
   if (IS_STUDIO) import('./appearance.js').then((a) => a.syncLookFromProfile());
   if (!state.user || !state.profile) {
@@ -61,12 +80,22 @@ async function boot() {
   const idle = window.requestIdleCallback || ((f) => setTimeout(f, 1500));
   idle(() => { import('./board.js').catch(() => {}); });
 }
-window.addEventListener('hashchange', () => state.user && route());
+window.addEventListener('hashchange', () => { if (!state.user) return; warmRoute(); route(); });
 boot();
 
 function go(hash) { if (location.hash === hash) route(); else location.hash = hash; }
 
+// quando uma página foi desenhada com dados guardados (o servidor demorou) e os novos chegam diferentes,
+// volta a desenhá-la — mas só logo a seguir a abrir e se ninguém estiver a escrever ou com uma janela aberta
+let routedAt = 0;
+window.addEventListener('portal-stale', () => {
+  if (!state.user || Date.now() - routedAt > 20000) return;
+  const a = document.activeElement;
+  if (a?.matches?.('input, textarea, select, [contenteditable="true"]') || document.querySelector('#modal.open, .pm-tpop, .dragging, .resizing')) return;
+  const y = window.scrollY; route().then(() => requestAnimationFrame(() => window.scrollTo(0, y)));
+});
 async function route() {
+  routedAt = Date.now();
   // antes de mudar de página: envia o que ainda estava por guardar e espera que chegue à base de dados,
   // para a página seguinte (ou a mesma, ao voltar) já mostrar os dados novos
   await settleSaves();
@@ -626,21 +655,29 @@ async function loadProject(id, { fresh = false } = {}) {
   setReadOnly(p);
   return p;
 }
+// tudo o que o projeto precisa num só pedido (project_boot, na base de dados); se falhar, os pedidos de antes
+const bootQ = (id) => sb.rpc('project_boot', { p: id }, { get: true });
+export function warmProject(id) { if (!projCache.get(id)) bootQ(id).then(() => {}, () => {}); }
 async function loadProjectNow(id) {
-  // tudo de uma vez (antes eram 4 idas à base de dados, uma atrás da outra)
-  const [{ data: p }, { data: fin }, { data: grant }, { count: nScripts }, { data: boards }, { data: canEdit }, { data: tl }] = await Promise.all([
-    // o projeto-pai (álbum) vem no mesmo pedido
-    sb.from('projects').select(`${PROJECT_COLS}, parent:parent_id(id, name, kind, deleted_at)`).eq('id', id).maybeSingle()
-      .then((r) => (r.error ? sb.from('projects').select(PROJECT_COLS).eq('id', id).maybeSingle() : r)),
-    // o orçamento só chega a quem tem acesso (a base de dados devolve vazio aos outros)
-    sb.from('project_budgets').select('value, budget, updated_at, approved_at').eq('project_id', id).maybeSingle(),
-    sb.from('budget_access').select('user_id').eq('project_id', id).eq('user_id', state.user.id).maybeSingle(),
-    sb.from('scripts').select('id', { count: 'exact', head: true }).eq('project_id', id).neq('kind', 'tratamento'),
-    sb.from('boards').select('id, parent_id, title, group_id, position, created_at, kind, visible_to, created_by').eq('project_id', id).order('position').order('created_at'),
-    sb.rpc('can_edit_project', { p: id }),
-    // as fases e datas do cronograma de produção dizem em que etapa o projeto está
-    sb.from('boards').select('id, phases:data->phases').eq('project_id', id).eq('kind', 'timeline').order('position').limit(1),
-  ]);
+  let p, fin, grant, nScripts, boards, canEdit, tl;
+  const { data: bt, error: be } = await bootQ(id);
+  if (!be && bt) {
+    ({ project: p, fin, grant, nScripts, boards, canEdit, tl } = bt);
+    tl = tl ? [tl] : [];
+  } else {
+    let pr, gr;
+    [{ data: pr }, { data: fin }, { data: gr }, { count: nScripts }, { data: boards }, { data: canEdit }, { data: tl }] = await Promise.all([
+      sb.from('projects').select(`${PROJECT_COLS}, parent:parent_id(id, name, kind, deleted_at)`).eq('id', id).maybeSingle()
+        .then((r) => (r.error ? sb.from('projects').select(PROJECT_COLS).eq('id', id).maybeSingle() : r)),
+      sb.from('project_budgets').select('value, budget, updated_at, approved_at').eq('project_id', id).maybeSingle(),
+      sb.from('budget_access').select('user_id').eq('project_id', id).eq('user_id', state.user.id).maybeSingle(),
+      sb.from('scripts').select('id', { count: 'exact', head: true }).eq('project_id', id).neq('kind', 'tratamento'),
+      sb.from('boards').select('id, parent_id, title, group_id, position, created_at, kind, visible_to, created_by').eq('project_id', id).order('position').order('created_at'),
+      sb.rpc('can_edit_project', { p: id }),
+      sb.from('boards').select('id, phases:data->phases').eq('project_id', id).eq('kind', 'timeline').order('position').limit(1),
+    ]);
+    p = pr; grant = !!gr;
+  }
   if (!p || p.deleted_at) return null;
   p.canEdit = canEdit !== false;
   { const t = (tl || [])[0]; const ph = t ? t.phases || t.data?.phases || null : null; p._tlPhases = ph && typeof ph === 'object' ? ph : null; p._tlHref = t ? `${projBase(p)}/f/${t.id}` : null; }
