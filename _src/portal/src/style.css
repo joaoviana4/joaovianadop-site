@@ -3186,3 +3186,26 @@ main > .cv-headblk + .ov { margin-top: 18px; }
 .cv-bpk small { margin-left: auto; }
 .cg.cg-drop { outline: 2px dashed var(--blue); outline-offset: 10px; border-radius: 14px; }
 .cg.cg-drop::after { content: 'Larga aqui para juntar à página'; position: sticky; top: 50%; display: block; width: max-content; margin: 0 auto; padding: 8px 14px; border-radius: 999px; background: var(--blue); color: #fff; font-size: 13px; z-index: 100001; pointer-events: none; }
+/* banner do início personalizável */
+.hero.hero-img { background-size: cover; background-repeat: no-repeat; }
+.hero.hero-compact .hero-in { padding-top: 22px; padding-bottom: 22px; }
+.hero.hero-compact .hero-h { font-size: clamp(26px, 3.4vw, 36px); }
+.hero.hero-tall .hero-in { padding-top: 140px; padding-bottom: 56px; }
+.hero-kick-w { color: rgba(255, 255, 255, .78); }
+.hero-edit { position: absolute; top: 12px; right: 18px; z-index: 3; display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: 999px; border: 0; background: rgba(0, 0, 0, .35); color: #fff; font: inherit; font-size: 12.5px; cursor: pointer; opacity: 0; transition: opacity .15s; }
+.hero-edit svg { width: 14px; height: 14px; }
+.hero:hover .hero-edit, .hero-edit:focus-visible { opacity: 1; }
+@media (hover: none) { .hero-edit { opacity: .9; } }
+.hero-pop { width: 320px; display: flex; flex-direction: column; gap: 12px; max-height: min(640px, 86vh); overflow: auto; }
+.hero-pop .hp-sec { display: flex; flex-direction: column; gap: 6px; }
+.hero-pop input:not([type]), .hero-pop input[type="text"] { width: 100%; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line2); background: var(--panel); color: var(--text); font: inherit; font-size: 13.5px; }
+.hero-pop .hp-range { display: flex; flex-direction: column; gap: 2px; }
+.hero-pop .hp-range input { width: 100%; }
+/* menu ⋯ dos cartões */
+.pop-menu { min-width: 210px; }
+.pop-menu [role="menuitemradio"][aria-checked="true"] { font-weight: 600; }
+.on-cover.pin-mark { pointer-events: none; }
+.hero.hero-on-dark, .hero.hero-on-dark .hero-h, .hero.hero-on-dark .hero-p { color: #fff !important; }
+.hero.hero-on-dark .hero-kicker { color: rgba(255, 255, 255, .8) !important; }
+.hero.hero-on-light, .hero.hero-on-light .hero-h, .hero.hero-on-light .hero-p { color: #141418 !important; }
+.hero.hero-on-light .hero-kicker { color: rgba(20, 20, 24, .7) !important; }

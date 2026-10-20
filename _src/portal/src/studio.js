@@ -7,6 +7,7 @@ import { IS_STUDIO, sb, BUCKET, state, esc, $, loadProfile, isStaff, isAdmin, to
 import { renderAuth } from './auth.js';
 import { visField, bindVis, readVis } from './vis.js';
 import { onWrite, setWriteGuard } from './undo.js';
+import { applyHero, heroEditor, heroTitle } from './herobanner.js';
 import { aheadNotice, bindAhead, aheadOf, stageOptions, projectStrip, bindStrip, phaseBar, bindPhaseBar, shows, modKey, toolKey, selPhase, setSelPhase, phaseLabel, phasesOf, setToolPhase, stagesOn } from './phases.js';
 import { projectSearch } from './psearch.js';
 import { mountTasks, loadPeople, clearPeopleCache, addTaskModal } from './tasks.js';
@@ -218,13 +219,33 @@ function changePassword() {
 const homeState = { tab: 'active', q: '', mine: false, sort: 'recent' };
 // Início (comm = null): os meus projetos (fora de comunidades), os fixados e as minhas comunidades.
 // Comunidade (comm): os projetos dela, a Central (se tiver parte business) e as pessoas.
+// menu pequeno junto a um botão (⋯): items = [{ label, icon, run, check, danger } | '-' | falso]
+function popMenu(btn, title, items) {
+  document.querySelector('.gi-menu.pop-menu')?.remove();
+  const list = items.filter(Boolean).filter((x, i, a) => x !== '-' || (i > 0 && a[i - 1] !== '-' && i < a.length - 1));
+  const m = document.createElement('div'); m.className = 'gi-menu pop-menu'; m.setAttribute('role', 'menu'); m.setAttribute('aria-label', title || 'Opções');
+  m.innerHTML = `${title ? `<div class="gi-mt">${esc(title)}</div>` : ''}${list.map((x, i) => x === '-' ? '<hr>' : `<button type="button" role="${x.check !== undefined ? 'menuitemradio' : 'menuitem'}" ${x.check !== undefined ? `aria-checked="${!!x.check}"` : ''} class="${x.danger ? 'danger' : ''}" data-mi="${i}">${x.check !== undefined ? `<i class="gi-mi">${x.check ? '✓' : ''}</i>` : x.icon || '<i class="gi-mi"></i>'}<span>${esc(x.label)}</span></button>`).join('')}`;
+  document.body.append(m);
+  const r = btn.getBoundingClientRect(); const w = m.offsetWidth, h = m.offsetHeight;
+  m.style.left = `${Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w))}px`;
+  m.style.top = `${r.bottom + 6 + h > window.innerHeight - 8 ? Math.max(8, r.top - h - 6) : r.bottom + 6}px`;
+  const close = () => { m.remove(); document.removeEventListener('pointerdown', out, true); document.removeEventListener('keydown', key, true); window.removeEventListener('scroll', close, true); };
+  const out = (e) => { if (!m.contains(e.target) && !btn.contains(e.target)) close(); };
+  const key = (e) => { if (e.key === 'Escape') { e.preventDefault(); close(); btn.focus(); } };
+  m.querySelectorAll('[data-mi]').forEach((b) => b.addEventListener('click', () => { const x = list[+b.dataset.mi]; close(); x?.run?.(); }));
+  setTimeout(() => { document.addEventListener('pointerdown', out, true); document.addEventListener('keydown', key, true); window.addEventListener('scroll', close, true); });
+  m.querySelector('button')?.focus();
+  onCleanup(close);
+}
+
 async function homePage(comm = null) {
   const staff = isStaff();
   if (homeState.scope !== (comm?.id || '')) { homeState.scope = comm?.id || ''; homeState.tab = 'active'; homeState.mine = false; }
   app.innerHTML = `<div class="page">${header(comm ? 'comm' : 'home')}
     <section class="hero"><div class="grain-layer" aria-hidden="true"></div>
+      ${comm ? '' : `<button type="button" class="hero-edit" data-hero-edit title="Personalizar o banner (só para ti)">${ICON.palette} Personalizar</button>`}
       <div class="wrap hero-in">
-        <div>${comm ? `<div class="hero-comm">${isLogo(comm.logo_path) ? commMark(comm, 'hero-logo') : ''}<div><p class="hero-kicker">${isLogo(comm.logo_path) ? '' : `<i style="background:${esc(comm.color)}"></i>`}Comunidade · ${esc(ROLES[comm.my_role])}</p><h1 class="hero-h">${esc(comm.name)}</h1></div></div>` : `<h1 class="hero-h">${greeting()}, ${esc(state.profile.display_name.split(' ')[0])}.</h1>`}<p class="hero-p" data-hero>&nbsp;</p></div>
+        <div>${comm ? `<div class="hero-comm">${isLogo(comm.logo_path) ? commMark(comm, 'hero-logo') : ''}<div><p class="hero-kicker">${isLogo(comm.logo_path) ? '' : `<i style="background:${esc(comm.color)}"></i>`}Comunidade · ${esc(ROLES[comm.my_role])}</p><h1 class="hero-h">${esc(comm.name)}</h1></div></div>` : `<p class="hero-kicker hero-kick-w" data-hero-kicker hidden></p><h1 class="hero-h" data-hero-title>${esc(heroTitle())}</h1>`}<p class="hero-p" data-hero>&nbsp;</p></div>
         ${staff ? `<button type="button" class="btn cream" data-new>${ICON.plus} Novo projeto</button>` : ''}
       </div>
     </section>
@@ -266,6 +287,7 @@ async function homePage(comm = null) {
       </aside>
     </div></div>`;
   bindHeader(app);
+  if (!comm) { const he = app.querySelector('.hero'); applyHero(he); heroEditor(he); }
   app.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { homeState.tab = b.dataset.tab; homePage(comm); }));
   app.querySelector('[data-new]')?.addEventListener('click', () => newProject({ comm }));
   app.querySelector('[data-newcomm]')?.addEventListener('click', () => newCommunity());
@@ -358,7 +380,7 @@ async function homePage(comm = null) {
       <div class="proj-cover" style="${covers[p.cover_path] ? `background-image:url('${esc(covers[p.cover_path])}')` : `background:${coverColor(p.id)}`}">
         <div class="grain-layer soft" aria-hidden="true"></div>
         <span class="tag dark">${esc(KINDS[p.kind] || p.kind)}</span>
-        <span class="on-cover-acts">${p.community_id ? `<button type="button" class="icon-btn on-cover ${pinned.has(p.id) ? 'on' : ''}" data-pin="${p.id}" title="${pinned.has(p.id) ? 'Tirar do meu início' : 'Fixar no meu início (continua a ser da comunidade)'}" aria-label="Fixar ${esc(p.name)}">${ICON.pin}</button>` : ''}<button type="button" class="icon-btn on-cover" data-hidep="${p.id}" title="Tirar da minha lista (os outros continuam a vê-lo)" aria-label="Tirar ${esc(p.name)} da minha lista">${ICON.hide}</button>${isAdmin() ? `<button type="button" class="icon-btn on-cover danger" data-trashp="${p.id}" title="Apagar (vai para a reciclagem durante 10 dias)" aria-label="Apagar ${esc(p.name)}">${ICON.trash}</button>` : ''}${staff ? `<button type="button" class="icon-btn on-cover" data-more="${p.id}" aria-label="Opções de ${esc(p.name)}">${ICON.dots}</button>` : ''}</span>
+        <span class="on-cover-acts">${p.community_id && pinned.has(p.id) ? `<span class="icon-btn on-cover on pin-mark" title="Fixado no teu início">${ICON.pin}</span>` : ''}<button type="button" class="icon-btn on-cover" data-more="${p.id}" aria-haspopup="menu" aria-label="Opções de ${esc(p.name)}">${ICON.dots}</button></span>
       </div>
       <div class="proj-body">
         <div><div class="proj-name" ${staff ? `data-rename="${p.id}" title="Duplo clique para mudar o nome"` : ''}>${p.kind === 'album' ? `<span class="fold-ic">${ICON.board}</span>` : ''}<span class="pn-txt">${esc(p.name)}</span></div><div class="muted small">${esc(p.client || '—')}${par ? ` · em ${esc(par.name)}` : ''}</div>${!comm && p.community_id ? (() => { const c = commById(p.community_id); return c ? `<span class="comm-chip" style="--cc:${esc(c.color)}">${esc(c.name)}</span>` : ''; })() : ''}</div>
@@ -396,7 +418,44 @@ async function homePage(comm = null) {
       inp.addEventListener('blur', () => finish(true));
     });
   });
-  grid.querySelectorAll('[data-more]').forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); const p = list.find((x) => x.id === b.dataset.more); projectDetailsModal(p, () => homePage(comm)); }));
+  // ⋯ do cartão: um menu curto com o que se faz mais vezes; o formulário completo fica em "Todos os detalhes"
+  grid.querySelectorAll('[data-more]').forEach((b) => b.addEventListener('click', (e) => {
+    e.preventDefault(); e.stopPropagation(); const p = list.find((x) => x.id === b.dataset.more); if (!p) return;
+    const card = b.closest('.proj-card');
+    const setStatus = async (v) => { const { error } = await sb.from('projects').update({ status: v }).eq('id', p.id); if (error) return toast(error.message); p.status = v; projCache.delete(p.id); toast({ active: 'Está em curso.', done: 'Marcado como finalizado.', archived: 'Foi para o arquivo.' }[v]); drawGrid(); };
+    const pickCover = () => { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.onchange = async () => { try { toast('A enviar a capa…'); const up = await uploadImage(p.id, 'cover', inp.files[0]); const { error } = await sb.from('projects').update({ cover_path: up.path }).eq('id', p.id); if (error) throw error; projCache.delete(p.id); toast('Capa mudada.'); homePage(comm); } catch (er) { toast(er.message || String(er)); } }; inp.click(); };
+    popMenu(b, p.name, [
+      { label: 'Abrir', icon: ICON.open, run: () => go(`#/p/${p.id}`) },
+      staff && { label: 'Mudar o nome', icon: ICON.title, run: () => card.querySelector('[data-rename]')?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })) },
+      staff && { label: p.cover_path ? 'Mudar a capa…' : 'Pôr uma capa…', icon: ICON.image, run: pickCover },
+      staff && p.cover_path && { label: 'Tirar a capa', icon: ICON.close, run: async () => { await sb.from('projects').update({ cover_path: null }).eq('id', p.id); projCache.delete(p.id); toast('Capa tirada.'); homePage(comm); } },
+      '-',
+      ...(staff ? [['active', 'Em curso'], ['done', 'Finalizado'], ['archived', 'Arquivado']].map(([k, l]) => ({ label: l, check: p.status === k, run: () => p.status !== k && setStatus(k) })) : []),
+      '-',
+      p.community_id && { label: pinned.has(p.id) ? 'Tirar do meu início' : 'Fixar no meu início', icon: ICON.pin, run: () => togglePin(p.id) },
+      { label: 'Tirar da minha lista', icon: ICON.hide, run: () => hideMine(p) },
+      staff && { label: 'Todos os detalhes…', icon: ICON.dots, run: () => projectDetailsModal(p, () => homePage(comm)) },
+      isAdmin() && '-',
+      isAdmin() && { label: 'Apagar', icon: ICON.trash, danger: true, run: () => trashOne(p) },
+    ]);
+  }));
+  const togglePin = async (id) => {
+    const r = pinned.has(id) ? await sb.from('project_pins').delete().eq('project_id', id).eq('user_id', state.user.id) : await sb.from('project_pins').insert({ project_id: id });
+    if (r.error) return toast(r.error.message);
+    if (pinned.has(id)) { pinned.delete(id); toast('Saiu do teu início.'); if (!comm) { projects = projects.filter((x) => x.id !== id); } } else { pinned.add(id); toast('Fixado no teu início.'); }
+    drawGrid();
+  };
+  const hideMine = async (p) => {
+    if (!(await hideProject(p.id))) return;
+    hidden.set(p.id, new Date().toISOString());
+    toast(`"${p.name}" saiu da tua lista. Para o resto da equipa continua igual; voltas a mostrá-lo em "Escondidos".`); drawGrid();
+  };
+  const trashOne = async (p) => {
+    if (!(await confirmBox(`Apagar "${p.name}"? Vai para a reciclagem e só é apagado de vez daqui a 10 dias. Até lá, qualquer pessoa da equipa o pode recuperar.`, 'Mandar para a reciclagem'))) return;
+    const { error } = await sb.rpc('trash_project', { p: p.id });
+    if (error) return toast(error.message);
+    projects = projects.filter((x) => x.id !== p.id); toast(`"${p.name}" foi para a reciclagem. Podes recuperá-lo durante 10 dias.`); drawGrid();
+  };
   grid.querySelectorAll('[data-pin]').forEach((b) => b.addEventListener('click', async (e) => {
     e.preventDefault(); const id = b.dataset.pin;
     const r = pinned.has(id) ? await sb.from('project_pins').delete().eq('project_id', id).eq('user_id', state.user.id) : await sb.from('project_pins').insert({ project_id: id });
