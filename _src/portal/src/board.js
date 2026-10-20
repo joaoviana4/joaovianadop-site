@@ -27,42 +27,8 @@ async function copyToSystem(it) {
   } catch { try { await navigator.clipboard.writeText(mark); } catch { /* sem acesso: o Ctrl+V dentro do Studio continua a funcionar pelo CLIP */ } }
 }
 
-export const FONTS = [['', 'Predefinida'], ['Instrument Sans', 'Instrument Sans'], ['Inter', 'Inter'], ['Montserrat', 'Montserrat'], ['Archivo Black', 'Archivo Black'], ['Bebas Neue', 'Bebas Neue'],
-  ['Playfair Display', 'Playfair Display'], ['DM Serif Display', 'DM Serif Display'], ['Lora', 'Lora'], ['Instrument Serif', 'Instrument Serif'], ['Space Mono', 'Space Mono'], ['Courier Prime', 'Courier Prime'], ['Caveat', 'Caveat (à mão)']];
-const SIZES = [['s', 'Pequeno', 0.8], ['m', 'Normal', 1], ['l', 'Grande', 1.35], ['xl', 'Muito grande', 1.8]];
-const BASE = { note: 15, title: 44, list: 14 };
-const TEXT_COLORS = ['', '#0B0B14', '#F4F1E8', '#C8382D', '#F08A24', '#E3B341', '#2FB67C', '#2AA8C9', '#1E2AD4', '#7C5CFF', '#E5579B'];
-let fontsLoaded = false;
-function loadFonts() {
-  if (fontsLoaded) return; fontsLoaded = true;
-  const l = document.createElement('link'); l.rel = 'stylesheet';
-  l.href = 'https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;600;700&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;700&family=Montserrat:ital,wght@0,400;0,700;1,400&family=Archivo+Black&family=Bebas+Neue&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Serif+Display:ital@0;1&family=Lora:ital,wght@0,400;0,700;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Caveat:wght@400;700&display=swap';
-  document.head.append(l);
-}
-// só deixa passar formatação simples (nada de scripts, links ou estilos estranhos)
-const OK_TAGS = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'S', 'STRIKE', 'BR', 'DIV', 'P', 'SPAN', 'FONT']);
-const OK_STYLE = ['color', 'font-weight', 'font-style', 'text-decoration', 'text-decoration-line'];
-export function cleanHtml(html) {
-  const t = document.createElement('template'); t.innerHTML = html || '';
-  const walk = (node) => {
-    [...node.childNodes].forEach((n) => {
-      if (n.nodeType === 3) return;
-      if (n.nodeType !== 1 || !OK_TAGS.has(n.tagName)) { if (n.nodeType === 1) { walk(n); n.replaceWith(...n.childNodes); } else n.remove(); return; }
-      walk(n);
-      let el = n;
-      if (n.tagName === 'FONT') { el = document.createElement('span'); if (n.getAttribute('color')) el.style.color = n.getAttribute('color'); el.append(...n.childNodes); n.replaceWith(el); }
-      const keep = OK_STYLE.map((k) => [k, el.style.getPropertyValue(k)]).filter(([, v]) => v);
-      [...el.attributes].forEach((a) => el.removeAttribute(a.name));
-      keep.forEach(([k, v]) => el.style.setProperty(k, v));
-    });
-  };
-  walk(t.content);
-  return t.innerHTML;
-}
-const fmtStyle = (kind, f = {}) => {
-  const k = (SIZES.find((x) => x[0] === f.size) || SIZES[1])[2];
-  return [f.align ? `text-align:${f.align}` : '', f.font ? `font-family:'${f.font}',var(--sans)` : '', f.size && BASE[kind] ? `font-size:${Math.round(BASE[kind] * k)}px` : '', f.color ? `color:${f.color}` : '', f.b ? 'font-weight:700' : '', f.i ? 'font-style:italic' : '', f.u ? 'text-decoration:underline' : ''].filter(Boolean).join(';');
-};
+import { FONTS, SIZES, TEXT_COLORS, loadFonts, cleanHtml, fmtStyle } from './textfmt.js';
+export { FONTS, cleanHtml };
 
 export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom, onSelect, presence, embedded = false }) {
   // embedded: o board dentro de uma página (pré-visualização). Só responde ao teclado, ao colar e à roda do rato

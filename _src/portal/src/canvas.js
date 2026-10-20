@@ -1,6 +1,7 @@
 import { sb, esc, toast, ICON, saveLater, uploadImage, signedUrls, onLeave } from './lib.js';
 import { mountGrid, COLS } from './grid.js';
 import { cropSliders, cropAspect, cropImgStyle, naturalSize } from './imgcrop.js';
+import { loadFonts, cleanHtml, fmtStyle, fmtBarHtml } from './textfmt.js';
 export const CROP = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg>';
 
 // Páginas como boards (Studio). Cada página tem os seus elementos (a página em si, ou os blocos da visão geral)
@@ -55,15 +56,74 @@ const saveItem = (p, id, val) => {
   const layouts = { ...(p.layouts || {}), items }; p.layouts = layouts;
   return sb.from('projects').update({ layouts }).eq('id', p.id).then(({ error }) => { if (error) toast('Não foi possível guardar: ' + error.message); });
 };
+// Texto da página: escreve-se direto (como as notas dos boards) e formata-se com a mesma barra: letra, tamanho,
+// negrito, itálico, sublinhado, riscado, cor, alinhamento e listas. A barra aparece por cima enquanto se escreve.
+// Guardado em layouts.items[id] = { html, text, fmt } (fmt = formatação do bloco inteiro; o resto fica no html).
 function textEl(p, id) {
   const v = p.layouts?.items?.[id] || { text: '' };
+  loadFonts();
   const el = document.createElement('div'); el.className = 'cv-text';
-  el.innerHTML = `<textarea placeholder="Escreve aqui…" aria-label="Texto">${esc(v.text || '')}</textarea>`;
-  const ta = el.querySelector('textarea'); const fit = () => { ta.style.height = 'auto'; ta.style.height = `${ta.scrollHeight}px`; };
-  const save = saveLater(() => saveItem(p, id, { text: ta.value }), 700);
-  ta.addEventListener('input', () => { fit(); save(); }); requestAnimationFrame(fit);
+  el.innerHTML = `<div class="cv-rt" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Texto" data-ph="Escreve aqui…" spellcheck="true">${v.html ? cleanHtml(v.html) : esc(v.text || '').replace(/\n/g, '<br>')}</div>`;
+  const ed = el.querySelector('.cv-rt');
+  const style = () => ed.setAttribute('style', fmtStyle('text', v.fmt || {}));
+  style();
+  const save = saveLater(() => { v.html = cleanHtml(ed.innerHTML); v.text = ed.innerText; saveItem(p, id, { html: v.html, text: v.text, ...(v.fmt ? { fmt: v.fmt } : {}) }); }, 700);
+  ed.addEventListener('input', save);
+  // colar: só o texto (a formatação de fora vinha com letras e cores estranhas)
+  ed.addEventListener('paste', (e) => { const t = e.clipboardData?.getData('text/plain'); if (t == null) return; e.preventDefault(); document.execCommand('insertText', false, t); });
+  ed.addEventListener('focus', () => fmtBar.show(ed, { get: () => v.fmt || {}, set: (patch) => { const f = { ...(v.fmt || {}), ...patch }; Object.keys(f).forEach((k) => { if (f[k] === '' || f[k] == null || f[k] === false) delete f[k]; }); v.fmt = Object.keys(f).length ? f : undefined; style(); save(); }, changed: save, clear: () => { ed.innerText = ed.innerText; v.fmt = undefined; style(); save(); } }));
+  ed.addEventListener('blur', () => fmtBar.hideSoon(ed));
   return el;
 }
+// uma barra só, para todos os textos da página (fica por cima do texto que se está a escrever)
+const fmtBar = (() => {
+  let bar = null, cur = null, api = null, hideT = 0, savedRange = null;
+  const selIn = () => { const s2 = getSelection(); return cur && s2.rangeCount && !s2.isCollapsed && cur.contains(s2.anchorNode); };
+  const place = () => { if (!bar || !cur) return; const r = cur.getBoundingClientRect(); const h = bar.offsetHeight || 44; bar.style.left = `${Math.max(8, Math.min(window.innerWidth - bar.offsetWidth - 8, r.left))}px`; bar.style.top = `${r.top - h - 10 < 64 ? r.bottom + 8 : r.top - h - 10}px`; };
+  const closePops = (ex) => bar.querySelectorAll('[data-popbox]').forEach((x) => { if (x.dataset.popbox !== ex) { x.hidden = true; bar.querySelector(`[data-pop="${x.dataset.popbox}"]`)?.setAttribute('aria-expanded', 'false'); } });
+  const update = () => {
+    if (!bar || !api) return; const f = api.get();
+    bar.querySelectorAll('[data-font]').forEach((b) => b.classList.toggle('on', (f.font || '') === b.dataset.font));
+    bar.querySelectorAll('[data-size]').forEach((b) => b.classList.toggle('on', (f.size || 'm') === b.dataset.size));
+    bar.querySelectorAll('[data-align]').forEach((b) => b.classList.toggle('on', (f.align || 'left') === b.dataset.align));
+    bar.querySelectorAll('[data-cmd]').forEach((b) => { const k = { bold: 'b', italic: 'i', underline: 'u', strikeThrough: 's' }[b.dataset.cmd]; let on = !!f[k]; try { if (document.activeElement === cur) on = on || document.queryCommandState(b.dataset.cmd); } catch { /* nada */ } b.classList.toggle('on', on); });
+    bar.querySelectorAll('[data-list]').forEach((b) => { let on = false; try { on = document.activeElement === cur && document.queryCommandState(b.dataset.list); } catch { /* nada */ } b.classList.toggle('on', on); });
+    bar.querySelector('[data-colbar]').style.background = f.color || 'currentColor';
+  };
+  const build = () => {
+    bar = document.createElement('div'); bar.className = 'fmt-bar cv-fmt'; bar.hidden = true; bar.setAttribute('role', 'toolbar'); bar.setAttribute('aria-label', 'Formatar texto');
+    bar.innerHTML = fmtBarHtml(); document.body.append(bar);
+    // carregar na barra não tira o cursor do texto
+    bar.addEventListener('pointerdown', (e) => { if (!e.target.closest('input')) e.preventDefault(); clearTimeout(hideT); });
+    bar.querySelectorAll('[data-pop]').forEach((b) => b.addEventListener('click', () => { const box = bar.querySelector(`[data-popbox="${b.dataset.pop}"]`); closePops(b.dataset.pop); box.hidden = !box.hidden; b.setAttribute('aria-expanded', String(!box.hidden)); }));
+    bar.querySelectorAll('[data-cmd]').forEach((b) => b.addEventListener('click', () => {
+      if (selIn()) { document.execCommand('styleWithCSS', false, false); document.execCommand(b.dataset.cmd); api.changed(); }
+      else { const k = { bold: 'b', italic: 'i', underline: 'u', strikeThrough: 's' }[b.dataset.cmd]; api.set({ [k]: !api.get()[k] }); }
+      update();
+    }));
+    bar.querySelectorAll('[data-list]').forEach((b) => b.addEventListener('click', () => { cur?.focus(); document.execCommand(b.dataset.list); api.changed(); update(); }));
+    const colBtn = bar.querySelector('[data-colbtn]');
+    colBtn.addEventListener('pointerdown', () => { savedRange = selIn() ? getSelection().getRangeAt(0).cloneRange() : null; });
+    const applyColor = (c) => {
+      if (savedRange) { const s2 = getSelection(); s2.removeAllRanges(); s2.addRange(savedRange); document.execCommand('styleWithCSS', false, true); document.execCommand('foreColor', false, c || 'inherit'); document.execCommand('styleWithCSS', false, false); api.changed(); }
+      else api.set({ color: c });
+      closePops(); update();
+    };
+    bar.querySelectorAll('[data-tc]').forEach((b) => b.addEventListener('click', () => applyColor(b.dataset.tc)));
+    bar.querySelector('[data-tcc]').addEventListener('change', (e) => applyColor(e.target.value));
+    bar.querySelectorAll('[data-align]').forEach((b) => b.addEventListener('click', () => { api.set({ align: b.dataset.align === 'left' ? '' : b.dataset.align }); update(); }));
+    bar.querySelectorAll('[data-font]').forEach((b) => b.addEventListener('click', () => { api.set({ font: b.dataset.font }); closePops(); update(); }));
+    bar.querySelectorAll('[data-size]').forEach((b) => b.addEventListener('click', () => { api.set({ size: b.dataset.size === 'm' ? '' : b.dataset.size }); closePops(); update(); }));
+    bar.querySelector('[data-clear]').addEventListener('click', () => { api.clear(); update(); });
+    document.addEventListener('selectionchange', () => { if (cur && !bar.hidden) update(); });
+    window.addEventListener('scroll', place, true); window.addEventListener('resize', place);
+  };
+  return {
+    show(el, a) { if (!bar) build(); clearTimeout(hideT); cur = el; api = a; bar.hidden = false; closePops(); update(); place(); },
+    hideSoon(el) { clearTimeout(hideT); hideT = setTimeout(() => { if (cur === el && document.activeElement !== el && !bar?.contains(document.activeElement)) { if (bar) bar.hidden = true; cur = null; api = null; } }, 150); },
+    hide() { if (bar) bar.hidden = true; cur = null; api = null; },
+  };
+})();
 // imagem: mantém sempre a proporção ao redimensionar; recorta-se com as pegas dos lados da própria imagem;
 // legenda só se a juntarem. Mudar a imagem: largar outra por cima, ou botão direito → Mudar imagem.
 const gridBox = (el, phase, d = {}) => { const detail = { phase, dl: 0, dt: 0, dw: 0, ...d }; el.dispatchEvent(new CustomEvent('gi-box', { bubbles: true, detail })); return detail.room || null; };
@@ -238,6 +298,7 @@ export function mountCanvas(main, p, { key, native, render, here, pageLabel = 'p
     lp = { close };
   }
   onLeave(() => lp?.close());
+  onLeave(() => fmtBar.hide());
 
   // "Board": cria um board novo dentro desta página, ou mostra aqui um que já existe (é o mesmo board: o que se
   // mudar aqui muda lá). Os boards novos ficam só nesta página (não aparecem na lista de ferramentas).

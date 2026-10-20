@@ -3209,3 +3209,13 @@ main > .cv-headblk + .ov { margin-top: 18px; }
 .hero.hero-on-dark .hero-kicker { color: rgba(255, 255, 255, .8) !important; }
 .hero.hero-on-light, .hero.hero-on-light .hero-h, .hero.hero-on-light .hero-p { color: #141418 !important; }
 .hero.hero-on-light .hero-kicker { color: rgba(20, 20, 24, .7) !important; }
+/* Texto das páginas: escreve-se direto, com a barra de formatação dos boards */
+.cv-rt { min-height: 34px; padding: 2px 0; font-size: 17px; line-height: 1.5; color: var(--text); outline: none; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
+.cv-rt:empty::before { content: attr(data-ph); color: var(--muted); pointer-events: none; }
+.cv-rt ul, .cv-rt ol { margin: 4px 0; padding-left: 1.4em; }
+.fmt-bar.cv-fmt { position: fixed; transform: none; z-index: 2600; background: var(--panel2); color: var(--text); }
+.fmt-bar.cv-fmt button { color: var(--text); }
+.fmt-bar.cv-fmt button:hover { background: rgba(127, 127, 127, .16); } .fmt-bar.cv-fmt button.on { background: rgba(127, 127, 127, .26); }
+.cv-fmt .fmt-pop { background: var(--panel2); color: var(--text); box-shadow: 0 14px 40px rgba(0, 0, 0, .3); }
+.cv-fmt .fmt-list button { color: var(--text); }
+.cv-fmt .fmt-list button:hover { background: rgba(127, 127, 127, .14); } .cv-fmt .fmt-list button.on { background: rgba(127, 127, 127, .24); }
