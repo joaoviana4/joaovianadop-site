@@ -113,7 +113,8 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
     { const ro = new ResizeObserver(() => schedule()); ro.observe(g.querySelector('.gi-c')); ros.push(ro); }
     return g;
   }
-  const spanOf = (it) => (it.h ? it.h : Math.max(4, Math.ceil(((it.g?.offsetHeight || 0) + GAP) / ROW)));
+  // altura ocupada (em linhas): a escolhida, ou mais se o conteúdo for maior (nada se cortou, por isso conta o real)
+  const spanOf = (it) => Math.max(it.h || 0, Math.max(4, Math.ceil(((it.g?.offsetHeight || 0) + GAP) / ROW)));
 
   function place(it) {
     const g = it.g; g.hidden = hidden.has(it.id); if (g.hidden) return;
@@ -333,7 +334,7 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
     const p0 = pos[it.id];
     const bottom = list.filter((x) => !hidden.has(x.id) && x.g).reduce((m, x) => Math.max(m, x.y + spanOf(x)), 0);
     const z = p0?.z ?? list.reduce((m, x) => Math.max(m, x.z || 0), 0) + 1;
-    const obj = { ...it, x: p0?.x ?? it.x ?? 0, y: p0?.y ?? (at === 'end' ? bottom : 0), w: p0?.w ?? it.w ?? COLS, h: p0?.h ?? it.h ?? 0, z };
+    const obj = { ...it, x: p0?.x ?? it.x ?? 0, y: p0?.y ?? it.y ?? (at === 'end' ? bottom : 0), w: p0?.w ?? it.w ?? COLS, h: p0?.h ?? it.h ?? 0, z };
     list.push(obj); root.append(wrap(obj)); place(obj);
     return obj;
   }
@@ -344,9 +345,17 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
   onLeave(() => { window.removeEventListener('resize', schedule); ros.forEach((r) => r.disconnect()); ros.length = 0; });
 
   return {
-    add(it) {
+    add(it, { scroll = true } = {}) {
+      // com posição (ex.: largado num sítio da página): a página fica arrumada à mão a partir daqui
+      if (it.y != null && !mobile()) { if (!free) layout(); free = true; }
       const o = add(it); hidden.delete(it.id);
-      requestAnimationFrame(() => { layout(); save(); o.g.scrollIntoView({ behavior: 'smooth', block: 'center' }); }); onChange?.(); return o;
+      requestAnimationFrame(() => { layout(); save(); if (scroll) o.g.scrollIntoView({ behavior: 'smooth', block: 'center' }); }); onChange?.(); return o;
+    },
+    // ponto do ecrã → sítio na grelha (colunas e linhas), para largar coisas onde o rato está
+    cellAt(cx, cy, w = 4) {
+      const R = root.getBoundingClientRect(); const cw = colW();
+      const x = Math.max(0, Math.min(COLS - w, Math.round(((cx - R.left) / (cw + GAP) - w / 2) * 1000) / 1000));
+      return { x, y: Math.max(0, Math.round((cy - R.top - 20) / ROW)) };
     },
     show(id) {
       const it = list.find((x) => x.id === id); hidden.delete(id);

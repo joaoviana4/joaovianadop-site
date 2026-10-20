@@ -67,6 +67,7 @@ function textEl(p, id) {
 // imagem: mantém sempre a proporção ao redimensionar; recorta-se com as pegas dos lados da própria imagem;
 // legenda só se a juntarem. Mudar a imagem: largar outra por cima, ou botão direito → Mudar imagem.
 const gridBox = (el, phase, d = {}) => { const detail = { phase, dl: 0, dt: 0, dw: 0, ...d }; el.dispatchEvent(new CustomEvent('gi-box', { bubbles: true, detail })); return detail.room || null; };
+const dropped = new Map(); // ficheiros largados na página, à espera do elemento de imagem que os vai mostrar
 function imageEl(p, id) {
   const v = p.layouts?.items?.[id] || {};
   const el = document.createElement('figure'); el.className = 'cv-img';
@@ -117,7 +118,7 @@ function imageEl(p, id) {
   el.addEventListener('dragover', (e) => { e.preventDefault(); el.classList.add('over'); });
   el.addEventListener('dragleave', () => el.classList.remove('over'));
   el.addEventListener('drop', (e) => { e.preventDefault(); el.classList.remove('over'); up(e.dataTransfer.files[0]); });
-  draw();
+  if (dropped.has(id)) { const f = dropped.get(id); dropped.delete(id); el.innerHTML = '<div class="cv-img-empty"><span>A carregar a imagem…</span></div>'; up(f); } else draw();
   return el;
 }
 function tableEl(p, id) {
@@ -184,7 +185,27 @@ export function mountCanvas(main, p, { key, native, render, here, pageLabel = 'p
     if (gi.dataset.gi.startsWith('x:')) return; // páginas coladas: as ações ficam na página original
     acts = e.detail.list || []; drawTools();
   });
-  const addExtra = (ref, title, w) => { const x = { id: newId(), ref, title, w }; saveExtra([...extra(), x]); grid.add(extraItem(x)); };
+  const addExtra = (ref, title, w, at = null, opts) => { const x = { id: newId(), ref, title, w }; saveExtra([...extra(), x]); grid.add({ ...extraItem(x), ...(at || {}) }, opts); };
+
+  // largar imagens (do computador) em qualquer sítio da página: cada uma vira um elemento onde foi largada
+  const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+  let dragDepth = 0;
+  const cvEl = main.querySelector('.cv');
+  cvEl.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; dragDepth++; root.classList.add('cg-drop'); });
+  cvEl.addEventListener('dragleave', (e) => { if (!hasFiles(e)) return; dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) root.classList.remove('cg-drop'); });
+  cvEl.addEventListener('dragover', (e) => { if (!hasFiles(e) || e.defaultPrevented) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+  cvEl.addEventListener('drop', (e) => {
+    dragDepth = 0; root.classList.remove('cg-drop');
+    if (!hasFiles(e) || e.defaultPrevented) return; // largado em cima de uma imagem ou de um board: esse trata
+    e.preventDefault();
+    const files = [...e.dataTransfer.files].filter((f) => /^image\//.test(f.type));
+    if (!files.length) return toast('Só dá para largar imagens aqui.');
+    files.forEach((f, i) => {
+      const id = newId(); dropped.set(id, f);
+      const at = grid.cellAt(e.clientX + i * 24, e.clientY + i * 24, 4);
+      addExtra({ kind: 'image', id }, 'Imagem', 4, at, { scroll: false });
+    });
+  });
 
   // camadas: lista do que está por cima para o que está por baixo; passar o rato realça o elemento na página
   let lp = null;

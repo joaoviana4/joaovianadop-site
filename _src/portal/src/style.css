@@ -3184,3 +3184,5 @@ main > .cv-headblk + .ov { margin-top: 18px; }
 .cv-bpk:disabled { opacity: .55; cursor: default; }
 .cv-bpk svg { width: 15px; height: 15px; flex: none; }
 .cv-bpk small { margin-left: auto; }
+.cg.cg-drop { outline: 2px dashed var(--blue); outline-offset: 10px; border-radius: 14px; }
+.cg.cg-drop::after { content: 'Larga aqui para juntar à página'; position: sticky; top: 50%; display: block; width: max-content; margin: 0 auto; padding: 8px 14px; border-radius: 999px; background: var(--blue); color: #fff; font-size: 13px; z-index: 100001; pointer-events: none; }

@@ -99,13 +99,13 @@ function hook(fb, table, kind, values) {
           const ids = idsOf(fb);
           const hit = ids && ids.every((id) => { const r = cache.get(`${table}:${id}`); return r && cols.every((c) => c in r); });
           if (cols.length && hit) before = ids.map((id) => { const r = cache.get(`${table}:${id}`); const o = { id }; cols.forEach((c) => { o[c] = r[c]; }); return JSON.parse(JSON.stringify(o)); });
-          else if (cols.length) { const { data } = await sameFilters(fb, origFrom(table).select(['id', ...cols].join(','))).limit(MAX_ROWS + 1); before = data; }
+          else if (cols.length) { const { data } = await sameFilters(fb, origFrom(table).select(['id', ...cols].join(','))).limit(MAX_ROWS + 1).setHeader('x-portal-nowait', '1'); before = data; }
         } else if (kind === 'delete') {
-          const { data } = await sameFilters(fb, origFrom(table).select('*')).limit(MAX_ROWS + 1); before = data;
+          const { data } = await sameFilters(fb, origFrom(table).select('*')).limit(MAX_ROWS + 1).setHeader('x-portal-nowait', '1'); before = data;
         } else if (kind === 'upsert') {
           const ids = (Array.isArray(values) ? values : [values]).map((x) => x?.id).filter(Boolean);
           cols = [...new Set((Array.isArray(values) ? values : [values]).flatMap((x) => Object.keys(x || {})))].filter((k) => k !== 'updated_at' && k !== 'id');
-          if (ids.length && ids.length <= MAX_ROWS) { const { data } = await origFrom(table).select('*').in('id', ids); before = data; }
+          if (ids.length && ids.length <= MAX_ROWS) { const { data } = await origFrom(table).select('*').in('id', ids).setHeader('x-portal-nowait', '1'); before = data; }
         }
       } catch { before = null; }
       const res = await run((r) => r, (e) => ({ error: e }));

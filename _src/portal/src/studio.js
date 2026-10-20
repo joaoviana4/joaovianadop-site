@@ -1,5 +1,5 @@
 import './style.css';
-import { settleSaves, daysUntil, runLeave } from './lib.js';
+import { settleSaves, navStart, daysUntil, runLeave } from './lib.js';
 import { loadHidden, hideProject, unhideProject } from './lib.js';
 import { loadComms, commById, setCtx, CID, isPlatformAdmin, PERMS } from './lib.js';
 import { activityButton, bindActivity, activityPage } from './activity.js';
@@ -83,6 +83,12 @@ async function boot() {
   idle(() => { import('./board.js').catch(() => {}); });
 }
 window.addEventListener('hashchange', () => { if (!state.user) return; warmRoute(); route(); });
+// ficheiros largados num sítio que não os aceita: o browser não abre a imagem por cima do Studio (perdia-se a página)
+{
+  const files = (e) => [...(e.dataTransfer?.types || [])].includes('Files') && !e.target.closest?.('input[type="file"]');
+  document.addEventListener('dragover', (e) => { if (files(e) && !e.defaultPrevented) { e.preventDefault(); e.dataTransfer.dropEffect = 'none'; } });
+  document.addEventListener('drop', (e) => { if (files(e) && !e.defaultPrevented) { e.preventDefault(); toast('Larga as imagens dentro de uma página ou de um board.'); } });
+}
 boot();
 
 // logo da comunidade (guardado como imagem pequena em communities.logo_path) ou a cor com as iniciais
@@ -103,7 +109,7 @@ async function route() {
   routedAt = Date.now();
   // antes de mudar de página: envia o que ainda estava por guardar e espera que chegue à base de dados,
   // para a página seguinte (ou a mesma, ao voltar) já mostrar os dados novos
-  await settleSaves();
+  navStart(); // as gravações por fazer seguem já; a página nova não fica à espera delas
   teardown();
   setReadOnly(null);
   const h = location.hash.replace(/^#\/?/, '');
@@ -711,7 +717,7 @@ async function crewPanel(el, p, people, members, reload, crewP) {
 
 // ---------- projeto: página com ferramentas; os boards criam-se lá dentro ----------
 const projBase = (p) => (p.is_central ? `#/c/${p.community_id}/central` : `#/p/${p.id}`);
-const toolHref = (p, b) => `${projBase(p)}/${(b.kind || 'board') === 'board' ? 'b' : 'f'}/${b.id}`;
+const toolHref = (p, b) => `${projBase(p)}/${['board', 'wrd', 'mkt'].includes(b.kind || 'board') ? 'b' : 'f'}/${b.id}`; // boards (também os moodboards e os das páginas) abrem no board
 
 // projetos já abertos ficam em memória 60 s: mudar de página dentro do projeto não volta a pedir tudo.
 // Qualquer gravação nas tabelas do projeto apaga esta memória; a página do orçamento pede sempre de novo.
@@ -1016,6 +1022,7 @@ async function toolPage(projectId, toolId) {
   if (!p) return notFound();
   if (tool && TOOL_MOD[tool.kind]) TOOL_MOD[tool.kind]().catch(() => {});
   if (!tool) return go(projBase(p));
+  if (['board', 'wrd', 'mkt'].includes(tool.kind || 'board')) { history.replaceState(null, '', `${projBase(p)}/b/${tool.id}`); return boardView(projectId, tool.id); }
   if (tool.kind === 'board') return go(toolHref(p, tool));
   if (tool.kind === 'lightmap') return lightmapView(p, tool);
   const d = (p.departments || []).find((x) => x.id === tool.group_id);
@@ -1543,7 +1550,7 @@ async function boardView(projectId, boardId) {
     onUp: async () => {
       if (cur.parent_id) return go(`${base}/b/${cur.parent_id}`);
       // board de um item de marketing: volta para a página do item
-      if (cur.kind === 'wrd') { const { data: wb } = await sb.from('boards').select('data').eq('id', cur.id).maybeSingle(); if (wb?.data?.location_id) return go(`${base}/decors/${wb.data.location_id}`); return go(`${base}/figurino${wb?.data?.character_id ? '/' + wb.data.character_id : ''}`); }
+      if (cur.kind === 'wrd') { const { data: wb } = await sb.from('boards').select('data').eq('id', cur.id).maybeSingle(); if (wb?.data?.location_id) return go(`${base}/decors/${wb.data.location_id}`); if (wb?.data?.page) { const [, pg, sb2] = String(wb.data.page).split(':'); return go(!pg || pg === 'geral' ? base : `${base}/${pg}${sb2 ? '/' + sb2 : ''}`); } if (!wb?.data?.character_id && !wb?.data?.person_id) return go(base); return go(`${base}/figurino${wb?.data?.character_id ? '/' + wb.data.character_id : ''}`); }
       if (cur.kind === 'mkt') { const { data: mi } = await sb.from('marketing_items').select('id').eq('board_id', cur.id).maybeSingle(); if (mi) return go(`${base}/marketing/${mi.id}`); }
       go(base);
     },

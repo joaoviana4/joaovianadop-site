@@ -13,6 +13,7 @@ const SUPABASE_ANON = FLAVOR.anon;
 // seguir, vai à base de dados uma só vez. Dura 2 s depois de chegar; qualquer gravação limpa tudo, para nunca se
 // mostrar algo velho depois de mudar alguma coisa. Também deixa pedir de antemão (warm) o que a página vai precisar.
 const readCache = new Map();
+let navWait = null; // ver navStart
 const READ_TTL = 2000;
 // Última resposta boa de cada leitura (5 min). Quando o servidor demora (às vezes leva vários segundos a responder,
 // embora a base de dados responda em milissegundos), mostra-se logo o que já se tinha visto e, quando a resposta nova
@@ -72,6 +73,9 @@ function cachedFetch(input, init = {}) {
   if (!url.includes('/rest/v1/')) return fetch(input, init);
   if (method !== 'GET' && method !== 'HEAD') { clearReadCache(); return fetch(input, init); }
   const h = new Headers(init.headers || (typeof input === 'string' ? undefined : input.headers));
+  // leituras feitas por dentro de uma gravação (valores antigos para o desfazer) não contam como leituras da página
+  const nowait = h.has('x-portal-nowait'); if (nowait) { h.delete('x-portal-nowait'); init = { ...init, headers: h }; }
+  const w = nowait ? null : navWait;
   const key = [method, url, h.get('authorization'), h.get('accept'), h.get('accept-profile'), h.get('prefer'), h.get('range')].join('|');
   const hit = readCache.get(key);
   // pedido igual já a caminho (há menos de 8 s) ou acabado de chegar: serve-se o mesmo
@@ -86,6 +90,9 @@ function cachedFetch(input, init = {}) {
       if (prev?.served && prev.body !== body) notifyStale();
       lastGood.set(key, { body, status: r.status, ct: r.headers.get('content-type'), cr: r.headers.get('content-range'), at: Date.now() });
       if (lastGood.size > 400) lastGood.delete(lastGood.keys().next().value);
+      // lida logo a seguir a mudar de página, com gravações ainda a caminho: quando chegarem, lê-se outra vez e,
+      // se mudou alguma coisa, a página volta a desenhar-se sozinha (portal-stale)
+      if (w) w.then(() => readFetch(input, init)).then((r2) => (r2.ok ? r2.text() : null)).then((b2) => { if (b2 != null && b2 !== body) { clearReadCache(); notifyStale(); } }).catch(() => {});
     }).catch(() => {});
     return r;
   }, (err) => { readCache.delete(key); throw err; });
@@ -127,6 +134,14 @@ export function saveLater(fn, ms = 600) {
   const f = (...a) => { args = a; clearTimeout(t); pendingSaves.add(entry); t = setTimeout(entry.flush, ms); };
   f.now = (...a) => { if (a.length) args = a; clearTimeout(t); t = -1; pendingSaves.add(entry); return entry.flush(); };
   return f;
+}
+// Mudar de página não espera pelas gravações: a página nova aparece logo. As leituras feitas enquanto ainda havia
+// gravações a caminho são repetidas quando elas chegam (ver cachedFetch), para nada ficar com dados de antes.
+export function flushSaves() { [...pendingSaves].forEach((e) => e.flush()); }
+export function navStart() {
+  flushSaves();
+  const w = writesPending() ? waitWrites(4000) : null; navWait = w;
+  if (w) w.finally(() => { if (navWait === w) navWait = null; });
 }
 export async function settleSaves(ms = 6000) {
   const out = [...pendingSaves].map((e) => e.flush());

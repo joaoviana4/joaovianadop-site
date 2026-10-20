@@ -1,5 +1,5 @@
 import './style.css';
-import { settleSaves, daysUntil, runLeave } from './lib.js';
+import { settleSaves, navStart, daysUntil, runLeave } from './lib.js';
 import { loadHidden, hideProject, unhideProject } from './lib.js';
 import { IS_STUDIO, sb, BUCKET, state, esc, $, loadProfile, isStaff, isAdmin, toast, modal, confirmBox, ICON, LOGO, KINDS, ROLES, phaseOf, greeting, initials, signedUrls, uploadImage, callFn, authPw, MIN_PW, fmtDate, dueInfo, todayISO, registerSW, isInstalled, installApp, BASE, PROJECT_COLS, hasPerm, leadsOf } from './lib.js';
 import { renderAuth } from './auth.js';
@@ -98,7 +98,7 @@ async function route() {
   routedAt = Date.now();
   // antes de mudar de página: envia o que ainda estava por guardar e espera que chegue à base de dados,
   // para a página seguinte (ou a mesma, ao voltar) já mostrar os dados novos
-  await settleSaves();
+  navStart(); // as gravações por fazer seguem já; a página nova não fica à espera delas
   state.ctx = { project: null };
   teardown();
   setReadOnly(null);
