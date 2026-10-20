@@ -2,16 +2,15 @@ import { sb, esc, toast, ICON, saveLater, onLeave } from './lib.js';
 
 // Página livre (Studio), como um board do Milanote: cada elemento fica exatamente onde é largado e pode ficar por
 // cima de outro. Nada se mexe sozinho. O que fica por cima decide-se nas camadas (botões do elemento ou "Camadas"
-// na barra da direita). Posições alinhadas a 12 colunas e a linhas de 24 px (Alt ao arrastar: passo fino de 8 px).
+// na barra da direita). Ao arrastar, cola às arestas e ao centro dos outros elementos, com guias (Alt: sem encaixe).
 // Enquanto ninguém mexeu na página, ela arruma-se sozinha (cada bloco por baixo do anterior); ao primeiro arrastar
 // fica tudo fixo. "Arrumar" (barra da direita) volta a encostar tudo de uma vez.
 // Altura: automática (segue o conteúdo) até alguém a esticar; duplo clique na pega do canto volta a automática.
 // Guardado em projects.layouts[key] = { grid: { id: { x, y, w, h, z } }, hidden: [ids], titles, extra } (igual para a equipa).
-// Unidades: x e w em colunas; y e h em linhas de 8 px (h inclui o espaço de 18 px por baixo).
+// Unidades: x e w em colunas (podem ter casas decimais); y e h em linhas de 8 px (h inclui o espaço de 18 px por baixo).
 
 export const COLS = 12;
 const ROW = 8; // altura de uma linha (px)
-const SNAP = 3; // ao arrastar, encaixa de 3 em 3 linhas (24 px)
 const GAP = 18; // espaço entre colunas (px)
 const MOBILE = 900;
 
@@ -140,6 +139,37 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
     save(); onChange?.();
   }
 
+  // ---------- guias de alinhamento (como no Milanote) ----------
+  // Ao arrastar ou redimensionar, as arestas e o centro do elemento "colam" às arestas e ao centro dos outros
+  // (e ao espaço normal de 18 px entre eles). Aparece uma linha fina onde alinha. Alt: sem encaixe.
+  const SN = 7; // distância (px) a que cola
+  function targets(it) {
+    const cw = colW(); const X = [0, root.clientWidth], Y = [0];
+    vis().forEach((o) => {
+      if (o === it) return;
+      const L = o.x * (cw + GAP), T = o.y * ROW, W = o.g.offsetWidth, H = o.g.offsetHeight;
+      X.push(L, L + W, L + W / 2, L + W + GAP, L - GAP);
+      Y.push(T, T + H, T + H / 2, T + H + GAP, T - GAP);
+    });
+    return { X, Y };
+  }
+  // devolve a correção (px) para a aresta mais perto de um alvo, e o alvo
+  function snapTo(edges, list) {
+    let best = null;
+    edges.forEach((e) => list.forEach((t) => { const d = t - e; if (Math.abs(d) <= SN && (!best || Math.abs(d) < Math.abs(best.d))) best = { d, t }; }));
+    return best;
+  }
+  const guides = { v: null, h: null };
+  function showGuides(gx, gy) {
+    ['v', 'h'].forEach((k) => {
+      const at = k === 'v' ? gx : gy;
+      if (at == null) { guides[k]?.remove(); guides[k] = null; return; }
+      if (!guides[k]) { guides[k] = document.createElement('div'); guides[k].className = `cg-guide ${k}`; root.append(guides[k]); }
+      guides[k].style[k === 'v' ? 'left' : 'top'] = `${Math.round(at)}px`;
+    });
+  }
+  const r3 = (n) => Math.round(n * 1000) / 1000;
+
   // ---------- arrastar ----------
   let busy = null;
   const autoScroll = (y) => { if (y < 70) window.scrollBy(0, -14); else if (y > window.innerHeight - 50) window.scrollBy(0, 14); };
@@ -149,25 +179,31 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
     if (!free) { layout(); freeze(); }
     const cw = colW(); const R0 = root.getBoundingClientRect();
     const sx = e.clientX, sy = e.clientY, left0 = it.x * (cw + GAP), top0 = it.y * ROW;
-    let nx = it.x, ny = it.y, ev = e, rf = 0;
+    const W = it.g.offsetWidth, H = it.g.offsetHeight; const T = targets(it);
+    let nl = left0, nt = top0, ev = e, rf = 0;
     busy = it; root.classList.add('cg-show'); it.g.classList.add('dragging'); it.g.style.zIndex = '100000';
     const step = () => {
       rf = 0;
       const R = root.getBoundingClientRect();
-      const dx = ev.clientX - sx, dy = ev.clientY - sy + (R0.top - R.top);
-      nx = Math.max(0, Math.min(COLS - it.w, Math.round((left0 + dx) / (cw + GAP))));
-      ny = Math.max(0, ev.altKey ? Math.round((top0 + dy) / ROW) : Math.round((top0 + dy) / (ROW * SNAP)) * SNAP);
-      // só o elemento arrastado se mexe (transform: rápido), sempre em cima da grelha
-      it.g.style.transform = `translate(${nx * (cw + GAP) - left0}px, ${ny * ROW - top0}px)`;
-      if (ny * ROW + it.g.offsetHeight + 48 > root.offsetHeight) fitHeight(ny * ROW + it.g.offsetHeight);
+      nl = Math.max(0, Math.min(root.clientWidth - W, left0 + ev.clientX - sx));
+      nt = Math.max(0, top0 + ev.clientY - sy + (R0.top - R.top));
+      let gx = null, gy = null;
+      if (!ev.altKey) {
+        const a = snapTo([nl, nl + W, nl + W / 2], T.X); if (a) { nl += a.d; gx = a.t; }
+        const b = snapTo([nt, nt + H, nt + H / 2], T.Y); if (b) { nt += b.d; gy = b.t; }
+      }
+      showGuides(gx, gy);
+      // só o elemento arrastado se mexe (transform: rápido)
+      it.g.style.transform = `translate(${nl - left0}px, ${nt - top0}px)`;
+      if (nt + H + 48 > root.offsetHeight) fitHeight(nt + H);
       autoScroll(ev.clientY);
     };
     const move = (m) => { ev = m; if (!rf) rf = requestAnimationFrame(step); };
     const up = () => {
       window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
       cancelAnimationFrame(rf); if (ev !== e) step();
-      it.x = nx; it.y = ny; it.g.style.transform = '';
-      it.g.classList.remove('dragging'); root.classList.remove('cg-show'); busy = null;
+      it.x = r3(nl / (cw + GAP)); it.y = r3(nt / ROW); it.g.style.transform = '';
+      it.g.classList.remove('dragging'); root.classList.remove('cg-show'); showGuides(null, null); busy = null;
       place(it); fitHeight(); save(); onChange?.();
     };
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
@@ -179,20 +215,28 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
     e.preventDefault(); e.stopPropagation();
     if (!free) { layout(); freeze(); }
     const r = it.g.getBoundingClientRect(); const sx = e.clientX, sy = e.clientY; const cw = colW();
+    const L = it.x * (cw + GAP), Tp = it.y * ROW; const T = targets(it);
     busy = it; it.g.classList.add('resizing'); root.classList.add('cg-show');
     let ev = e, rf = 0;
     const step = () => {
       rf = 0;
-      it.w = Math.max(2, Math.min(COLS - it.x, Math.round((r.width + ev.clientX - sx + GAP) / (cw + GAP))));
-      it.h = Math.max(6, Math.round((r.height + ev.clientY - sy + GAP) / (ROW * SNAP)) * SNAP);
-      place(it); if (it.y * ROW + it.h * ROW + 48 > root.offsetHeight) fitHeight(it.y * ROW + it.h * ROW);
+      let wpx = Math.max(160, Math.min(root.clientWidth - L, r.width + ev.clientX - sx));
+      let hpx = Math.max(48, r.height + ev.clientY - sy);
+      let gx = null, gy = null;
+      if (!ev.altKey) {
+        const a = snapTo([L + wpx], T.X); if (a) { wpx += a.d; gx = a.t; }
+        const b = snapTo([Tp + hpx], T.Y); if (b) { hpx += b.d; gy = b.t; }
+      }
+      showGuides(gx, gy);
+      it.w = r3((wpx + GAP) / (cw + GAP)); it.h = r3((hpx + GAP) / ROW);
+      place(it); if (Tp + hpx + 48 > root.offsetHeight) fitHeight(Tp + hpx);
       autoScroll(ev.clientY);
     };
     const move = (m) => { ev = m; if (!rf) rf = requestAnimationFrame(step); };
     const up = () => {
       window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
       cancelAnimationFrame(rf); if (ev !== e) step();
-      it.g.classList.remove('resizing'); root.classList.remove('cg-show'); busy = null;
+      it.g.classList.remove('resizing'); root.classList.remove('cg-show'); showGuides(null, null); busy = null;
       fitHeight(); save(); onChange?.();
     };
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
