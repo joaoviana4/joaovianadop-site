@@ -1,12 +1,15 @@
 import { sb, esc, toast, ICON, saveLater, onLeave } from './lib.js';
 
 // Grelha com encaixe (Studio): cada página é feita de elementos que se arrastam e redimensionam numa grelha
-// de 12 colunas. Os elementos sobem sozinhos para ocupar os espaços vazios (como num dashboard).
+// de 12 colunas. Encaixe na grelha: cada elemento fica onde é largado (alinhado às colunas e às linhas de 24 px).
+// Cada um guarda a posição que lhe deram (py); se o de cima crescer, desce o necessário e, quando o de cima volta a
+// encolher, regressa à sua posição. "Arrumar" (barra da direita) sobe tudo de uma vez para tirar os espaços.
 // Altura: automática (segue o conteúdo) até alguém a esticar; duplo clique na pega do canto volta a automática.
 // Guardado em projects.layouts[key] = { grid: { id: { x, y, w, h } }, hidden: [ids], extra: [...] } (igual para a equipa).
 
 export const COLS = 12;
 const ROW = 8; // altura de uma linha da grelha (px)
+const SNAP = 3; // ao arrastar, a posição vertical encaixa de 3 em 3 linhas (24 px)
 const GAP = 18; // espaço entre elementos (px)
 const MOBILE = 900;
 
@@ -49,7 +52,7 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
   root.style.setProperty('--cg-row', `${ROW}px`); root.style.setProperty('--cg-gap', `${GAP}px`);
 
   const save = saveLater(async () => {
-    const grid = Object.fromEntries(list.map((it) => [it.id, { x: it.x, y: it.y, w: it.w, h: it.h }]));
+    const grid = Object.fromEntries(list.map((it) => [it.id, { x: it.x, y: it.py ?? it.y, w: it.w, h: it.h }]));
     const layouts = { ...(project.layouts || {}), [key]: { ...(project.layouts?.[key] || {}), grid, hidden: [...hidden] } };
     project.layouts = layouts;
     const { error } = await sb.from('projects').update({ layouts }).eq('id', project.id);
@@ -87,14 +90,15 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
     return Math.max(4, Math.ceil((c.scrollHeight + GAP) / ROW));
   };
 
-  // arruma: o elemento "preso" (o que se está a arrastar) fica onde está; os outros sobem o mais possível
-  function compact(pinned) {
+  // resolve sobreposições: o elemento "preso" (o que se está a arrastar) fica onde está; os outros ficam onde estão
+  // e só descem o necessário para não ficarem por baixo de outro. gravity: sobem o mais possível (botão "Arrumar").
+  function compact(pinned, gravity = false) {
     const vis = list.filter((it) => !hidden.has(it.id));
     vis.forEach((it) => { it.span = spanOf(it); it.w = Math.max(1, Math.min(COLS, it.w)); it.x = Math.max(0, Math.min(COLS - it.w, it.x)); });
-    const order = [...vis].sort((a, b) => (a === pinned ? -1 : b === pinned ? 1 : 0) || a.y - b.y || a.x - b.x);
+    const order = [...vis].sort((a, b) => (a === pinned ? -1 : b === pinned ? 1 : 0) || a.py - b.py || a.x - b.x);
     const placed = [];
     order.forEach((it) => {
-      if (it !== pinned) { it.y = Math.max(0, Math.min(it.y, 100000)); let y = 0; while (placed.some((o) => overlaps({ ...it, y }, o))) y++; it.y = y; }
+      if (it !== pinned) { let y = gravity ? 0 : Math.max(0, Math.min(it.py, 100000)); while (placed.some((o) => overlaps({ ...it, y }, o))) y++; it.y = y; if (gravity) it.py = y; }
       else it.y = Math.max(0, it.y);
       placed.push(it);
     });
@@ -118,22 +122,24 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
     e.preventDefault();
     const r = it.g.getBoundingClientRect(), R = root.getBoundingClientRect();
     drag = { it, dx: e.clientX - r.left, dy: e.clientY - r.top, R, ph: document.createElement('div') };
-    drag.ph.className = 'gi-ph'; root.append(drag.ph);
+    drag.ph.className = 'gi-ph'; root.append(drag.ph); root.classList.add('cg-show');
     it.g.classList.add('dragging');
     Object.assign(it.g.style, { position: 'fixed', left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, zIndex: 60 });
     const move = (ev) => {
       const R2 = root.getBoundingClientRect(); const cw = colW();
-      it.g.style.left = `${ev.clientX - drag.dx}px`; it.g.style.top = `${ev.clientY - drag.dy}px`;
       const lx = ev.clientX - drag.dx - R2.left, ly = ev.clientY - drag.dy - R2.top;
-      it.x = Math.max(0, Math.min(COLS - it.w, Math.round(lx / (cw + GAP)))); it.y = Math.max(0, Math.round(ly / ROW));
-      compact(it); apply(it);
+      it.x = Math.max(0, Math.min(COLS - it.w, Math.round(lx / (cw + GAP)))); it.y = Math.max(0, Math.round(ly / (ROW * SNAP)) * SNAP);
+      // o elemento salta de célula em célula (encaixe), em vez de seguir o rato solto
+      it.g.style.left = `${R2.left + it.x * (cw + GAP)}px`; it.g.style.top = `${R2.top + it.y * ROW}px`;
+      compact(it); apply(it); // os outros partem sempre da posição que tinham (py)
       drag.ph.style.gridColumn = `${it.x + 1} / span ${it.w}`; drag.ph.style.gridRow = `${it.y + 1} / span ${it.span}`;
       autoScroll(ev.clientY);
     };
     const up = () => {
       window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
       it.g.classList.remove('dragging'); ['position', 'left', 'top', 'width', 'zIndex'].forEach((k) => { it.g.style[k] = ''; });
-      drag.ph.remove(); drag = null; layout(); save(); onChange?.();
+      // fica tudo como se vê agora: o que foi largado no sítio onde caiu, os outros onde estão
+      list.forEach((o) => { o.py = o.y; }); drag.ph.remove(); drag = null; root.classList.remove('cg-show'); layout(); save(); onChange?.();
     };
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
   }
@@ -144,15 +150,15 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
     if (mobile() || e.button !== 0) return;
     e.preventDefault(); e.stopPropagation();
     const r = it.g.getBoundingClientRect(); const sx = e.clientX, sy = e.clientY;
-    it.g.classList.add('resizing'); drag = { it };
+    it.g.classList.add('resizing'); drag = { it }; root.classList.add('cg-show');
     const move = (ev) => {
       const cw = colW();
       it.w = Math.max(2, Math.min(COLS - it.x, Math.round((r.width + ev.clientX - sx + GAP) / (cw + GAP))));
-      it.h = Math.max(6, Math.round((r.height + ev.clientY - sy + GAP) / ROW));
+      it.h = Math.max(6, Math.round((r.height + ev.clientY - sy + GAP) / (ROW * SNAP)) * SNAP);
       compact(it); apply();
       autoScroll(ev.clientY);
     };
-    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); it.g.classList.remove('resizing'); drag = null; layout(); save(); onChange?.(); };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); it.g.classList.remove('resizing'); root.classList.remove('cg-show'); list.forEach((o) => { o.py = o.y; }); drag = null; layout(); save(); onChange?.(); };
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
   }
 
@@ -165,7 +171,7 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
   function add(it, { at = 'end' } = {}) {
     const p0 = pos[it.id];
     const bottom = list.filter((x) => !hidden.has(x.id)).reduce((m, x) => Math.max(m, x.y + (x.span || 0)), 0);
-    const obj = { ...it, x: p0?.x ?? it.x ?? 0, y: p0?.y ?? (at === 'end' ? bottom : 0), w: p0?.w ?? it.w ?? COLS, h: p0?.h ?? it.h ?? 0 };
+    const obj = { ...it, x: p0?.x ?? it.x ?? 0, y: p0?.y ?? (at === 'end' ? bottom : 0), w: p0?.w ?? it.w ?? COLS, h: p0?.h ?? it.h ?? 0 }; obj.py = obj.y;
     list.push(obj); root.append(wrap(obj));
     return obj;
   }
@@ -183,5 +189,7 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
     has: (id) => list.some((x) => x.id === id),
     items: () => list,
     layout,
+    // "Arrumar": sobe tudo para ocupar os espaços vazios (uma vez)
+    pack() { if (mobile()) return; compact(null, true); apply(); save(); onChange?.(); },
   };
 }

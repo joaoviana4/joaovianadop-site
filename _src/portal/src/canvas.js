@@ -9,6 +9,7 @@ import { mountGrid, COLS } from './grid.js';
 // Tudo o que se cola fica em layouts[key].extra = [{ id, ref, title }]; ref = { kind: 'page'|'block'|'tool'|'note', ... }.
 
 const CLIP = 'portal-clip2';
+const PACK = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="16" height="7" rx="1"/></svg>';
 const UNDO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>';
 const REDO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>';
 export const newId = () => Math.random().toString(36).slice(2, 10);
@@ -159,6 +160,7 @@ export function mountCanvas(main, p, { key, native, render, here, pageLabel = 'p
       <button type="button" data-note title="Juntar uma nota a esta ${esc(pageLabel)}">${ICON.note}<span>Nota</span></button>
       <button type="button" data-gen="image" title="Juntar uma imagem a esta ${esc(pageLabel)}">${ICON.image}<span>Imagem</span></button>
       <button type="button" data-gen="table" title="Juntar uma tabela a esta ${esc(pageLabel)}">${ICON.table || ICON.list}<span>Tabela</span></button>
+      <button type="button" data-pack title="Arrumar: sobe todos os elementos para ocupar os espaços vazios">${PACK}<span>Arrumar</span></button>
       <button type="button" class="${clip ? '' : 'off'}" data-paste ${clip ? '' : 'disabled'} title="${clip ? `Colar «${esc(clip.title)}» aqui (Ctrl+V)` : 'Para colar: copia um elemento noutra página (botão de copiar no canto dele)'}">${ICON.copy}<span>Colar</span></button>
       ${gone.length ? `<hr>${gone.map((n) => `<button type="button" data-own="${esc(n.id)}" title="Voltar a pôr ${esc(n.label)} na página">${n.icon || ICON.board}<span>${esc(n.label)}</span></button>`).join('')}` : ''}
       <hr><div class="cv-ur"><button type="button" data-undo title="Desfazer (Ctrl+Z)" aria-label="Desfazer">${UNDO}</button><button type="button" data-redo title="Refazer (Ctrl+Shift+Z)" aria-label="Refazer">${REDO}</button></div>`;
@@ -171,6 +173,7 @@ export function mountCanvas(main, p, { key, native, render, here, pageLabel = 'p
     tools.querySelector('[data-note]').addEventListener('click', () => addExtra({ kind: 'note', id: newId() }, 'Nota', 6));
     tools.querySelectorAll('[data-gen]').forEach((b) => b.addEventListener('click', () => { const k = b.dataset.gen; addExtra({ kind: k, id: newId() }, GENERAL[k][0], k === 'text' ? 12 : 6); }));
     tools.querySelector('[data-paste]').addEventListener('click', () => paste());
+    tools.querySelector('[data-pack]').addEventListener('click', () => grid.pack());
   }
   const paste = () => {
     const c = readClip(p); if (!c) return false;

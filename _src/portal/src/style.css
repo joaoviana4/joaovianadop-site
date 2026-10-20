@@ -3042,3 +3042,12 @@ body:has(.pv-zoom) .mp { bottom: 70px; }
 .gdb-src button .count { color: var(--muted); font-size: 12px; margin-left: 4px; }
 .gdb-src button[aria-checked="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
 .gdb-src button[aria-checked="true"] .count { color: inherit; opacity: .7; }
+
+/* páginas: a grelha aparece enquanto se arrasta ou redimensiona (12 colunas, linhas de 24 px) */
+.cg.cg-show { --cg-colw: calc((100% - 11 * var(--cg-gap, 18px)) / 12); }
+.cg.cg-show::before { content: ''; position: absolute; inset: 0 0 -240px; pointer-events: none; z-index: 0; border-radius: 10px;
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 23px, rgba(127, 127, 127, .16) 23px 24px),
+    repeating-linear-gradient(to right, rgba(0, 113, 227, .06) 0 var(--cg-colw), transparent var(--cg-colw) calc(var(--cg-colw) + var(--cg-gap, 18px))); }
+.cg.cg-show > .gi { z-index: 1; }
+.gi.dragging { transition: left .06s ease-out, top .06s ease-out; }
