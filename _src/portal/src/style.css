@@ -2998,3 +2998,12 @@ body:has(.pv-zoom) .mp { bottom: 70px; }
 .bst-o.bs-aprovado[aria-checked="true"] { background: var(--ok); }
 .bst-o.bs-rejeitado[aria-checked="true"] { background: var(--late); }
 .appr.bs-por_aprovar { color: var(--soon); } .appr.bs-rejeitado { color: var(--late); }
+
+/* tarefas: o histórico é um botão no topo da página e abre num menu */
+.tc-titlebar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.tc-titlebar .h1 { margin-bottom: 0; }
+.tc-titlebar + .tc { margin-top: 16px; }
+.tc-histbtn em { font-style: normal; font-size: 12px; min-width: 20px; padding: 1px 6px; border-radius: 999px; background: var(--line2); color: var(--text); text-align: center; }
+.tc-hpop { width: min(520px, calc(100vw - 24px)); }
+.tc-hpop .tc-hlist { display: grid; gap: 4px; }
+.tc-hpop input[type=search] { width: 100%; }

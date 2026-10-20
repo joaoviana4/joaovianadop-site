@@ -293,7 +293,13 @@ export function callsheetTool(main, p, tool, { edit = false } = {}) {
   const key = `bg-cs-day:${tool.id}`;
   let cur = 0; try { cur = Math.min(all.sheets.length - 1, Math.max(0, Number(localStorage.getItem(key)) || 0)); } catch { /* nada */ }
   let d = all.sheets[cur];
-  const save = debounce(async () => { all.sheets[cur] = d; const { error } = await sb.from('boards').update({ data: all, updated_at: new Date().toISOString() }).eq('id', tool.id); if (error) toast('Não foi possível guardar: ' + error.message); else tool.data = all; });
+  // o que a folha preenche sozinha ao abrir (morada do décor, hospital, tempo) grava-se marcado como automático:
+  // não aparece na Atividade. Se pelo meio houver uma alteração à mão, conta.
+  let manual = false;
+  const saveNow = debounce(async () => { all.sheets[cur] = d; const auto = !manual; manual = false; let q = sb.from('boards').update({ data: all, updated_at: new Date().toISOString() }).eq('id', tool.id); if (auto) q = q.setHeader('x-client-info', 'portal-auto'); const { error } = await q; if (error) toast('Não foi possível guardar: ' + error.message); else tool.data = all; });
+  const save = (...a) => { manual = true; return saveNow(...a); };
+  save.now = (...a) => { manual = true; return saveNow.now(...a); };
+  const saveAuto = () => saveNow();
   const go = (i) => { cur = Math.max(0, Math.min(all.sheets.length - 1, i)); d = all.sheets[cur]; try { localStorage.setItem(key, cur); } catch { /* nada */ } draw(); };
   // "DIA x DE y" acompanha os dias quando se junta ou tira um dia
   const renumber = () => { const n = all.sheets.length; all.sheets.forEach((sh, i) => { sh.day = String(i + 1); sh.days = String(n); }); };
@@ -329,10 +335,10 @@ export function callsheetTool(main, p, tool, { edit = false } = {}) {
       const l = (locs || []).find((x) => sh.place && n(x.name) === n(sh.place)); const a = placeAddr(p, l);
       if (l && a && a !== (sh.address || '').trim()) { sh.address = a; if (sh.hospital) sh.hospital = { name: '', url: '' }; changed = true; }
     });
-    if (changed) { save(); draw(); toast('Morada atualizada a partir do décor.'); }
+    if (changed) { saveAuto(); draw(); toast('Morada atualizada a partir do décor.'); }
   })();
   const geoTried = new Set();
-  const geoFill = async ({ hosp = false, wx = false, loud = false }) => {
+  const geoFill = async ({ hosp = false, wx = false, loud = false, auto = false }) => {
     if (!d.place && !d.address) { if (loud) toast(`Falta ${d.date ? 'o local ou a morada' : 'o local ou a morada, e a data do dia'} para procurar o hospital, o sol e o tempo.`, 5000); return; }
     if (loud) toast('A procurar…', 6000);
     try {
@@ -359,7 +365,7 @@ export function callsheetTool(main, p, tool, { edit = false } = {}) {
         if (w.min != null) { put('weather.min', `${w.min}°`, wx); put('weather.max', `${w.max}°`, wx); }
         put('more.sunrise', w.sunrise, wx); put('more.sunset', w.sunset, wx);
       }
-      if (changed && sheet === d) { save(); draw(); }
+      if (changed && sheet === d) { (auto ? saveAuto : save)(); draw(); }
       if (loud) toast(!sheet.date ? `${changed ? 'Hospital preenchido. ' : ''}Para o sol e o tempo falta a data do dia.` : changed ? 'Folha preenchida com o hospital, o sol e o tempo. Confirma antes de enviar.' : 'Já estava tudo preenchido.', 5000);
       void pinUrl;
     } catch (e) { if (loud) toast(e.message || 'Não foi possível procurar agora.'); }
@@ -412,7 +418,7 @@ export function callsheetTool(main, p, tool, { edit = false } = {}) {
     main.querySelector('[data-geofill]')?.addEventListener('click', () => geoFill({ hosp: true, wx: true, loud: true }));
     ['place', 'address'].forEach((k) => main.querySelector(`[data-p="${k}"]`)?.addEventListener('change', () => geoFill({ hosp: true })));
     main.querySelector('[data-p="date"]')?.addEventListener('change', () => geoFill({ wx: true }));
-    { const k = `${cur}|${d.place}|${d.address}|${d.date}`; if (!geoTried.has(k) && (d.place || d.address) && (!d.hospital?.name || (d.date && !d.weather?.text))) { geoTried.add(k); geoFill({}); } }
+    { const k = `${cur}|${d.place}|${d.address}|${d.date}`; if (!geoTried.has(k) && (d.place || d.address) && (!d.hospital?.name || (d.date && !d.weather?.text))) { geoTried.add(k); geoFill({ auto: true }); } }
     on('[data-addt]', () => d.times.push({ id: uid(), label: '', value: '' }));
     on('[data-addd]', () => d.depts.push({ id: uid(), name: '', time: '' }));
     on('[data-addcast]', () => d.cast.push({ id: uid(), name: '', role: '', scene: '', call: '', out: '', obs: '' }));

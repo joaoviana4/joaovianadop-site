@@ -54,7 +54,7 @@ async function syncKids(p, D) {
   const missing = D.kids.filter((k) => !linked.has(k.id));
   if (!missing.length) return false;
   const rows = missing.map((k) => ({ project_id: p.id, title: k.name, kind: MK[k.kind] ? k.kind : 'videoclipe', date: k.ends_on || null, status: k.status === 'done' ? 'publicado' : 'producao', linked_project_id: k.id }));
-  const { error } = await sb.from('marketing_items').insert(rows);
+  const { error } = await sb.from('marketing_items').insert(rows).setHeader('x-client-info', 'portal-auto'); // automático: não vai para a Atividade
   return !error;
 }
 

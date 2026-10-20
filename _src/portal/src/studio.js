@@ -424,7 +424,7 @@ function coverColor(id) {
   return c[h % c.length];
 }
 
-// novo projeto, por passos: 1) nome e tipo; 2) fase e departamentos. O resto (artista, datas, líderes, capa,
+// novo projeto, por passos: 1) nome e categoria; 2) fase e departamentos. O resto (artista, datas, líderes, capa,
 // orçamento) junta-se depois, dentro do projeto (Detalhes).
 const BASE_DEPTS = [{ id: 'criativo', name: 'Criativo', color: '#7C5CFF' }, { id: 'producao', name: 'Produção', color: '#F08A24' }, { id: 'imagem', name: 'Imagem', color: '#2FB67C' }, { id: 'pos', name: 'Pós-produção', color: '#E3B341' }, { id: 'digital', name: 'Digital', color: '#2AA8C9' }, { id: 'cliente', name: 'Cliente', color: '#E5579B' }];
 const DEPT_COLORS = ['#7C5CFF', '#F08A24', '#2FB67C', '#E3B341', '#2AA8C9', '#E5579B', '#1F8A8A', '#E5484D', '#8A8A99'];
@@ -441,12 +441,12 @@ async function newProject(opts = {}) {
   const deptsFor = (k) => JSON.parse(JSON.stringify(k === 'ficcao' ? FICTION_DEPTS : BASE_DEPTS)).map((d) => ({ ...d, on: true }));
   const draw = () => {
     const where = !parent ? `<p class="muted small">${commId ? `Na comunidade <b>${esc(commById(commId)?.name || '')}</b>: a equipa da comunidade tem acesso.` : 'Projeto pessoal: só tu e quem convidares.'}</p>` : '';
-    const steps = st.kind === 'album' ? '' : `<ol class="np-steps"><li class="${st.step === 1 ? 'on' : 'done'}"><b>1</b>Nome e tipo</li><li class="${st.step === 2 ? 'on' : ''}"><b>2</b>Fase e departamentos</li></ol>`;
+    const steps = '';
     if (st.step === 1) {
       box.innerHTML = `<h2>${parent ? `Novo projeto em ${esc(parent.name)}` : 'Novo projeto'}</h2>${where}${steps}
         <form class="stack" data-s1>
           <div class="field"><label for="pn">Nome do projeto</label><input id="pn" name="name" value="${esc(st.name)}" required autocomplete="off"></div>
-          <fieldset class="np-kinds"><legend>Tipo</legend>${kinds.map(([k, v]) => `<label class="np-k"><input type="radio" name="kind" value="${k}" ${st.kind === k ? 'checked' : ''}><span>${esc(v)}</span></label>`).join('')}</fieldset>
+          <fieldset class="np-kinds"><legend>Categoria</legend>${kinds.map(([k, v]) => `<label class="np-k"><input type="radio" name="kind" value="${k}" ${st.kind === k ? 'checked' : ''}><span>${esc(v)}</span></label>`).join('')}</fieldset>
           ${(folders || []).length ? `<div class="field" data-parentf ${st.kind === 'album' ? 'hidden' : ''}><label for="pp">Dentro de</label><select id="pp" name="parent_id"><option value="">— nenhuma pasta —</option>${folders.map((f) => `<option value="${f.id}" ${st.parent_id === f.id ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select></div>` : ''}
           <p class="muted small" data-albhint ${st.kind === 'album' ? '' : 'hidden'}>Um álbum é uma pasta: junta os videoclipes e lançamentos do mesmo artista.</p>
           <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">${st.kind === 'album' ? 'Criar álbum' : 'Seguinte'}</button></div>
@@ -1195,9 +1195,9 @@ async function renderPage(main, p, page, sub, { plain = false } = {}) {
   if (page === 'aderecos' && !p.is_central) return (await lazy.props()).propsPage(main, p, sub, projBase(p), onCleanup);
   if (page === 'figurino' && !p.is_central) return (await lazy.wardrobe()).wardrobePage(main, p, sub, projBase(p), onCleanup);
   if (page === 'tratamento' && !p.is_central) return (await import('./treatment.js')).treatmentPage(main, p, projBase(p), onCleanup);
-  main.innerHTML = `<h1 class="h1 pm-title">${esc(titles[page] || '')}</h1><div class="panel" data-body></div>`;
+  main.innerHTML = page === 'tarefas' ? `<div class="tc-titlebar"><h1 class="h1 pm-title">${esc(titles[page] || '')}</h1><div data-tcbar></div></div><div class="tc" data-body></div>` : `<h1 class="h1 pm-title">${esc(titles[page] || '')}</h1><div class="panel" data-body></div>`;
   const body = main.querySelector('[data-body]');
-  if (page === 'tarefas') { body.classList.remove('panel'); body.classList.add('tc'); const t = mountTaskCenter(body, { projectId: p.id }); onCleanup(() => t.destroy()); }
+  if (page === 'tarefas') { const t = mountTaskCenter(body, { projectId: p.id, bar: main.querySelector('[data-tcbar]') }); onCleanup(() => t.destroy()); }
   if (page === 'equipa') projectTeam(body, p);
   if (page === 'detalhes') {
     if (!p.is_central && p.kind !== 'album') { const fq = sb.from('projects').select('id, name').eq('kind', 'album').is('deleted_at', null).neq('id', p.id).order('name'); const { data: fs } = await (p.community_id ? fq.eq('community_id', p.community_id) : fq.is('community_id', null)); p._folders = fs || []; }
@@ -1591,11 +1591,11 @@ async function gearDbPage() {
 function tasksPage(comm = null) {
   app.innerHTML = `<div class="page">${header('tasks')}
     <div class="wrap page-pad">
-      <h1 class="h1">${comm ? `Tarefas · ${esc(comm.name)}` : 'As minhas tarefas'}</h1>
+      <div class="tc-titlebar"><h1 class="h1">${comm ? `Tarefas · ${esc(comm.name)}` : 'As minhas tarefas'}</h1><div data-tcbar></div></div>
       <div class="tc" data-list></div>
     </div></div>`;
   bindHeader(app);
-  const t = mountTaskCenter(app.querySelector('[data-list]'), comm ? { communityId: comm.id } : { mine: true });
+  const t = mountTaskCenter(app.querySelector('[data-list]'), { ...(comm ? { communityId: comm.id } : { mine: true }), bar: app.querySelector('[data-tcbar]') });
   onCleanup(() => t.destroy());
 }
 
