@@ -1,4 +1,5 @@
 import { sb, esc, toast, modal, confirmBox, ICON, saveLater } from './lib.js';
+const BSTATES = [['curso', 'Em curso'], ['por_aprovar', 'Por aprovar'], ['aprovado', 'Aprovado'], ['rejeitado', 'Rejeitado']];
 import { exportPdf } from './pdf.js';
 import { GRAIN_FEE, feeRowSum, oneTotal } from './folders.js';
 import { budgetSheet, isFormula, show, colName, HELP, remapFormulas } from './formula.js';
@@ -189,9 +190,9 @@ export async function budgetPage(main, p) {
           ${moneyCols.length > 1 ? `<label class="field"><span class="label">Compara com a coluna</span><select data-main>${moneyCols.map((c) => `<option value="${c.id}" ${c.id === b.main ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>` : ''}
         </div>
         <div data-sum>${summary()}</div>
-        ${hasFee && p.kind !== 'album' ? `<div class="bappr ${p._approvedAt ? 'on' : ''}">${p._approvedAt
-          ? `<span class="bchip bst-ok">✓ Orçamento aprovado</span><span class="muted small">a ${new Date(p._approvedAt).toLocaleDateString('pt-PT', { day: 'numeric', month: 'long' })} · conta nos ganhos e no resumo das Finanças</span><button type="button" class="link-btn" data-unapprove>Desfazer</button>`
-          : `<button type="button" class="btn primary" data-approve>✓ Orçamento aprovado</button><span class="muted small">Até aprovares, aparece nos ganhos como “Orçamento enviado” e não conta nos totais.</span>`}</div>` : ''}
+        ${hasFee && p.kind !== 'album' ? (() => { const cur = p._budgetStatus || (p._approvedAt ? 'aprovado' : 'curso'); return `<div class="bappr bst-${cur}">
+          <div class="bst-seg" role="radiogroup" aria-label="Estado do orçamento">${BSTATES.map(([k, l]) => `<button type="button" role="radio" aria-checked="${cur === k}" class="bst-o bs-${k}" data-bst="${k}">${l}</button>`).join('')}</div>
+          <span class="muted small">${{ curso: 'Ainda a fazer o orçamento. Nos ganhos aparece como “Orçamento enviado” e não conta nos totais.', por_aprovar: 'Enviado ao cliente, à espera de resposta. Ainda não conta nos totais.', aprovado: `Aprovado${p._approvedAt ? ` a ${new Date(p._approvedAt).toLocaleDateString('pt-PT', { day: 'numeric', month: 'long' })}` : ''}: conta nos ganhos e no resumo das Finanças como “Aceite”.`, rejeitado: 'O cliente não aceitou. Nos ganhos fica como “Perdido”.' }[cur]}</span></div>`; })() : ''}
       </section>`}
       ${p._tableOnly ? '' : `<div class="btools">
         <label class="sel"><span class="vh">Modelo</span><select data-tpl><option value="">Aplicar modelo…</option>${TPL_NAMES.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label>
@@ -242,13 +243,17 @@ export async function budgetPage(main, p) {
     tn?.addEventListener('change', () => { const v = tn.value.trim(); snapshot('nome da tabela'); if (p._tableOnly) b.tname = v || 'Tabela'; else if (!v || v === (p.kind === 'album' ? 'Despesas gerais' : 'Despesas')) delete b.tname; else b.tname = v; tn.value = p._tableOnly ? b.tname : tname(); save(0); refreshSums(); });
     tn?.addEventListener('keydown', (e) => { if (e.key === 'Enter') tn.blur(); if (e.key === 'Escape') { tn.value = p._tableOnly ? b.tname || 'Tabela' : tname(); tn.blur(); } });
     main.querySelector('[data-tdel]')?.addEventListener('click', () => p._remove?.());
-    const setAppr = async (on) => {
-      if (on && !(await confirmBox(`Marcar o orçamento de "${p.name}" como aprovado? Passa a contar nos ganhos e no resumo das Finanças como “Aceite”.`, 'Aprovar'))) return;
-      const v = on ? new Date().toISOString() : null;
-      if (await write({ approved_at: v, approved_by: on ? (await sb.auth.getUser()).data.user?.id || null : null })) { p._approvedAt = v; toast(on ? 'Orçamento aprovado. Já está nos ganhos.' : 'Aprovação desfeita.'); draw(); }
+    // estado do orçamento: Em curso, Por aprovar, Aprovado, Rejeitado (os ganhos das Finanças acompanham)
+    const setStatus = async (st) => {
+      const cur = p._budgetStatus || (p._approvedAt ? 'aprovado' : 'curso'); if (st === cur) return;
+      if (st === 'aprovado' && !(await confirmBox(`Marcar o orçamento de "${p.name}" como aprovado? Passa a contar nos ganhos e no resumo das Finanças como “Aceite”.`, 'Aprovar'))) return;
+      const v = st === 'aprovado' ? new Date().toISOString() : null;
+      if (await write({ status: st, approved_at: v, approved_by: v ? (await sb.auth.getUser()).data.user?.id || null : null })) {
+        p._approvedAt = v; p._budgetStatus = st;
+        toast({ curso: 'Orçamento em curso.', por_aprovar: 'Orçamento à espera de aprovação.', aprovado: 'Orçamento aprovado. Já está nos ganhos.', rejeitado: 'Orçamento rejeitado.' }[st]); draw();
+      }
     };
-    main.querySelector('[data-approve]')?.addEventListener('click', () => setAppr(true));
-    main.querySelector('[data-unapprove]')?.addEventListener('click', () => setAppr(false));
+    main.querySelectorAll('[data-bst]').forEach((b) => b.addEventListener('click', () => setStatus(b.dataset.bst)));
     const cn = main.querySelector('[data-capname]');
     cn?.addEventListener('change', () => { const v = cn.value.trim(); snapshot('nome'); if (!v || v === (p._capLabel || 'Orçamento geral do projeto')) delete b.capName; else b.capName = v; cn.value = capName(); save(0); });
     cn?.addEventListener('keydown', (e) => { if (e.key === 'Enter') cn.blur(); });

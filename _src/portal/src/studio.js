@@ -736,7 +736,7 @@ async function loadProjectNow(id) {
     sb.from('projects').select(`${PROJECT_COLS}, parent:parent_id(id, name, kind, deleted_at)`).eq('id', id).maybeSingle()
       .then((r) => (r.error ? sb.from('projects').select(PROJECT_COLS).eq('id', id).maybeSingle() : r)),
     // o orçamento só chega a quem tem acesso (a base de dados devolve vazio aos outros)
-    sb.from('project_budgets').select('value, budget, updated_at, approved_at').eq('project_id', id).maybeSingle(),
+    sb.from('project_budgets').select('value, budget, updated_at, approved_at, status').eq('project_id', id).maybeSingle(),
     sb.from('budget_access').select('user_id').eq('project_id', id).eq('user_id', state.user.id).maybeSingle(),
     sb.from('scripts').select('id', { count: 'exact', head: true }).eq('project_id', id).neq('kind', 'tratamento'),
     sb.from('boards').select('id, parent_id, title, group_id, position, created_at, kind, visible_to, created_by').eq('project_id', id).order('position').order('created_at'),
@@ -756,6 +756,7 @@ async function loadProjectNow(id) {
   p.budget = p.canBudget ? fin?.budget ?? null : null;
   p._budgetAt = p.canBudget ? fin?.updated_at ?? null : null;
   p._approvedAt = p.canBudget ? fin?.approved_at ?? null : null;
+  p._budgetStatus = p.canBudget ? fin?.status || (fin?.approved_at ? 'aprovado' : 'curso') : null;
   p._boards = boards || [];
   if (p.parent_id) { let par = Array.isArray(p.parent) ? p.parent[0] : p.parent; if (par === undefined || (par && !par.id)) ({ data: par } = await sb.from('projects').select('id, name, kind, deleted_at').eq('id', p.parent_id).maybeSingle()); p._parent = par && !par.deleted_at ? par : null; }
   delete p.parent;
@@ -1218,7 +1219,7 @@ async function projectOverview(main, p, { plain = false } = {}) {
         <p class="pm-sub">${[p.client, p.starts_on && p.ends_on ? `${fmtDate(p.starts_on)} – ${fmtDate(p.ends_on)}` : ''].filter(Boolean).map(esc).join(' · ')}</p>
         ${!p.is_central ? `<div class="pm-leads" data-leads></div>` : ''}
         ${!p.is_central ? (() => { const n = tasks.length, all = (allTasks || []).length, late = tasks.filter((t) => t.due && t.due < todayISO()).length; return `<div class="pm-pills"><button type="button" class="pm-tasks ${late ? 'late' : ''}" data-pmtasks aria-expanded="false" aria-haspopup="true" title="Ver as tarefas do projeto">${ICON.task}<span>${n ? `Tem ${n} ${n === 1 ? 'tarefa' : 'tarefas'}` : all ? 'Tarefas todas feitas' : 'Sem tarefas'}${late ? ` · ${late} ${late === 1 ? 'atrasada' : 'atrasadas'}` : ''}</span>${all ? `<i class="pm-tbar" aria-hidden="true"><b style="width:${Math.round(((all - n) / all) * 100)}%"></b></i>` : ''}</button><button type="button" class="pm-tasks pm-q" data-pmq aria-expanded="false" aria-haspopup="true" title="Questões do projeto: o que ainda está por decidir"><b class="pm-qi" aria-hidden="true">?</b><span>Questões</span></button></div>`; })() : ''}
-        ${p.canBudget && hasMod(p, 'orcamento') ? (() => { const used = budgetUsed(p) + (p._kidsAlloc || 0); const over = p.value != null && used > p.value; return `<button type="button" class="pm-budget ${over ? 'over' : ''}" data-budget title="Só quem tem acesso ao orçamento vê isto"><span>${ICON.lock} Orçamento${p._approvedAt ? ' <em class="appr">✓ aprovado</em>' : ''}</span>${p.value != null ? `<strong>${eur.format(p.value)}</strong>${used ? `<small>${eur.format(used)} na tabela${over ? ` · ${eur.format(used - p.value)} acima` : ''}</small>` : ''}` : '<strong class="muted-w">Definir</strong>'}</button>`; })() : ''}
+        ${p.canBudget && hasMod(p, 'orcamento') ? (() => { const used = budgetUsed(p) + (p._kidsAlloc || 0); const over = p.value != null && used > p.value; return `<button type="button" class="pm-budget ${over ? 'over' : ''}" data-budget title="Só quem tem acesso ao orçamento vê isto"><span>${ICON.lock} Orçamento${p._budgetStatus && p._budgetStatus !== 'curso' ? ` <em class="appr bs-${p._budgetStatus}">${{ por_aprovar: 'por aprovar', aprovado: '✓ aprovado', rejeitado: 'rejeitado' }[p._budgetStatus]}</em>` : ''}</span>${p.value != null ? `<strong>${eur.format(p.value)}</strong>${used ? `<small>${eur.format(used)} na tabela${over ? ` · ${eur.format(used - p.value)} acima` : ''}</small>` : ''}` : '<strong class="muted-w">Definir</strong>'}</button>`; })() : ''}
         ${ph.label || p.stage ? `<div class="pm-phase"><div class="row between small"><span>${esc(p.stage ? phaseLabel(p.stage) : ph.label)}</span><span>${Math.round(ph.pct * 100)}%</span></div><div class="bar light"><i style="width:${Math.round(ph.pct * 100)}%"></i></div></div>` : ''}
       </div>
     </section>

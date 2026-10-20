@@ -2987,3 +2987,14 @@ body:has(.pv-zoom) .mp { bottom: 70px; }
 .proj-card.renaming .proj-link { pointer-events: none; }
 .pn-rename { font: inherit; font-weight: 700; font-size: inherit; width: 100%; min-width: 160px; padding: 2px 6px; margin: -3px -7px; border: 1.5px solid var(--blue); border-radius: 7px; background: var(--panel); color: var(--text); }
 .icon-btn.on-cover.danger:hover { color: #fff; background: var(--late); }
+/* estado do orçamento */
+.bappr { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.bst-seg { display: inline-flex; gap: 3px; padding: 3px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--line); flex-wrap: wrap; }
+.bst-o { border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; padding: 6px 14px; border-radius: 999px; cursor: pointer; }
+.bst-o:hover { color: var(--text); }
+.bst-o[aria-checked="true"] { color: #fff; }
+.bst-o.bs-curso[aria-checked="true"] { background: #6B6B78; }
+.bst-o.bs-por_aprovar[aria-checked="true"] { background: var(--soon); }
+.bst-o.bs-aprovado[aria-checked="true"] { background: var(--ok); }
+.bst-o.bs-rejeitado[aria-checked="true"] { background: var(--late); }
+.appr.bs-por_aprovar { color: var(--soon); } .appr.bs-rejeitado { color: var(--late); }
