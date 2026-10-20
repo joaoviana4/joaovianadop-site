@@ -141,7 +141,7 @@ function guiao(main, p, f, _sub, base) {
   }
   function preview(text, file) {
     const r = parseScript(text);
-    if (!r.scenes.length) { toast('Não encontrei cabeçalhos de cena (INT. / EXT.). Confirma o ficheiro.', 6000); return; }
+    if (!r.scenes.length) { toast('Não encontrei cabeçalhos de cena (ex.: "INT. CASA - NOITE", "Int: Casa. Noite" ou "CENA 1"). Confirma o ficheiro.', 7000); return; }
     const changed = f.scenes.length && f.scenes.length !== r.scenes.length;
     const m = modal(`<h2>${r.scenes.length} cenas encontradas</h2>
       <p>${r.characters.length} personagens · ${r.locations.length} décors · ${eighthsLabel(r.scenes.reduce((a, s) => a + s.eighths, 0))} páginas</p>

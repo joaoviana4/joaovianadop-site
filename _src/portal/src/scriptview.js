@@ -1,5 +1,5 @@
 import { esc, ICON, signedUrl, onLeave } from './lib.js';
-import { parseScript, openPdf, pdfPageText, isSceneHeading, classifyLines } from './script.js';
+import { parseScript, openPdf, pdfPageText, sceneCounter, classifyLines } from './script.js';
 
 // Leitor do guião: as páginas do PDF tal como foram escritas (ou, para Fountain / Final Draft / texto,
 // o texto paginado com a formatação de guião), com índice de cenas, zoom, ir para a página e ecrã inteiro.
@@ -103,10 +103,10 @@ export function mountReader(el, { version, sceneHref, pagesIndex = false, scene 
     layout();
     if (pagesIndex) { thumbs(); return; }
     // cenas → página: conta os cabeçalhos de cena em cada página
-    let k = 0;
+    let k = 0; const isStart = sceneCounter(); const ctx = {};
     for (let i = 0; i < pages.length && !destroyed; i++) {
-      const t = await pdfPageText(pages[i].page);
-      t.split('\n').forEach((l) => { if (isSceneHeading(l) && k < idx.length) scenePage[k++] = i; });
+      const t = await pdfPageText(pages[i].page, ctx);
+      t.split('\n').forEach((l) => { if (isStart(l) && k < idx.length) scenePage[k++] = i; });
     }
     for (; k < idx.length; k++) scenePage[k] = scenePage[k - 1] ?? 0;
     if (scene != null && scenePage[scene] != null) {
