@@ -3018,3 +3018,20 @@ body:has(.pv-zoom) .mp { bottom: 70px; }
 .bp-rs { display: block; height: 12px; margin: 2px auto -6px; width: 64px; cursor: ns-resize; position: relative; }
 .bp-rs::after { content: ''; position: absolute; left: 16px; right: 16px; top: 4px; height: 4px; border-radius: 4px; background: var(--line2); }
 .bp-rs:hover::after { background: var(--muted); }
+
+/* board: desfazer um board aqui / copiar o conteúdo — pré-visualização que se arrasta antes de colocar */
+.dc-btn { right: 32px; }
+.dc-ghost { position: absolute; outline: 2px dashed var(--accent, #1E2AD4); outline-offset: 8px; border-radius: 6px; cursor: grab; background: color-mix(in srgb, var(--accent, #1E2AD4) 6%, transparent); touch-action: none; }
+.dc-ghost.dc-drag { cursor: grabbing; }
+.dc-ghost.dc-bad { outline-color: #E5484D; background: rgba(229, 72, 77, .08); }
+.dc-it { position: absolute; border-radius: 6px; background: var(--panel2, #fff) center / cover no-repeat; border: 1px solid var(--line2); opacity: .75; overflow: hidden; pointer-events: none; }
+.dc-it span { display: block; padding: 8px 10px; font-size: 13px; line-height: 1.3; color: var(--text); }
+.dc-tag { position: absolute; left: -8px; top: -38px; white-space: nowrap; font-size: 13px; padding: 4px 10px; border-radius: 999px; background: var(--accent, #1E2AD4); color: #fff; pointer-events: none; }
+.dc-bad .dc-tag { background: #E5484D; }
+.dc-bar { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 16px; border-radius: 12px; background: var(--panel2); border: 1px solid var(--line2); box-shadow: 0 10px 30px rgba(0, 0, 0, .25); font-size: 14px; white-space: nowrap; }
+.bm-list li { display: flex; align-items: center; gap: 8px; }
+.bm-list li > button[data-b] { flex: 1; }
+.bm-copy { flex: none; }
+.bm-list .bm-copy { width: auto; flex-direction: row; align-items: center; padding: 6px 10px; border: 1px solid var(--line2); border-radius: 8px; font-size: 13px; }
+.dc-tag { transform-origin: left bottom; }
+.dc-bar [data-dcs].bad { color: #E5484D; }
