@@ -16,6 +16,34 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
   const saved = project.layouts?.[key] || {};
   const pos = saved.grid || {};
   let hidden = new Set(saved.hidden || []);
+  // nomes dados pela equipa a cada elemento (layouts[key].titles)
+  const titles = { ...(saved.titles || {}) };
+  const nameOf = (it) => titles[it.id] || it.label || '';
+  const applyTitle = (it) => {
+    const l = it.g?.querySelector('.gi-l'); if (l) l.textContent = nameOf(it);
+    const h = [...it.el.querySelectorAll('h2, h3')].find((x) => !x.closest('.gi-bar')); if (!h) return;
+    if (!h.dataset.orig) h.dataset.orig = h.textContent;
+    h.textContent = titles[it.id] || h.dataset.orig;
+  };
+  const saveTitles = saveLater(async () => {
+    const layouts = { ...(project.layouts || {}), [key]: { ...(project.layouts?.[key] || {}), titles } };
+    project.layouts = layouts;
+    const { error } = await sb.from('projects').update({ layouts }).eq('id', project.id);
+    if (error) toast('Não foi possível guardar o nome: ' + error.message);
+  }, 300);
+  function rename(it) {
+    const l = it.g.querySelector('.gi-l'); const inp = document.createElement('input');
+    inp.className = 'gi-in'; inp.value = nameOf(it); inp.setAttribute('aria-label', 'Nome do elemento');
+    l.replaceWith(inp); inp.focus(); inp.select();
+    let done = false;
+    const finish = (ok) => {
+      if (done) return; done = true; inp.replaceWith(l);
+      if (ok) { const v = inp.value.trim(); if (!v || v === it.label) delete titles[it.id]; else titles[it.id] = v; saveTitles(); }
+      applyTitle(it); onChange?.();
+    };
+    inp.addEventListener('keydown', (k) => { if (k.key === 'Enter') finish(true); else if (k.key === 'Escape') finish(false); });
+    inp.addEventListener('blur', () => finish(true));
+  }
   const list = [];
   root.classList.add('cg');
   root.style.setProperty('--cg-row', `${ROW}px`); root.style.setProperty('--cg-gap', `${GAP}px`);
@@ -35,12 +63,15 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
     const g = document.createElement('div');
     g.className = 'gi'; g.dataset.gi = it.id;
     g.innerHTML = `<div class="gi-bar" role="toolbar" aria-label="${esc(it.label || 'Elemento')}">
-        <span class="gi-grip" title="Arrasta para mudar de sítio" aria-hidden="true">⠿</span><span class="gi-l">${esc(it.label || '')}</span>
+        <span class="gi-grip" title="Arrasta para mudar de sítio" aria-hidden="true">⠿</span><span class="gi-l" title="Duplo clique para mudar o nome">${esc(nameOf(it))}</span><button type="button" class="gi-b" data-gname title="Mudar o nome" aria-label="Mudar o nome de ${esc(nameOf(it))}">✎</button>
         ${it.copy ? `<button type="button" class="gi-b" data-gcopy title="Copiar (depois cola noutra página com Ctrl+V)" aria-label="Copiar ${esc(it.label || '')}">${ICON.copy}</button>` : ''}
         ${it.removable !== false ? `<button type="button" class="gi-b" data-grm title="${it.id.startsWith('x:') ? 'Apagar desta página' : 'Tirar desta página (volta pela barra da direita)'}" aria-label="Tirar ${esc(it.label || '')} desta página">${ICON.trash}</button>` : ''}
       </div><div class="gi-c"></div><span class="gi-rs" title="Arrasta para redimensionar · duplo clique: altura automática" aria-hidden="true"></span>`;
     g.querySelector('.gi-c').append(it.el);
     it.g = g;
+    g.querySelector('[data-gname]').addEventListener('click', () => rename(it));
+    g.querySelector('.gi-l').addEventListener('dblclick', () => rename(it));
+    applyTitle(it);
     g.querySelector('[data-gcopy]')?.addEventListener('click', () => it.copy());
     g.querySelector('[data-grm]')?.addEventListener('click', () => remove(it.id));
     g.querySelector('.gi-grip').addEventListener('pointerdown', (e) => startDrag(e, it));

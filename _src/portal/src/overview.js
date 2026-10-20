@@ -135,7 +135,7 @@ export async function mountSituation(box, p, base, { onChange, onBlocks } = {}) 
       <div data-blk="music"><section class="panel ov-music"><div class="row between"><h2 class="h3">Seguimento</h2><a class="small" href="${base}/seguimento">Abrir</a></div>${ms && ms.scenes.length ? trackHtml(ms.scenes, p.music?.duration, { base, compact: true }) : '<p class="muted small">Ainda não há secções no seguimento.</p>'}</section></div>
 
         <div data-blk="who"><section class="panel ov-who">
-          <div class="row between"><h2 class="h3">Quem tem o quê</h2><a class="small" href="${base}/tarefas">Todas as tarefas</a></div>
+          <div class="row between"><h2 class="h3">Tarefas</h2><a class="small" href="${base}/tarefas">Todas as tarefas</a></div>
           ${order.length ? `<ul class="ov-people">${order.map(([uid, list]) => { const who = people.find((x) => x.id === uid); const l = list.filter((t) => late.includes(t)).length; const sorted = [...list].sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999'));
             return `<li class="${uid ? '' : 'nobody'}">
               <div class="ovp-h">${av(who)}<strong>${uid ? esc(who?.display_name || 'Alguém') : 'Sem responsável'}</strong><span class="muted small">${plural(list.length, 'por fazer', 'por fazer')}</span>${l ? `<span class="due due-late">${plural(l, 'atrasada', 'atrasadas')}</span>` : ''}</div>
@@ -160,7 +160,7 @@ export async function mountSituation(box, p, base, { onChange, onBlocks } = {}) 
     const defsStd = [
       { id: 'prog', label: 'Progresso da rodagem', w: 12, icon: ICON.check }, { id: 'mapa', label: 'Mapa de rodagem', w: 12, icon: ICON.calendar },
       { id: 'kpis', label: 'Números do projeto', w: 12, icon: ICON.list }, { id: 'music', label: 'Seguimento', w: 12, icon: ICON.music, off: !(ms && ms.scenes.length) },
-      { id: 'who', label: 'Quem tem o quê', w: 7, icon: ICON.team }, { id: 'crono', label: 'Cronograma', w: 5, x: 7, icon: ICON.calendar }, { id: 'depts', label: 'Por departamento', w: 5, x: 7, icon: ICON.board, off: !all.some((t) => t.department) },
+      { id: 'who', label: 'Tarefas', w: 7, icon: ICON.team }, { id: 'crono', label: 'Cronograma', w: 5, x: 7, icon: ICON.calendar }, { id: 'depts', label: 'Por departamento', w: 5, x: 7, icon: ICON.board, off: !all.some((t) => t.department) },
       { id: 'props', label: 'Adereços em falta', w: 5, x: 7, icon: ICON.prop, off: !withProps },
     ];
     const root = box.querySelector('[data-lay]');

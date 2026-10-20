@@ -1,4 +1,4 @@
-import { sb, esc, toast, ICON, saveLater } from './lib.js';
+import { sb, esc, toast, ICON, saveLater, uploadImage, signedUrls } from './lib.js';
 import { mountGrid, COLS } from './grid.js';
 
 // Páginas como boards (Studio). Cada página tem os seus elementos (a página em si, ou os blocos da visão geral)
@@ -45,6 +45,70 @@ function noteEl(p, id) {
   return el;
 }
 
+// elementos gerais de uma página: texto, imagem e tabela (guardados no projeto, em layouts.items[id])
+const saveItem = (p, id, val) => {
+  const items = { ...(p.layouts?.items || {}), [id]: val };
+  const layouts = { ...(p.layouts || {}), items }; p.layouts = layouts;
+  return sb.from('projects').update({ layouts }).eq('id', p.id).then(({ error }) => { if (error) toast('Não foi possível guardar: ' + error.message); });
+};
+function textEl(p, id) {
+  const v = p.layouts?.items?.[id] || { text: '' };
+  const el = document.createElement('div'); el.className = 'cv-text';
+  el.innerHTML = `<textarea placeholder="Escreve aqui…" aria-label="Texto">${esc(v.text || '')}</textarea>`;
+  const ta = el.querySelector('textarea'); const fit = () => { ta.style.height = 'auto'; ta.style.height = `${ta.scrollHeight}px`; };
+  const save = saveLater(() => saveItem(p, id, { text: ta.value }), 700);
+  ta.addEventListener('input', () => { fit(); save(); }); requestAnimationFrame(fit);
+  return el;
+}
+function imageEl(p, id) {
+  const v = p.layouts?.items?.[id] || {};
+  const el = document.createElement('figure'); el.className = 'cv-img';
+  const draw = async () => {
+    const url = v.path ? (await signedUrls([v.path]))[v.path] : null;
+    el.innerHTML = url ? `<img src="${esc(url)}" alt="${esc(v.caption || '')}"><figcaption><input value="${esc(v.caption || '')}" placeholder="Legenda" aria-label="Legenda"></figcaption><button type="button" class="cv-img-ch" data-pick>${ICON.image} Mudar</button>`
+      : `<button type="button" class="cv-img-empty" data-pick>${ICON.image}<span>Escolher imagem</span><small>ou larga-a aqui</small></button>`;
+    el.querySelectorAll('[data-pick]').forEach((b) => b.addEventListener('click', pick));
+    const cap = el.querySelector('figcaption input');
+    cap?.addEventListener('input', saveLater(() => { v.caption = cap.value; saveItem(p, id, v); }, 600));
+  };
+  const up = async (file) => {
+    if (!file || !/^image\//.test(file.type)) return toast('Escolhe uma imagem.');
+    toast('A carregar a imagem…', 6000);
+    try { const r = await uploadImage(p.id, 'paginas', file); v.path = r.path; v.w = r.w; v.h = r.h; await saveItem(p, id, v); draw(); } catch (e) { toast('Não foi possível carregar: ' + (e.message || e)); }
+  };
+  const pick = () => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.onchange = () => up(i.files[0]); i.click(); };
+  el.addEventListener('dragover', (e) => { e.preventDefault(); el.classList.add('over'); });
+  el.addEventListener('dragleave', () => el.classList.remove('over'));
+  el.addEventListener('drop', (e) => { e.preventDefault(); el.classList.remove('over'); up(e.dataTransfer.files[0]); });
+  draw();
+  return el;
+}
+function tableEl(p, id) {
+  const v = p.layouts?.items?.[id] || {}; if (!v.rows?.length) v.rows = [['Coluna 1', 'Coluna 2', 'Coluna 3'], ['', '', ''], ['', '', '']];
+  const el = document.createElement('div'); el.className = 'cv-table';
+  const save = saveLater(() => saveItem(p, id, v), 600);
+  const draw = () => {
+    const nc = Math.max(...v.rows.map((r) => r.length));
+    el.innerHTML = `<div class="cvt-w"><table><tbody>${v.rows.map((r, ri) => `<tr>${Array.from({ length: nc }, (_, ci) => `<${ri ? 'td' : 'th'}><input value="${esc(r[ci] || '')}" data-r="${ri}" data-c="${ci}" aria-label="Linha ${ri + 1}, coluna ${ci + 1}"></${ri ? 'td' : 'th'}>`).join('')}</tr>`).join('')}</tbody></table></div>
+      <div class="cvt-ui"><button type="button" data-t="addrow">${ICON.plus} Linha</button><button type="button" data-t="addcol">${ICON.plus} Coluna</button>${v.rows.length > 1 ? '<button type="button" data-t="rmrow">− Linha</button>' : ''}${nc > 1 ? '<button type="button" data-t="rmcol">− Coluna</button>' : ''}</div>`;
+    el.querySelectorAll('input').forEach((i) => {
+      i.addEventListener('input', () => { const r = +i.dataset.r, c = +i.dataset.c; while (v.rows[r].length <= c) v.rows[r].push(''); v.rows[r][c] = i.value; save(); });
+      i.addEventListener('keydown', (e) => { if (e.key !== 'Enter') return; e.preventDefault(); const nx = el.querySelector(`input[data-r="${+i.dataset.r + 1}"][data-c="${i.dataset.c}"]`); if (nx) nx.focus(); else { v.rows.push(Array(nc).fill('')); save(); draw(); el.querySelector(`input[data-r="${+i.dataset.r + 1}"][data-c="${i.dataset.c}"]`)?.focus(); } });
+    });
+    el.querySelectorAll('[data-t]').forEach((b) => b.addEventListener('click', () => {
+      const t = b.dataset.t; const n = Math.max(...v.rows.map((r) => r.length));
+      if (t === 'addrow') v.rows.push(Array(n).fill(''));
+      else if (t === 'addcol') v.rows.forEach((r) => { while (r.length < n) r.push(''); r.push(''); });
+      else if (t === 'rmrow' && v.rows.length > 1) v.rows.pop();
+      else if (t === 'rmcol' && n > 1) v.rows.forEach((r) => { r.length = Math.min(r.length, n - 1); });
+      save(); draw();
+    }));
+  };
+  draw();
+  return el;
+}
+const GENERAL = { text: ['Texto', textEl], image: ['Imagem', imageEl], table: ['Tabela', tableEl] };
+
 // mountCanvas(main, p, { key, label, native: [{ id, label, el, w?, x?, off?, ref? }], render: (el, ref) => Promise, here })
 //   native: os elementos próprios da página; ref: o que se copia quando se copia esse elemento
 //   render: desenha um elemento colado (página, bloco, ferramenta) dentro de el
@@ -63,16 +127,17 @@ export function mountCanvas(main, p, { key, native, render, here, pageLabel = 'p
   const extraItem = (x) => {
     const el = document.createElement('div'); el.className = 'cv-x';
     if (x.ref.kind === 'note') el.append(noteEl(p, x.ref.id));
+    else if (GENERAL[x.ref.kind]) el.append(GENERAL[x.ref.kind][1](p, x.ref.id));
     else if (here && same(x.ref, here)) el.innerHTML = '<p class="muted small">Esta é a própria página.</p>';
     else { el.innerHTML = '<p class="muted small">A carregar…</p>'; Promise.resolve(render(el, x.ref)).catch((e) => { el.innerHTML = `<p class="muted small">Não foi possível mostrar: ${esc(e.message || '')}</p>`; }); }
-    return { id: `x:${x.id}`, label: x.title || (x.ref.kind === 'note' ? 'Nota' : 'Elemento'), el, w: x.w || COLS, copy: () => copyRef(p, x.ref, x.title || 'Elemento'), ref: x.ref };
+    return { id: `x:${x.id}`, label: x.title || (x.ref.kind === 'note' ? 'Nota' : GENERAL[x.ref.kind]?.[0] || 'Elemento'), el, w: x.w || COLS, copy: () => copyRef(p, x.ref, x.title || 'Elemento'), ref: x.ref };
   };
   const nativeItems = native.map((n) => ({ ...n, copy: n.ref ? () => copyRef(p, n.ref, n.label) : null, removable: n.removable }));
   // escondidos por defeito: os sugeridos que ainda não estão guardados na página
   if (!saved.grid) { const off = native.filter((n) => n.off).map((n) => n.id); if (off.length) p.layouts = { ...(p.layouts || {}), [key]: { ...(p.layouts?.[key] || {}), hidden: [...new Set([...(saved.hidden || []), ...off])] } }; }
   const grid = mountGrid(root, {
     project: p, key, items: [...nativeItems, ...extra().map(extraItem)],
-    onRemove: (it) => { if (!it.id.startsWith('x:')) return false; saveExtra(extra().filter((x) => `x:${x.id}` !== it.id)); toast(it.ref?.kind === 'note' ? 'Nota apagada desta página.' : 'Tirado desta página. O original continua onde estava.'); return true; },
+    onRemove: (it) => { if (!it.id.startsWith('x:')) return false; saveExtra(extra().filter((x) => `x:${x.id}` !== it.id)); toast(it.ref?.kind === 'note' || GENERAL[it.ref?.kind] ? `${GENERAL[it.ref?.kind]?.[0] || 'Nota'} apagada desta página.` : 'Tirado desta página. O original continua onde estava.'); return true; },
     onChange: () => drawTools(),
   });
   // ações que a página em si (o elemento próprio) oferece
@@ -89,10 +154,14 @@ export function mountCanvas(main, p, { key, native, render, here, pageLabel = 'p
     const own = native.filter((n) => n.label);
     // barra limpa, como a do board: ícone grande e o nome por baixo. Os elementos próprios só aparecem se foram tirados (para os voltar a pôr).
     const gone = own.filter((n) => grid.isHidden(n.id));
-    tools.innerHTML = `${acts.map((a, i) => `<button type="button" data-cva="${i}" title="${esc(a.title || a.label)}">${a.icon || ICON.plus}<span>${esc(a.label)}</span></button>`).join('')}${acts.length ? '<hr>' : ''}<button type="button" data-note title="Juntar uma nota a esta ${esc(pageLabel)}">${ICON.note}<span>Nota</span></button>
+    tools.innerHTML = `${acts.map((a, i) => `<button type="button" data-cva="${i}" title="${esc(a.title || a.label)}">${a.icon || ICON.plus}<span>${esc(a.label)}</span></button>`).join('')}${acts.length ? '<hr>' : ''}
+      <button type="button" data-gen="text" title="Juntar texto a esta ${esc(pageLabel)}">${ICON.title || ICON.note}<span>Texto</span></button>
+      <button type="button" data-note title="Juntar uma nota a esta ${esc(pageLabel)}">${ICON.note}<span>Nota</span></button>
+      <button type="button" data-gen="image" title="Juntar uma imagem a esta ${esc(pageLabel)}">${ICON.image}<span>Imagem</span></button>
+      <button type="button" data-gen="table" title="Juntar uma tabela a esta ${esc(pageLabel)}">${ICON.table || ICON.list}<span>Tabela</span></button>
       <button type="button" class="${clip ? '' : 'off'}" data-paste ${clip ? '' : 'disabled'} title="${clip ? `Colar «${esc(clip.title)}» aqui (Ctrl+V)` : 'Para colar: copia um elemento noutra página (botão de copiar no canto dele)'}">${ICON.copy}<span>Colar</span></button>
-      <hr><button type="button" data-undo title="Desfazer a última alteração (Ctrl+Z)">${UNDO}<span>Desfazer</span></button><button type="button" data-redo title="Refazer (Ctrl+Shift+Z)">${REDO}<span>Refazer</span></button>
-      ${gone.length ? `<hr>${gone.map((n) => `<button type="button" data-own="${esc(n.id)}" title="Voltar a pôr ${esc(n.label)} na página">${n.icon || ICON.board}<span>${esc(n.label)}</span></button>`).join('')}` : ''}`;
+      ${gone.length ? `<hr>${gone.map((n) => `<button type="button" data-own="${esc(n.id)}" title="Voltar a pôr ${esc(n.label)} na página">${n.icon || ICON.board}<span>${esc(n.label)}</span></button>`).join('')}` : ''}
+      <hr><div class="cv-ur"><button type="button" data-undo title="Desfazer (Ctrl+Z)" aria-label="Desfazer">${UNDO}</button><button type="button" data-redo title="Refazer (Ctrl+Shift+Z)" aria-label="Refazer">${REDO}</button></div>`;
     // desfazer/refazer: o mesmo que Ctrl+Z. Primeiro tenta o da tabela ou do board desta página, senão o geral.
     const key = (redo) => document.dispatchEvent(new KeyboardEvent('keydown', { key: redo ? 'z' : 'z', shiftKey: redo, ctrlKey: true, bubbles: true, cancelable: true }));
     tools.querySelector('[data-undo]').addEventListener('click', () => key(false));
@@ -100,6 +169,7 @@ export function mountCanvas(main, p, { key, native, render, here, pageLabel = 'p
     tools.querySelectorAll('[data-cva]').forEach((b) => b.addEventListener('click', () => acts[+b.dataset.cva]?.run()));
     tools.querySelectorAll('[data-own]').forEach((b) => b.addEventListener('click', () => grid.show(b.dataset.own)));
     tools.querySelector('[data-note]').addEventListener('click', () => addExtra({ kind: 'note', id: newId() }, 'Nota', 6));
+    tools.querySelectorAll('[data-gen]').forEach((b) => b.addEventListener('click', () => { const k = b.dataset.gen; addExtra({ kind: k, id: newId() }, GENERAL[k][0], k === 'text' ? 12 : 6); }));
     tools.querySelector('[data-paste]').addEventListener('click', () => paste());
   }
   const paste = () => {
