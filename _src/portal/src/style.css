@@ -3051,3 +3051,21 @@ body:has(.pv-zoom) .mp { bottom: 70px; }
     repeating-linear-gradient(to right, rgba(0, 113, 227, .06) 0 var(--cg-colw), transparent var(--cg-colw) calc(var(--cg-colw) + var(--cg-gap, 18px))); }
 .cg.cg-show > .gi { z-index: 1; }
 .gi.dragging { transition: left .06s ease-out, top .06s ease-out; }
+
+/* páginas livres (como o Milanote): cada elemento no sítio onde foi largado, pode sobrepor-se; camadas decidem o de cima */
+.cg.cg-free { display: block; position: relative; isolation: isolate; grid-template-columns: none; }
+.cg.cg-free > .gi { position: absolute; }
+.cg.cg-free > .gi.dragging { transition: transform .05s linear; pointer-events: none; }
+.cg.cg-free.cg-stack { display: flex; flex-direction: column; height: auto !important; }
+.cg.cg-free.cg-stack > .gi { position: relative; left: auto !important; top: auto !important; width: auto !important; z-index: auto !important; }
+.cg.cg-free > .gi-ph { display: none; }
+.cg.cg-free .gi-bar { cursor: grab; touch-action: none; }
+.cg.cg-free .gi-bar:active { cursor: grabbing; }
+.cg.cg-free .gi-bar .gi-b, .cg.cg-free .gi-bar .gi-in { cursor: pointer; }
+.gi-b svg { width: 14px; height: 14px; }
+.gi.gi-hl { outline: 2px solid var(--accent, #0071e3); outline-offset: 4px; border-radius: 14px; }
+.cv-layers { width: min(300px, calc(100vw - 24px)); }
+.cvl-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.cvl-list li { display: flex; align-items: center; gap: 4px; padding: 4px 6px; border-radius: 8px; }
+.cvl-list li:hover { background: var(--panel); }
+.cvl-n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; font-size: 14px; }

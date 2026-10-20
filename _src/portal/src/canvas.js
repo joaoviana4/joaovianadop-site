@@ -9,6 +9,7 @@ import { mountGrid, COLS } from './grid.js';
 // Tudo o que se cola fica em layouts[key].extra = [{ id, ref, title }]; ref = { kind: 'page'|'block'|'tool'|'note', ... }.
 
 const CLIP = 'portal-clip2';
+const LAYERS = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/><path d="M3 17.5l9 5 9-5" opacity=".5"/></svg>';
 const PACK = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="16" height="7" rx="1"/></svg>';
 const UNDO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>';
 const REDO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>';
@@ -150,6 +151,37 @@ export function mountCanvas(main, p, { key, native, render, here, pageLabel = 'p
   });
   const addExtra = (ref, title, w) => { const x = { id: newId(), ref, title, w }; saveExtra([...extra(), x]); grid.add(extraItem(x)); };
 
+  // camadas: lista do que está por cima para o que está por baixo; passar o rato realça o elemento na página
+  let lp = null;
+  function layersPanel(btn) {
+    if (lp) { lp.close(); return; }
+    const pop = document.createElement('div'); pop.className = 'pm-tpop cv-layers'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', 'Camadas');
+    document.body.append(pop);
+    const draw = () => {
+      const ls = grid.layers();
+      pop.innerHTML = `<div class="row between"><strong>Camadas</strong><button type="button" class="icon-btn sm" data-x aria-label="Fechar">${ICON.close}</button></div>
+        <p class="muted small">Em cima na lista = por cima na página.</p>
+        <ol class="cvl-list">${ls.map((l, i) => `<li data-l="${esc(l.id)}"><span class="cvl-n">${esc(l.label)}</span>
+          <button type="button" class="icon-btn sm" data-ld="up" ${i === 0 ? 'disabled' : ''} title="Subir uma camada" aria-label="Subir ${esc(l.label)}">↑</button>
+          <button type="button" class="icon-btn sm" data-ld="down" ${i === ls.length - 1 ? 'disabled' : ''} title="Descer uma camada" aria-label="Descer ${esc(l.label)}">↓</button></li>`).join('')}</ol>`;
+      pop.querySelector('[data-x]').addEventListener('click', close);
+      pop.querySelectorAll('[data-l]').forEach((li) => {
+        li.addEventListener('mouseenter', () => grid.highlight(li.dataset.l));
+        li.addEventListener('mouseleave', () => grid.highlight(null));
+        li.querySelector('.cvl-n').addEventListener('click', () => grid.items().find((x) => x.id === li.dataset.l)?.g.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+        li.querySelectorAll('[data-ld]').forEach((b) => b.addEventListener('click', () => { grid.restack(li.dataset.l, b.dataset.ld); draw(); grid.highlight(li.dataset.l); }));
+      });
+    };
+    const r = btn.getBoundingClientRect();
+    const out = (e) => { if (!pop.contains(e.target) && !btn.contains(e.target)) close(); };
+    const key = (e) => { if (e.key === 'Escape') close(); };
+    function close() { pop.remove(); grid.highlight(null); lp = null; document.removeEventListener('pointerdown', out, true); document.removeEventListener('keydown', key, true); }
+    draw();
+    pop.style.top = `${Math.max(12, Math.min(window.innerHeight - pop.offsetHeight - 12, r.top))}px`; pop.style.left = `${Math.max(12, r.left - pop.offsetWidth - 10)}px`;
+    setTimeout(() => { document.addEventListener('pointerdown', out, true); document.addEventListener('keydown', key, true); });
+    lp = { close };
+  }
+  onLeave(() => lp?.close());
   function drawTools() {
     const clip = readClip(p);
     const own = native.filter((n) => n.label);
@@ -160,7 +192,8 @@ export function mountCanvas(main, p, { key, native, render, here, pageLabel = 'p
       <button type="button" data-note title="Juntar uma nota a esta ${esc(pageLabel)}">${ICON.note}<span>Nota</span></button>
       <button type="button" data-gen="image" title="Juntar uma imagem a esta ${esc(pageLabel)}">${ICON.image}<span>Imagem</span></button>
       <button type="button" data-gen="table" title="Juntar uma tabela a esta ${esc(pageLabel)}">${ICON.table || ICON.list}<span>Tabela</span></button>
-      <button type="button" data-pack title="Arrumar: sobe todos os elementos para ocupar os espaços vazios">${PACK}<span>Arrumar</span></button>
+      <button type="button" data-layers title="Camadas: escolhe o que fica por cima quando os elementos se sobrepõem" aria-haspopup="dialog">${LAYERS}<span>Camadas</span></button>
+      <button type="button" data-pack title="Arrumar: encosta todos os elementos para cima, sem sobreposições">${PACK}<span>Arrumar</span></button>
       <button type="button" class="${clip ? '' : 'off'}" data-paste ${clip ? '' : 'disabled'} title="${clip ? `Colar «${esc(clip.title)}» aqui (Ctrl+V)` : 'Para colar: copia um elemento noutra página (botão de copiar no canto dele)'}">${ICON.copy}<span>Colar</span></button>
       ${gone.length ? `<hr>${gone.map((n) => `<button type="button" data-own="${esc(n.id)}" title="Voltar a pôr ${esc(n.label)} na página">${n.icon || ICON.board}<span>${esc(n.label)}</span></button>`).join('')}` : ''}
       <hr><div class="cv-ur"><button type="button" data-undo title="Desfazer (Ctrl+Z)" aria-label="Desfazer">${UNDO}</button><button type="button" data-redo title="Refazer (Ctrl+Shift+Z)" aria-label="Refazer">${REDO}</button></div>`;
@@ -174,6 +207,7 @@ export function mountCanvas(main, p, { key, native, render, here, pageLabel = 'p
     tools.querySelectorAll('[data-gen]').forEach((b) => b.addEventListener('click', () => { const k = b.dataset.gen; addExtra({ kind: k, id: newId() }, GENERAL[k][0], k === 'text' ? 12 : 6); }));
     tools.querySelector('[data-paste]').addEventListener('click', () => paste());
     tools.querySelector('[data-pack]').addEventListener('click', () => grid.pack());
+    tools.querySelector('[data-layers]').addEventListener('click', (e) => layersPanel(e.currentTarget));
   }
   const paste = () => {
     const c = readClip(p); if (!c) return false;
