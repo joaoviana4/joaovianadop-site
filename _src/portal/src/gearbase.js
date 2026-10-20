@@ -1,5 +1,5 @@
 import { sb, esc, toast, modal, ICON } from './lib.js';
-import { CATS, CATALOG, loadCatalog, specLine, gearName, editGearModal, catLabel, LIGHT_SOURCES, lightSource } from './gear.js';
+import { CATS, CATALOG, loadCatalog, specLine, gearName, editGearModal, catLabel, LIGHT_SOURCES, lightSource, LENS_FILTERS, lensMatch } from './gear.js';
 
 // Base de dados de equipamento: câmaras, luzes, tripés e suportes (e o resto) num só sítio,
 // partilhada por todos os projetos. O que está aqui aparece no mapa de luz (lista + catálogo geral)
@@ -7,7 +7,7 @@ import { CATS, CATALOG, loadCatalog, specLine, gearName, editGearModal, catLabel
 
 const TABS = [['camera', 'Câmaras'], ['light', 'Luzes'], ['stand', 'Tripés e suportes'], ['lens', 'Objetivas'], ['modifier', 'Modificadores'], ['more', 'Outros']];
 const MORE = ['grip', 'power', 'filter', 'other'];
-const st = { tab: 'camera', q: '', brand: '', sub: '', owned: false, src: '' };
+const st = { tab: 'camera', q: '', brand: '', sub: '', owned: false, src: '', lk: '' };
 try { st.tab = localStorage.getItem('bg-gdb-tab') || 'camera'; } catch { /* nada */ }
 const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const eur = new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
@@ -29,7 +29,7 @@ function cols(tab) {
   if (tab === 'camera') return [['Formato', (s) => s.format], ['Sensor', (s) => (s.sensor_w ? `${s.sensor_w} mm` : '')], ['Encaixe', (s) => s.mount]];
   if (tab === 'light') return [['Fonte', (s, g) => (LIGHT_SOURCES.find(([k]) => k === lightSource(g)) || [])[1]?.replace(' (Kino Flo)', '')], ['Tipo', (s) => s.type], ['Consumo', (s) => (s.watts ? `${s.watts} W` : '')], ['Cor', (s) => (s.cct ? (s.cct[0] === s.cct[1] ? `${s.cct[0]}K` : `${s.cct[0]}–${s.cct[1]}K`) : '') + (s.color === 'rgb' ? ' · RGB' : '')], ['Feixe', (s) => (s.beam ? `${s.beam}°` : '')], ['', (s) => (s.battery ? '<span class="chip">bateria</span>' : '')]];
   if (tab === 'stand') return [['Para', (s) => (s.stand === 'camera' ? 'Câmara' : 'Luz / frames')], ['Altura máx.', (s) => (s.max_h ? `${s.max_h} m` : '')], ['Carga máx.', (s) => (s.max_kg ? `${s.max_kg} kg` : '')]];
-  if (tab === 'lens') return [['Focais', (s) => (s.zoom ? `${s.zoom[0]}–${s.zoom[1]} mm` : (s.focals || []).join(', ') + ((s.focals || []).length ? ' mm' : ''))], ['Abertura', (s) => s.tstop], ['Cobre', (s) => ({ S35: 'Super 35', FF: 'Full frame', LF: 'Large format / VV', 65: '65 mm' }[s.cover] || s.cover || '')], ['Encaixe', (s) => s.mount], ['', (s) => `${s.squeeze ? `<span class="chip">anamórfica ${s.squeeze}x</span>` : ''}${s.vintage ? '<span class="chip">vintage</span>' : ''}`]];
+  if (tab === 'lens') return [['Focais', (s) => (s.zoom ? `${s.zoom[0]}–${s.zoom[1]} mm` : (s.focals || []).join(', ') + ((s.focals || []).length ? ' mm' : ''))], ['Abertura', (s) => s.tstop], ['Cobre', (s) => ({ S16: 'Super 16', S35: 'Super 35', FF: 'Full frame', LF: 'Large format / VV', MF: 'Médio formato', 65: '65 mm' }[s.cover] || s.cover || '')], ['Encaixe', (s) => s.mount], ['', (s) => `${s.squeeze ? `<span class="chip">anamórfica ${s.squeeze}x</span>` : ''}${s.vintage ? '<span class="chip">vintage</span>' : ''}${s.origin === 'URSS' ? '<span class="chip">soviética</span>' : s.origin === 'RDA' ? '<span class="chip">RDA</span>' : ''}`]];
   return [['Detalhes', (s, g) => esc(specLine(g))]];
 }
 
@@ -47,7 +47,7 @@ function draw(root) {
   if (st.brand && !brands.includes(st.brand)) st.brand = '';
   if (st.sub && !subs.includes(st.sub)) st.sub = '';
   const words = norm(st.q).split(/\s+/).filter(Boolean);
-  const list = list0.filter((g) => (!st.src || st.tab !== 'light' || lightSource(g) === st.src) && (!st.brand || g.brand === st.brand) && (!st.sub || subOf(g) === st.sub) && (!st.owned || g.owned) && words.every((w) => norm(`${g.brand} ${g.name} ${specLine(g)} ${g.supplier || ''} ${g.notes || ''}`).includes(w)));
+  const list = list0.filter((g) => (!st.src || st.tab !== 'light' || lightSource(g) === st.src) && (!st.lk || st.tab !== 'lens' || lensMatch(g, st.lk)) && (!st.brand || g.brand === st.brand) && (!st.sub || subOf(g) === st.sub) && (!st.owned || g.owned) && words.every((w) => norm(`${g.brand} ${g.name} ${specLine(g)} ${g.supplier || ''} ${g.notes || ''}`).includes(w)));
   const C = cols(st.tab);
   const count = (tab) => all.filter((g) => inTab(g, tab)).length;
   root.innerHTML = `
@@ -56,6 +56,7 @@ function draw(root) {
       <button type="button" class="btn primary" data-add>${ICON.plus} Juntar equipamento</button>
     </div>
     <div class="seg dark gdb-tabs" role="tablist">${TABS.map(([k, l]) => `<button type="button" role="tab" aria-selected="${st.tab === k}" data-tab="${k}">${l} <span class="count">${count(k)}</span></button>`).join('')}</div>
+    ${st.tab === 'lens' ? `<div class="gdb-src" role="radiogroup" aria-label="Tipo de lente">${LENS_FILTERS.map(([k, l]) => `<button type="button" role="radio" aria-checked="${(st.lk || '') === k}" data-lk="${k}">${l} <span class="count">${list0.filter((g) => lensMatch(g, k)).length}</span></button>`).join('')}</div>` : ''}
     ${st.tab === 'light' ? `<div class="gdb-src" role="radiogroup" aria-label="Fonte de luz">${[['', 'Todas'], ...LIGHT_SOURCES].map(([k, l]) => `<button type="button" role="radio" aria-checked="${st.src === k}" data-src="${k}">${l} <span class="count">${k ? list0.filter((g) => lightSource(g) === k).length : list0.length}</span></button>`).join('')}</div>` : ''}
     <div class="row wrap-gap gdb-filters">
       <label class="search"><span class="vh">Procurar</span>${ICON.search}<input type="search" data-q placeholder="Procurar marca, modelo, especificação…" value="${esc(st.q)}" autocomplete="off"></label>
@@ -73,10 +74,11 @@ function draw(root) {
     </tbody></table>` : `<p class="empty-note">${st.q || st.brand || st.sub || st.owned ? 'Nada com estes filtros.' : 'Ainda não há nada aqui.'} Usa “Juntar equipamento”.</p>`}</div>`;
 
   const redraw = () => draw(root);
-  root.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { st.tab = b.dataset.tab; st.brand = ''; st.sub = ''; st.src = ''; try { localStorage.setItem('bg-gdb-tab', st.tab); } catch { /* nada */ } redraw(); }));
+  root.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { st.tab = b.dataset.tab; st.brand = ''; st.sub = ''; st.src = ''; st.lk = ''; try { localStorage.setItem('bg-gdb-tab', st.tab); } catch { /* nada */ } redraw(); }));
   const qi = root.querySelector('[data-q]');
   qi.addEventListener('input', () => { st.q = qi.value; const pos = qi.selectionStart; redraw(); const n = root.querySelector('[data-q]'); n.focus(); n.setSelectionRange(pos, pos); });
   root.querySelectorAll('[data-src]').forEach((b) => b.addEventListener('click', () => { st.src = b.dataset.src; redraw(); }));
+  root.querySelectorAll('[data-lk]').forEach((b) => b.addEventListener('click', () => { st.lk = b.dataset.lk; redraw(); }));
   root.querySelector('[data-brand]')?.addEventListener('change', (e) => { st.brand = e.target.value; redraw(); });
   root.querySelector('[data-sub]')?.addEventListener('change', (e) => { st.sub = e.target.value; redraw(); });
   root.querySelector('[data-owned]').addEventListener('change', (e) => { st.owned = e.target.checked; redraw(); });
