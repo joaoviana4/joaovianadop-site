@@ -14,21 +14,56 @@ const SUPABASE_ANON = FLAVOR.anon;
 // mostrar algo velho depois de mudar alguma coisa. Também deixa pedir de antemão (warm) o que a página vai precisar.
 const readCache = new Map();
 const READ_TTL = 2000;
-export const clearReadCache = () => readCache.clear();
+// Última resposta boa de cada leitura (5 min). Quando o servidor demora (às vezes leva vários segundos a responder,
+// embora a base de dados responda em milissegundos), mostra-se logo o que já se tinha visto e, quando a resposta nova
+// chega e é diferente, a página volta a desenhar-se sozinha. Qualquer gravação ou mudança de outra pessoa limpa isto.
+const lastGood = new Map();
+const STALE_MS = 5 * 60 * 1000;
+const SLOW_MS = 700;
+export const clearReadCache = () => { readCache.clear(); lastGood.clear(); };
+let staleT = 0;
+const notifyStale = () => { clearTimeout(staleT); staleT = setTimeout(() => window.dispatchEvent(new Event('portal-stale')), 250); };
+// leitura com limite de tempo: se o servidor ficar pendurado, tenta outra vez em vez de deixar a página "A carregar…"
+function readFetch(input, init) {
+  if (init.signal) return fetch(input, init);
+  const attempt = (ms) => { const ac = new AbortController(); const t = setTimeout(() => ac.abort(), ms); return fetch(input, { ...init, signal: ac.signal }).finally(() => clearTimeout(t)); };
+  return attempt(6000).catch((e) => { if (e?.name === 'AbortError') return attempt(15000); throw e; });
+}
 function cachedFetch(input, init = {}) {
   const url = typeof input === 'string' ? input : input.url;
   const method = (init.method || (typeof input === 'string' ? 'GET' : input.method) || 'GET').toUpperCase();
   if (!url.includes('/rest/v1/')) return fetch(input, init);
-  if (method !== 'GET' && method !== 'HEAD') { readCache.clear(); return fetch(input, init); }
+  if (method !== 'GET' && method !== 'HEAD') { clearReadCache(); return fetch(input, init); }
   const h = new Headers(init.headers || (typeof input === 'string' ? undefined : input.headers));
   const key = [method, url, h.get('authorization'), h.get('accept'), h.get('accept-profile'), h.get('prefer'), h.get('range')].join('|');
   const hit = readCache.get(key);
-  if (hit && (!hit.at || Date.now() - hit.at < READ_TTL)) return hit.p.then((r) => r.clone());
-  const e = { at: 0, p: null };
-  e.p = fetch(input, init).then((r) => { if (!r.ok) readCache.delete(key); else e.at = Date.now(); return r; }, (err) => { readCache.delete(key); throw err; });
+  // pedido igual já a caminho (há menos de 8 s) ou acabado de chegar: serve-se o mesmo
+  if (hit && (hit.at ? Date.now() - hit.at < READ_TTL : Date.now() - hit.t0 < 8000)) return hit.p.then((r) => r.clone());
+  const e = { at: 0, t0: Date.now(), p: null };
+  e.p = readFetch(input, init).then((r) => {
+    if (!r.ok) { readCache.delete(key); return r; }
+    e.at = Date.now();
+    // guarda uma cópia para as próximas visitas (texto + cabeçalhos que a biblioteca lê)
+    r.clone().text().then((body) => {
+      const prev = lastGood.get(key);
+      if (prev?.served && prev.body !== body) notifyStale();
+      lastGood.set(key, { body, status: r.status, ct: r.headers.get('content-type'), cr: r.headers.get('content-range'), at: Date.now() });
+      if (lastGood.size > 400) lastGood.delete(lastGood.keys().next().value);
+    }).catch(() => {});
+    return r;
+  }, (err) => { readCache.delete(key); throw err; });
   readCache.set(key, e);
   if (readCache.size > 300) readCache.delete(readCache.keys().next().value);
-  return e.p.then((r) => r.clone());
+  const net = e.p.then((r) => r.clone());
+  const old = lastGood.get(key);
+  if (!old || Date.now() - old.at > STALE_MS) return net;
+  // já se viu isto há pouco: se a resposta demorar, mostra-se o que se tinha
+  return Promise.race([net, new Promise((res) => setTimeout(() => res(null), SLOW_MS))]).then((r) => {
+    if (r) return r;
+    old.served = true;
+    const headers = new Headers(); if (old.ct) headers.set('content-type', old.ct); if (old.cr) headers.set('content-range', old.cr);
+    return new Response(method === 'HEAD' ? null : old.body, { status: old.status, headers });
+  });
 }
 
 export const sb = createClient(SUPABASE_URL, SUPABASE_ANON, {

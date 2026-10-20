@@ -90,7 +90,17 @@ const isLogo = (v) => typeof v === 'string' && /^data:image\//.test(v);
 const commMark = (c, cls = 'comm-dot') => (isLogo(c?.logo_path) ? `<span class="${cls} has-logo"><img src="${esc(c.logo_path)}" alt=""></span>` : `<span class="${cls}" style="background:${esc(c?.color || '#8A8A99')}">${cls === 'comm-dot' ? esc(initials(c?.name || '')) : ''}</span>`);
 function go(hash) { if (location.hash === hash) route(); else location.hash = hash; }
 
+// quando uma página foi desenhada com dados guardados (o servidor demorou) e os novos chegam diferentes,
+// volta a desenhá-la — mas só logo a seguir a abrir e se ninguém estiver a escrever ou com uma janela aberta
+let routedAt = 0;
+window.addEventListener('portal-stale', () => {
+  if (!state.user || Date.now() - routedAt > 20000) return;
+  const a = document.activeElement;
+  if (a?.matches?.('input, textarea, select, [contenteditable="true"]') || document.querySelector('#modal.open, .pm-tpop, .dragging, .resizing')) return;
+  const y = window.scrollY; route().then(() => requestAnimationFrame(() => window.scrollTo(0, y)));
+});
 async function route() {
+  routedAt = Date.now();
   // antes de mudar de página: envia o que ainda estava por guardar e espera que chegue à base de dados,
   // para a página seguinte (ou a mesma, ao voltar) já mostrar os dados novos
   await settleSaves();
