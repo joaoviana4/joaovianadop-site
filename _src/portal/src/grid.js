@@ -1,4 +1,4 @@
-import { sb, esc, toast, ICON, saveLater } from './lib.js';
+import { sb, esc, toast, ICON, saveLater, onLeave } from './lib.js';
 
 // Grelha com encaixe (Studio): cada página é feita de elementos que se arrastam e redimensionam numa grelha
 // de 12 colunas. Os elementos sobem sozinhos para ocupar os espaços vazios (como num dashboard).
@@ -44,7 +44,7 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
     inp.addEventListener('keydown', (k) => { if (k.key === 'Enter') finish(true); else if (k.key === 'Escape') finish(false); });
     inp.addEventListener('blur', () => finish(true));
   }
-  const list = [];
+  const list = []; const ros = [];
   root.classList.add('cg');
   root.style.setProperty('--cg-row', `${ROW}px`); root.style.setProperty('--cg-gap', `${GAP}px`);
 
@@ -78,7 +78,7 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
     g.querySelector('.gi-rs').addEventListener('pointerdown', (e) => startResize(e, it));
     g.querySelector('.gi-rs').addEventListener('dblclick', () => { it.h = 0; layout(); save(); });
     // altura automática: acompanha o conteúdo
-    new ResizeObserver(() => { if (!it.h) schedule(); }).observe(g.querySelector('.gi-c'));
+    { const ro = new ResizeObserver(() => { if (!it.h) schedule(); }); ro.observe(g.querySelector('.gi-c')); ros.push(ro); }
     return g;
   }
   const spanOf = (it) => {
@@ -174,6 +174,7 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
   // os novos (sem posição guardada) vão para o fim, pela ordem dada
   requestAnimationFrame(() => { layout(); });
   window.addEventListener('resize', schedule);
+  onLeave(() => { window.removeEventListener('resize', schedule); ros.forEach((r) => r.disconnect()); ros.length = 0; });
 
   return {
     add(it) { const o = add(it); hidden.delete(it.id); requestAnimationFrame(() => { layout(); save(); o.g.scrollIntoView({ behavior: 'smooth', block: 'center' }); }); onChange?.(); return o; },

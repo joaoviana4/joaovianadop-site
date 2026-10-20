@@ -1,4 +1,4 @@
-import { esc, ICON, signedUrl } from './lib.js';
+import { esc, ICON, signedUrl, onLeave } from './lib.js';
 import { parseScript, openPdf, pdfPageText, isSceneHeading, classifyLines } from './script.js';
 
 // Leitor do guião: as páginas do PDF tal como foram escritas (ou, para Fountain / Final Draft / texto,
@@ -251,7 +251,7 @@ export function mountReader(el, { version, sceneHref, pagesIndex = false, scene 
   const onWheel = (e) => { if (!(e.ctrlKey || e.metaKey)) return; e.preventDefault(); const s = scale(); rezoom(Math.max(0.4, Math.min(2.5, +(s * Math.exp(-e.deltaY * 0.002)).toFixed(3)))); };
   pagesEl.addEventListener('wheel', onWheel, { passive: false });
   let rt = 0; const onResize = () => { clearTimeout(rt); rt = setTimeout(() => fitting() && rezoom(zoom, beforeFs !== null), 120); };
-  window.addEventListener('resize', onResize);
+  window.addEventListener('resize', onResize); onLeave(() => window.removeEventListener('resize', onResize));
   if (matchMedia('(max-width: 760px)').matches || compact) root.classList.add('no-side');
   if (compact) root.classList.add('sr-mini');
 

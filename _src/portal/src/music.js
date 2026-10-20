@@ -4,7 +4,7 @@ import { pageButtons, sceneNums, bindSceneNums } from './pagenotes.js';
 import { offerActions } from './canvas.js';
 import { placeProps } from './sceneinfo.js';
 import { geoPanel } from './placegeo.js';
-import { saveLater, sb, BUCKET, esc, toast, confirmBox, modal, ICON, signedUrls, signedUrl, uploadImage } from './lib.js';
+import { saveLater, sb, BUCKET, esc, toast, confirmBox, modal, ICON, signedUrls, signedUrl, uploadImage, onLeave } from './lib.js';
 import { entMode, entUrls, modeToggle, bindMode, entItems, photoField, bindPhoto, bindEdits, placePhotos, bindPlacePhotos } from './entview.js';
 import { shotCard, bindShots, shotViewer } from './fiction.js';
 import { mountLayout, fullscreenButton } from './layout.js';
@@ -322,7 +322,7 @@ async function section(main, p, f, sid, base, cleanup) {
     const files = [...(e.clipboardData?.files || [])]; if (!files.some((x) => x.type.startsWith('image/'))) return;
     e.preventDefault(); e.stopPropagation(); addRefs(files);
   };
-  document.addEventListener('paste', onPaste, true);
+  document.addEventListener('paste', onPaste, true); onLeave(() => document.removeEventListener('paste', onPaste, true));
   cleanup(() => document.removeEventListener('paste', onPaste, true));
   refsBox.querySelectorAll('[data-refrm]').forEach((b) => b.addEventListener('click', async () => {
     if (!(await confirmBox('Tirar esta imagem das referências?', 'Tirar'))) return;
@@ -600,7 +600,7 @@ async function storyboard(main, p, f, base) {
     const file = [...(e.clipboardData?.files || [])].find((x) => x.type.startsWith('image/')); if (!file || !hover) return;
     e.preventDefault(); setImg(f.shots.find((x) => x.id === hover), file);
   };
-  document.addEventListener('paste', onPaste);
+  document.addEventListener('paste', onPaste); onLeave(() => document.removeEventListener('paste', onPaste));
 }
 
 // Música, pre-vis e referências como ferramenta (para qualquer projeto ou departamento)

@@ -1,5 +1,5 @@
 import { onWrite } from './undo.js';
-import { saveLater, sb, BUCKET, esc, toast, modal, confirmBox, ICON, signedUrl, signedUrls, uploadImage, fmtDate } from './lib.js';
+import { saveLater, sb, BUCKET, esc, toast, modal, confirmBox, ICON, signedUrl, signedUrls, uploadImage, fmtDate, onLeave } from './lib.js';
 import { entMode, entUrls, modeToggle, bindMode, entItems, photoField, bindPhoto, bindEdits } from './entview.js';
 import { parseScript, fileToText, eighthsLabel } from './script.js';
 import { mountReader } from './scriptview.js';
@@ -346,7 +346,7 @@ export function bindShots(main, p, f, s, shots, urls, base) {
     e.preventDefault();
     setImage(shots.find((x) => x.id === card.dataset.shot), card, file);
   };
-  document.addEventListener('paste', onPaste);
+  document.addEventListener('paste', onPaste); onLeave(() => document.removeEventListener('paste', onPaste));
   function pickImage(sh, card) { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.onchange = () => inp.files[0] && setImage(sh, card, inp.files[0]); inp.click(); }
   async function setImage(sh, card, file) {
     try {
@@ -537,7 +537,7 @@ async function decor(main, p, f, id, base, cleanup) {
   const grid = main.querySelector('[data-photos]');
   grid.addEventListener('dragover', (e) => e.preventDefault());
   grid.addEventListener('drop', (e) => { e.preventDefault(); add(e.dataTransfer.files); });
-  { const h = (e) => { if (!document.body.contains(grid)) { document.removeEventListener('paste', h); return; } if (e.target.closest?.('input, textarea') || document.querySelector('#modal .modal')) return; const fs = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith('image/')); if (fs.length) { e.preventDefault(); add(fs); } }; document.addEventListener('paste', h); }
+  { const h = (e) => { if (!document.body.contains(grid)) { document.removeEventListener('paste', h); return; } if (e.target.closest?.('input, textarea') || document.querySelector('#modal .modal')) return; const fs = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith('image/')); if (fs.length) { e.preventDefault(); add(fs); } }; document.addEventListener('paste', h); onLeave(() => document.removeEventListener('paste', h)); }
   grid.querySelectorAll('[data-rmph]').forEach((b) => b.addEventListener('click', async () => { l.photos = l.photos.filter((_, i) => i !== +b.dataset.rmph); await sb.from('locations').update({ photos: l.photos }).eq('id', l.id); decor(main, p, f, id, base, cleanup); }));
   main.querySelector('[data-delent]').addEventListener('click', async () => {
     if (!(await confirmBox(`Apagar o décor ${l.name}? As cenas ficam sem décor.`, 'Apagar'))) return;
@@ -578,7 +578,7 @@ async function storyboard(main, p, f, _sub, base) {
   // Ctrl+V com o rato por cima de um plano: troca a imagem desse plano
   let hover = null;
   const onPaste = (e) => { if (!document.body.contains(main.querySelector('.sb-grid')) ) { document.removeEventListener('paste', onPaste); return; } if (!hover || e.target.closest?.('input, textarea')) return; const file = [...(e.clipboardData?.files || [])].find((y) => y.type.startsWith('image/')); if (!file) return; e.preventDefault(); const x = f.shots.find((y) => y.id === hover); if (x) (async () => { toast('A enviar a imagem…'); const up = await uploadImage(p.id, 'storyboard', file); await sb.from('shots').update({ image_path: up.path }).eq('id', x.id); x.image_path = up.path; Object.assign(urls, await signedUrls([up.path])); draw(); })(); };
-  document.addEventListener('paste', onPaste);
+  document.addEventListener('paste', onPaste); onLeave(() => document.removeEventListener('paste', onPaste));
   draw();
 }
 

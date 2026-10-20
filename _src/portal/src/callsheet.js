@@ -380,7 +380,8 @@ export function callsheetTool(main, p, tool, { edit = false } = {}) {
         <button type="button" class="btn primary" data-export>${ICON.open} Exportar</button></div>
       ${studioHtml(d)}`;
     const auto = (t) => { if (t.tagName === 'TEXTAREA') { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; } };
-    main.querySelectorAll('.cst textarea').forEach(auto);
+    // todas de uma vez (ler e escrever alturas alternadamente obrigava o browser a refazer a página por cada campo)
+    { const tas = [...main.querySelectorAll('.cst textarea')]; tas.forEach((t) => (t.style.height = 'auto')); const hs = tas.map((t) => t.scrollHeight); tas.forEach((t, i) => (t.style.height = hs[i] + 'px')); }
     main.querySelectorAll('[data-p]').forEach((el) => el.addEventListener('input', () => { set(d, el.dataset.p, el.value); auto(el); save(); if (el.dataset.p === 'weather.text') { const ic = main.querySelector('[data-wxic]'); if (ic) ic.textContent = wxIcon(el.value); } if (el.dataset.p === 'date') { const pd = main.querySelector('[data-prettydate]'); if (pd) pd.textContent = fmtDay(d.date) || 'Escolher a data'; }
       if (['date', 'day'].includes(el.dataset.p)) { const t = main.querySelector(`[data-day="${cur}"]`); if (t) t.innerHTML = `<b>Dia ${esc(d.day || cur + 1)}</b>${d.date ? `<small>${esc(shortDay(d.date))}</small>` : ''}<small class="muted">${d.rows.filter((r) => r.kind === 'shot').length} pl.</small>`; } }));
     main.querySelector('[data-acc]').addEventListener('input', (e) => { d.accent = e.target.value; main.querySelector('.cst').style.setProperty('--acc', d.accent); save(); });

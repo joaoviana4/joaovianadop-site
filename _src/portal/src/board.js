@@ -1,4 +1,4 @@
-import { trackWrite, DB_SCHEMA, sb, BUCKET, esc, signedUrl, signedUrls, uploadImage, toast, modal, confirmBox, ICON } from './lib.js';
+import { trackWrite, DB_SCHEMA, sb, BUCKET, esc, signedUrl, signedUrls, uploadImage, toast, modal, confirmBox, ICON, onLeave } from './lib.js';
 import { ytId } from './music.js';
 
 // Board infinito à maneira do Milanote: cada cartão é uma linha própria na base de dados,
@@ -743,7 +743,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     if (t && /^https?:\/\/\S+$/.test(t)) { e.preventDefault(); create('link', null, { url: t, title: '' }, ytId(t) ? [300, 230] : undefined); }
     else if (t) { e.preventDefault(); create('note', null, { text: t }); }
   };
-  document.addEventListener('paste', onPaste);
+  document.addEventListener('paste', onPaste); onLeave(() => document.removeEventListener('paste', onPaste));
 
   // teclado
   const onKey = async (e) => {

@@ -1,5 +1,5 @@
 import { onWrite } from './undo.js';
-import { saveLater, sb, esc, toast, modal, confirmBox, ICON, signedUrls, uploadImage } from './lib.js';
+import { saveLater, sb, esc, toast, modal, confirmBox, ICON, signedUrls, uploadImage, onLeave } from './lib.js';
 import { pageButtons } from './pagenotes.js';
 import { offerActions } from './canvas.js';
 import { scriptMode } from './modules.js';
@@ -326,7 +326,7 @@ async function propPage(main, p, f, id, base, cleanup) {
     for (const file of files) { try { const up = await uploadImage(p.id, 'props', file); x.refs = [...(x.refs || []), { kind: 'image', path: up.path }]; } catch (er) { toast(er.message); } }
     saveRefs();
   };
-  document.addEventListener('paste', onPaste);
+  document.addEventListener('paste', onPaste); onLeave(() => document.removeEventListener('paste', onPaste));
   cleanup(() => document.removeEventListener('paste', onPaste));
   main.querySelector('[data-addlink]').addEventListener('click', () => {
     const m = modal(`<h2>Link para produto</h2><form class="stack"><div class="field"><label for="lu">Endereço</label><input id="lu" type="url" required placeholder="https://"></div><div class="field"><label for="lt">Nome (opcional)</label><input id="lt"></div><div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Juntar</button></div></form>`);

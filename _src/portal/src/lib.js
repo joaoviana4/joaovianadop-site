@@ -9,10 +9,38 @@ export { IS_STUDIO, FLAVOR };
 export const SUPABASE_URL = FLAVOR.url;
 const SUPABASE_ANON = FLAVOR.anon;
 
+// Leituras repetidas: o mesmo pedido (GET/HEAD igual) feito por várias partes da página ao mesmo tempo, ou logo a
+// seguir, vai à base de dados uma só vez. Dura 2 s depois de chegar; qualquer gravação limpa tudo, para nunca se
+// mostrar algo velho depois de mudar alguma coisa. Também deixa pedir de antemão (warm) o que a página vai precisar.
+const readCache = new Map();
+const READ_TTL = 2000;
+export const clearReadCache = () => readCache.clear();
+function cachedFetch(input, init = {}) {
+  const url = typeof input === 'string' ? input : input.url;
+  const method = (init.method || (typeof input === 'string' ? 'GET' : input.method) || 'GET').toUpperCase();
+  if (!url.includes('/rest/v1/')) return fetch(input, init);
+  if (method !== 'GET' && method !== 'HEAD') { readCache.clear(); return fetch(input, init); }
+  const h = new Headers(init.headers || (typeof input === 'string' ? undefined : input.headers));
+  const key = [method, url, h.get('authorization'), h.get('accept'), h.get('accept-profile'), h.get('prefer'), h.get('range')].join('|');
+  const hit = readCache.get(key);
+  if (hit && (!hit.at || Date.now() - hit.at < READ_TTL)) return hit.p.then((r) => r.clone());
+  const e = { at: 0, p: null };
+  e.p = fetch(input, init).then((r) => { if (!r.ok) readCache.delete(key); else e.at = Date.now(); return r; }, (err) => { readCache.delete(key); throw err; });
+  readCache.set(key, e);
+  if (readCache.size > 300) readCache.delete(readCache.keys().next().value);
+  return e.p.then((r) => r.clone());
+}
+
 export const sb = createClient(SUPABASE_URL, SUPABASE_ANON, {
   auth: { persistSession: true, autoRefreshToken: true, storageKey: FLAVOR.storageKey },
   db: { schema: FLAVOR.schema },
+  global: { fetch: cachedFetch },
 });
+// mudanças feitas por outra pessoa (tempo real): o que se ler a seguir vem sempre fresco
+{
+  const ch = sb.channel.bind(sb);
+  sb.channel = (...a) => { const c = ch(...a); const on = c.on.bind(c); c.on = (type, filter, cb) => on(type, filter, typeof cb === 'function' ? (...x) => { clearReadCache(); return cb(...x); } : cb); return c; };
+}
 // Ctrl+Z em todas as páginas (undo.js)
 queueMicrotask(() => installUndo(sb, (m) => toast(m)));
 
@@ -36,6 +64,11 @@ window.addEventListener('beforeunload', (e) => {
   [...pendingSaves].forEach((x) => x.flush());
   e.preventDefault(); e.returnValue = '';
 });
+// ao sair de uma página: tira o que ela pendurou na janela (colar, copiar, redimensionar…). Sem isto, cada página
+// visitada ficava presa na memória e a reagir em segundo plano, e o Studio ia ficando mais lento ao longo do dia.
+const leaveFns = new Set();
+export const onLeave = (f) => { leaveFns.add(f); return f; };
+export function runLeave() { const fs = [...leaveFns]; leaveFns.clear(); fs.forEach((f) => { try { f(); } catch { /* nada */ } }); }
 // ficheiros: sb.storage.from(BUCKET)
 export const BUCKET = FLAVOR.bucket;
 

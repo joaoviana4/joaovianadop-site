@@ -1,4 +1,4 @@
-import { sb, esc, toast, ICON, saveLater, uploadImage, signedUrls } from './lib.js';
+import { sb, esc, toast, ICON, saveLater, uploadImage, signedUrls, onLeave } from './lib.js';
 import { mountGrid, COLS } from './grid.js';
 
 // Páginas como boards (Studio). Cada página tem os seus elementos (a página em si, ou os blocos da visão geral)
@@ -186,7 +186,7 @@ export function mountCanvas(main, p, { key, native, render, here, pageLabel = 'p
   const onCopy = (e) => { if (!document.body.contains(root)) return off(); if (!hover || typing(e) || document.querySelector('.bp-active')) return; const it = grid.items().find((x) => x.id === hover); if (it?.copy) { e.preventDefault(); it.copy(); } };
   const onClip = () => { if (!document.body.contains(root)) return off(); drawTools(); };
   const off = () => { document.removeEventListener('paste', onPaste); document.removeEventListener('copy', onCopy); window.removeEventListener('portal-clip', onClip); window.removeEventListener('storage', onClip); };
-  document.addEventListener('paste', onPaste); document.addEventListener('copy', onCopy); window.addEventListener('portal-clip', onClip); window.addEventListener('storage', onClip);
+  document.addEventListener('paste', onPaste); document.addEventListener('copy', onCopy); window.addEventListener('portal-clip', onClip); window.addEventListener('storage', onClip); onLeave(off);
   drawTools();
   return grid;
 }
