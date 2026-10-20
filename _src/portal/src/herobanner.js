@@ -1,9 +1,11 @@
 import { sb, esc, toast, ICON, state, signedUrls, knownUrl, greeting, compressImage, saveLater } from './lib.js';
+import { FLAVOR } from './flavor.js';
 
 // Banner do início ("Boa tarde, nome"): cada pessoa escolhe o seu. Fica no perfil (profiles.prefs.hero):
-// { img: 'vf:<uid>/studio-banner/<id>.webp', pos: 0–100 (enquadramento vertical), color, title, kicker,
+// { img: <caminho da imagem>, pos: 0–100 (enquadramento vertical), color, title, kicker,
 //   size: 'compact' | 'normal' | 'tall', grain: true/false }
-// A imagem vai para a pasta da própria pessoa (bucket photos/<uid>/…), que só ela pode ver e mudar.
+// A imagem vai para a pasta da própria pessoa (FLAVOR.ownDir: no Studio photos/<uid>/…, na byGrain files/u/<uid>/…),
+// que só ela pode ver e mudar.
 const DEF = { img: null, pos: 50, color: '', title: '', kicker: '', size: 'normal', grain: true };
 const COLORS = ['', '#111114', '#2B2B33', '#3A2E5C', '#1F4E3D', '#6B2B2B', '#8A5A12', '#0E4A6B'];
 const cfg = () => ({ ...DEF, ...(state.profile?.prefs?.hero || {}) });
@@ -86,12 +88,13 @@ export function heroEditor(el) {
         try {
           toast('A enviar a imagem…');
           const { blob, ext } = await compressImage(f, 2400);
-          const path = `${state.user.id}/studio-banner/${crypto.randomUUID()}.${ext}`;
-          const { error } = await sb.storage.from('photos').upload(path, blob, { contentType: blob.type || 'image/webp', upsert: false });
+          const own = FLAVOR.ownDir(state.user.id);
+          const path = `${own.dir}/${crypto.randomUUID()}.${ext}`;
+          const { error } = await sb.storage.from(own.bucket).upload(path, blob, { contentType: blob.type || 'image/webp', upsert: false });
           if (error) throw error;
-          const old = c.img; c.img = `vf:${path}`; c.pos = 50; commit(); draw();
+          const old = c.img; c.img = `${own.prefix}${path}`; c.pos = 50; commit(); draw();
           // a imagem anterior (da própria pessoa) já não faz falta
-          if (old?.startsWith(`vf:${state.user.id}/studio-banner/`)) sb.storage.from('photos').remove([old.slice(3)]).catch(() => {});
+          if (old?.startsWith(`${own.prefix}${own.dir}/`)) sb.storage.from(own.bucket).remove([old.slice(own.prefix.length)]).catch(() => {});
         } catch (e) { toast('Não foi possível enviar: ' + (e.message || e)); }
       };
       inp.click();

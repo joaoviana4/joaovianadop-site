@@ -1,5 +1,8 @@
 import { saveLater, sb, esc, toast, ICON, signedUrls, uploadImage, confirmBox } from './lib.js';
-import { entMode, entUrls, modeToggle, bindMode, entItems } from './entview.js';
+import { entMode, entUrls, modeToggle, bindMode, entItems, bindPhoto } from './entview.js';
+import { quickInfo, heroPhoto } from './quickinfo.js';
+import { pageButtons } from './pagenotes.js';
+import { offerActions } from './canvas.js';
 
 // Figurino (departamento de Arte): cada ator/personagem tem uma página com
 //  · o moodboard "Moodboard (nome)" — um board normal, que se abre em ecrã inteiro
@@ -57,46 +60,75 @@ async function personPage(main, p, c, base, cleanup) {
   const redraw = () => personPage(main, p, c, base, cleanup);
   const img = (ph, i, attr) => `<figure>${urls[ph.path] ? `<img src="${esc(urls[ph.path])}" alt="" loading="lazy">` : '<span class="muted small">a carregar…</span>'}<button type="button" class="icon-btn sm" ${attr}="${i}" aria-label="Tirar foto">${ICON.close}</button></figure>`;
 
-  main.innerHTML = `<a href="${base}/figurino" class="link-btn">${ICON.back} Figurino</a>
-    <header class="wr-head">
-      <span class="wr-ph">${urls[c.info?.photo] ? `<img src="${esc(urls[c.info.photo])}" alt="">` : ICON.team}</span>
-      <div><h1 class="h1">${esc(title)}</h1><p class="muted">${c.actor ? esc(c.name) : c.info?.extra ? 'Figurante' : 'Personagem'}</p></div>
-      <button type="button" class="btn primary wr-mood" data-mood>${ICON.board} Moodboard (${esc(title)})</button>
+  // página limpa: em cima a foto, o nome e só o que está preenchido; o resto abre-se com botões
+  main.innerHTML = `<nav class="row between"><a href="${base}/figurino" class="link-btn">${ICON.back} Figurino</a><span data-pp></span></nav>
+    <header class="qi-hero">
+      ${heroPhoto(urls[c.info?.photo], 'Foto')}
+      <div class="qi-main"><span class="small muted">${c.info?.extra ? 'Figurante' : c.actor ? esc(c.name) : 'Personagem'}</span><h1 class="h1">${esc(title)}</h1>
+        <div data-qi></div><div data-acts></div></div>
     </header>
-    <div class="wr-grid">
-      <section class="panel stack"><h2 class="h3">Medidas</h2>
-        <table class="table wr-meas"><tbody>${MEASURES.map(([k, l]) => `<tr><th>${l}</th><td><input data-m="${k}" value="${esc(w.measures[k] || '')}" aria-label="${l}" placeholder="—"></td></tr>`).join('')}
-          ${(w.extraMeasures || []).map((x, i) => `<tr><th><input class="wr-mname" data-xn="${i}" value="${esc(x.name)}" aria-label="Nome da medida"></th><td class="row"><input data-xv="${i}" value="${esc(x.value || '')}" aria-label="${esc(x.name)}" placeholder="—"><button type="button" class="icon-btn sm" data-xrm="${i}" aria-label="Tirar">${ICON.close}</button></td></tr>`).join('')}</tbody></table>
-        <button type="button" class="link-btn small" data-xadd>${ICON.plus} Outra medida</button>
-        <div class="field"><label for="wn">Notas (alergias a tecidos, preferências, tatuagens a tapar…)</label><textarea id="wn" data-m="notas" rows="3">${esc(w.measures.notas || '')}</textarea></div>
-      </section>
-      <section class="stack wr-costumes">
-        <div class="row between"><h2 class="h3">Figurinos</h2><button type="button" class="btn ghost" data-cadd>${ICON.plus} Figurino</button></div>
-        ${w.costumes.length ? w.costumes.map((x, i) => `<article class="panel stack wr-cost" data-ci="${i}">
-          <div class="row between"><input class="title-in h3 wr-cname" data-cname="${i}" value="${esc(x.name)}" aria-label="Nome do figurino"><div class="row"><button type="button" class="btn ghost sm" data-cboard="${i}" title="Board deste figurino, em ecrã inteiro">${ICON.board} Board</button><button type="button" class="icon-btn" data-crm="${i}" aria-label="Apagar figurino">${ICON.trash}</button></div></div>
-          <textarea data-cnotes="${i}" rows="2" placeholder="Peças, cores, tecidos, cenas onde entra…">${esc(x.notes || '')}</textarea>
-          <div class="row between"><span class="label">Referências</span><button type="button" class="link-btn small" data-cph="${i}">${ICON.plus} Fotos</button></div>
-          <div class="photo-grid wr-photos" data-cdrop="${i}">${(x.photos || []).map((ph, j) => img(ph, `${i}:${j}`, 'data-cphrm')).join('') || '<p class="muted small">Larga aqui fotos de referência, ou cola com Ctrl+V depois de carregares neste figurino.</p>'}</div>
-        </article>`).join('') : '<div class="empty-box"><p>Ainda não há figurinos.</p><p class="muted small">Cria o "Figurino 1" e junta-lhe as fotos de referência.</p></div>'}
-      </section>
-    </div>
-    <section class="panel stack">
-      <div class="row between"><h2 class="h3">Provas de guarda-roupa</h2><button type="button" class="btn ghost" data-fadd>${ICON.plus} Fotos</button></div>
-      <div class="photo-grid wr-fit" data-fdrop>${w.fittings.map((ph, i) => `<figure>${urls[ph.path] ? `<img src="${esc(urls[ph.path])}" alt="" loading="lazy">` : ''}<input class="wr-cap" data-fcap="${i}" value="${esc(ph.caption || '')}" placeholder="Legenda (figurino, data…)" aria-label="Legenda"><button type="button" class="icon-btn sm" data-frm="${i}" aria-label="Tirar foto">${ICON.close}</button></figure>`).join('') || '<p class="muted small">Fotos das provas com o ator vestido. Larga-as aqui ou cola com Ctrl+V.</p>'}</div>
-    </section>`;
+    <span hidden><button type="button" data-cadd></button><button type="button" data-fadd2></button></span>
+    <section class="panel bp-wrap" data-mb hidden></section>
+    <section class="stack wr-costumes">
+      ${w.costumes.length ? `<div class="row between"><h2 class="h3">Figurinos</h2></div>` : ''}
+      ${w.costumes.map((x, i) => `<article class="panel stack wr-cost" data-ci="${i}">
+        <div class="row between wrap-gap"><input class="title-in h3 wr-cname" data-cname="${i}" value="${esc(x.name)}" aria-label="Nome do figurino">
+          <div class="row wrap-gap"><button type="button" class="btn ghost sm" data-cph="${i}">${ICON.image} Fotos</button>${x.notes ? '' : `<button type="button" class="btn ghost sm" data-cnote="${i}">${ICON.note} Nota</button>`}<button type="button" class="btn ghost sm" data-cboard="${i}" title="Board deste figurino, em ecrã inteiro">${ICON.board} Board</button><button type="button" class="icon-btn" data-crm="${i}" aria-label="Apagar figurino">${ICON.trash}</button></div></div>
+        <textarea data-cnotes="${i}" rows="2" placeholder="Peças, cores, tecidos, cenas onde entra…" ${x.notes ? '' : 'hidden'}>${esc(x.notes || '')}</textarea>
+        ${(x.photos || []).length ? `<div class="photo-grid wr-photos" data-cdrop="${i}">${x.photos.map((ph, j) => img(ph, `${i}:${j}`, 'data-cphrm')).join('')}</div>` : `<div class="wr-drop" data-cdrop="${i}">Larga aqui fotos de referência, ou cola com Ctrl+V</div>`}
+      </article>`).join('')}
+    </section>
+    ${w.fittings.length ? `<section class="panel stack" data-fsec>
+      <div class="row between"><h2 class="h3">Provas de guarda-roupa</h2><button type="button" class="btn ghost sm" data-fadd>${ICON.plus} Fotos</button></div>
+      <div class="photo-grid wr-fit" data-fdrop>${w.fittings.map((ph, i) => `<figure>${urls[ph.path] ? `<img src="${esc(urls[ph.path])}" alt="" loading="lazy">` : ''}<input class="wr-cap" data-fcap="${i}" value="${esc(ph.caption || '')}" placeholder="Legenda (figurino, data…)" aria-label="Legenda"><button type="button" class="icon-btn sm" data-frm="${i}" aria-label="Tirar foto">${ICON.close}</button></figure>`).join('')}</div>
+    </section>` : ''}`;
 
-  // moodboard: cria-se na primeira vez (um board próprio, fora da lista de ferramentas)
-  main.querySelector('[data-mood]').addEventListener('click', async () => {
+  // medidas, características e notas: só aparece o que estiver preenchido
+  const qi = quickInfo(main.querySelector('[data-qi]'), {
+    groups: [
+      { key: 'medidas', label: 'Medidas', add: 'Medidas e tamanhos', fields: MEASURES.map(([k, l]) => ({ k, label: l })),
+        show: (get) => MEASURES.filter(([k]) => String(get(k) || '').trim()).map(([k, l]) => `${l} ${get(k)}`).concat((w.extraMeasures || []).filter((x) => x.value).map((x) => `${x.name} ${x.value}`)).join(' · ') },
+      { key: 'notas', label: 'Características', add: 'Características (alergias, tatuagens…)', fields: [{ k: 'notas', label: 'Alergias a tecidos, preferências, tatuagens a tapar…', type: 'textarea' }] },
+    ],
+    get: (k) => w.measures[k],
+    save: async (patch) => { Object.assign(w.measures, patch); await saveNow(); },
+  });
+  void qi;
+  bindPhoto(main, p, 'characters', c, redraw);
+  pageButtons(main.querySelector('[data-pp]'), p, { type: 'character', id: c.id, label: title });
+
+  // moodboard: aparece na página (pré-visualização) quando existe; cria-se pela barra da direita
+  const showMood = async () => {
+    const el = main.querySelector('[data-mb]'); if (!el || !w.board_id) return;
+    el.hidden = false;
+    const { boardPreview } = await import('./boardview.js');
+    const bid = w.board_id;
+    const h = boardPreview(el, p, { boardId: bid, title: 'Moodboard', href: `${base}/b/${bid}`, base,
+      onRemove: async () => {
+        if (!(await confirmBox('Apagar o moodboard? As imagens e notas que tem também se apagam.', 'Apagar'))) return;
+        const { error } = await sb.from('boards').delete().eq('id', bid); if (error) return toast(error.message);
+        delete w.board_id; await saveNow(); h?.destroy(); el.hidden = true; el.innerHTML = ''; toast('Moodboard apagado.'); offer();
+      } });
+    if (h) cleanup(() => h.destroy());
+  };
+  const createMood = async () => {
     let bid = w.board_id;
     if (bid) { const { data: ex } = await sb.from('boards').select('id').eq('id', bid).maybeSingle(); if (!ex) bid = null; }
     if (!bid) {
       const grp = (p.departments || []).find((d) => d.id === 'arte') ? 'arte' : null;
       const { data: b, error } = await sb.from('boards').insert({ project_id: p.id, kind: 'wrd', title: `Moodboard (${title})`, group_id: grp, data: { character_id: c.id } }).select('id').single();
       if (error) return toast(error.message);
-      w.board_id = b.id; await saveNow(); bid = b.id;
+      w.board_id = b.id; await saveNow();
     }
-    location.hash = `${base}/b/${bid}`;
-  });
+    await showMood(); main.querySelector('[data-mb]')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); offer();
+  };
+  const offer = () => offerActions(main, main.querySelector('[data-acts]'), [
+    { label: 'Figurino', icon: ICON.hanger || ICON.plus, title: 'Juntar um figurino', run: () => main.querySelector('[data-cadd]').click() },
+    { label: 'Provas', icon: ICON.image, title: 'Juntar fotos das provas de guarda-roupa', run: () => main.querySelector('[data-fadd2]').click() },
+    ...(!w.board_id ? [{ label: 'Moodboard', icon: ICON.board, title: 'Criar o moodboard (aparece aqui na página)', run: createMood }] : []),
+  ]);
+  offer();
+  showMood();
   // board de cada figurino
   main.querySelectorAll('[data-cboard]').forEach((btn) => btn.addEventListener('click', async () => {
     const x = w.costumes[+btn.dataset.cboard];
@@ -105,16 +137,11 @@ async function personPage(main, p, c, base, cleanup) {
     if (x.board_id !== id) { x.board_id = id; await saveNow(); }
     location.hash = `${base}/b/${id}`;
   }));
-  // medidas
-  main.querySelectorAll('[data-m]').forEach((el) => el.addEventListener('input', () => { w.measures[el.dataset.m] = el.value; save(); }));
-  main.querySelector('[data-xadd]').addEventListener('click', async () => { w.extraMeasures = [...(w.extraMeasures || []), { name: 'Medida', value: '' }]; await saveNow(); redraw(); });
-  main.querySelectorAll('[data-xn]').forEach((el) => el.addEventListener('input', () => { w.extraMeasures[+el.dataset.xn].name = el.value; save(); }));
-  main.querySelectorAll('[data-xv]').forEach((el) => el.addEventListener('input', () => { w.extraMeasures[+el.dataset.xv].value = el.value; save(); }));
-  main.querySelectorAll('[data-xrm]').forEach((b) => b.addEventListener('click', async () => { w.extraMeasures.splice(+b.dataset.xrm, 1); await saveNow(); redraw(); }));
   // figurinos
-  main.querySelector('[data-cadd]').addEventListener('click', async () => { w.costumes.push({ id: uid(), name: `Figurino ${w.costumes.length + 1}`, notes: '', photos: [] }); await saveNow(); redraw(); requestAnimationFrame(() => { const el = main.querySelector(`[data-cname="${w.costumes.length - 1}"]`); el?.focus(); el?.select(); }); });
+  main.querySelector('[data-cadd]')?.addEventListener('click', async () => { w.costumes.push({ id: uid(), name: `Figurino ${w.costumes.length + 1}`, notes: '', photos: [] }); await saveNow(); redraw(); requestAnimationFrame(() => { const el = main.querySelector(`[data-cname="${w.costumes.length - 1}"]`); el?.focus(); el?.select(); }); });
   main.querySelectorAll('[data-cname]').forEach((el) => el.addEventListener('input', () => { w.costumes[+el.dataset.cname].name = el.value; save(); }));
   main.querySelectorAll('[data-cnotes]').forEach((el) => el.addEventListener('input', () => { w.costumes[+el.dataset.cnotes].notes = el.value; save(); }));
+  main.querySelectorAll('[data-cnote]').forEach((b) => b.addEventListener('click', () => { const t = main.querySelector(`[data-cnotes="${b.dataset.cnote}"]`); t.hidden = false; t.focus(); b.remove(); }));
   main.querySelectorAll('[data-crm]').forEach((b) => b.addEventListener('click', async () => { const x = w.costumes[+b.dataset.crm]; if (!(await confirmBox(`Apagar "${x.name}" e as suas fotos de referência?`, 'Apagar'))) return; w.costumes.splice(+b.dataset.crm, 1); await saveNow(); redraw(); }));
   main.querySelectorAll('[data-cphrm]').forEach((b) => b.addEventListener('click', async () => { const [i, j] = b.dataset.cphrm.split(':').map(Number); w.costumes[i].photos.splice(j, 1); await saveNow(); redraw(); }));
 
@@ -131,19 +158,20 @@ async function personPage(main, p, c, base, cleanup) {
   main.querySelectorAll('[data-cph]').forEach((b) => b.addEventListener('click', () => pick(toCostume(+b.dataset.cph))));
   main.querySelectorAll('[data-ci]').forEach((el) => el.addEventListener('pointerdown', () => { target = toCostume(+el.dataset.ci); main.querySelectorAll('.wr-cost').forEach((x) => x.classList.toggle('on', x === el)); }));
   main.querySelectorAll('[data-cdrop]').forEach((el) => { el.addEventListener('dragover', (e) => e.preventDefault()); el.addEventListener('drop', (e) => { e.preventDefault(); upload(e.dataTransfer.files, toCostume(+el.dataset.cdrop)); }); });
-  main.querySelector('[data-fadd]').addEventListener('click', () => pick(toFit));
+  main.querySelectorAll('[data-fadd], [data-fadd2]').forEach((b) => b.addEventListener('click', () => pick(toFit)));
   const fd = main.querySelector('[data-fdrop]');
-  fd.addEventListener('dragover', (e) => e.preventDefault()); fd.addEventListener('drop', (e) => { e.preventDefault(); upload(e.dataTransfer.files, toFit); });
-  fd.closest('.panel').addEventListener('pointerdown', () => { target = toFit; main.querySelectorAll('.wr-cost').forEach((x) => x.classList.remove('on')); });
+  if (fd) { fd.addEventListener('dragover', (e) => e.preventDefault()); fd.addEventListener('drop', (e) => { e.preventDefault(); upload(e.dataTransfer.files, toFit); }); main.querySelector('[data-fsec]').addEventListener('pointerdown', () => { target = toFit; main.querySelectorAll('.wr-cost').forEach((x) => x.classList.remove('on')); }); }
   main.querySelectorAll('[data-fcap]').forEach((el) => el.addEventListener('input', () => { w.fittings[+el.dataset.fcap].caption = el.value; save(); }));
   main.querySelectorAll('[data-frm]').forEach((b) => b.addEventListener('click', async () => { w.fittings.splice(+b.dataset.frm, 1); await saveNow(); redraw(); }));
+  const anchor = main.querySelector('.qi-hero');
   const onPaste = (e) => {
-    if (!document.body.contains(fd)) { document.removeEventListener('paste', onPaste); return; }
-    if (e.target.closest?.('input, textarea') || document.querySelector('#modal .modal')) return;
+    if (!document.body.contains(anchor)) { document.removeEventListener('paste', onPaste, true); return; }
+    if (e.target.closest?.('input, textarea') || document.querySelector('#modal .modal') || e.target.closest?.('[data-photo-drop]')) return;
     const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith('image/')); if (!files.length) return;
-    e.preventDefault(); upload(files, target || (w.costumes.length ? toCostume(w.costumes.length - 1) : toFit));
+    if (!target && !w.costumes.length) return; // sem figurinos: a imagem colada vai para a foto (bindPhoto)
+    e.preventDefault(); upload(files, target || toCostume(w.costumes.length - 1));
   };
-  document.addEventListener('paste', onPaste); cleanup(() => document.removeEventListener('paste', onPaste));
+  document.addEventListener('paste', onPaste, true); cleanup(() => document.removeEventListener('paste', onPaste, true));
 }
 
 // Resumo do figurino para a página da personagem/ator: figurinos com foto, medidas, provas e o que veste em cada cena.

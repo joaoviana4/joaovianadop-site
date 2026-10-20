@@ -74,7 +74,9 @@ export function phasesOf(p, key, kind) {
   return Array.isArray(o) ? o : defOf(key, kind);
 }
 const LS = (p) => `portal-phase:${p.id}`;
-export function selPhase(p) { try { const v = localStorage.getItem(LS(p)); return activePhases(p).some(([k]) => k === v) ? v : 'all'; } catch { return 'all'; } }
+// há sempre uma etapa escolhida (nunca "tudo de uma vez"): a última que se escolheu ou, sem isso, aquela em que o projeto está
+function defaultPhase(p) { const list = activePhases(p); if (!list.length) return 'all'; const cur = currentPhase(p); return list.some(([k]) => k === cur) ? cur : list[0][0]; }
+export function selPhase(p) { let v = null; try { v = localStorage.getItem(LS(p)); } catch { /* sem memória do navegador */ } return activePhases(p).some(([k]) => k === v) ? v : defaultPhase(p); }
 export function setSelPhase(p, v) { try { if (v === 'all') localStorage.removeItem(LS(p)); else localStorage.setItem(LS(p), v); } catch { /* sem memória do navegador */ } }
 export const shows = (p, key, kind) => { const s = selPhase(p), ph = phasesOf(p, key, kind); return s === 'all' ? ph.some((k) => stagesOn(p).includes(k)) : ph.includes(s); };
 export const phaseLabel = (k) => [...PHASES, ['dist', 'Distribuição']].find(([x]) => x === k)?.[1] || 'Tudo';
@@ -155,13 +157,13 @@ export function projectStrip(p, base, extra = '') {
   };
   return `<div class="proj-strip" role="navigation" aria-label="Etapas do projeto"><div class="ps-in">
     <div class="ps-head"><a class="ps-name" href="${base}" title="Visão geral">${esc(p.name)}</a>${extra}</div>
-    <div class="ps-steps" role="tablist" style="--n:${list.length}">${list.map(([k, l], i) => { const f = fill(k); return `<button type="button" role="tab" class="ps-step ${k === cur ? 'now' : ''} ${f >= 1 ? 'done' : ''}" aria-selected="${s === k}" data-phase="${k}" title="${s === k ? 'Ver todas as fases' : `Ver só ${esc(l.toLowerCase())}`}">
+    <div class="ps-steps" role="tablist" style="--n:${list.length}">${list.map(([k, l], i) => { const f = fill(k); return `<button type="button" role="tab" class="ps-step ${k === cur ? 'now' : ''} ${f >= 1 ? 'done' : ''}" aria-selected="${s === k}" data-phase="${k}" title="${s === k ? `Estás a ver ${esc(l.toLowerCase())}` : `Ver ${esc(l.toLowerCase())}`}">
         <span class="ps-l"><span class="ps-n">${f >= 1 ? '✓' : i + 1}</span>${esc(l)}${k === cur ? '<i class="phase-now" title="O projeto está nesta fase"></i>' : ''}</span>
         <span class="ps-bar"><i style="width:${Math.round(f * 100)}%"></i></span></button>`; }).join('')}${p.canEdit !== false ? `<button type="button" class="ps-add" data-stages title="${more.length ? `Juntar ${esc(more.map(([, l]) => l.toLowerCase()).join(', '))}` : 'Etapas do projeto'}" aria-label="Etapas do projeto">${more.length ? `+ ${esc(more[0][1])}` : ICON.more || '⋯'}</button>` : ''}</div>
   </div></div>`;
 }
 export function bindStrip(root, p, { onChange, onPhase, items }) {
-  root.querySelectorAll('.proj-strip [data-phase]').forEach((b) => b.addEventListener('click', () => { const k = b.dataset.phase; setSelPhase(p, k !== 'all' && selPhase(p) === k ? 'all' : k); (onPhase || onChange)(); }));
+  root.querySelectorAll('.proj-strip [data-phase]').forEach((b) => b.addEventListener('click', () => { const k = b.dataset.phase; setSelPhase(p, k); (onPhase || onChange)(); }));
   root.querySelector('.proj-strip [data-phaseorg]')?.addEventListener('click', () => organizePhases(p, items(), onChange));
   root.querySelector('.proj-strip [data-stages]')?.addEventListener('click', () => stagesMenu(p, onPhase || onChange));
   root.querySelector('.proj-strip [data-stage]')?.addEventListener('change', async (e) => {
@@ -175,7 +177,7 @@ export function bindStrip(root, p, { onChange, onPhase, items }) {
 export function phaseBar(p) {
   const s = selPhase(p); const cur = currentPhase(p);
   return `<nav class="phase-bar" aria-label="Fases do projeto">
-    <div class="phase-seg" role="tablist">${[['all', 'Tudo'], ...PHASES].map(([k, l]) => `<button type="button" role="tab" aria-selected="${s === k}" data-phase="${k}">${esc(l)}${k === cur ? '<i class="phase-now" title="O projeto está nesta fase"></i>' : ''}</button>`).join('')}</div>
+    <div class="phase-seg" role="tablist">${PHASES.map(([k, l]) => `<button type="button" role="tab" aria-selected="${s === k}" data-phase="${k}">${esc(l)}${k === cur ? '<i class="phase-now" title="O projeto está nesta fase"></i>' : ''}</button>`).join('')}</div>
     <button type="button" class="link-btn small phase-org" data-phaseorg>Organizar fases</button>
   </nav>`;
 }

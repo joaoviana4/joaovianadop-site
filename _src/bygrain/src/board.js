@@ -1,5 +1,7 @@
 import { trackWrite, DB_SCHEMA, sb, BUCKET, esc, signedUrl, signedUrls, uploadImage, toast, modal, confirmBox, ICON, onLeave } from './lib.js';
 import { ytId } from './music.js';
+import { cropSliders, cropAspect, cropImgStyle } from './imgcrop.js';
+const DECOMP_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 17.5h7M17.5 14v7"/></svg>';
 
 // Board infinito à maneira do Milanote: cada cartão é uma linha própria na base de dados,
 // por isso duas pessoas podem trabalhar no mesmo board sem se apagarem uma à outra.
@@ -25,44 +27,15 @@ async function copyToSystem(it) {
   } catch { try { await navigator.clipboard.writeText(mark); } catch { /* sem acesso: o Ctrl+V dentro do Studio continua a funcionar pelo CLIP */ } }
 }
 
-export const FONTS = [['', 'Predefinida'], ['Instrument Sans', 'Instrument Sans'], ['Inter', 'Inter'], ['Montserrat', 'Montserrat'], ['Archivo Black', 'Archivo Black'], ['Bebas Neue', 'Bebas Neue'],
-  ['Playfair Display', 'Playfair Display'], ['DM Serif Display', 'DM Serif Display'], ['Lora', 'Lora'], ['Instrument Serif', 'Instrument Serif'], ['Space Mono', 'Space Mono'], ['Courier Prime', 'Courier Prime'], ['Caveat', 'Caveat (à mão)']];
-const SIZES = [['s', 'Pequeno', 0.8], ['m', 'Normal', 1], ['l', 'Grande', 1.35], ['xl', 'Muito grande', 1.8]];
-const BASE = { note: 15, title: 44, list: 14 };
-const TEXT_COLORS = ['', '#0B0B14', '#F4F1E8', '#C8382D', '#F08A24', '#E3B341', '#2FB67C', '#2AA8C9', '#1E2AD4', '#7C5CFF', '#E5579B'];
-let fontsLoaded = false;
-function loadFonts() {
-  if (fontsLoaded) return; fontsLoaded = true;
-  const l = document.createElement('link'); l.rel = 'stylesheet';
-  l.href = 'https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;600;700&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;700&family=Montserrat:ital,wght@0,400;0,700;1,400&family=Archivo+Black&family=Bebas+Neue&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Serif+Display:ital@0;1&family=Lora:ital,wght@0,400;0,700;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Caveat:wght@400;700&display=swap';
-  document.head.append(l);
-}
-// só deixa passar formatação simples (nada de scripts, links ou estilos estranhos)
-const OK_TAGS = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'S', 'STRIKE', 'BR', 'DIV', 'P', 'SPAN', 'FONT']);
-const OK_STYLE = ['color', 'font-weight', 'font-style', 'text-decoration', 'text-decoration-line'];
-export function cleanHtml(html) {
-  const t = document.createElement('template'); t.innerHTML = html || '';
-  const walk = (node) => {
-    [...node.childNodes].forEach((n) => {
-      if (n.nodeType === 3) return;
-      if (n.nodeType !== 1 || !OK_TAGS.has(n.tagName)) { if (n.nodeType === 1) { walk(n); n.replaceWith(...n.childNodes); } else n.remove(); return; }
-      walk(n);
-      let el = n;
-      if (n.tagName === 'FONT') { el = document.createElement('span'); if (n.getAttribute('color')) el.style.color = n.getAttribute('color'); el.append(...n.childNodes); n.replaceWith(el); }
-      const keep = OK_STYLE.map((k) => [k, el.style.getPropertyValue(k)]).filter(([, v]) => v);
-      [...el.attributes].forEach((a) => el.removeAttribute(a.name));
-      keep.forEach(([k, v]) => el.style.setProperty(k, v));
-    });
-  };
-  walk(t.content);
-  return t.innerHTML;
-}
-const fmtStyle = (kind, f = {}) => {
-  const k = (SIZES.find((x) => x[0] === f.size) || SIZES[1])[2];
-  return [f.align ? `text-align:${f.align}` : '', f.font ? `font-family:'${f.font}',var(--sans)` : '', f.size && BASE[kind] ? `font-size:${Math.round(BASE[kind] * k)}px` : '', f.color ? `color:${f.color}` : '', f.b ? 'font-weight:700' : '', f.i ? 'font-style:italic' : '', f.u ? 'text-decoration:underline' : ''].filter(Boolean).join(';');
-};
+import { FONTS, SIZES, TEXT_COLORS, loadFonts, cleanHtml, fmtStyle } from './textfmt.js';
+export { FONTS, cleanHtml };
 
-export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom, onSelect, presence }) {
+export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom, onSelect, presence, embedded = false }) {
+  // embedded: o board dentro de uma página (pré-visualização). Só responde ao teclado, ao colar e à roda do rato
+  // depois de se clicar dentro dele; fora disso a página faz scroll e cola normalmente.
+  let active = !embedded;
+  const onDocDown = (e) => { active = root.contains(e.target); root.classList.toggle('bp-active', active); };
+  if (embedded) document.addEventListener('pointerdown', onDocDown, true);
   // cartões que outras pessoas estão a mexer agora (não se podem tocar até largarem)
   let locked = new Map();
   const lockedBy = (id) => locked.get(id);
@@ -235,7 +208,8 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     switch (it.kind) {
       case 'note': return `<div class="txt note-txt" data-field="text" style="${fmtStyle('note', d.fmt)}">${d.html ? cleanHtml(d.html) : esc(d.text || '')}</div>`;
       case 'title': return `<div class="txt title-txt" data-field="text" style="${fmtStyle('title', d.fmt)}">${d.html ? cleanHtml(d.html) : esc(d.text || 'Título')}</div>`;
-      case 'image': return `${urls[d.path] ? `<img src="${esc(urls[d.path])}" alt="${esc(d.caption || '')}" draggable="false">` : '<div class="img-wait">A carregar…</div>'}${d.caption ? `<div class="caption">${esc(d.caption)}</div>` : ''}`;
+      // recorte: pegas a meio de cada lado da imagem (cropSliders, em cardEl)
+      case 'image': return `${urls[d.path] ? `<div class="img-crop"><img src="${esc(urls[d.path])}" alt="${esc(d.caption || '')}" draggable="false" style="${d.crop ? cropImgStyle(d.crop) : 'width:100%;height:100%;object-fit:cover'}"></div>` : '<div class="img-wait">A carregar…</div>'}${d.caption ? `<div class="caption">${esc(d.caption)}</div>` : ''}`;
       case 'palette': return `<div class="txt card-h" data-field="title">${esc(d.title || 'Paleta')}</div>
         <div class="swatches">${(d.colors || []).map((c, i) => `<div class="sw"><button type="button" data-ui="color" data-i="${i}" style="background:${esc(c)}" aria-label="Mudar cor ${esc(c)}"></button><span>${esc(c.toUpperCase())}</span><button type="button" class="x" data-ui="rmcolor" data-i="${i}" aria-label="Tirar cor">${ICON.close}</button></div>`).join('')}
         <button type="button" class="sw-add" data-ui="addcolor" aria-label="Juntar cor">${ICON.plus}</button></div>`;
@@ -243,7 +217,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
         <ul class="checklist">${(d.items || []).map((li, i) => `<li class="${li.done ? 'done' : ''}"><button type="button" class="chk" data-ui="toggle" data-i="${i}" aria-label="${li.done ? 'Desmarcar' : 'Marcar'}">${li.done ? ICON.check : ''}</button><span class="txt" data-field="item" data-i="${i}">${esc(li.text)}</span><button type="button" class="x" data-ui="rmitem" data-i="${i}" aria-label="Tirar">${ICON.close}</button></li>`).join('')}</ul>
         <button type="button" class="add-item" data-ui="additem">${ICON.plus} Item</button></div>`;
       case 'board': { const cov = urls[d.cover] || covers[d.board_id];
-        return `<div class="bcov" ${cov ? `style="background-image:url('${esc(cov)}')"` : ''}>${cov ? '' : ICON.board}</div><div class="txt bname" data-field="title">${esc(d.title || 'Board')}</div><button type="button" class="cov-btn" data-ui="cover" title="Mudar a capa" aria-label="Mudar a capa">${ICON.image}</button>`; }
+        return `<div class="bcov" ${cov ? `style="background-image:url('${esc(cov)}')"` : ''}>${cov ? '' : ICON.board}</div><div class="txt bname" data-field="title">${esc(d.title || 'Board')}</div><button type="button" class="cov-btn" data-ui="cover" title="Mudar a capa" aria-label="Mudar a capa">${ICON.image}</button><button type="button" class="cov-btn dc-btn" data-ui="decomp" title="Desfazer aqui: passa todos os elementos deste board para aqui (o board original não se perde se estiver noutro sítio)" aria-label="Desfazer o board aqui">${DECOMP_ICON}</button>`; }
       case 'video': { const id = ytId(d.url); const playing = st.playing === it.id;
         return `<div class="vid-h"><span class="txt card-h" data-field="title">${esc(d.title || 'Pre-vis')}</span><a class="open-link sm" data-ui="link" href="${esc(d.url || '#')}" target="_blank" rel="noopener noreferrer" title="Abrir no YouTube">${ICON.open}</a></div>
           <div class="vid" data-ui="media">${!id ? '<p class="muted small">Link do YouTube inválido.</p>' : playing ? `<iframe src="https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0" title="${esc(d.title || 'Vídeo')}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>` : `<button type="button" class="vid-play" data-ui="play" aria-label="Ver o vídeo"><img src="https://i.ytimg.com/vi/${id}/hqdefault.jpg" alt="" draggable="false" onerror="this.remove()"><span>▶</span></button>`}</div>`; }
@@ -261,6 +235,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     if (it.kind === 'palette') it.w = Math.max(it.w, 28 + (it.data?.colors || []).length * 70 + 40);
     el.style.cssText = `left:${it.x}px;top:${it.y}px;width:${it.w}px;height:${it.h}px;z-index:${it.z}`;
     el.innerHTML = `${inner(it)}<div class="rs" data-rs aria-hidden="true"></div>`;
+    if (it.kind === 'image') imageCrop(it, el);
     const bg = it.data?.bg;
     el.classList.toggle('dark-bg', !!bg && isDark(bg) && it.kind !== 'title');
     el.classList.toggle('light-tile', it.kind === 'board' && !!bg && !isDark(bg));
@@ -273,6 +248,33 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     el.classList.toggle('card-locked', !!lk);
     if (lk) { el.style.setProperty('--lk', lk.color || '#F08A24'); el.dataset.lockName = lk.name; } else delete el.dataset.lockName;
     return el;
+  }
+  // recortar na própria imagem: a imagem não muda de escala, o cartão acompanha o recorte (igual às páginas)
+  function imageCrop(it, el) {
+    const fr = el.querySelector('.img-crop'); if (!fr) return;
+    const img = fr.querySelector('img');
+    // imagens antigas sem tamanho guardado: lê-se quando a imagem carregar
+    if (!it.data?.w || !it.data?.h) { img?.addEventListener('load', () => { if (!img.naturalWidth) return; it.data = { ...(it.data || {}), w: img.naturalWidth, h: img.naturalHeight }; imageCrop(it, el); }, { once: true }); return; }
+    let s0 = null, cc = null;
+    const nat = () => ({ w: it.data.w, h: it.data.h });
+    cropSliders(fr, {
+      nat, get: () => it.data?.crop, zoom: () => st.view.k,
+      apply: (c) => { cc = c; fr.querySelector('img').style.cssText = cropImgStyle(c); },
+      box: {
+        start: () => { mark(it, 'crop'); s0 = { x: it.x, y: it.y, w: it.w, h: it.h }; return { left: Infinity, right: Infinity, top: Infinity }; },
+        move: (dl, dt, dw) => {
+          it.x = Math.round(s0.x + dl); it.y = Math.round(s0.y + dt); it.w = Math.round(s0.w + dw);
+          it.h = Math.round(it.w / (cropAspect(cc, it.data.w, it.data.h) || 1));
+          Object.assign(el.style, { left: `${it.x}px`, top: `${it.y}px`, width: `${it.w}px`, height: `${it.h}px` }); placeBar();
+        },
+        end: () => {},
+        cancel: () => { Object.assign(it, s0); cardEl(it); placeBar(); },
+      },
+      commit: (c) => {
+        const d = { ...(it.data || {}) }; if (c) d.crop = c; else delete d.crop;
+        it.data = d; cardEl(it); placeBar(); save(it, ['data', 'x', 'y', 'w', 'h']);
+      },
+    });
   }
   function renderAll() { world.innerHTML = ''; [...items.values()].sort((a, b) => a.z - b.z).forEach(cardEl); }
   function select(id) {
@@ -318,6 +320,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     record({ t: 'upd', id: it.id, before: snap(it) });
   }
   async function applyOp(op, dir) {
+    if (op.t === 'decomp') return applyDecomp(op, dir);
     if (op.t === 'upd') {
       const it = items.get(op.id); if (!it) return null;
       const now = snap(it); Object.assign(it, JSON.parse(JSON.stringify(op.before)));
@@ -408,7 +411,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     const up = new Set([boardId]); let cur = (all || []).find((b) => b.id === boardId);
     while (cur?.parent_id) { up.add(cur.parent_id); cur = (all || []).find((b) => b.id === cur.parent_id); }
     const list = (all || []).filter((b) => !up.has(b.id));
-    const label = (b) => (b.kind === 'wrd' ? (b.data?.location_id ? 'Moodboard de décor' : 'Moodboard de figurino') : b.parent_id ? 'Board dentro de outro' : 'Board');
+    const label = (b) => (b.kind === 'wrd' ? (b.data?.location_id ? 'Moodboard de décor' : b.data?.page ? 'Board de uma página' : 'Moodboard de figurino') : b.parent_id ? 'Board dentro de outro' : 'Board');
     const m = modal(`<h2>Juntar um board</h2>
       <button type="button" class="btn primary bm-new" data-new>${ICON.plus} Criar um board novo aqui</button>
       <div class="field"><label for="bmq">Ou liga um que já existe</label><input id="bmq" type="search" placeholder="Procurar (ex: Moodboard, figurino, nome do ator…)" autocomplete="off"></div>
@@ -417,8 +420,9 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     const draw = () => {
       const q = m.el.querySelector('#bmq').value.trim().toLowerCase();
       const xs = list.filter((b) => !q || `${b.title} ${label(b)}`.toLowerCase().includes(q));
-      m.el.querySelector('[data-list]').innerHTML = xs.length ? xs.map((b) => `<li><button type="button" data-b="${b.id}" ${here.has(b.id) ? 'disabled' : ''}><b>${esc(b.title || 'Board')}</b><small class="muted">${esc(label(b))}${here.has(b.id) ? ' · já está neste board' : ''}</small></button></li>`).join('') : '<li class="muted small">Nenhum board com esse nome.</li>';
+      m.el.querySelector('[data-list]').innerHTML = xs.length ? xs.map((b) => `<li><button type="button" data-b="${b.id}" ${here.has(b.id) ? 'disabled' : ''}><b>${esc(b.title || 'Board')}</b><small class="muted">${esc(label(b))}${here.has(b.id) ? ' · já está neste board' : ''}</small></button><button type="button" class="btn ghost sm bm-copy" data-bcopy="${b.id}" title="Copia todos os elementos desse board para este (o original fica como está)">Copiar o conteúdo</button></li>`).join('') : '<li class="muted small">Nenhum board com esse nome.</li>';
       m.el.querySelectorAll('[data-b]').forEach((x) => x.addEventListener('click', () => { const b = list.find((y) => y.id === x.dataset.b); m.close(); create('board', null, { board_id: b.id, title: b.title || 'Board', link: true }); }));
+      m.el.querySelectorAll('[data-bcopy]').forEach((x) => x.addEventListener('click', () => { m.close(); decompose(x.dataset.bcopy, null); }));
     };
     m.el.querySelector('#bmq').addEventListener('input', draw);
     m.el.querySelector('[data-new]').addEventListener('click', () => { m.close(); newChild(); });
@@ -589,7 +593,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
 
   // ---------- botões dentro dos cartões ----------
   async function onUi(btn, it) {
-    if (!['link', 'media', 'play', 'openboard'].includes(btn.dataset.ui)) mark(it, 'ui-' + btn.dataset.ui);
+    if (!['link', 'media', 'play', 'openboard', 'decomp', 'cover'].includes(btn.dataset.ui)) mark(it, 'ui-' + btn.dataset.ui);
     const d = { ...(it.data || {}) }; const i = +btn.dataset.i;
     switch (btn.dataset.ui) {
       case 'toggle': d.items = d.items.map((x, j) => (j === i ? { ...x, done: !x.done } : x)); break;
@@ -616,6 +620,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
       }
       case 'openboard': return d.board_id && onOpenBoard(d.board_id);
       case 'cover': return coverMenu(it);
+      case 'decomp': return d.board_id && decompose(d.board_id, it);
       case 'link': case 'media': return;
       case 'play': st.playing = it.id; cardEl(it); return;
       default: return;
@@ -671,7 +676,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     else {
       const [mw, mh] = MIN[it.kind] || [80, 60];
       let w = Math.max(mw, g.ow + dx / k), h = Math.max(mh, g.oh + dy / k);
-      if (it.kind === 'image' && it.data?.w) h = w * (it.data.h / it.data.w);
+      if (it.kind === 'image' && it.data?.w) h = w / (cropAspect(it.data.crop, it.data.w, it.data.h) || it.data.w / it.data.h);
       it.w = Math.round(w); it.h = Math.round(h); el.style.width = it.w + 'px'; el.style.height = it.h + 'px';
     }
   };
@@ -710,6 +715,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   }
 
   stage.addEventListener('wheel', (e) => {
+    if (!active && !(e.ctrlKey || e.metaKey)) return;
     e.preventDefault();
     if (e.ctrlKey || e.metaKey) smoothZoom(e);
     else { st.view.x -= e.deltaX; st.view.y -= e.deltaY; applyView(); }
@@ -720,6 +726,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
   stage.addEventListener('dragleave', (e) => { if (e.target === stage) root.querySelector('.drop-hint').hidden = true; });
   stage.addEventListener('drop', (e) => { e.preventDefault(); root.querySelector('.drop-hint').hidden = true; addImages([...e.dataTransfer.files], toWorld(e.clientX, e.clientY)); });
   const onPaste = (e) => {
+    if (!active) return;
     if (st.editing || /INPUT|TEXTAREA/.test(document.activeElement?.tagName) || document.querySelector('#modal.open')) return;
     // cartão copiado com Ctrl+C (neste board ou noutro): cola uma cópia igual, com a mesma imagem
     const mark = e.clipboardData?.getData('text/plain')?.trim();
@@ -740,7 +747,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
 
   // teclado
   const onKey = async (e) => {
-    if (document.querySelector('#modal.open')) return;
+    if (!active || document.querySelector('#modal.open')) return;
     const typing = st.editing || /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName) || document.activeElement?.isContentEditable;
     if (st.editing && e.key === 'Escape') { e.preventDefault(); commitEdit(); return; }
     if (st.editing && e.key === 'Enter' && st.editing.el.dataset.field === 'item' && !e.shiftKey) {
@@ -776,6 +783,111 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     }
   };
   document.addEventListener('keydown', onKey);
+
+  // ---------- desfazer um board aqui (ou copiar o conteúdo de outro board) ----------
+  // Mostra primeiro onde os elementos vão ficar (uma pré-visualização que se arrasta), sem tapar o que já cá está.
+  // Ao confirmar, copia todos os elementos para este board. O cartão do board sai daqui; o board original continua a
+  // existir se estiver noutro sítio (outro cartão, ferramenta do menu, moodboard de um décor…). Se só existia aqui, sai.
+  let dc = null;
+  async function decompose(srcId, card) {
+    if (dc) dc.cancel();
+    if (srcId === boardId) return toast('Não dá para copiar um board para dentro dele próprio.');
+    const [{ data: src }, { data: rows, error }] = await Promise.all([
+      sb.from('boards').select('id, title, kind, parent_id, data, project_id, group_id, position, created_by, visible_to').eq('id', srcId).maybeSingle(),
+      sb.from('board_items').select('*').eq('board_id', srcId),
+    ]);
+    if (error) return toast(error.message);
+    if (!rows?.length) return toast(`O board «${src?.title || 'Board'}» está vazio: não há nada para passar.`);
+    const nu = await signedUrls(rows.filter((r) => r.kind === 'image' || r.kind === 'audio').map((r) => r.data?.path).concat(rows.filter((r) => r.kind === 'board').map((r) => r.data?.cover)));
+    urls = { ...urls, ...nu };
+    const bx = Math.min(...rows.map((r) => r.x)), by = Math.min(...rows.map((r) => r.y));
+    const bw = Math.max(...rows.map((r) => r.x + r.w)) - bx, bh = Math.max(...rows.map((r) => r.y + r.h)) - by;
+    const others = () => [...items.values()].filter((x) => !card || x.id !== card.id);
+    const hits = (gx, gy) => others().some((o) => gx < o.x + o.w + 16 && gx + bw + 16 > o.x && gy < o.y + o.h + 16 && gy + bh + 16 > o.y);
+    // sítio inicial: onde está o cartão (ou o meio do ecrã); se tapar alguma coisa, à direita, depois por baixo de tudo
+    const r0 = stage.getBoundingClientRect(); const mid = toWorld(r0.left + r0.width / 2, r0.top + r0.height / 2);
+    const all = others();
+    const cx = card ? card.x : Math.round(mid.x - bw / 2), cy = card ? card.y : Math.round(mid.y - bh / 2);
+    const right = all.length ? Math.max(...all.map((o) => o.x + o.w)) + 80 : cx, top = all.length ? Math.min(...all.map((o) => o.y)) : cy;
+    const below = all.length ? Math.max(...all.map((o) => o.y + o.h)) + 80 : cy, left = all.length ? Math.min(...all.map((o) => o.x)) : cx;
+    let [gx, gy] = [[cx, cy], [right, card ? card.y : top], [left, below]].find(([x, y]) => !hits(x, y)) || [right, top];
+    const g = document.createElement('div'); g.className = 'dc-ghost';
+    g.style.cssText = `width:${bw}px;height:${bh}px;z-index:${maxZ() + 5}`;
+    g.innerHTML = rows.slice().sort((a, b) => a.z - b.z).map((r) => {
+      const d = r.data || {}; const u = r.kind === 'image' ? urls[d.path] : r.kind === 'board' ? urls[d.cover] : '';
+      const txt = r.kind === 'image' ? '' : (d.text || d.title || (d.html ? d.html.replace(/<[^>]+>/g, ' ') : '') || { palette: 'Paleta', list: 'Lista', board: 'Board', video: 'Vídeo', audio: 'Música', link: 'Ligação' }[r.kind] || '').slice(0, 80);
+      return `<div class="dc-it k-${esc(r.kind)}" style="left:${r.x - bx}px;top:${r.y - by}px;width:${r.w}px;height:${r.h}px;${u ? `background-image:url('${esc(u)}')` : ''}${d.bg && r.kind !== 'title' ? `;background-color:${esc(d.bg)}` : ''}">${txt ? `<span>${esc(txt)}</span>` : ''}</div>`;
+    }).join('') + `<div class="dc-tag"></div>`;
+    world.appendChild(g);
+    const tag = g.querySelector('.dc-tag');
+    const place = () => { g.style.left = `${gx}px`; g.style.top = `${gy}px`; const bad = hits(gx, gy); g.classList.toggle('dc-bad', bad); tag.textContent = bad ? 'Está por cima de outros elementos: arrasta para um espaço livre' : `${rows.length} ${rows.length === 1 ? 'elemento' : 'elementos'} · arrasta para escolher o sítio`; tag.style.transform = `scale(${1 / st.view.k})`; const s2 = root.querySelector('[data-dcs]'); if (s2) { s2.textContent = bad ? 'Por cima de outros elementos' : 'Arrasta para escolher o sítio'; s2.classList.toggle('bad', bad); } };
+    place();
+    // mostra a pré-visualização inteira no ecrã
+    { const k = Math.max(0.1, Math.min(st.view.k, (r0.width - 300) / (bw + 200), (r0.height - 260) / (bh + 200)));
+      const inView = gx * st.view.k + st.view.x > 40 && (gx + bw) * st.view.k + st.view.x < r0.width - 130 && gy * st.view.k + st.view.y > 90 && (gy + bh) * st.view.k + st.view.y < r0.height - 100;
+      if (!inView) { st.view = { k, x: r0.width / 2 - (gx + bw / 2) * k, y: r0.height / 2 - (gy + bh / 2) * k }; applyView(); } }
+    const ui = document.createElement('div'); ui.className = 'dc-bar'; ui.setAttribute('role', 'dialog'); ui.setAttribute('aria-label', 'Onde ficam os elementos');
+    ui.innerHTML = `<span>${card ? 'Desfazer' : 'Copiar'} <b>${esc(src?.title || 'Board')}</b> aqui · <span class="muted" data-dcs></span></span><button type="button" class="btn ghost sm" data-dcx>Cancelar</button><button type="button" class="btn primary sm" data-dcok>Colocar aqui</button>`;
+    root.appendChild(ui); place();
+    ui.addEventListener('pointerdown', (e) => e.stopPropagation());
+    let drag = null;
+    const mv = (e) => { if (!drag) return; gx = Math.round(drag.gx + (e.clientX - drag.x) / st.view.k); gy = Math.round(drag.gy + (e.clientY - drag.y) / st.view.k); place(); };
+    const up = () => { drag = null; g.classList.remove('dc-drag'); };
+    g.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); drag = { x: e.clientX, y: e.clientY, gx, gy }; g.classList.add('dc-drag'); });
+    window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
+    const key = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); } if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); finish(true); } };
+    document.addEventListener('keydown', key, true);
+    let done = false;
+    async function finish(ok) {
+      if (done) return; done = true; dc = null;
+      g.remove(); ui.remove(); window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); document.removeEventListener('keydown', key, true);
+      if (!ok) return;
+      if (hits(gx, gy) && !(await confirmBox('Os elementos vão ficar por cima de outros. Colocar mesmo assim?', 'Colocar'))) return decompose(srcId, card);
+      const z0 = maxZ() + 1, zMin = Math.min(...rows.map((r) => r.z));
+      const copies = rows.map((r) => {
+        const d = JSON.parse(JSON.stringify(r.data || {}));
+        if (r.kind === 'board') d.link = true; // um board dentro do outro passa como ligação (não se apaga com o cartão)
+        return { id: crypto.randomUUID(), board_id: boardId, kind: r.kind, x: gx + (r.x - bx), y: gy + (r.y - by), w: r.w, h: r.h, z: z0 + (r.z - zMin), data: d };
+      });
+      const { error: e1 } = await sb.from('board_items').insert(copies);
+      if (e1) return toast('Não foi possível copiar: ' + e1.message);
+      const op = { t: 'decomp', copies, card: card ? rowOf(card) : null, src: null, srcItems: null };
+      if (card) {
+        items.delete(card.id); world.querySelector(`[data-id="${card.id}"]`)?.remove(); if (st.sel === card.id) { st.sel = null; placeBar(); }
+        await sb.from('board_items').delete().eq('id', card.id);
+        // o board original: fica se estiver noutro sítio; se era só um board dentro deste e já não aparece em lado nenhum, sai
+        if (src && src.kind === 'board' && src.parent_id === boardId) {
+          const [{ count: elsewhere }, { count: kids }] = await Promise.all([
+            sb.from('board_items').select('id', { count: 'exact', head: true }).eq('kind', 'board').eq('data->>board_id', src.id),
+            sb.from('boards').select('id', { count: 'exact', head: true }).eq('parent_id', src.id),
+          ]);
+          if (!elsewhere && !kids) { const { error: e2 } = await sb.from('boards').delete().eq('id', src.id); if (!e2) { op.src = src; op.srcItems = rows; } }
+        }
+      }
+      copies.forEach((c) => { items.set(c.id, { ...c }); cardEl(items.get(c.id)); });
+      record(op);
+      toast(`${copies.length} ${copies.length === 1 ? 'elemento passou' : 'elementos passaram'} para este board. Ctrl+Z para desfazer.`);
+    }
+    ui.querySelector('[data-dcx]').addEventListener('click', () => finish(false));
+    ui.querySelector('[data-dcok]').addEventListener('click', () => finish(true));
+    dc = { cancel: () => finish(false) };
+  }
+  async function applyDecomp(op, dir) {
+    if (dir === 'undo') {
+      const ids = op.copies.map((c) => c.id);
+      ids.forEach((id) => { items.delete(id); world.querySelector(`[data-id="${id}"]`)?.remove(); });
+      if (ids.includes(st.sel)) { st.sel = null; placeBar(); }
+      await sb.from('board_items').delete().in('id', ids);
+      if (op.src) { const { error } = await sb.from('boards').insert(op.src); if (!error && op.srcItems?.length) await sb.from('board_items').insert(op.srcItems); }
+      if (op.card) { const { error } = await sb.from('board_items').insert(op.card); if (!error || /duplicate/i.test(error.message)) { items.set(op.card.id, { ...op.card }); cardEl(items.get(op.card.id)); } }
+    } else {
+      const { error } = await sb.from('board_items').insert(op.copies); if (error && !/duplicate/i.test(error.message)) { toast(error.message); return null; }
+      op.copies.forEach((c) => { items.set(c.id, { ...c }); cardEl(items.get(c.id)); });
+      if (op.card) { items.delete(op.card.id); world.querySelector(`[data-id="${op.card.id}"]`)?.remove(); await sb.from('board_items').delete().eq('id', op.card.id); }
+      if (op.src) await sb.from('boards').delete().eq('id', op.src.id);
+    }
+    return op;
+  }
 
   async function remove(it) {
     if (it.kind !== 'board') record({ t: 'del', row: rowOf(it) });
@@ -837,7 +949,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     if (saved && Number.isFinite(saved.k)) { st.view = saved; applyView(); } else fit();
   })();
   applyView();
-  stage.focus({ preventScroll: true });
+  if (!embedded) stage.focus({ preventScroll: true });
   // marcar os cartões em uso por outras pessoas (sem redesenhar o conteúdo)
   const offLocks = presence?.onCards((m) => {
     locked = m;
@@ -856,9 +968,9 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     setColor: (c, delay) => setBg(c, delay),
     get zoom() { return st.view.k; },
     destroy() {
-      st.dead = true; commitEdit(); flushItems();
+      st.dead = true; dc?.cancel(); commitEdit(); flushItems();
       pending.forEach((it) => cleanupFiles(it)); pending.clear(); offLocks && offLocks(); presence?.setCard(null);
-      document.removeEventListener('keydown', onKey); document.removeEventListener('paste', onPaste); document.removeEventListener('selectionchange', onSelChange);
+      document.removeEventListener('keydown', onKey); document.removeEventListener('paste', onPaste); document.removeEventListener('pointerdown', onDocDown, true); document.removeEventListener('selectionchange', onSelChange);
       window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end);
       sb.removeChannel(ch);
     },

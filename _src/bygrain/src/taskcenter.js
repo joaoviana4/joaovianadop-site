@@ -22,7 +22,9 @@ async function entityNames(tasks) {
   return out;
 }
 
-export function mountTaskCenter(root, { projectId = null } = {}) {
+// bar: onde fica o botão "Histórico" (no topo da página, ao lado do título); o histórico abre num menu por cima
+export function mountTaskCenter(root, { projectId = null, communityId = null, mine = false, bar = null } = {}) {
+  let pop = null;
   const st = { tasks: [], people: [], projects: new Map(), names: {}, f: { status: 'open', who: 'all', about: 'all', dept: 'all', sort: 'due' }, q: '', histLimit: 60, dead: false };
 
   async function load() {
@@ -97,9 +99,6 @@ export function mountTaskCenter(root, { projectId = null } = {}) {
     const p = projectId ? st.projects.get(projectId) : null;
     const allDepts = p ? p.departments || [] : [];
     const aboutTypes = [...new Set(st.tasks.map((t) => t.entity_type || ''))];
-    const q = st.q.trim().toLowerCase();
-    const done = st.tasks.filter((t) => t.status === 'done' && (!q || t.title.toLowerCase().includes(q) || projName(proj(t)).toLowerCase().includes(q))).sort((a, b) => (b.done_at || '').localeCompare(a.done_at || ''));
-    const months = []; done.slice(0, st.histLimit).forEach((t) => { const k = (t.done_at || t.created_at).slice(0, 7); let g = months.find((m) => m.k === k); if (!g) months.push((g = { k, list: [] })); g.list.push(t); });
     const sel = (k, opts) => `<label class="sel"><span class="vh">${k}</span><select data-f="${k}">${opts.map(([v, l]) => `<option value="${esc(v)}" ${st.f[k] === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>`;
     root.innerHTML = `
       <section class="tc-sec">
@@ -118,26 +117,58 @@ export function mountTaskCenter(root, { projectId = null } = {}) {
           </div>
           ${list.length ? `<ul class="task-list">${list.map((t) => row(t)).join('')}</ul>` : `<p class="empty-note">${st.tasks.some((t) => t.status !== 'done') ? 'Nada com estes filtros.' : 'Ainda não há tarefas abertas.'}</p>`}
         </div>
-      </section>
-      <section class="tc-sec">
-        <div class="tc-h"><h2 class="h2">Histórico</h2><span class="muted small">${(() => { const n = st.tasks.filter((t) => t.status === 'done').length; return `${n} ${n === 1 ? 'tarefa feita' : 'tarefas feitas'}`; })()}</span></div>
-        <div class="panel stack">
-          <input type="search" data-q value="${esc(st.q)}" placeholder="Procurar no histórico…" aria-label="Procurar no histórico">
-          ${months.length ? months.map((m) => `<div class="hist-m"><h3 class="hist-h">${MESES[+m.k.slice(5, 7) - 1]} ${m.k.slice(0, 4)} <span>${m.list.length}</span></h3><ul class="task-list done">${m.list.map((t) => row(t)).join('')}</ul></div>`).join('') : `<p class="empty-note">${q ? 'Nada encontrado.' : 'As tarefas feitas ficam aqui guardadas, com a data em que foram feitas.'}</p>`}
-          ${done.length > st.histLimit ? `<button type="button" class="link-btn" data-more>Ver mais (${done.length - st.histLimit})</button>` : ''}
-        </div>
       </section>`;
     root.querySelectorAll('[data-f]').forEach((s) => s.addEventListener('change', () => { st.f[s.dataset.f] = s.value; draw(); }));
-    const qi = root.querySelector('[data-q]');
-    qi.addEventListener('input', () => { st.q = qi.value; const pos = qi.selectionStart; draw(); const n = root.querySelector('[data-q]'); n.focus(); n.setSelectionRange(pos, pos); });
-    root.querySelector('[data-more]')?.addEventListener('click', () => { st.histLimit += 100; draw(); });
+    drawHist();
     root.querySelector('[data-newtask]')?.addEventListener('click', () => {
       const projs = [...st.projects.values()].filter((x) => x.status !== 'archived' && !x.deleted_at);
       const pr = projectId ? st.projects.get(projectId) : null;
       addTaskModal({ projectId: projectId || null, departments: pr?.departments || [], projects: projectId ? null : projs.map((x) => ({ id: x.id, name: projName(x), departments: x.departments || [] })) });
     });  }
 
-  root.addEventListener('click', async (e) => {
+
+  // ---------- histórico: botão no topo da página, com a lista num menu ----------
+  const histBtn = document.createElement('button');
+  histBtn.type = 'button'; histBtn.className = 'btn ghost tc-histbtn'; histBtn.setAttribute('aria-haspopup', 'dialog'); histBtn.setAttribute('aria-expanded', 'false');
+  (bar || root).prepend(histBtn);
+  const closeHist = () => { pop?.remove(); pop = null; histBtn.setAttribute('aria-expanded', 'false'); document.removeEventListener('pointerdown', outHist, true); document.removeEventListener('keydown', keyHist, true); window.removeEventListener('resize', placeHist); };
+  const outHist = (e) => { if (pop && !pop.contains(e.target) && !histBtn.contains(e.target) && !e.target.closest('#modal')) closeHist(); };
+  const keyHist = (e) => { if (e.key === 'Escape' && !document.querySelector('#modal.open')) closeHist(); };
+  const placeHist = () => { if (!pop) return; const r = histBtn.getBoundingClientRect(); pop.style.top = `${r.bottom + 8}px`; pop.style.left = `${Math.max(12, Math.min(window.innerWidth - pop.offsetWidth - 12, r.right - pop.offsetWidth))}px`; };
+  function drawHist() {
+    const n = st.tasks.filter((t) => t.status === 'done').length;
+    histBtn.innerHTML = `${ICON.history}<span>Histórico</span>${n ? `<em>${n}</em>` : ''}`;
+    histBtn.title = `${n} ${n === 1 ? 'tarefa feita' : 'tarefas feitas'}`;
+    if (!pop) return;
+    const q = st.q.trim().toLowerCase();
+    const done = st.tasks.filter((t) => t.status === 'done' && (!q || t.title.toLowerCase().includes(q) || projName(proj(t)).toLowerCase().includes(q))).sort((a, b) => (b.done_at || '').localeCompare(a.done_at || ''));
+    const months = []; done.slice(0, st.histLimit).forEach((t) => { const k = (t.done_at || t.created_at).slice(0, 7); let g = months.find((m) => m.k === k); if (!g) months.push((g = { k, list: [] })); g.list.push(t); });
+    const listHtml = `${months.length ? months.map((m) => `<div class="hist-m"><h3 class="hist-h">${MESES[+m.k.slice(5, 7) - 1]} ${m.k.slice(0, 4)} <span>${m.list.length}</span></h3><ul class="task-list done">${m.list.map((t) => row(t)).join('')}</ul></div>`).join('') : `<p class="empty-note">${q ? 'Nada encontrado.' : 'As tarefas feitas ficam aqui guardadas, com a data em que foram feitas.'}</p>`}
+      ${done.length > st.histLimit ? `<button type="button" class="link-btn" data-more>Ver mais (${done.length - st.histLimit})</button>` : ''}`;
+    const body = pop.querySelector('[data-hlist]');
+    if (body) { body.innerHTML = listHtml; } else {
+      pop.innerHTML = `<div class="row between"><strong>Histórico <span class="muted small">${n} ${n === 1 ? 'tarefa feita' : 'tarefas feitas'}</span></strong><button type="button" class="icon-btn sm" data-x aria-label="Fechar">${ICON.close}</button></div>
+        <input type="search" data-q value="${esc(st.q)}" placeholder="Procurar no histórico…" aria-label="Procurar no histórico">
+        <div class="tc-hlist" data-hlist>${listHtml}</div>`;
+      pop.querySelector('[data-x]').addEventListener('click', closeHist);
+      const qi = pop.querySelector('[data-q]');
+      qi.addEventListener('input', () => { st.q = qi.value; drawHist(); });
+    }
+    pop.querySelector('strong .muted').textContent = `${n} ${n === 1 ? 'tarefa feita' : 'tarefas feitas'}`;
+    pop.querySelector('[data-more]')?.addEventListener('click', () => { st.histLimit += 100; drawHist(); });
+  }
+  histBtn.addEventListener('click', () => {
+    if (pop) return closeHist();
+    document.querySelector('.pm-tpop')?.remove();
+    pop = document.createElement('div'); pop.className = 'pm-tpop tc-hpop'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', 'Histórico das tarefas');
+    pop.addEventListener('click', onAct);
+    document.body.append(pop); histBtn.setAttribute('aria-expanded', 'true'); drawHist(); placeHist();
+    setTimeout(() => { document.addEventListener('pointerdown', outHist, true); document.addEventListener('keydown', keyHist, true); window.addEventListener('resize', placeHist); });
+    pop.querySelector('[data-q]').focus();
+  });
+  drawHist();
+
+  async function onAct(e) {
     const b = e.target.closest('[data-act]'); if (!b) return;
     const t = st.tasks.find((x) => x.id === b.closest('[data-task]')?.dataset.task); if (!t) return;
     if (b.dataset.act === 'edit') return editTask(t, st, draw);
@@ -147,8 +178,9 @@ export function mountTaskCenter(root, { projectId = null } = {}) {
     draw();
     const { error } = await sb.from('tasks').update({ status: t.status }).eq('id', t.id);
     if (error) { t.status = prev; draw(); return toast(error.message); }
-    if (t.status === 'done') toast('Feita. Fica guardada no Histórico.');
-  });
+    if (t.status === 'done') toast('Feita. Fica guardada no Histórico (botão no topo da página).');
+  }
+  root.addEventListener('click', onAct);
 
   const ch = sb.channel('tc-' + (projectId || 'all') + Math.random().toString(36).slice(2))
     .on('postgres_changes', { event: '*', schema: DB_SCHEMA, table: 'tasks', ...(projectId ? { filter: `project_id=eq.${projectId}` } : {}) }, () => { clearTimeout(ch._t); ch._t = setTimeout(load, 500); })
@@ -157,5 +189,5 @@ export function mountTaskCenter(root, { projectId = null } = {}) {
   window.addEventListener('portal-task-added', onAdded);
   root.innerHTML = '<p class="muted">A carregar…</p>';
   load();
-  return { destroy() { st.dead = true; sb.removeChannel(ch); window.removeEventListener('portal-task-added', onAdded); } };
+  return { destroy() { st.dead = true; closeHist(); histBtn.remove(); sb.removeChannel(ch); window.removeEventListener('portal-task-added', onAdded); } };
 }

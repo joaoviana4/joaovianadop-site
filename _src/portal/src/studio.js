@@ -1118,9 +1118,9 @@ async function toolPage(projectId, toolId) {
   app.querySelector('[data-tooltask]')?.addEventListener('click', () => addTaskModal({ projectId: p.id, departments: p.departments || [], entity: { type: 'board', id: tool.id }, where: tool.title }));
   const box = app.querySelector('[data-tool]');
   joinProject(p.id);
-  if (IS_STUDIO) import('./miniplayer.js').then((m) => m.miniPlayer(p, { page: 'f', sub: toolId, base: projBase(p) })).catch(() => {});
+  import('./miniplayer.js').then((m) => m.miniPlayer(p, { page: 'f', sub: toolId, base: projBase(p) })).catch(() => {});
   { const lk = lockPage(`${p.id}:f:${tool.id}`, app.querySelector('[data-main]'), { reopen: () => route() }); onCleanup(() => lk.destroy()); }
-  if (IS_STUDIO && !p.is_central && !['lightmap'].includes(tool.kind)) {
+  if (!p.is_central && !['lightmap'].includes(tool.kind)) {
     const el = document.createElement('div'); el.className = 'cv-page';
     mountCanvas(box, p, { key: `f:${tool.id}`, pageLabel: 'ferramenta', here: { kind: 'tool', id: tool.id },
       native: [{ id: 'tool', label: tool.title, el, ref: { kind: 'tool', id: tool.id }, removable: false }], render: (b, ref) => renderRef(b, p, ref) });
@@ -1224,14 +1224,14 @@ async function projectPage(projectId, page, sub) {
   });
   joinProject(p.id);
   // videoclipes com música: mini leitor que acompanha as páginas do projeto
-  if (IS_STUDIO) import('./miniplayer.js').then((m) => m.miniPlayer(p, { page, sub, base: projBase(p) })).catch(() => {});
+  import('./miniplayer.js').then((m) => m.miniPlayer(p, { page, sub, base: projBase(p) })).catch(() => {});
   // páginas de trabalho: só uma janela edita de cada vez (as outras ficam só a ver)
   if (['orcamento', 'seguimento', 'decors', 'elenco', 'personagens', 'aderecos', 'cenas', 'guiao', 'planificacao', 'detalhes', 'shotlist', 'storyboard', 'financas', 'plano', 'equipamento', 'figurino', 'tratamento'].includes(page)) {
     const lk = lockPage(`${p.id}:${page}:${sub || ''}`, main, { reopen: () => route() });
     onCleanup(() => lk.destroy());
   }
-  // Studio: cada página é um board (grelha com encaixe), com a página em si como elemento e o que se colar de outras
-  if (IS_STUDIO && !p.is_central && !['detalhes', 'equipa'].includes(page)) {
+  // cada página é um board (grelha com encaixe), com a página em si como elemento e o que se colar de outras
+  if (!p.is_central && !['detalhes', 'equipa'].includes(page)) {
     if (page === 'geral') return projectOverview(main, p);
     const el = document.createElement('div'); el.className = 'cv-page';
     const label = pageMeta(page)?.label || { atividade: 'Atividade', tarefas: 'Tarefas', plano: 'Plano', rodagem: 'Rodagem', anotacao: 'Folhas de Anotação', personagens: 'Personagens' }[page] || page;
@@ -1388,7 +1388,7 @@ async function projectOverview(main, p, { plain = false } = {}) {
     });
   });
   main.querySelectorAll('[data-bopt]').forEach((btn) => btn.addEventListener('click', () => boardOptions(p, p._boards.find((x) => x.id === btn.dataset.bopt), () => projectPage(p.id, 'geral'))));
-  const asCanvas = IS_STUDIO && !plain && !p.is_central;
+  const asCanvas = !plain && !p.is_central;
   if (!p.is_central && !asCanvas) { mountSituation(main.querySelector('[data-situation]'), p, base); autoModules(p); }
   const mkup = main.querySelector('[data-mkup]'); if (mkup) lazy.marketing().then((m) => m.upcomingBox(mkup, p, base));
   if (kids) childrenSection(main.querySelector('[data-kids]'), p, kids, { base, canBudget: p.canBudget, onNew: isStaff() ? () => newProject({ parent: p }) : null, canEdit: isStaff(), after: () => projectPage(p.id, 'geral') });
@@ -1615,7 +1615,7 @@ async function boardView(projectId, boardId) {
 
   const pct = app.querySelector('.pct');
   joinProject(p.id);
-  if (IS_STUDIO) import('./miniplayer.js').then((m) => m.miniPlayer(p, { page: 'b', sub: boardId, base: projBase(p) })).catch(() => {});
+  import('./miniplayer.js').then((m) => m.miniPlayer(p, { page: 'b', sub: boardId, base: projBase(p) })).catch(() => {});
   const bp = boardPresence(cur.id);
   onCleanup(() => bp.leave());
   const { mountBoard } = await boardMod;

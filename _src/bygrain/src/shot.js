@@ -1,5 +1,6 @@
 import { saveLater, sb, esc, toast, confirmBox, ICON, signedUrl, uploadImage } from './lib.js';
-import { mountTasks } from './tasks.js';
+import { pageButtons } from './pagenotes.js';
+import { offerActions } from './canvas.js';
 
 // Página de um plano: imagem em grande, tudo o que se sabe dele, secção/cena e grupo da shotlist, tarefas.
 // Chega-se aqui a partir do storyboard, da grelha do seguimento, da shotlist e das secções.
@@ -37,13 +38,13 @@ export async function shotPage(main, p, id, base, cleanup) {
   const shownOpt = OPTIONAL.filter(([k]) => x[k]);
   main.innerHTML = `
     <nav class="row between wrap-gap"><span class="row wrap-gap"><a href="${base}/storyboard" class="link-btn">${ICON.back} Storyboard</a>${scene ? `<a href="${base}/${unit}/${scene.id}" class="link-btn">${esc(scene.heading || 'Secção')}</a>` : ''}<a href="${base}/shotlist" class="link-btn">Shotlist</a></span>
-      <span class="row">${prev ? `<a class="btn ghost" href="${base}/plano/${prev.id}" aria-label="Plano anterior">${ICON.back}</a>` : ''}<span class="muted small">${i + 1} de ${order.length}</span>${next ? `<a class="btn ghost" href="${base}/plano/${next.id}" aria-label="Plano seguinte">${ICON.chev}</a>` : ''}</span></nav>
+      <span class="row"><span data-pp></span>${prev ? `<a class="btn ghost" href="${base}/plano/${prev.id}" aria-label="Plano anterior">${ICON.back}</a>` : ''}<span class="muted small">${i + 1} de ${order.length}</span>${next ? `<a class="btn ghost" href="${base}/plano/${next.id}" aria-label="Plano seguinte">${ICON.chev}</a>` : ''}</span></nav>
     <header class="shot-head"><input class="title-in" data-f="code" value="${esc(x.code || '')}" placeholder="Código (ex: 3.1)" aria-label="Código do plano"></header>
     <div class="shot-layout">
       <div class="shot-left">
         <section class="shot-big" data-img tabindex="0" role="button" aria-label="${img ? 'Mudar a imagem' : 'Juntar imagem'}">${img ? `<img src="${esc(img)}" alt="${esc(title)}">` : `<span>${ICON.image}<strong>Juntar imagem</strong><small>clica, arrasta ou cola com Ctrl+V</small></span>`}</section>
         <section class="panel shot-in" data-in></section>
-        <div class="row wrap-gap shot-acts"><button type="button" class="btn ghost sm" data-lm>${ICON.bulb} ${x.lightmap_id ? 'Abrir mapa de luz' : 'Criar mapa de luz'}</button>${img ? '<button type="button" class="btn ghost sm" data-rmimg>Tirar imagem</button>' : ''}<button type="button" class="btn ghost sm danger-text" data-del>${ICON.trash} Apagar plano</button></div>
+        <div class="row wrap-gap shot-acts">${x.lightmap_id ? `<button type="button" class="btn ghost sm" data-lm>${ICON.bulb} Abrir mapa de luz</button>` : ''}${img ? '<button type="button" class="btn ghost sm" data-rmimg>Tirar imagem</button>' : ''}<button type="button" class="btn ghost sm danger-text" data-del>${ICON.trash} Apagar plano</button></div>
       </div>
       <section class="panel stack shot-fields">
         <div class="field"><label for="ss">${script ? 'Cena' : 'Secção'}</label><select id="ss" data-f="scene_id"><option value="">—</option>${(scenes || []).map((s) => `<option value="${s.id}" ${s.id === x.scene_id ? 'selected' : ''}>${esc(s.heading || 'Secção ' + s.number)}</option>`).join('')}</select></div>
@@ -55,8 +56,9 @@ export async function shotPage(main, p, id, base, cleanup) {
         </div>
         <div class="ex-add"><button type="button" class="link-btn small" data-addex>${ICON.plus} Campo</button></div>
       </section>
-    </div>
-    <section class="panel"><h2 class="h3">Tarefas deste plano</h2><div data-tasks></div></section>`;
+    </div>`;
+  pageButtons(main.querySelector('[data-pp]'), p, { type: 'shot', id: x.id, label: `Plano ${x.code || ''}`.trim() });
+  offerActions(main, null, x.lightmap_id ? [] : [{ label: 'Mapa de luz', icon: ICON.bulb, title: 'Criar um mapa de luz para este plano', run: async () => (await import('./lmhub.js')).openShotLightmap(p, x, base) }]);
   inPanel(main.querySelector('[data-in]'), x, scene, chars || [], (props || []).filter((y) => !y.removed), base);
   // campos extra: rig / carro / prop (colunas do plano) ou um campo com nome à escolha (shots.extra)
   const saveExtra = debounce(() => sb.from('shots').update({ extra: x.extra, updated_at: new Date().toISOString() }).eq('id', x.id).then(({ error }) => error && toast(error.message)), 500);
@@ -102,13 +104,12 @@ export async function shotPage(main, p, id, base, cleanup) {
     if (!(await confirmBox('Tirar a imagem deste plano?', 'Tirar'))) return;
     await sb.from('shots').update({ image_path: null }).eq('id', x.id); shotPage(main, p, id, base, cleanup);
   });
-  main.querySelector('[data-lm]').addEventListener('click', async () => (await import('./lmhub.js')).openShotLightmap(p, x, base));
+  main.querySelector('[data-lm]')?.addEventListener('click', async () => (await import('./lmhub.js')).openShotLightmap(p, x, base));
   main.querySelector('[data-del]').addEventListener('click', async () => {
     if (!(await confirmBox(`Apagar o plano "${title}"?`, 'Apagar plano'))) return;
     const { error } = await sb.from('shots').delete().eq('id', x.id); if (error) return toast(error.message);
     location.hash = next ? `${base}/plano/${next.id}` : prev ? `${base}/plano/${prev.id}` : `${base}/storyboard`;
   });
-  const t = mountTasks(main.querySelector('[data-tasks]'), { projectId: p.id, entity: { type: 'shot', id: x.id } }); cleanup(() => t.destroy());
 }
 
 

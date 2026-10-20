@@ -1,5 +1,5 @@
 import { esc, ICON, signedUrl, onLeave } from './lib.js';
-import { parseScript, openPdf, pdfPageText, isSceneHeading, classifyLines } from './script.js';
+import { parseScript, openPdf, pdfPageText, sceneCounter, classifyLines } from './script.js';
 
 // Leitor do guião: as páginas do PDF tal como foram escritas (ou, para Fountain / Final Draft / texto,
 // o texto paginado com a formatação de guião), com índice de cenas, zoom, ir para a página e ecrã inteiro.
@@ -34,7 +34,8 @@ function markText(root, marks) {
     n.replaceWith(frag);
   });
 }
-const getZoom = () => { try { return localStorage.getItem(KEY) || 'fit'; } catch { return 'fit'; } };
+// ao entrar no guião abre sempre a 75%; o zoom que se escolhe vale enquanto se está na página
+const getZoom = () => 0.75;
 const setZoom = (z) => { try { localStorage.setItem(KEY, String(z)); } catch { /* sem armazenamento */ } };
 
 export function mountReader(el, { version, sceneHref, pagesIndex = false, scene = null, compact = false, marks = null }) {
@@ -103,10 +104,10 @@ export function mountReader(el, { version, sceneHref, pagesIndex = false, scene 
     layout();
     if (pagesIndex) { thumbs(); return; }
     // cenas → página: conta os cabeçalhos de cena em cada página
-    let k = 0;
+    let k = 0; const isStart = sceneCounter(); const ctx = {};
     for (let i = 0; i < pages.length && !destroyed; i++) {
-      const t = await pdfPageText(pages[i].page);
-      t.split('\n').forEach((l) => { if (isSceneHeading(l) && k < idx.length) scenePage[k++] = i; });
+      const t = await pdfPageText(pages[i].page, ctx);
+      t.split('\n').forEach((l) => { if (isStart(l) && k < idx.length) scenePage[k++] = i; });
     }
     for (; k < idx.length; k++) scenePage[k] = scenePage[k - 1] ?? 0;
     if (scene != null && scenePage[scene] != null) {
@@ -220,16 +221,29 @@ export function mountReader(el, { version, sceneHref, pagesIndex = false, scene 
   el.querySelector('[data-zout]').addEventListener('click', () => step(-1));
   el.querySelectorAll('[data-zfit]').forEach((b) => b.addEventListener('click', () => rezoom(b.dataset.zfit)));
   el.querySelector('[data-toggle]').addEventListener('click', () => { root.classList.toggle('no-side'); if (fitting()) rezoom(zoom); });
-  el.querySelector('[data-fs]').addEventListener('click', () => { if (document.fullscreenElement) document.exitFullscreen(); else root.requestFullscreen?.().catch(() => {}); });
+  // ecrã inteiro: o mesmo botão entra e sai (com o texto "Sair" enquanto está em ecrã inteiro). Também funciona nos
+  // browsers que ainda usam os nomes antigos (webkit), e se o browser recusar sair, tira-se à mão.
+  const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+  const fsBtn = el.querySelector('[data-fs]');
+  const exitFs = () => { try { const r = (document.exitFullscreen || document.webkitExitFullscreen)?.call(document); r?.catch?.(() => onFs()); } catch { onFs(); } };
+  fsBtn.addEventListener('click', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    if (fsEl() || root.classList.contains('fs')) return exitFs();
+    const req = root.requestFullscreen || root.webkitRequestFullscreen;
+    try { req?.call(root)?.catch?.(() => {}); } catch { /* sem ecrã inteiro */ }
+  });
   // em ecrã inteiro mostra a página inteira; ao sair volta ao zoom que estava
   let beforeFs = null;
   const onFs = () => {
-    const on = document.fullscreenElement === root;
+    const on = fsEl() === root;
     root.classList.toggle('fs', on);
+    fsBtn.innerHTML = on ? `${ICON.close}<span>Sair</span>` : '⤢';
+    fsBtn.classList.toggle('sr-fsout', on);
+    fsBtn.title = on ? 'Sair do ecrã inteiro (Esc)' : 'Ecrã inteiro'; fsBtn.setAttribute('aria-label', fsBtn.title);
     if (on) { beforeFs = zoom; setTimeout(() => rezoom('page', true), 80); }
     else { const z = beforeFs ?? zoom; beforeFs = null; setTimeout(() => rezoom(z), 80); }
   };
-  document.addEventListener('fullscreenchange', onFs);
+  document.addEventListener('fullscreenchange', onFs); document.addEventListener('webkitfullscreenchange', onFs);
   el.querySelectorAll('[data-mk]').forEach((b) => b.addEventListener('click', () => { const on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', String(on)); root.classList.toggle(`hide-${b.dataset.mk}`, !on); }));
   el.querySelector('[data-dl]')?.addEventListener('click', async () => { const u = await signedUrl(version.file_path); u && window.open(u, '_blank', 'noopener'); });
   el.querySelector('[data-scenes]').addEventListener('click', (e) => {
@@ -258,6 +272,6 @@ export function mountReader(el, { version, sceneHref, pagesIndex = false, scene 
   (isPdf && version.file_path ? openPdfMode() : Promise.resolve(textMode())).catch(() => { if (!destroyed) { pages = []; scenePage = []; pdf = null; textMode(); } });
 
   return {
-    destroy() { destroyed = true; io?.disconnect(); window.removeEventListener('resize', onResize); document.removeEventListener('fullscreenchange', onFs); pdf?.destroy?.(); },
+    destroy() { destroyed = true; io?.disconnect(); window.removeEventListener('resize', onResize); document.removeEventListener('fullscreenchange', onFs); document.removeEventListener('webkitfullscreenchange', onFs); if (fsEl() === root) exitFs(); pdf?.destroy?.(); },
   };
 }

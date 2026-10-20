@@ -32,3 +32,9 @@
 /l/index.html
   Cache-Control: no-cache
   X-Robots-Tag: noindex, nofollow
+/g/
+  Cache-Control: no-cache
+  X-Robots-Tag: noindex, nofollow
+/g/index.html
+  Cache-Control: no-cache
+  X-Robots-Tag: noindex, nofollow

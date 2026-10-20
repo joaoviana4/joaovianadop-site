@@ -24,12 +24,12 @@ export function entItems(items, { mode, urls, place = false }) {
   const ed = (it) => `<input class="ent-ed" data-ented="${esc(it.e.id)}" value="${esc(editValue(it))}" placeholder="${esc(it.edit.placeholder || '')}" aria-label="${esc(it.edit.label || it.edit.placeholder || '')} de ${esc(it.title)}">`;
   if (mode === 'list') {
     return `<div class="ent-list">${items.map((it, i) => { const { e, href, title, sub, meta } = it; return it.edit
-      ? `<div class="ent-row ed"><a href="${href}" class="ent-ra" tabindex="-1" aria-hidden="true">${pic(e, title, 'ent-th')}</a><a href="${href}" class="ent-rt"><strong>${esc(title)}</strong></a>${ed(it)}<span class="small">${meta}</span><a href="${href}" class="ent-rc" aria-label="Abrir ${esc(title)}">${ICON.chev}</a></div>`
-      : `<a class="ent-row" href="${href}">${pic(e, title, 'ent-th')}<strong>${esc(title)}</strong><span class="muted small">${sub}</span><span class="small">${meta}</span>${ICON.chev}</a>`; }).join('')}</div>`;
+      ? `<div class="ent-row ed${it.child ? ' ent-child' : ''}"><a href="${href}" class="ent-ra" tabindex="-1" aria-hidden="true">${pic(e, title, 'ent-th')}</a><a href="${href}" class="ent-rt"><strong>${esc(title)}</strong></a>${ed(it)}<span class="small">${meta}</span><a href="${href}" class="ent-rc" aria-label="Abrir ${esc(title)}">${ICON.chev}</a></div>`
+      : `<a class="ent-row${it.child ? ' ent-child' : ''}" href="${href}">${pic(e, title, 'ent-th')}<strong>${esc(title)}</strong><span class="muted small">${sub}</span><span class="small">${meta}</span>${ICON.chev}</a>`; }).join('')}</div>`;
   }
   return `<div class="ent-tiles">${items.map((it, i) => { const { e, href, title, sub, meta } = it; return it.edit
-    ? `<div class="ent-tile ed"><a href="${href}" class="ent-ta">${pic(e, title, 'ent-ph')}<span class="ent-tb"><strong>${esc(title)}</strong></span></a><span class="ent-tb ent-tb2">${ed(it)}<span class="small">${meta}</span></span></div>`
-    : `<a class="ent-tile" href="${href}">${pic(e, title, 'ent-ph')}<span class="ent-tb"><strong>${esc(title)}</strong><span class="muted small">${sub}</span><span class="small">${meta}</span></span></a>`; }).join('')}</div>`;
+    ? `<div class="ent-tile ed${it.child ? ' ent-child' : ''}"><a href="${href}" class="ent-ta">${pic(e, title, 'ent-ph')}<span class="ent-tb"><strong>${esc(title)}</strong></span></a><span class="ent-tb ent-tb2">${ed(it)}<span class="small">${meta}</span></span></div>`
+    : `<a class="ent-tile${it.child ? ' ent-child' : ''}" href="${href}">${pic(e, title, 'ent-ph')}<span class="ent-tb"><strong>${esc(title)}</strong><span class="muted small">${sub}</span><span class="small">${meta}</span></span></a>`; }).join('')}</div>`;
 }
 const editValue = (it) => { const f = it.edit.field; return f.startsWith('info.') ? it.e.info?.[f.slice(5)] || '' : it.e[f] || ''; };
 // grava o que se escreve nos campos da lista (cada linha à sua vez)
@@ -48,7 +48,7 @@ export function bindEdits(root, items) {
 function onPasteImages(root, fn) {
   const h = (e) => {
     if (!document.body.contains(root)) { document.removeEventListener('paste', h); return; }
-    if (e.target.closest?.('input, textarea, [contenteditable="true"]') || document.querySelector('#modal .modal')) return;
+    if (e.defaultPrevented || e.target.closest?.('input, textarea, [contenteditable="true"]') || document.querySelector('#modal .modal')) return;
     const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith('image/'));
     if (files.length) { e.preventDefault(); fn(files); }
   };
@@ -75,7 +75,7 @@ export function bindPhoto(root, p, table, e, redraw) {
 // Fotos de um décor (locations.photos = [{ path }]); a primeira é a que aparece na grelha
 export async function placePhotos(l) {
   const photos = l.photos || []; const urls = await signedUrls(photos.map((x) => x.path));
-  return `<section class="panel"><div class="row between"><h2 class="h3">Fotos do décor</h2><button type="button" class="btn ghost" data-addph>${ICON.plus} Fotos</button></div>
+  return `<section class="panel" data-phsec ${photos.length ? '' : 'hidden'}><div class="row between"><h2 class="h3">Fotos do décor</h2><button type="button" class="btn ghost" data-addph>${ICON.plus} Fotos</button></div>
     <div class="photo-grid" data-photos>${photos.map((ph, i) => `<figure><img src="${esc(urls[ph.path] || '')}" alt="">${i === 0 ? '<figcaption class="small muted">Capa</figcaption>' : `<button type="button" class="link-btn small" data-coverph="${i}">Usar como capa</button>`}<button type="button" class="icon-btn sm" data-rmph="${i}" aria-label="Tirar foto">${ICON.close}</button></figure>`).join('') || '<p class="muted small">Ainda sem fotos. Também podes largá-las aqui ou colar com Ctrl+V.</p>'}</div></section>`;
 }
 export function bindPlacePhotos(root, p, l, redraw) {

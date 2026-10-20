@@ -97,8 +97,8 @@ export function mountTasks(root, { projectId = null, mine = false, compact = fal
         ${depts.length && !entity ? `<label class="sel"><span class="vh">Departamento</span><select data-f="dept"><option value="all">Todos os departamentos</option>${depts.map((d) => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</select></label>` : ''}
         <label class="sel"><span class="vh">Ordenar</span><select data-f="sort"><option value="due">Por urgência</option><option value="name">Por nome</option><option value="status">Por estado</option></select></label>
       </div>
-      ${projectId && !entity ? `<form class="task-add" data-add>
-        <input name="title" placeholder="Nova tarefa…" aria-label="Nova tarefa" autocomplete="off">
+      ${projectId ? `<form class="task-add" data-add>
+        <input name="title" placeholder="${entity ? 'Nova tarefa para esta página…' : 'Nova tarefa…'}" aria-label="Nova tarefa" autocomplete="off">
         <select name="assignee" aria-label="Responsável"><option value="">Responsável</option>${st.people.map((p) => `<option value="${p.id}">${esc(p.display_name)}</option>`).join('')}</select>
         ${depts.length ? `<select name="department" aria-label="Departamento"><option value="">Departamento</option>${depts.map((d) => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('')}</select>` : ''}
         <input name="due" type="date" aria-label="Prazo">

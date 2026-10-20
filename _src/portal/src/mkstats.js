@@ -1,4 +1,5 @@
 import { sb, esc, toast, modal, confirmBox, ICON, fmtDate, callFn, isStaff } from './lib.js';
+import { FLAVOR } from './flavor.js';
 
 // Estatísticas do marketing (Studio): o link de cada publicação e as redes do artista, com os números ao longo do
 // tempo. YouTube, TikTok e Spotify: os números públicos são lidos sozinhos (ao juntar, todos os dias e em "Atualizar"),
@@ -8,7 +9,7 @@ import { sb, esc, toast, modal, confirmBox, ICON, fmtDate, callFn, isStaff } fro
 export const PL = { youtube: ['YouTube', '#E5484D'], tiktok: ['TikTok', '#2AA8C9'], instagram: ['Instagram', '#E5579B'], spotify: ['Spotify', '#2FB67C'], facebook: ['Facebook', '#5B7CFF'], x: ['X', '#8A8A99'], outro: ['Outro', '#8A8A99'] };
 const plName = (k) => (PL[k] || PL.outro)[0];
 const plColor = (k) => (PL[k] || PL.outro)[1];
-const SHORT = 'joaovianadop.com/l/?';
+const SHORT = FLAVOR.short;
 const nf = new Intl.NumberFormat('pt-PT');
 const cf = new Intl.NumberFormat('pt-PT', { notation: 'compact', maximumFractionDigits: 1 });
 const big = (v) => (v == null ? '—' : v >= 10000 ? cf.format(v) : nf.format(v));

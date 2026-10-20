@@ -6,7 +6,9 @@ import { shootDays } from './shootdays.js';
 // Painel "Perto daqui e sol" na página de um décor: hospital mais perto (com urgência, público/privado,
 // tempo de carro), polícia e bombeiros, e sol e tempo para um dia. Fica guardado em locations.info.geo / info.near.
 // a ficção escreve a morada em info.morada; os videoclipes/campanhas em info.address
-export const placeAddr = (p, loc) => { const i = loc?.info || {}; const a = p && scriptMode(p) ? [i.morada, i.address] : [i.address, i.morada]; return (a.find((x) => x && String(x).trim()) || '').trim(); };
+const ownAddr = (p, loc) => { const i = loc?.info || {}; const a = p && scriptMode(p) ? [i.morada, i.address] : [i.address, i.morada]; return (a.find((x) => x && String(x).trim()) || '').trim(); };
+// morada do décor; se não tiver, a do décor principal do mesmo local (info.grupo), quando se conhece (loc._parent ou a lista)
+export const placeAddr = (p, loc, all) => ownAddr(p, loc) || ownAddr(p, loc?._parent || (loc?.info?.grupo && (all || []).find((x) => x.id === loc.info.grupo)) || null);
 
 export async function geoPanel(el, p, loc, { onChange } = {}) {
   if (!el) return;

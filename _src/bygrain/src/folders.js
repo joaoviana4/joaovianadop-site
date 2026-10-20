@@ -14,11 +14,14 @@ export const GRAIN_FEE = 10;
 const FEE_RE = /\b(agency|grain)\s*fee\b|^\s*(fee|agency)\s*$/i;
 export const isFeeRow = (b, r) => r.kind === 'item' && (b?.cols || []).some((c) => c.type === 'text' && FEE_RE.test(String(r.cells?.[c.id] || '')));
 // os valores podem ser fórmulas (=B2*C2): contam já calculados
-export const feeRowSum = (b) => { if (!b?.rows || !b.main) return 0; const S = budgetSheet(b); return b.rows.filter((r) => isFeeRow(b, r)).reduce((a, r) => a + (S.num(r, b.main) || 0), 0); };
+// um orçamento pode ter mais tabelas por baixo da principal (b.extra): contam todas
+const oneFee = (b) => { if (!b?.rows || !b.main) return 0; const S = budgetSheet(b); return b.rows.filter((r) => isFeeRow(b, r)).reduce((a, r) => a + (S.num(r, b.main) || 0), 0); };
+export const feeRowSum = (b) => oneFee(b) + (b?.extra || []).reduce((a, e) => a + oneFee(e), 0);
 export const costsOf = (b) => tableTotal(b) - feeRowSum(b);
 export const feePct = (b) => (feeRowSum(b) ? 0 : b?.gfee?.off ? 0 : b?.gfee?.pct != null ? Number(b.gfee.pct) || 0 : GRAIN_FEE);
 export const grainFee = (b) => feeRowSum(b) || costsOf(b) * feePct(b) / 100;
-export const tableTotal = (b) => { if (!b?.rows || !b.main) return 0; const S = budgetSheet(b); return b.rows.filter((r) => r.kind === 'item').reduce((a, r) => a + (S.num(r, b.main) || 0), 0); };
+export const oneTotal = (b) => { if (!b?.rows || !b.main) return 0; const S = budgetSheet(b); return b.rows.filter((r) => r.kind === 'item').reduce((a, r) => a + (S.num(r, b.main) || 0), 0); };
+export const tableTotal = (b) => oneTotal(b) + (b?.extra || []).reduce((a, e) => a + oneTotal(e), 0);
 
 // projetos dentro da pasta, com o orçamento de cada um (só chega o de quem tem acesso)
 export async function loadChildren(p) {

@@ -9,20 +9,22 @@ const editing = new Set();
 const SPLITS = [['2:1', '2/3 + 1/3'], ['1:1', 'Metade + metade'], ['1:2', '1/3 + 2/3']];
 const POS = [['left', 'Esquerda', '◧'], ['full', 'Largura toda', '▭'], ['right', 'Direita', '◨']];
 
-export function mountLayout(root, { project, key, blocks, title = 'página' }) {
+// inline: os controlos de cada bloco aparecem ao passar o rato (sem o modo "Organizar"); tirar um bloco esconde-o
+// (onRemove pode tratar dele, ex.: notas e ferramentas coladas, que se apagam). b.off: escondido por defeito.
+export function mountLayout(root, { project, key, blocks, title = 'página', inline = false, onRemove, onChange }) {
   const els = new Map([...root.querySelectorAll(':scope > [data-blk]')].map((e) => [e.dataset.blk, e]));
   const defs = blocks.filter((b) => els.has(b.id));
   const saved = project.layouts?.[key] || {};
   const st = {
     order: [...(saved.order || []).filter((id) => els.has(id)), ...defs.map((b) => b.id).filter((id) => !(saved.order || []).includes(id))],
     pos: Object.fromEntries(defs.map((b) => [b.id, saved.pos?.[b.id] || b.pos || 'full'])),
-    hidden: (saved.hidden || []).filter((id) => els.has(id)),
+    hidden: [...(saved.hidden || []).filter((id) => els.has(id)), ...defs.filter((b) => b.off && !(saved.order || []).includes(b.id) && !(saved.hidden || []).includes(b.id)).map((b) => b.id)],
     split: saved.split || '2:1',
   };
   const label = (id) => defs.find((b) => b.id === id)?.label || id;
   const save = saveLater(async () => {
     {
-      const layouts = { ...(project.layouts || {}), [key]: { order: st.order, pos: st.pos, hidden: st.hidden, split: st.split } };
+      const layouts = { ...(project.layouts || {}), [key]: { ...(project.layouts?.[key] || {}), order: st.order, pos: st.pos, hidden: st.hidden, split: st.split } };
       const { error } = await sb.from('projects').update({ layouts }).eq('id', project.id);
       if (error) toast('Não foi possível guardar a arrumação: ' + error.message); else project.layouts = layouts;
     }
@@ -33,9 +35,10 @@ export function mountLayout(root, { project, key, blocks, title = 'página' }) {
   root.before(bar);
 
   function render() {
-    const on = editing.has(key);
+    const on = inline || editing.has(key);
     root.classList.add('lay');
     root.classList.toggle('lay-edit', on);
+    root.classList.toggle('lay-inline', inline);
     root.style.setProperty('--split', { '2:1': '1.7fr 1fr', '1:1': '1fr 1fr', '1:2': '1fr 1.7fr' }[st.split]);
     els.forEach((e) => e.remove());
     root.querySelectorAll(':scope > .lay-band').forEach((b) => b.remove());
@@ -44,7 +47,7 @@ export function mountLayout(root, { project, key, blocks, title = 'página' }) {
       const e = els.get(id);
       if (!e) return;
       const hidden = st.hidden.includes(id);
-      if (hidden && !on) return;
+      if (hidden && (!on || inline)) return;
       e.classList.toggle('lay-hidden', hidden);
       decorate(e, id, on);
       const pos = st.pos[id];
@@ -54,6 +57,7 @@ export function mountLayout(root, { project, key, blocks, title = 'página' }) {
     });
     // colunas vazias numa faixa: o outro lado ocupa tudo
     root.querySelectorAll(':scope > .lay-band').forEach((b) => b.classList.toggle('one', [...b.children].some((c) => !c.children.length)));
+    if (inline) { bar.hidden = true; onChange?.(st); return; }
     bar.innerHTML = on
       ? `<div class="lay-tools"><strong>${ICON.board} A organizar a ${esc(title)}</strong>
           <span class="muted small">Arrasta pela pega, ou usa os botões de cada bloco.</span>
@@ -80,12 +84,15 @@ export function mountLayout(root, { project, key, blocks, title = 'página' }) {
         <span class="lay-seg" role="group" aria-label="Posição">${POS.map(([k, l, g]) => `<button type="button" data-pos="${k}" class="${st.pos[id] === k ? 'on' : ''}" title="${l}" aria-label="${l}" aria-pressed="${st.pos[id] === k}">${g}</button>`).join('')}</span>
         <button type="button" data-mv="-1" title="Subir" aria-label="Subir" ${i === 0 ? 'disabled' : ''}>↑</button>
         <button type="button" data-mv="1" title="Descer" aria-label="Descer" ${i === st.order.length - 1 ? 'disabled' : ''}>↓</button>
-        <button type="button" data-hide title="${hidden ? 'Mostrar' : 'Esconder'}">${hidden ? 'Mostrar' : 'Esconder'}</button>
+        ${inline ? `<button type="button" data-hide class="lay-x" title="Tirar da página" aria-label="Tirar ${esc(label(id))} da página">${ICON.close}</button>` : `<button type="button" data-hide title="${hidden ? 'Mostrar' : 'Esconder'}">${hidden ? 'Mostrar' : 'Esconder'}</button>`}
       </span>`;
     e.prepend(h);
     h.querySelectorAll('[data-pos]').forEach((b) => b.addEventListener('click', () => { st.pos[id] = b.dataset.pos; save(); render(); }));
     h.querySelectorAll('[data-mv]').forEach((b) => b.addEventListener('click', () => { const j = i + Number(b.dataset.mv); if (j < 0 || j >= st.order.length) return; st.order.splice(i, 1); st.order.splice(j, 0, id); save(); render(); }));
-    h.querySelector('[data-hide]').addEventListener('click', () => { st.hidden = hidden ? st.hidden.filter((x) => x !== id) : [...st.hidden, id]; save(); render(); });
+    h.querySelector('[data-hide]').addEventListener('click', () => {
+      if (inline && onRemove && onRemove(id)) { st.order = st.order.filter((x) => x !== id); els.delete(id); e.remove(); save(); render(); return; }
+      st.hidden = hidden ? st.hidden.filter((x) => x !== id) : [...st.hidden, id]; save(); render();
+    });
     const grip = h.querySelector('.lay-grip');
     grip.addEventListener('dragstart', (ev) => { ev.dataTransfer.setData('text/plain', id); ev.dataTransfer.effectAllowed = 'move'; e.classList.add('lay-dragging'); });
     grip.addEventListener('dragend', () => e.classList.remove('lay-dragging'));
@@ -103,7 +110,13 @@ export function mountLayout(root, { project, key, blocks, title = 'página' }) {
   }
 
   render();
-  return { render };
+  return {
+    render, st,
+    isHidden: (id) => st.hidden.includes(id),
+    show(id) { st.hidden = st.hidden.filter((x) => x !== id); save(); render(); els.get(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); },
+    // junta um bloco novo (nota, ferramenta colada) no fim
+    add(el, def) { el.dataset.blk = def.id; defs.push(def); els.set(def.id, el); st.order.push(def.id); st.pos[def.id] = def.pos || 'full'; save(); render(); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); },
+  };
 }
 
 // ecrã inteiro para um bloco (grelha de secções, shotlist…): ocupa a janela toda. Esc ou "Sair" para voltar.
@@ -117,6 +130,10 @@ export function fullscreenButton(el, key, label = 'Ecrã inteiro') {
     const on = fsOn.has(key);
     el.classList.toggle('fs-on', on); document.body.classList.toggle('fs-lock', fsOn.size > 0);
     b.classList.toggle('fs-float', on);
+    // dentro de uma página livre, cada elemento tem a sua camada (z-index): sem isto o ecrã inteiro e o botão de sair
+    // ficavam por baixo da barra de cima. Os "pais" deixam de ter camada própria enquanto está em ecrã inteiro.
+    document.querySelectorAll('.fs-anc').forEach((x) => x.classList.remove('fs-anc'));
+    document.querySelectorAll('.fs-on, .fs-btn.fs-float').forEach((n) => { for (let x = n.parentElement; x && x !== document.body; x = x.parentElement) if (!x.classList.contains('fs-on')) x.classList.add('fs-anc'); });
     b.innerHTML = `${on ? ICON.close : ICON.fit}<span>${on ? 'Sair do ecrã inteiro' : label}</span>`;
   };
   b.addEventListener('click', () => { if (fsOn.has(key)) fsOn.delete(key); else fsOn.add(key); apply(); });
@@ -126,4 +143,4 @@ export function fullscreenButton(el, key, label = 'Ecrã inteiro') {
   apply();
   return b;
 }
-export function clearFullscreen() { fsOn.clear(); document.body.classList.remove('fs-lock'); }
+export function clearFullscreen() { fsOn.clear(); document.body.classList.remove('fs-lock'); document.querySelectorAll('.fs-anc').forEach((x) => x.classList.remove('fs-anc')); }

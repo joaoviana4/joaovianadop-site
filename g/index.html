@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>A abrir…</title>
+<script>
+// links curtos da byGrain (joaovianadop.com/g/?nome): conta o click e segue para o destino
+(function () {
+  var s = (location.search.slice(1).split('&')[0] || location.hash.slice(1) || location.pathname.split('/').filter(Boolean)[1] || '');
+  try { s = decodeURIComponent(s); } catch (e) { /* fica como está */ }
+  s = s.toLowerCase().replace(/[^a-z0-9-]/g, '');
+  var r = ''; try { r = document.referrer ? new URL(document.referrer).hostname : ''; } catch (e) { r = ''; }
+  location.replace('https://ppovjdyrhdfedjcdnnol.supabase.co/functions/v1/go?s=' + encodeURIComponent(s) + (r ? '&r=' + encodeURIComponent(r) : ''));
+})();
+</script>
+<style>html,body{margin:0;height:100%;background:#111114;color:#eee;font:15px system-ui,sans-serif;display:grid;place-items:center}</style>
+</head>
+<body><p>A abrir…</p></body>
+</html>

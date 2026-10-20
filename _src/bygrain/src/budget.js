@@ -1,6 +1,7 @@
 import { sb, esc, toast, modal, confirmBox, ICON, saveLater } from './lib.js';
+const BSTATES = [['curso', 'Em curso'], ['por_aprovar', 'Por aprovar'], ['aprovado', 'Aprovado'], ['rejeitado', 'Rejeitado']];
 import { exportPdf } from './pdf.js';
-import { GRAIN_FEE, feeRowSum } from './folders.js';
+import { GRAIN_FEE, feeRowSum, oneTotal } from './folders.js';
 import { budgetSheet, isFormula, show, colName, HELP, remapFormulas } from './formula.js';
 import { colorField, readColor, bindColorField, colorPop, tableShortcuts, rowStyle, colStyle, makeHistory, bindUndoKeys, GRIP, rowDrag, moveInList } from './tablekit.js';
 
@@ -93,6 +94,10 @@ export async function budgetPage(main, p) {
   // nome do orçamento e do valor geral: personalizáveis (ficam guardados com a tabela)
   p._renameBudget = (name) => { if (!b) b = baseBudget(); b.title = name; save(0); };
   const capName = () => b?.capName || p._capLabel || 'Orçamento geral do projeto';
+  // nome da tabela (as despesas) e as outras tabelas por baixo (só no orçamento geral do projeto ou da pasta)
+  const tname = () => b?.tname || (p.kind === 'album' ? 'Despesas gerais' : 'Despesas');
+  const canMore = !p._store && !p._tableOnly;
+  const extras = () => (canMore && b?.extra) || [];
   const saveTotal = async () => { if (await write({ value: total })) p.value = total; };
   const totalLater = saveLater(saveTotal, 600);
   async function history() {
@@ -118,14 +123,15 @@ export async function budgetPage(main, p) {
   const feeP = () => (!hasFee || !b || rowFee() || b.gfee?.off ? 0 : b.gfee?.pct != null ? Number(b.gfee.pct) || 0 : GRAIN_FEE);
   const feeOf = (own) => own * feeP() / 100;
   function summary() {
-    const { tot } = sums(b); const rf = rowFee(); const costs = ((b.main && tot[b.main]) || 0) - rf; const fee = rf || feeOf(costs); const own = costs + fee;
+    const { tot } = sums(b); const rf = rowFee(); const exs = extras(); const mainT = (b.main && tot[b.main]) || 0;
+    const costs = mainT + exs.reduce((a, e) => a + oneTotal(e), 0) - rf; const fee = rf || feeOf(costs); const own = costs + fee;
     // numa pasta (ex.: álbum), o que está atribuído aos projetos lá dentro também conta
     const extra = p._extra?.amount || 0; const t = own + extra;
     const has = total != null && total > 0; const ratio = has ? t / total : 0; const diff = has ? total - t : 0;
     const stt = !has ? 'none' : diff < 0 ? 'over' : ratio >= 0.9 ? 'near' : 'ok';
     const label = { none: p._capLabel ? 'Sem limite definido' : 'Sem orçamento geral definido', over: 'Fora do orçamento', near: 'Dentro, mas perto do limite', ok: 'Dentro do orçamento' }[stt];
     const pctTxt = String(feeP()).replace('.', ',');
-    const lines = [[extra ? 'Custos desta tabela' : 'Custos', costs], ...(fee ? [[rf ? 'Agency fee (linha da tabela)' : `Grain fee · ${pctTxt} %`, fee]] : []), ...(extra ? [[p._extra.label ? p._extra.label.charAt(0).toUpperCase() + p._extra.label.slice(1) : 'Projetos dentro', extra]] : [])];
+    const lines = [...(exs.length ? [[tname(), mainT], ...exs.map((e) => [e.tname || 'Tabela', oneTotal(e)])] : [[extra ? 'Custos desta tabela' : 'Custos', costs]]), ...(fee ? [[rf ? 'Agency fee (linha da tabela)' : `Grain fee · ${pctTxt} %`, fee]] : []), ...(extra ? [[p._extra.label ? p._extra.label.charAt(0).toUpperCase() + p._extra.label.slice(1) : 'Projetos dentro', extra]] : [])];
     return `<div class="bsum-grid">
       <div class="bsum-main"><span class="fl">${extra ? 'Total comprometido' : fee ? 'Total com Grain fee' : 'Total da tabela'}</span><strong class="bbig">${eur.format(t)}</strong>
         ${lines.length > 1 ? `<dl class="bsum-lines">${lines.map(([l, v]) => `<div><dt>${esc(l)}</dt><dd>${eur.format(v)}</dd></div>`).join('')}</dl>` : ''}</div>
@@ -138,6 +144,27 @@ export async function budgetPage(main, p) {
     const v = r.cells?.[c.id] ?? '';
     if (isFormula(v)) { const x = S.value(r, c.id); return `<input class="${c.type !== 'text' ? 'num' : ''} is-f" data-cell="${c.id}" data-raw="${esc(v)}" title="${esc(v)}" value="${esc(typeof x === 'number' && c.type !== 'text' ? fmt(c, x) : show(x))}" ${c.type !== 'text' ? 'inputmode="decimal"' : ''} aria-label="${esc(c.name)}">`; }
     return `<input class="${c.type !== 'text' ? 'num' : ''}" data-cell="${c.id}" value="${esc(c.type === 'text' ? v : fmtIn(c, v))}" ${c.type !== 'text' ? 'inputmode="decimal" placeholder="0,00"' : `placeholder="${esc(c.name)}"`} aria-label="${esc(c.name)}">`;
+  }
+
+  // outras tabelas por baixo da principal: cada uma é uma tabela de orçamento igual, com nome e colunas próprias
+  let exBox = null;
+  function drawExtras() {
+    if (!exBox || !exBox.isConnected) { exBox = document.createElement('div'); exBox.className = 'bextras'; main.after(exBox); }
+    exBox.innerHTML = '';
+    extras().forEach((e0) => {
+      let e = e0;
+      const el = document.createElement('div'); el.className = 'budget-wrap bextra'; exBox.append(el);
+      budgetPage(el, { id: p.id, name: p.name, kind: p.kind, budget: e, value: null, _tableOnly: true,
+        _store: async (patch) => { if (patch.budget) { const i = (b.extra || []).findIndex((x) => x.id === e.id); if (i >= 0) { b.extra[i] = { ...patch.budget, id: e.id }; e = b.extra[i]; } refreshSums(); save(); } return true; },
+        _remove: async () => { if (!(await confirmBox(`Apagar a tabela "${e.tname || 'Tabela'}" e tudo o que tem?`, 'Apagar'))) return; snapshot('apagar tabela'); b.extra = (b.extra || []).filter((x) => x.id !== e.id); save(0); draw(); toast('Tabela apagada. Ctrl+Z para voltar atrás.'); } });
+    });
+    const add = document.createElement('div'); add.className = 'row wrap-gap bextra-add';
+    add.innerHTML = `<button type="button" class="btn ghost" data-addtable>${ICON.plus} Tabela</button><span class="muted small">Outra tabela por baixo (ex.: equipamento, pós-produção). O total dela soma-se ao orçamento.</span>`;
+    add.querySelector('button').addEventListener('click', () => {
+      snapshot('juntar tabela'); const t = { ...baseBudget(), id: uid(), tname: 'Nova tabela' }; b.extra = [...(b.extra || []), t]; save(0); draw();
+      const ins = exBox.querySelectorAll('[data-tname]'); const last = ins[ins.length - 1]; last?.focus(); last?.select(); last?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    exBox.append(add);
   }
 
   function draw() {
@@ -155,7 +182,7 @@ export async function budgetPage(main, p) {
     const { tot, sec } = sums(b); const SH = budgetSheet(b);
     const moneyCols = b.cols.filter((c) => c.type !== 'text');
     const nItems = b.rows.filter((r) => r.kind !== 'section').length;
-    main.innerHTML = `
+    main.innerHTML = `${p._tableOnly ? '' : `
       <section class="panel bsum">
         <div class="btotal-in">
           <div class="field"><input class="label-in" data-capname value="${esc(capName())}" aria-label="Nome do valor geral" title="Clica para mudar o nome" maxlength="60"><span class="money-in"><input class="num" data-total inputmode="decimal" value="${total != null ? esc(fmtIn({ type: 'money' }, total)) : ''}" placeholder="Ex.: 8000" autocomplete="off" aria-label="${esc(capName())}"><i>€</i></span></div>
@@ -163,28 +190,30 @@ export async function budgetPage(main, p) {
           ${moneyCols.length > 1 ? `<label class="field"><span class="label">Compara com a coluna</span><select data-main>${moneyCols.map((c) => `<option value="${c.id}" ${c.id === b.main ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>` : ''}
         </div>
         <div data-sum>${summary()}</div>
-        ${hasFee && p.kind !== 'album' ? `<div class="bappr ${p._approvedAt ? 'on' : ''}">${p._approvedAt
-          ? `<span class="bchip bst-ok">✓ Orçamento aprovado</span><span class="muted small">a ${new Date(p._approvedAt).toLocaleDateString('pt-PT', { day: 'numeric', month: 'long' })} · conta nos ganhos e no resumo das Finanças</span><button type="button" class="link-btn" data-unapprove>Desfazer</button>`
-          : `<button type="button" class="btn primary" data-approve>✓ Orçamento aprovado</button><span class="muted small">Até aprovares, aparece nos ganhos como “Orçamento enviado” e não conta nos totais.</span>`}</div>` : ''}
-      </section>
-      <div class="btools">
+        ${hasFee && p.kind !== 'album' ? (() => { const cur = p._budgetStatus || (p._approvedAt ? 'aprovado' : 'curso'); return `<div class="bappr bst-${cur}">
+          <div class="bst-seg" role="radiogroup" aria-label="Estado do orçamento">${BSTATES.map(([k, l]) => `<button type="button" role="radio" aria-checked="${cur === k}" class="bst-o bs-${k}" data-bst="${k}">${l}</button>`).join('')}</div>
+          <span class="muted small">${{ curso: 'Ainda a fazer o orçamento. Nos ganhos aparece como “Orçamento enviado” e não conta nos totais.', por_aprovar: 'Enviado ao cliente, à espera de resposta. Ainda não conta nos totais.', aprovado: `Aprovado${p._approvedAt ? ` a ${new Date(p._approvedAt).toLocaleDateString('pt-PT', { day: 'numeric', month: 'long' })}` : ''}: conta nos ganhos e no resumo das Finanças como “Aceite”.`, rejeitado: 'O cliente não aceitou. Nos ganhos fica como “Perdido”.' }[cur]}</span></div>`; })() : ''}
+      </section>`}
+      ${p._tableOnly ? '' : `<div class="btools">
         <label class="sel"><span class="vh">Modelo</span><select data-tpl><option value="">Aplicar modelo…</option>${TPL_NAMES.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label>
         <button type="button" class="btn ghost" data-import>${ICON.open} Importar Excel ou CSV</button>
         <button type="button" class="btn ghost" data-export>${ICON.copy} Exportar para Excel</button>
         <button type="button" class="btn ghost" data-pdf>${ICON.open} Exportar PDF</button>
         ${p._store ? '' : `<button type="button" class="btn ghost" data-hist>${ICON.refresh} Versões anteriores</button>`}
         ${hist.last ? `<button type="button" class="link-btn" data-undo title="Ctrl+Z">Desfazer: ${esc(hist.last)}</button>` : ''}
-      </div>
+      </div>`}
+      ${canMore || p._tableOnly ? `<div class="row between wrap-gap btname-row"><input class="title-in h3 btname" data-tname value="${esc(p._tableOnly ? b.tname || 'Tabela' : tname())}" aria-label="Nome da tabela" title="Clica para mudar o nome" maxlength="80">${p._tableOnly ? `<button type="button" class="icon-btn" data-tdel title="Apagar esta tabela" aria-label="Apagar esta tabela">${ICON.trash}</button>` : ''}</div>` : ''}
       <div class="panel table-wrap btable"><table class="table budget">
         <thead><tr>${b.cols.map((c) => `<th class="${c.type !== 'text' ? 'num' : ''} ${c.color ? 'has-cc' : ''}" data-colid="${c.id}"${colStyle(c)}><span class="col-l" aria-hidden="true">${colName(b.cols.indexOf(c))}</span><button type="button" class="th-btn" data-col="${c.id}">${esc(c.name)}${c.id === b.main ? ' ●' : ''}</button></th>`).join('')}<th class="bact"><button type="button" class="icon-btn sm" data-addcol aria-label="Juntar coluna">${ICON.plus}</button></th></tr></thead>
         <tbody>${b.rows.map((r) => r.kind === 'section'
           ? `<tr class="bsec ${r.color ? 'has-rc' : ''}" data-row="${r.id}"${rowStyle(r)}><td colspan="${Math.max(1, b.cols.findIndex((c) => c.type !== 'text'))}" class="rd-cell"><span class="row-n" aria-hidden="true">${b.rows.indexOf(r) + 1}</span><button type="button" class="row-dot" data-rowcolor title="Cor da secção" aria-label="Cor da secção"></button><input class="sec-in" data-sec value="${esc(r.title)}" aria-label="Nome da secção"></td>${b.cols.slice(Math.max(1, b.cols.findIndex((c) => c.type !== 'text'))).map((c) => `<td class="num">${c.type === 'text' ? '' : `<b data-ssum="${r.id}:${c.id}">${fmt(c, sec[r.id]?.[c.id] || 0)}</b>`}</td>`).join('')}<td class="bact row-act">${GRIP('secção')}<button type="button" class="icon-btn sm" data-rm aria-label="Apagar secção">${ICON.close}</button></td></tr>`
           : `<tr data-row="${r.id}" class="${r.color ? 'has-rc' : ''}"${rowStyle(r)}>${b.cols.map((c, i) => `<td class="${c.type !== 'text' ? 'num' : ''} ${c.color ? 'has-cc' : ''} ${i === 0 ? 'rd-cell' : ''}" data-colid="${c.id}"${colStyle(c)}>${i === 0 ? `<span class="row-n" aria-hidden="true">${b.rows.indexOf(r) + 1}</span><button type="button" class="row-dot" data-rowcolor title="Cor da linha" aria-label="Cor da linha"></button>` : ''}${cellInput(r, c, SH)}</td>`).join('')}<td class="bact row-act">${GRIP()}<button type="button" class="icon-btn sm" data-rm aria-label="Apagar linha">${ICON.close}</button></td></tr>`).join('')}</tbody>
-        <tfoot><tr>${b.cols.map((c, i) => `<td class="num">${i === 0 ? '<strong>Total</strong>' : c.type === 'text' ? '' : `<strong data-tsum="${c.id}">${fmt(c, tot[c.id] || 0)}</strong>`}</td>`).join('')}<td></td></tr>${hasFee && b.main ? `<tr class="bfee-row" ${feeP() ? '' : 'hidden'}>${b.cols.map((c, i) => `<td class="num">${i === 0 ? `Grain fee (${String(feeP()).replace('.', ',')} %)` : c.id === b.main ? `<span data-tfee>${eur.format(feeOf(tot[c.id] || 0))}</span>` : ''}</td>`).join('')}<td></td></tr><tr class="bfee-row tot" ${feeP() ? '' : 'hidden'}>${b.cols.map((c, i) => `<td class="num">${i === 0 ? '<strong>Total com Grain fee</strong>' : c.id === b.main ? `<strong data-tfeetot>${eur.format((tot[c.id] || 0) + feeOf(tot[c.id] || 0))}</strong>` : ''}</td>`).join('')}<td></td></tr>` : ''}</tfoot>
+        <tfoot><tr>${b.cols.map((c, i) => `<td class="num">${i === 0 ? '<strong>Total</strong>' : c.type === 'text' ? '' : `<strong data-tsum="${c.id}">${fmt(c, tot[c.id] || 0)}</strong>`}</td>`).join('')}<td></td></tr>${hasFee && b.main && !extras().length ? `<tr class="bfee-row" ${feeP() ? '' : 'hidden'}>${b.cols.map((c, i) => `<td class="num">${i === 0 ? `Grain fee (${String(feeP()).replace('.', ',')} %)` : c.id === b.main ? `<span data-tfee>${eur.format(feeOf(tot[c.id] || 0))}</span>` : ''}</td>`).join('')}<td></td></tr><tr class="bfee-row tot" ${feeP() ? '' : 'hidden'}>${b.cols.map((c, i) => `<td class="num">${i === 0 ? '<strong>Total com Grain fee</strong>' : c.id === b.main ? `<strong data-tfeetot>${eur.format((tot[c.id] || 0) + feeOf(tot[c.id] || 0))}</strong>` : ''}</td>`).join('')}<td></td></tr>` : ''}</tfoot>
       </table></div>
       <div class="row wrap-gap"><button type="button" class="btn ghost" data-addrow>${ICON.plus} Linha</button><button type="button" class="btn ghost" data-addcol2>${ICON.plus} Coluna</button><button type="button" class="btn ghost" data-addsec>${ICON.plus} Secção</button><span class="muted small">${nItems} ${nItems === 1 ? 'linha' : 'linhas'} · clica no nome de uma coluna para mudar nome, tipo e cor · ● conta para o total · <kbd>Alt</kbd>+<kbd>↓</kbd> linha, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>↓</kbd> secção, <kbd>Alt</kbd>+<kbd>→</kbd> coluna (onde está o rato) · cor da linha no ponto à esquerda</span></div>
-      <p class="muted small f-help">${esc(HELP)}</p>`;
+      ${p._tableOnly ? '' : `<p class="muted small f-help">${esc(HELP)}</p>`}`;
     bind();
+    if (canMore) drawExtras();
   }
 
   // fórmulas: na célula com o cursor vê-se a fórmula; nas outras, o resultado
@@ -202,29 +231,37 @@ export async function budgetPage(main, p) {
     main.querySelectorAll('[data-ssum]').forEach((el) => { const [sid, cid] = el.dataset.ssum.split(':'); const c = b.cols.find((x) => x.id === cid); el.textContent = fmt(c, sec[sid]?.[cid] || 0); });
     const rf = rowFee(); main.querySelectorAll('.bfee-row').forEach((tr) => { tr.hidden = !feeP(); }); const fn = main.querySelector('[data-feenote]'); if (fn) fn.hidden = !rf; const fc = main.querySelector('[data-feectl]'); if (fc) fc.hidden = !!rf;
     const mt = (b.main && tot[b.main]) || 0; const tf = main.querySelector('[data-tfee]'); if (tf) tf.textContent = eur.format(feeOf(mt)); const tt = main.querySelector('[data-tfeetot]'); if (tt) tt.textContent = eur.format(mt + feeOf(mt));
-    main.querySelector('[data-sum]').innerHTML = summary();
+    const sm = main.querySelector('[data-sum]'); if (sm) sm.innerHTML = summary();
   }
   const snapshot = (label) => hist.push(label);
 
   function bind() {
     const totalIn = main.querySelector('[data-total]');
-    totalIn.addEventListener('input', () => { total = num(totalIn.value); refreshSums(); totalLater(); });
-    totalIn.addEventListener('blur', () => { if (total != null) totalIn.value = fmtIn({ type: 'money' }, total); });
-    const setAppr = async (on) => {
-      if (on && !(await confirmBox(`Marcar o orçamento de "${p.name}" como aprovado? Passa a contar nos ganhos e no resumo das Finanças como “Aceite”.`, 'Aprovar'))) return;
-      const v = on ? new Date().toISOString() : null;
-      if (await write({ approved_at: v, approved_by: on ? (await sb.auth.getUser()).data.user?.id || null : null })) { p._approvedAt = v; toast(on ? 'Orçamento aprovado. Já está nos ganhos.' : 'Aprovação desfeita.'); draw(); }
+    totalIn?.addEventListener('input', () => { total = num(totalIn.value); refreshSums(); totalLater(); });
+    totalIn?.addEventListener('blur', () => { if (total != null) totalIn.value = fmtIn({ type: 'money' }, total); });
+    const tn = main.querySelector('[data-tname]');
+    tn?.addEventListener('change', () => { const v = tn.value.trim(); snapshot('nome da tabela'); if (p._tableOnly) b.tname = v || 'Tabela'; else if (!v || v === (p.kind === 'album' ? 'Despesas gerais' : 'Despesas')) delete b.tname; else b.tname = v; tn.value = p._tableOnly ? b.tname : tname(); save(0); refreshSums(); });
+    tn?.addEventListener('keydown', (e) => { if (e.key === 'Enter') tn.blur(); if (e.key === 'Escape') { tn.value = p._tableOnly ? b.tname || 'Tabela' : tname(); tn.blur(); } });
+    main.querySelector('[data-tdel]')?.addEventListener('click', () => p._remove?.());
+    // estado do orçamento: Em curso, Por aprovar, Aprovado, Rejeitado (os ganhos das Finanças acompanham)
+    const setStatus = async (st) => {
+      const cur = p._budgetStatus || (p._approvedAt ? 'aprovado' : 'curso'); if (st === cur) return;
+      if (st === 'aprovado' && !(await confirmBox(`Marcar o orçamento de "${p.name}" como aprovado? Passa a contar nos ganhos e no resumo das Finanças como “Aceite”.`, 'Aprovar'))) return;
+      const v = st === 'aprovado' ? new Date().toISOString() : null;
+      if (await write({ status: st, approved_at: v, approved_by: v ? (await sb.auth.getUser()).data.user?.id || null : null })) {
+        p._approvedAt = v; p._budgetStatus = st;
+        toast({ curso: 'Orçamento em curso.', por_aprovar: 'Orçamento à espera de aprovação.', aprovado: 'Orçamento aprovado. Já está nos ganhos.', rejeitado: 'Orçamento rejeitado.' }[st]); draw();
+      }
     };
-    main.querySelector('[data-approve]')?.addEventListener('click', () => setAppr(true));
-    main.querySelector('[data-unapprove]')?.addEventListener('click', () => setAppr(false));
+    main.querySelectorAll('[data-bst]').forEach((b) => b.addEventListener('click', () => setStatus(b.dataset.bst)));
     const cn = main.querySelector('[data-capname]');
-    cn.addEventListener('change', () => { const v = cn.value.trim(); snapshot('nome'); if (!v || v === (p._capLabel || 'Orçamento geral do projeto')) delete b.capName; else b.capName = v; cn.value = capName(); save(0); });
-    cn.addEventListener('keydown', (e) => { if (e.key === 'Enter') cn.blur(); });
+    cn?.addEventListener('change', () => { const v = cn.value.trim(); snapshot('nome'); if (!v || v === (p._capLabel || 'Orçamento geral do projeto')) delete b.capName; else b.capName = v; cn.value = capName(); save(0); });
+    cn?.addEventListener('keydown', (e) => { if (e.key === 'Enter') cn.blur(); });
     main.querySelector('[data-feeon]')?.addEventListener('change', (e) => { snapshot('Grain fee'); b.gfee = { ...(b.gfee || {}), off: !e.target.checked }; if (!b.gfee.off) delete b.gfee.off; save(0); draw(); });
     const fp = main.querySelector('[data-feepct]');
     fp?.addEventListener('change', () => { const n = num(fp.value); snapshot('Grain fee'); b.gfee = { ...(b.gfee || {}), pct: n == null ? GRAIN_FEE : Math.max(0, n) }; save(0); draw(); });
     main.querySelector('[data-main]')?.addEventListener('change', (e) => { b.main = e.target.value; save(); draw(); });
-    main.querySelector('[data-tpl]').addEventListener('change', async (e) => {
+    main.querySelector('[data-tpl]')?.addEventListener('change', async (e) => {
       const k = e.target.value; if (!k) return;
       if (!(await confirmBox('Substituir as linhas pelo modelo? Podes desfazer a seguir.', 'Aplicar modelo'))) { e.target.value = ''; return; }
       snapshot('modelo'); b.rows = templateRows(k); if (k === 'simple') b.cols = baseBudget().cols; if (!b.cols.some((c) => c.id === b.main)) b.main = b.cols.find((c) => c.type === 'money')?.id || null;
@@ -233,11 +270,11 @@ export async function budgetPage(main, p) {
     });
     main.querySelector('[data-undo]')?.addEventListener('click', () => hist.undo());
     hist.watch(main.querySelector('table.budget'));
-    if (!undoKeysBound) { bindUndoKeys(main, hist); undoKeysBound = true; }
-    main.querySelector('[data-import]').addEventListener('click', pickImport);
-    main.querySelector('[data-export]').addEventListener('click', () => exportXlsx(b, total, p.name, feeP()));
+    if (!undoKeysBound && !p._tableOnly) { bindUndoKeys(main, hist); undoKeysBound = true; }
+    main.querySelector('[data-import]')?.addEventListener('click', pickImport);
+    main.querySelector('[data-export]')?.addEventListener('click', () => exportXlsx(b, total, p.name, feeP(), tname()));
     main.querySelector('[data-hist]')?.addEventListener('click', history);
-    main.querySelector('[data-pdf]').addEventListener('click', () => {
+    main.querySelector('[data-pdf]')?.addEventListener('click', () => {
       const { tot, sec } = sums(b); const SP = budgetSheet(b); const groups = []; let cur = { title: null, rows: [] };
       b.rows.forEach((r) => {
         if (r.kind === 'section') { if (cur.title !== null || cur.rows.length) groups.push(cur); cur = { title: r.title, color: r.color || '#1E2AD4', right: b.main && sec[r.id]?.[b.main] != null ? fmt(b.cols.find((c) => c.id === b.main), sec[r.id][b.main]) : '', rows: [] }; return; }
@@ -249,7 +286,7 @@ export async function budgetPage(main, p) {
         title: `${b.title || 'Orçamento'} — ${p.name}`, subtitle: new Date().toLocaleDateString('pt-PT'),
         columns: b.cols.map((c) => ({ label: c.name, align: c.type === 'text' ? undefined : 'right' })),
         groups: groups.filter((g) => g.title !== null || g.rows.length),
-        footer: [['Total da tabela', mainCol ? fmt(mainCol, t) : ''], ...(feeP() ? [[`Grain fee (${String(feeP()).replace('.', ',')} %)`, eur.format(feeOf(t))], ['Total com Grain fee', eur.format(t + feeOf(t))]] : []), ...(total != null ? [[capName(), eur.format(total)], [total - t - feeOf(t) < 0 ? 'Passa' : 'Sobram', eur.format(Math.abs(total - t - feeOf(t)))]] : [])],
+        footer: (() => { const exs = extras(); const all = t + exs.reduce((a, e) => a + oneTotal(e), 0); return [[exs.length ? tname() : 'Total da tabela', mainCol ? fmt(mainCol, t) : ''], ...exs.map((e) => [e.tname || 'Tabela', eur.format(oneTotal(e))]), ...(exs.length ? [['Total das tabelas', eur.format(all)]] : []), ...(feeP() ? [[`Grain fee (${String(feeP()).replace('.', ',')} %)`, eur.format(feeOf(all))], ['Total com Grain fee', eur.format(all + feeOf(all))]] : []), ...(total != null ? [[capName(), eur.format(total)], [total - all - feeOf(all) < 0 ? 'Passa' : 'Sobram', eur.format(Math.abs(total - all - feeOf(all)))]] : [])]; })(),
       });
     });
     const tbody = main.querySelector('tbody');
@@ -355,7 +392,7 @@ export async function budgetPage(main, p) {
       box.querySelector('[data-x]').onclick = m.close;
       box.querySelector('[data-go]').onclick = () => {
         if (b) snapshot('importação');
-        if (!b || mode === 'replace') { b = { cols: parsed.cols, rows: parsed.rows, main: [...parsed.cols].reverse().find((c) => c.type === 'money')?.id || parsed.cols.find((c) => c.type !== 'text')?.id || null }; }
+        if (!b || mode === 'replace') { b = { ...(b ? { tname: b.tname, extra: b.extra, title: b.title, capName: b.capName, gfee: b.gfee } : {}), cols: parsed.cols, rows: parsed.rows, main: [...parsed.cols].reverse().find((c) => c.type === 'money')?.id || parsed.cols.find((c) => c.type !== 'text')?.id || null }; }
         else {
           const map = {};
           parsed.cols.forEach((c) => { let ex = b.cols.find((x) => x.name.trim().toLowerCase() === c.name.trim().toLowerCase()); if (!ex) { ex = { ...c }; b.cols.push(ex); } map[c.id] = ex.id; });
@@ -428,9 +465,11 @@ function parseRows(raw) {
   return { cols, rows: out, total };
 }
 
-async function exportXlsx(b, total, name, feePct = 0) {
+async function exportXlsx(b, total, name, feePct = 0, mainName = 'Orçamento') {
   const ExcelJS = await loadExcel();
-  const wb = new ExcelJS.Workbook(); const ws = wb.addWorksheet('Orçamento');
+  const wb = new ExcelJS.Workbook(); const used = new Set();
+  const sheetName = (n) => { let x = String(n || 'Tabela').replace(/[\\/*?:[\]]+/g, ' ').trim().slice(0, 28) || 'Tabela'; let k = x, i = 2; while (used.has(k.toLowerCase())) k = `${x} ${i++}`; used.add(k.toLowerCase()); return k; };
+  const ws = wb.addWorksheet(sheetName(mainName));
   ws.columns = b.cols.map((c) => ({ header: c.name, key: c.id, width: c.type === 'text' ? 30 : 14 }));
   ws.getRow(1).font = { bold: true };
   const { tot, sec } = sums(b); const SX = budgetSheet(b);
@@ -440,14 +479,32 @@ async function exportXlsx(b, total, name, feePct = 0) {
   });
   ws.addRow({});
   const t = ws.addRow({}); t.getCell(1).value = 'Total'; t.font = { bold: true }; b.cols.forEach((c, i) => { if (c.type !== 'text') t.getCell(i + 1).value = tot[c.id]; });
-  const fi = b.cols.findIndex((c) => c.id === b.main); const fee = feePct && fi >= 0 ? (tot[b.main] || 0) * feePct / 100 : 0;
-  if (fee) { const f = ws.addRow({}); f.getCell(1).value = `Grain fee (${feePct} %)`; f.getCell(fi + 1).value = fee; const ft = ws.addRow({}); ft.getCell(1).value = 'Total com Grain fee'; ft.font = { bold: true }; ft.getCell(fi + 1).value = (tot[b.main] || 0) + fee; }
+  const fi = b.cols.findIndex((c) => c.id === b.main);
+  const all = (tot[b.main] || 0) + (b.extra || []).reduce((a, e) => a + oneTotal(e), 0);
+  if ((b.extra || []).length && fi >= 0) {
+    (b.extra || []).forEach((e) => { const r = ws.addRow({}); r.getCell(1).value = e.tname || 'Tabela'; r.getCell(fi + 1).value = oneTotal(e); });
+    const ta = ws.addRow({}); ta.getCell(1).value = 'Total das tabelas'; ta.font = { bold: true }; ta.getCell(fi + 1).value = all;
+  }
+  const fee = feePct && fi >= 0 ? all * feePct / 100 : 0;
+  if (fee) { const f = ws.addRow({}); f.getCell(1).value = `Grain fee (${feePct} %)`; f.getCell(fi + 1).value = fee; const ft = ws.addRow({}); ft.getCell(1).value = 'Total com Grain fee'; ft.font = { bold: true }; ft.getCell(fi + 1).value = all + fee; }
   if (total != null) {
     const i = b.cols.findIndex((c) => c.id === b.main);
     const g = ws.addRow({}); g.getCell(1).value = 'Orçamento geral'; if (i >= 0) g.getCell(i + 1).value = total;
-    const d = ws.addRow({}); d.getCell(1).value = 'Diferença'; if (i >= 0) d.getCell(i + 1).value = total - (tot[b.main] || 0) - fee;
+    const d = ws.addRow({}); d.getCell(1).value = 'Diferença'; if (i >= 0) d.getCell(i + 1).value = total - all - fee;
   }
   b.cols.forEach((c, i) => { if (c.type === 'money') ws.getColumn(i + 1).numFmt = '#,##0.00 "€"'; });
+  // outras tabelas: uma folha para cada
+  (b.extra || []).forEach((e) => {
+    const w2 = wb.addWorksheet(sheetName(e.tname));
+    w2.columns = e.cols.map((c) => ({ header: c.name, key: c.id, width: c.type === 'text' ? 30 : 14 })); w2.getRow(1).font = { bold: true };
+    const { tot: t2, sec: s2 } = sums(e); const S2 = budgetSheet(e);
+    e.rows.forEach((r) => {
+      if (r.kind === 'section') { const row = w2.addRow({}); row.getCell(1).value = r.title; row.font = { bold: true }; e.cols.forEach((c, i) => { if (c.type !== 'text' && s2[r.id]?.[c.id] != null) row.getCell(i + 1).value = s2[r.id][c.id]; }); return; }
+      const o = {}; e.cols.forEach((c) => { const v = r.cells?.[c.id]; const x = isFormula(v) ? S2.value(r, c.id) : null; o[c.id] = isFormula(v) ? (typeof x === 'number' ? x : show(x)) : c.type === 'text' ? v || '' : num(v) ?? (v || ''); }); w2.addRow(o);
+    });
+    w2.addRow({}); const tt = w2.addRow({}); tt.getCell(1).value = 'Total'; tt.font = { bold: true }; e.cols.forEach((c, i) => { if (c.type !== 'text') tt.getCell(i + 1).value = t2[c.id]; });
+    e.cols.forEach((c, i) => { if (c.type === 'money') w2.getColumn(i + 1).numFmt = '#,##0.00 "€"'; });
+  });
   const buf = await wb.xlsx.writeBuffer();
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
   a.download = `${(name || 'Projeto').replace(/[\\/:*?"<>|]+/g, ' ').trim()} - orcamento.xlsx`; document.body.appendChild(a); a.click();

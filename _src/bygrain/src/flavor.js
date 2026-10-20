@@ -19,6 +19,8 @@ export const FLAVOR = IS_STUDIO
       brand: 'PØRTAL',
       app: 'PØRTAL Studio',
       team: 'equipa',
+      short: 'joaovianadop.com/l/?', // links com contagem de clicks (página l/ na raiz do site → função studio-go)
+      ownDir: (uid) => ({ bucket: 'photos', dir: `${uid}/studio-banner`, prefix: 'vf:' }), // pasta pessoal (banner do início)
     }
   : {
       url: 'https://ppovjdyrhdfedjcdnnol.supabase.co',
@@ -34,4 +36,6 @@ export const FLAVOR = IS_STUDIO
       brand: 'byGrain',
       app: 'byGrain Studio',
       team: 'Grain',
+      short: 'joaovianadop.com/g/?', // links com contagem de clicks (página g/ na raiz do site → função go)
+      ownDir: (uid) => ({ bucket: 'files', dir: `u/${uid}/banner`, prefix: '' }), // pasta pessoal (banner do início)
     };

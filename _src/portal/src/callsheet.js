@@ -218,7 +218,7 @@ export function dayLength(d) {
   let m = b - a; if (m <= 0) m += 24 * 60; // wrap depois da meia-noite
   return { min: m, call: d.call, wrap: w, text: `${Math.floor(m / 60)}h${m % 60 ? String(m % 60).padStart(2, '0') : ''}` };
 }
-const dayLenHtml = (d) => { const L = dayLength(d); return L ? `<span class="cst-len ${L.min > 12 * 60 ? 'long' : ''}" title="Da call (${esc(L.call)}) ao wrap (${esc(L.wrap)})"><b>${L.text}</b> de dia para a equipa${L.min > 12 * 60 ? ' · mais de 12 horas' : ''}</span>` : `<span class="cst-len none">Põe a hora do wrap nos horários para saber a duração do dia</span>`; };
+const dayLenHtml = (d) => { const L = dayLength(d); return L ? `<span class="cst-len ${L.min > 11 * 60 ? 'long' : ''}" title="Da call (${esc(L.call)}) ao wrap (${esc(L.wrap)})"><b>${L.text}</b> de dia para a equipa${L.min > 11 * 60 ? ' · mais de 11 horas' : ''}</span>` : `<span class="cst-len none">Põe a hora do wrap nos horários para saber a duração do dia</span>`; };
 const shortDay = (iso) => { if (!iso) return ''; const d = new Date(iso + 'T00:00:00'); return d.toLocaleDateString('pt-PT', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, ''); };
 
 // Escolher a pessoa num menu, como os planos: ao clicar no campo "Nome - telefone" de um contacto aparece a

@@ -99,3 +99,16 @@ O resto deste ficheiro descreve como o Studio nasceu do código do byGrain (aind
 - Mini leitor da música nos videoclipes (miniplayer.js): acompanha as páginas do projeto, com secções na barra e "Tocar esta secção".
 - Orçamento: nome da tabela editável (b.tname) e mais tabelas por baixo (b.extra; contam no total, no fee, nas Finanças e no Excel). Desfazer/Refazer na barra da direita. Visão geral de projetos novos só com o bloco das tarefas. Etapa sempre escolhida (sem "Tudo").
 - (Grain e Studio) Folha de serviço: a lista de pessoas dos contactos abria duas vezes e ficava uma por fechar; corrigido, com botão de fechar.
+
+## 20 out — Tudo o que era só do Studio passou para a Grain
+- Antes de mexer: cópia de todas as tabelas, contas e lista de ficheiros da byGrain no esquema `backup_20261020` (só o serviço lhe acede). Contagens conferidas antes e depois (22 projetos, 45 tarefas, 73 elementos de boards, 18 orçamentos, 15 ganhos, 68 linhas de atividade): nada mudou.
+- Código: junção a 3 (base = Studio em d8afea6, a byGrain atual e o Studio de hoje), com a lógica sem comunidades da byGrain. Ficheiros novos na Grain: boardview, canvas, grid, herobanner, imgcrop, locgroup, miniplayer, mkstats, pagenotes, quickinfo, textfmt. As páginas como board (elementos, Texto com formatação, imagens com recorte, boards, largar fotos, Arrumar) e o mini leitor deixaram de ser só do Studio. A "Aparência" (temas do PØRTAL) continua só no Studio; a Grain mantém o aspeto dela.
+- `flavor.js`: `short` (links curtos: Studio `joaovianadop.com/l/?`, Grain `joaovianadop.com/g/?`) e `ownDir` (pasta pessoal do banner do início: Studio `photos/<uid>/studio-banner`, Grain `files/u/<uid>/banner`).
+- Base de dados da Grain (migração `studio_tools_port_20261020`, só acrescenta): `project_budgets.status` (os orçamentos antigos ficam sem estado e a app mostra-os como aprovado/em curso pela data de aprovação), `page_notes`, `mk_accounts`, `mk_posts`, `mk_stats`, `mk_links`, `mk_clicks`, `mk_config` (todas com RLS como no Studio), `mk_overview`, `sync_budget_earning` e `project_boot` com o estado do orçamento, `log_activity` como no Studio (não conta gravações automáticas, repetidas, nem só a ordem dos boards), políticas do banner pessoal no balde `files` (pasta `u/<id da pessoa>/`), relógio `mk-stats-daily` (06:25 UTC).
+- Catálogo de equipamento da Grain: +247 objetivas e luzes (só inserções; nada do que a equipa mudou foi tocado).
+- Funções da Grain: `go` (links curtos, página `g/` na raiz do site) e `mk-stats` (números públicos), código em `_src/bygrain/functions/`.
+- Por fazer (precisa de autorização): o elemento "Tabela" dos boards na Grain precisa de alargar a regra `board_items_kind_check` (juntar 'table'); não mexe em dados.
+
+## 20 out — Estatísticas com números públicos (nos dois)
+- `functions/*/public.ts`: lê as páginas públicas, sem chaves: YouTube (canal: subscritores do cabeçalho; vídeos: views, likes e comentários pelo pedido interno `youtubei/v1/next`), TikTok (dados da página), Spotify (ouvintes mensais e seguidores do artista; reproduções das faixas). O Instagram bloqueia leituras a partir de servidores: fica à mão ou com a ligação (opcional) da Meta.
+- Ao juntar uma rede ou publicação lê logo os números; "Atualizar" lê sempre os de agora; ao abrir a página lê o que tiver mais de 3 horas; todos os dias às 06:20/06:25 UTC.

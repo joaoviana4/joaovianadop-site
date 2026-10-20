@@ -90,7 +90,7 @@ export function situationData(p, tasksP) {
     import('./rodagem.js').then((m) => m.shootProgress(p)).catch(() => null),
   ]);
 }
-export async function mountSituation(box, p, base, { onChange } = {}) {
+export async function mountSituation(box, p, base, { onChange, onBlocks } = {}) {
   box.innerHTML = '<p class="muted">A preparar o ponto de situação…</p>';
   const isMusic = hasMod(p, 'seguimento'); const withProps = hasMod(p, 'aderecos');
   const pre = p._preSit; p._preSit = null; // os dados pedidos pela visão geral só servem a primeira vez
@@ -133,10 +133,10 @@ export async function mountSituation(box, p, base, { onChange } = {}) {
         ${ms ? `<a class="ov-kpi" href="${base}/seguimento"><span class="k-ic">${ICON.music}</span><strong>${ms.scenes.length}</strong><span>${ms.scenes.length === 1 ? 'secção no seguimento' : 'secções no seguimento'}</span><em>${plural(ms.shots, 'plano', 'planos')}</em></a>` : ''}
       </div></div>
 
-      ${ms && ms.scenes.length ? `<div data-blk="music"><section class="panel ov-music"><div class="row between"><h2 class="h3">Seguimento</h2><a class="small" href="${base}/seguimento">Abrir</a></div>${trackHtml(ms.scenes, p.music?.duration, { base, compact: true })}</section></div>` : ''}
+      <div data-blk="music"><section class="panel ov-music"><div class="row between"><h2 class="h3">Seguimento</h2><a class="small" href="${base}/seguimento">Abrir</a></div>${ms && ms.scenes.length ? trackHtml(ms.scenes, p.music?.duration, { base, compact: true }) : '<p class="muted small">Ainda não há secções no seguimento.</p>'}</section></div>
 
         <div data-blk="who"><section class="panel ov-who">
-          <div class="row between"><h2 class="h3">Quem tem o quê</h2><a class="small" href="${base}/tarefas">Todas as tarefas</a></div>
+          <div class="row between"><h2 class="h3">Tarefas</h2><a class="small" href="${base}/tarefas">Todas as tarefas</a></div>
           ${order.length ? `<ul class="ov-people">${order.map(([uid, list]) => { const who = people.find((x) => x.id === uid); const l = list.filter((t) => late.includes(t)).length; const sorted = [...list].sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999'));
             return `<li class="${uid ? '' : 'nobody'}">
               <div class="ovp-h">${av(who)}<strong>${uid ? esc(who?.display_name || 'Alguém') : 'Sem responsável'}</strong><span class="muted small">${plural(list.length, 'por fazer', 'por fazer')}</span>${l ? `<span class="due due-late">${plural(l, 'atrasada', 'atrasadas')}</span>` : ''}</div>
@@ -150,18 +150,35 @@ export async function mountSituation(box, p, base, { onChange } = {}) {
               return `<li style="--g:${esc(d.color)}"><div class="row between small"><span><i class="dot"></i>${esc(d.name)}</span><span class="muted">${dt.length ? `${done}/${dt.length}` : '—'}${q ? ` · ${plural(q, 'questão', 'questões')}` : ''}</span></div><div class="bar"><i style="width:${dt.length ? Math.round((done / dt.length) * 100) : 0}%"></i></div></li>`; }).join('')}</ul></section></div>` : ''}
 
 
-        ${withProps ? `<div data-blk="props"><section class="panel ov-props">
-          <div class="row between"><h2 class="h3">Adereços em falta</h2><a class="small" href="${base}/aderecos">Todos os adereços</a></div>
+        ${true ? `<div data-blk="props"><section class="panel ov-props" data-gscroll data-ovprops>
+          <a class="ovp-mini ${missing.length ? 'ovp-late' : ''}" href="${base}/aderecos"><strong>${missing.length}</strong><span class="ovp-ml"><span>${missing.length === 1 ? 'adereço em falta' : 'adereços em falta'}</span>${P.length ? `<em>${P.length - missing.length} de ${P.length} prontos</em>` : '<em>sem lista ainda</em>'}</span></a>
+          <div class="ovp-full">
+          <div class="row between"><span class="ovp-t"><h2 class="h3">Adereços em falta</h2>${missing.length ? `<span class="ovp-n">${missing.length}</span>` : ''}</span><a class="small" href="${base}/aderecos">Todos os adereços</a></div>
           ${P.length ? `<div class="bar ok"><i style="width:${Math.round(((P.length - missing.length) / P.length) * 100)}%"></i></div>
-            ${missing.length ? `<ul class="ov-pl">${missing.slice(0, 8).map((x) => { const s = PROP_STATUS.find((y) => y[0] === x.status) || PROP_STATUS[0]; return `<li><a href="${base}/aderecos/${x.id}"><span>${esc(x.name)}</span><span class="pstat" style="--c:${s[2]}">${esc(s[1])}</span></a></li>`; }).join('')}${missing.length > 8 ? `<li class="muted small">e mais ${missing.length - 8}…</li>` : ''}</ul>` : '<p class="muted small">Está tudo pronto.</p>'}`
+            ${missing.length ? `<ul class="ov-pl">${missing.map((x) => { const s = PROP_STATUS.find((y) => y[0] === x.status) || PROP_STATUS[0]; return `<li><a href="${base}/aderecos/${x.id}"><span>${esc(x.name)}</span><span class="pstat" style="--c:${s[2]}">${esc(s[1])}</span></a></li>`; }).join('')}</ul>` : '<p class="muted small">Está tudo pronto.</p>'}`
           : `<p class="muted small">Ainda não há adereços.</p><a class="btn ghost" href="${base}/aderecos">${ICON.plus} Juntar adereços</a>`}
+          </div>
         </section></div>` : ''}
       </div>`;
-    mountLayout(box.querySelector('[data-lay]'), { project: p, key: 'overview', title: 'vista geral', blocks: [
-      { id: 'prog', label: 'Progresso', pos: 'full' }, { id: 'mapa', label: 'Mapa de rodagem', pos: 'full' }, { id: 'kpis', label: 'Números do projeto', pos: 'full' }, { id: 'music', label: 'Seguimento', pos: 'full' },
-      { id: 'who', label: 'Quem tem o quê', pos: 'left' }, { id: 'crono', label: 'Cronograma', pos: 'right' }, { id: 'depts', label: 'Por departamento', pos: 'right' },
-      { id: 'props', label: 'Adereços em falta', pos: 'right' },
-    ] });
+    // blocos da visão geral: no Studio cada um é um elemento da grelha (onBlocks); fora disso, arrumação por colunas
+    const defsStd = [
+      { id: 'prog', label: 'Progresso da rodagem', w: 12, icon: ICON.check }, { id: 'mapa', label: 'Mapa de rodagem', w: 12, icon: ICON.calendar },
+      { id: 'kpis', label: 'Números do projeto', w: 12, icon: ICON.list }, { id: 'music', label: 'Seguimento', w: 12, icon: ICON.music, off: !(ms && ms.scenes.length) },
+      { id: 'who', label: 'Tarefas', w: 7, icon: ICON.team }, { id: 'crono', label: 'Cronograma', w: 5, x: 7, icon: ICON.calendar }, { id: 'depts', label: 'Por departamento', w: 5, x: 7, icon: ICON.board, off: !all.some((t) => t.department) },
+      { id: 'props', label: 'Adereços em falta', w: 5, x: 7, icon: ICON.prop, off: !withProps },
+    ];
+    const root = box.querySelector('[data-lay]');
+    // adereços em falta: pequeno mostra só o número; maior mostra a lista (com scroll quando não cabe)
+    root.querySelectorAll('[data-ovprops]').forEach((sec) => {
+      const fit = () => { const mini = sec.clientWidth < 230 || (sec.style.height && sec.clientHeight < 150); sec.classList.toggle('is-mini', !!mini); };
+      fit(); new ResizeObserver(fit).observe(sec);
+    });
+    if (onBlocks) {
+      const els = new Map([...root.querySelectorAll(':scope > [data-blk]')].map((e) => [e.dataset.blk, e]));
+      onBlocks(defsStd.filter((d) => els.has(d.id)).map((d) => ({ ...d, el: els.get(d.id) })));
+    } else {
+      mountLayout(root, { project: p, key: 'overview', title: 'vista geral', blocks: defsStd.map((d) => ({ id: d.id, label: d.label, pos: d.w === 12 ? 'full' : d.x ? 'right' : 'left' })) });
+    }
     bind();
   };
 

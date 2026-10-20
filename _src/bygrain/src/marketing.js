@@ -54,7 +54,7 @@ async function syncKids(p, D) {
   const missing = D.kids.filter((k) => !linked.has(k.id));
   if (!missing.length) return false;
   const rows = missing.map((k) => ({ project_id: p.id, title: k.name, kind: MK[k.kind] ? k.kind : 'videoclipe', date: k.ends_on || null, status: k.status === 'done' ? 'publicado' : 'producao', linked_project_id: k.id }));
-  const { error } = await sb.from('marketing_items').insert(rows);
+  const { error } = await sb.from('marketing_items').insert(rows).setHeader('x-client-info', 'portal-auto'); // automático: não vai para a Atividade
   return !error;
 }
 
@@ -76,6 +76,7 @@ async function syncTask(it, hostId) {
 
 // ---------- página Marketing ----------
 export async function marketingPage(main, p, sub, base) {
+  if (sub && sub.startsWith('?')) { if (sub === '?stats') ui.view = 'stats'; sub = null; }
   if (sub) return itemPage(main, p, sub, base);
   main.innerHTML = '<p class="muted">A carregar o calendário…</p>';
   let D = await load(p);
@@ -88,7 +89,8 @@ export async function marketingPage(main, p, sub, base) {
     const chip = (i) => { const k = kindOf(i.kind); const who = person(i.assignee_id); return `<button type="button" class="mk-chip st-${i.status}" draggable="true" data-it="${i.id}" style="--mk:${k.color}" title="${esc(`${k.label} · ${i.title} · ${stLabel(i.status)}${who ? ' · ' + who.display_name : ''}`)}"><i></i><span>${esc(i.title)}</span>${i.linked_project_id ? `<em>${ICON.open}</em>` : ''}${who ? `<b class="avatar xs" style="--c:${esc(who.color)}">${esc(initials(who.display_name))}</b>` : ''}</button>`; };
     const [y, m] = ui.ym.split('-').map(Number);
     let body = '';
-    if (ui.view === 'mes') {
+    if (ui.view === 'stats') body = '<div data-stats></div>';
+    else if (ui.view === 'mes') {
       const first = new Date(y, m - 1, 1); const start = new Date(first); start.setDate(1 - ((first.getDay() + 6) % 7));
       const cells = []; for (let d = new Date(start); cells.length < 42; d.setDate(d.getDate() + 1)) cells.push(new Date(d));
       const weeks = cells.slice(35).every((d) => d.getMonth() !== m - 1) ? cells.slice(0, 35) : cells;
@@ -105,20 +107,21 @@ export async function marketingPage(main, p, sub, base) {
       <div class="row between wrap-gap"><div><h1 class="h1 pm-title">Marketing</h1><p class="muted">Quando e como sai cada coisa: lançamentos, videoclipes, teasers, TikToks, capas… Cada um tem responsável e página própria; os videoclipes abrem o projeto.</p></div>
         ${isStaff() ? `<button type="button" class="btn primary" data-new>${ICON.plus} Novo</button>` : ''}</div>
       <div class="row wrap-gap mk-bar">
-        <div class="seg dark" role="tablist"><button type="button" role="tab" aria-selected="${ui.view === 'mes'}" data-v="mes">Calendário</button><button type="button" role="tab" aria-selected="${ui.view === 'lista'}" data-v="lista">Roll-out</button></div>
+        <div class="seg dark" role="tablist"><button type="button" role="tab" aria-selected="${ui.view === 'mes'}" data-v="mes">Calendário</button><button type="button" role="tab" aria-selected="${ui.view === 'lista'}" data-v="lista">Roll-out</button><button type="button" role="tab" aria-selected="${ui.view === 'stats'}" data-v="stats">Estatísticas</button></div>
         ${ui.view === 'mes' ? `<div class="month-nav"><button type="button" class="icon-btn" data-m="-1" aria-label="Mês anterior">${ICON.back}</button><strong>${MES[m - 1]} ${y}</strong><button type="button" class="icon-btn" data-m="1" aria-label="Mês seguinte">${ICON.chev}</button><button type="button" class="link-btn" data-m="0">Hoje</button></div>` : ''}
-        <label class="sel"><span class="vh">Tipo</span><select data-fk><option value="">Todos os tipos</option>${counts.map(([k, n]) => `<option value="${k}" ${ui.kind === k ? 'selected' : ''}>${esc(MK[k].label)} (${n})</option>`).join('')}</select></label>
-        <label class="sel"><span class="vh">Responsável</span><select data-fw><option value="">Todas as pessoas</option>${D.people.map((x) => `<option value="${x.id}" ${ui.who === x.id ? 'selected' : ''}>${esc(x.display_name)}</option>`).join('')}</select></label>
+        ${ui.view === 'stats' ? '' : `<label class="sel"><span class="vh">Tipo</span><select data-fk><option value="">Todos os tipos</option>${counts.map(([k, n]) => `<option value="${k}" ${ui.kind === k ? 'selected' : ''}>${esc(MK[k].label)} (${n})</option>`).join('')}</select></label>
+        <label class="sel"><span class="vh">Responsável</span><select data-fw><option value="">Todas as pessoas</option>${D.people.map((x) => `<option value="${x.id}" ${ui.who === x.id ? 'selected' : ''}>${esc(x.display_name)}</option>`).join('')}</select></label>`}
       </div>
-      <div class="mk-wrap ${undated.length ? 'has-side' : ''}">
+      <div class="mk-wrap ${undated.length && ui.view !== 'stats' ? 'has-side' : ''}">
         <div class="mk-main">${body}</div>
-        ${undated.length ? `<aside class="mk-side" data-day=""><h3>Sem data <span class="muted">${undated.length}</span></h3><p class="muted small">Arrasta para um dia do calendário.</p>${undated.map(chip).join('')}</aside>` : ''}
+        ${undated.length && ui.view !== 'stats' ? `<aside class="mk-side" data-day=""><h3>Sem data <span class="muted">${undated.length}</span></h3><p class="muted small">Arrasta para um dia do calendário.</p>${undated.map(chip).join('')}</aside>` : ''}
       </div>
-      <div class="mk-legend">${counts.map(([k]) => `<span style="--mk:${MK[k].color}"><i></i>${esc(MK[k].label)}</span>`).join('')}</div>`;
+      <div class="mk-legend" ${ui.view === 'stats' ? 'hidden' : ''}>${counts.map(([k]) => `<span style="--mk:${MK[k].color}"><i></i>${esc(MK[k].label)}</span>`).join('')}</div>`;
     main.querySelectorAll('[data-v]').forEach((b) => b.addEventListener('click', () => { ui.view = b.dataset.v; saveUi(); draw(); }));
     main.querySelectorAll('[data-m]').forEach((b) => b.addEventListener('click', () => { if (b.dataset.m === '0') ui.ym = todayISO().slice(0, 7); else { const d = new Date(y, m - 1 + +b.dataset.m, 1); ui.ym = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; } draw(); }));
-    main.querySelector('[data-fk]').addEventListener('change', (e) => { ui.kind = e.target.value; saveUi(); draw(); });
-    main.querySelector('[data-fw]').addEventListener('change', (e) => { ui.who = e.target.value; saveUi(); draw(); });
+    main.querySelector('[data-fk]')?.addEventListener('change', (e) => { ui.kind = e.target.value; saveUi(); draw(); });
+    main.querySelector('[data-fw]')?.addEventListener('change', (e) => { ui.who = e.target.value; saveUi(); draw(); });
+    { const sb2 = main.querySelector('[data-stats]'); if (sb2) import('./mkstats.js').then((m) => m.statsView(sb2, p, D, base)).catch((e) => { sb2.innerHTML = `<p class="muted">Não foi possível abrir as estatísticas: ${esc(e.message || '')}</p>`; }); }
     main.querySelector('[data-new]')?.addEventListener('click', () => itemForm(p, D, null, { date: null }, reload));
     main.querySelectorAll('[data-addday]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); itemForm(p, D, null, { date: b.dataset.addday }, reload); }));
     // abrir: videoclipes vão para o projeto; o resto para a página do item
@@ -223,7 +226,9 @@ async function itemPage(main, p, id, base) {
           <hr class="mk-hr"><h2 class="h3">Board</h2><p class="muted small">Referências, imagens, guião do vídeo — num board em ecrã inteiro.</p>
           <button type="button" class="btn primary" data-board>${ICON.board} ${it.board_id ? 'Abrir o board' : 'Criar o board'}</button></section>
       </div>
+      <section class="panel mks-item" data-mkstats><p class="muted small">A carregar os números…</p></section>
       ${isStaff() ? `<div class="row end"><button type="button" class="btn ghost danger-text" data-del>${ICON.trash} Apagar do calendário</button></div>` : ''}`;
+    import('./mkstats.js').then((m) => m.itemStats(main.querySelector('[data-mkstats]'), p, it, base)).catch(() => { const x = main.querySelector('[data-mkstats]'); if (x) x.remove(); });
     const ti = main.querySelector('[data-title]');
     ti.addEventListener('change', () => { const v = ti.value.trim(); if (v && v !== it.title) save({ title: v }); });
     main.querySelectorAll('[data-k]').forEach((el) => el.addEventListener('change', () => { save({ [el.dataset.k]: el.value || null }); if (el.dataset.k === 'kind') draw(); }));
