@@ -3035,3 +3035,10 @@ body:has(.pv-zoom) .mp { bottom: 70px; }
 .bm-list .bm-copy { width: auto; flex-direction: row; align-items: center; padding: 6px 10px; border: 1px solid var(--line2); border-radius: 8px; font-size: 13px; }
 .dc-tag { transform-origin: left bottom; }
 .dc-bar [data-dcs].bad { color: #E5484D; }
+
+/* base de dados de equipamento: fonte de luz (LED, tungsténio, HMI, fluorescente) */
+.gdb-src { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; }
+.gdb-src button { border: 1px solid var(--line2); background: var(--panel); color: var(--text); border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 14px; cursor: pointer; }
+.gdb-src button .count { color: var(--muted); font-size: 12px; margin-left: 4px; }
+.gdb-src button[aria-checked="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+.gdb-src button[aria-checked="true"] .count { color: inherit; opacity: .7; }
