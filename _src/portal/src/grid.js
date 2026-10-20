@@ -101,6 +101,7 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
   function place(it) {
     const g = it.g; g.hidden = hidden.has(it.id); if (g.hidden) return;
     g.style.left = leftCss(it.x); g.style.width = widthCss(it.w); g.style.top = `${it.y * ROW}px`; g.style.zIndex = String(it.z || 1);
+    if (it.lockRatio) it.h = 0; // imagens: a altura segue sempre a largura (proporção da imagem)
     g.classList.toggle('fixed', !!it.h);
     g.querySelector('.gi-c').style.height = it.h ? `${it.h * ROW - GAP}px` : '';
   }
@@ -228,7 +229,7 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
         const b = snapTo([Tp + hpx], T.Y); if (b) { hpx += b.d; gy = b.t; }
       }
       showGuides(gx, gy);
-      it.w = r3((wpx + GAP) / (cw + GAP)); it.h = r3((hpx + GAP) / ROW);
+      it.w = r3((wpx + GAP) / (cw + GAP)); it.h = it.lockRatio ? 0 : r3((hpx + GAP) / ROW);
       place(it); if (Tp + hpx + 48 > root.offsetHeight) fitHeight(Tp + hpx);
       autoScroll(ev.clientY);
     };

@@ -1,5 +1,7 @@
 import { sb, esc, toast, ICON, saveLater, uploadImage, signedUrls, onLeave } from './lib.js';
 import { mountGrid, COLS } from './grid.js';
+import { cropDialog, cropAspect, cropImgStyle, naturalSize, isFull } from './imgcrop.js';
+export const CROP = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg>';
 
 // Páginas como boards (Studio). Cada página tem os seus elementos (a página em si, ou os blocos da visão geral)
 // e pode receber elementos copiados de outras páginas. Uma cópia é o mesmo elemento visto noutro sítio:
@@ -62,21 +64,41 @@ function textEl(p, id) {
   ta.addEventListener('input', () => { fit(); save(); }); requestAnimationFrame(fit);
   return el;
 }
+// imagem: mantém sempre a proporção ao redimensionar; "Recortar" escolhe a parte que se vê; legenda só se a juntarem
 function imageEl(p, id) {
   const v = p.layouts?.items?.[id] || {};
   const el = document.createElement('figure'); el.className = 'cv-img';
   const draw = async () => {
     const url = v.path ? (await signedUrls([v.path]))[v.path] : null;
-    el.innerHTML = url ? `<img src="${esc(url)}" alt="${esc(v.caption || '')}"><figcaption><input value="${esc(v.caption || '')}" placeholder="Legenda" aria-label="Legenda"></figcaption><button type="button" class="cv-img-ch" data-pick>${ICON.image} Mudar</button>`
-      : `<button type="button" class="cv-img-empty" data-pick>${ICON.image}<span>Escolher imagem</span><small>ou larga-a aqui</small></button>`;
-    el.querySelectorAll('[data-pick]').forEach((b) => b.addEventListener('click', pick));
+    if (!url) {
+      el.innerHTML = `<button type="button" class="cv-img-empty" data-pick>${ICON.image}<span>Escolher imagem</span><small>ou larga-a aqui</small></button>`;
+      el.querySelector('[data-pick]').addEventListener('click', pick); return;
+    }
+    if (!v.w) { const n = await naturalSize(url); if (n) { v.w = n.w; v.h = n.h; saveItem(p, id, v); } }
+    const ar = cropAspect(v.crop, v.w, v.h) || 1.5;
+    const hasCap = typeof v.caption === 'string';
+    el.innerHTML = `<div class="cv-img-f" style="aspect-ratio:${ar.toFixed(5)}"><img src="${esc(url)}" alt="${esc(v.caption || '')}" draggable="false" style="${cropImgStyle(v.crop)}"></div>
+      ${hasCap ? `<figcaption><input value="${esc(v.caption)}" placeholder="Legenda" aria-label="Legenda"></figcaption>` : ''}
+      <div class="cv-img-tools"><button type="button" data-crop>${CROP} Recortar</button>${hasCap ? '' : `<button type="button" data-cap>${ICON.title || ''} Legenda</button>`}<button type="button" data-pick>${ICON.image} Mudar</button></div>`;
+    el.querySelector('[data-pick]').addEventListener('click', pick);
+    el.querySelector('[data-crop]').addEventListener('click', async () => {
+      const c = await cropDialog(url, v.crop, { w: v.w, h: v.h }); if (!c) return;
+      if (isFull(c)) delete v.crop; else v.crop = c;
+      await saveItem(p, id, v); draw();
+    });
+    el.querySelector('[data-cap]')?.addEventListener('click', () => { v.caption = ''; draw().then(() => el.querySelector('figcaption input')?.focus()); });
     const cap = el.querySelector('figcaption input');
-    cap?.addEventListener('input', saveLater(() => { v.caption = cap.value; saveItem(p, id, v); }, 600));
+    if (cap) {
+      const keep = saveLater(() => { v.caption = cap.value; saveItem(p, id, v); }, 600);
+      cap.addEventListener('input', keep);
+      // legenda vazia ao sair: desaparece
+      cap.addEventListener('blur', () => { if (!cap.value.trim()) { delete v.caption; saveItem(p, id, v); draw(); } });
+    }
   };
   const up = async (file) => {
     if (!file || !/^image\//.test(file.type)) return toast('Escolhe uma imagem.');
     toast('A carregar a imagem…', 6000);
-    try { const r = await uploadImage(p.id, 'paginas', file); v.path = r.path; v.w = r.w; v.h = r.h; await saveItem(p, id, v); draw(); } catch (e) { toast('Não foi possível carregar: ' + (e.message || e)); }
+    try { const r = await uploadImage(p.id, 'paginas', file); v.path = r.path; v.w = r.w; v.h = r.h; delete v.crop; await saveItem(p, id, v); draw(); } catch (e) { toast('Não foi possível carregar: ' + (e.message || e)); }
   };
   const pick = () => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.onchange = () => up(i.files[0]); i.click(); };
   el.addEventListener('dragover', (e) => { e.preventDefault(); el.classList.add('over'); });
@@ -132,7 +154,7 @@ export function mountCanvas(main, p, { key, native, render, here, pageLabel = 'p
     else if (GENERAL[x.ref.kind]) el.append(GENERAL[x.ref.kind][1](p, x.ref.id));
     else if (here && same(x.ref, here)) el.innerHTML = '<p class="muted small">Esta é a própria página.</p>';
     else { el.innerHTML = '<p class="muted small">A carregar…</p>'; Promise.resolve(render(el, x.ref)).catch((e) => { el.innerHTML = `<p class="muted small">Não foi possível mostrar: ${esc(e.message || '')}</p>`; }); }
-    return { id: `x:${x.id}`, label: x.title || (x.ref.kind === 'note' ? 'Nota' : GENERAL[x.ref.kind]?.[0] || 'Elemento'), el, w: x.w || COLS, copy: () => copyRef(p, x.ref, x.title || 'Elemento'), ref: x.ref };
+    return { id: `x:${x.id}`, label: x.title || (x.ref.kind === 'note' ? 'Nota' : GENERAL[x.ref.kind]?.[0] || 'Elemento'), el, w: x.w || COLS, copy: () => copyRef(p, x.ref, x.title || 'Elemento'), ref: x.ref, lockRatio: x.ref.kind === 'image' };
   };
   const nativeItems = native.map((n) => ({ ...n, copy: n.ref ? () => copyRef(p, n.ref, n.label) : null, removable: n.removable }));
   // escondidos por defeito: os sugeridos que ainda não estão guardados na página

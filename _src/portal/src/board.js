@@ -1,5 +1,7 @@
 import { trackWrite, DB_SCHEMA, sb, BUCKET, esc, signedUrl, signedUrls, uploadImage, toast, modal, confirmBox, ICON, onLeave } from './lib.js';
 import { ytId } from './music.js';
+import { cropDialog, cropAspect, cropImgStyle, naturalSize, isFull } from './imgcrop.js';
+const CROP_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg>';
 const DECOMP_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 17.5h7M17.5 14v7"/></svg>';
 
 // Board infinito à maneira do Milanote: cada cartão é uma linha própria na base de dados,
@@ -241,7 +243,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     switch (it.kind) {
       case 'note': return `<div class="txt note-txt" data-field="text" style="${fmtStyle('note', d.fmt)}">${d.html ? cleanHtml(d.html) : esc(d.text || '')}</div>`;
       case 'title': return `<div class="txt title-txt" data-field="text" style="${fmtStyle('title', d.fmt)}">${d.html ? cleanHtml(d.html) : esc(d.text || 'Título')}</div>`;
-      case 'image': return `${urls[d.path] ? `<img src="${esc(urls[d.path])}" alt="${esc(d.caption || '')}" draggable="false">` : '<div class="img-wait">A carregar…</div>'}${d.caption ? `<div class="caption">${esc(d.caption)}</div>` : ''}`;
+      case 'image': return `${urls[d.path] ? (d.crop ? `<div class="img-crop"><img src="${esc(urls[d.path])}" alt="${esc(d.caption || '')}" draggable="false" style="${cropImgStyle(d.crop)}"></div>` : `<img src="${esc(urls[d.path])}" alt="${esc(d.caption || '')}" draggable="false">`) : '<div class="img-wait">A carregar…</div>'}${d.caption ? `<div class="caption">${esc(d.caption)}</div>` : ''}${urls[d.path] ? `<button type="button" class="cov-btn" data-ui="crop" title="Recortar" aria-label="Recortar a imagem">${CROP_ICON}</button>` : ''}`;
       case 'palette': return `<div class="txt card-h" data-field="title">${esc(d.title || 'Paleta')}</div>
         <div class="swatches">${(d.colors || []).map((c, i) => `<div class="sw"><button type="button" data-ui="color" data-i="${i}" style="background:${esc(c)}" aria-label="Mudar cor ${esc(c)}"></button><span>${esc(c.toUpperCase())}</span><button type="button" class="x" data-ui="rmcolor" data-i="${i}" aria-label="Tirar cor">${ICON.close}</button></div>`).join('')}
         <button type="button" class="sw-add" data-ui="addcolor" aria-label="Juntar cor">${ICON.plus}</button></div>`;
@@ -597,7 +599,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
 
   // ---------- botões dentro dos cartões ----------
   async function onUi(btn, it) {
-    if (!['link', 'media', 'play', 'openboard', 'decomp', 'cover'].includes(btn.dataset.ui)) mark(it, 'ui-' + btn.dataset.ui);
+    if (!['link', 'media', 'play', 'openboard', 'decomp', 'cover', 'crop'].includes(btn.dataset.ui)) mark(it, 'ui-' + btn.dataset.ui);
     const d = { ...(it.data || {}) }; const i = +btn.dataset.i;
     switch (btn.dataset.ui) {
       case 'toggle': d.items = d.items.map((x, j) => (j === i ? { ...x, done: !x.done } : x)); break;
@@ -625,6 +627,16 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
       case 'openboard': return d.board_id && onOpenBoard(d.board_id);
       case 'cover': return coverMenu(it);
       case 'decomp': return d.board_id && decompose(d.board_id, it);
+      case 'crop': {
+        // modo de recorte; depois o cartão fica com a proporção da parte recortada (mesma largura)
+        const url = urls[d.path]; if (!url) return;
+        if (!d.w) { const n = await naturalSize(url); if (!n) return; d.w = n.w; d.h = n.h; }
+        const c = await cropDialog(url, d.crop, { w: d.w, h: d.h }); if (!c) return;
+        mark(it, 'crop');
+        if (isFull(c)) delete d.crop; else d.crop = c;
+        it.data = d; it.h = Math.round(it.w / (cropAspect(d.crop, d.w, d.h) || 1));
+        cardEl(it); save(it, ['data', 'h']); return;
+      }
       case 'link': case 'media': return;
       case 'play': st.playing = it.id; cardEl(it); return;
       default: return;
@@ -680,7 +692,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     else {
       const [mw, mh] = MIN[it.kind] || [80, 60];
       let w = Math.max(mw, g.ow + dx / k), h = Math.max(mh, g.oh + dy / k);
-      if (it.kind === 'image' && it.data?.w) h = w * (it.data.h / it.data.w);
+      if (it.kind === 'image' && it.data?.w) h = w / (cropAspect(it.data.crop, it.data.w, it.data.h) || it.data.w / it.data.h);
       it.w = Math.round(w); it.h = Math.round(h); el.style.width = it.w + 'px'; el.style.height = it.h + 'px';
     }
   };
