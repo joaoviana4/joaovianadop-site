@@ -102,6 +102,7 @@ function studioHtml(d) {
         <div class="cst-kick">Dia ${f('day', '1', 'cst-n')} de ${f('days', '1', 'cst-n')}</div>
         ${f('title', 'Nome do projeto', 'cst-title')}
         <label class="cst-date">${ICON.calendar}<span data-prettydate>${esc(fmtDay(d.date) || 'Escolher a data')}</span><input type="date" data-p="date" value="${esc(d.date || '')}" aria-label="Data" onclick="try{this.showPicker()}catch(e){}"></label>
+        <div data-daylen>${dayLenHtml(d)}</div>
       </div>
       <div class="cst-call">
         <span class="cst-lab">Call</span>
@@ -114,7 +115,7 @@ function studioHtml(d) {
     <div class="cst-grid">
       <section class="cst-card"><h3>Contactos</h3>
         <div class="cst-list">${d.contacts.map((c, i) => `<div class="cst-li"><div class="cst-lic">${f(`contacts.${i}.role`, 'Função', 'cst-role')}${f(`contacts.${i}.value`, 'Nome - telefone', 'cst-val')}</div>${x(`data-rm="contacts:${c.id}"`)}</div>`).join('')}</div>
-        <div class="row wrap-gap">${add('data-addc', 'Contacto')}${add('data-pickc', 'Da equipa e elenco')}</div></section>
+        <div class="row wrap-gap">${add('data-addc', 'Contacto')}${add('data-pickc', 'Da equipa')}</div></section>
       <section class="cst-card"><h3>Horários</h3>
         <div class="cst-times">${d.times.map((t, i) => `<div class="cst-time">${f(`times.${i}.label`, 'Hora')}${f(`times.${i}.value`, '00:00', 'cst-tv')}${x(`data-rm="times:${t.id}"`)}</div>`).join('')}</div>
         ${add('data-addt', 'Hora')}
@@ -209,16 +210,25 @@ function missing(d) {
   const dp = (d.depts || []).filter((x) => !e(x.name) && e(x.time)); if (dp.length && dp.length < (d.depts || []).length) m.push(`Departamentos sem hora: ${dp.map((x) => x.name).join(', ')}`);
   return m;
 }
+// duração do dia da equipa: da call ao wrap (o "Wrap" dos horários ou o wrap previsto)
+const toMin = (t) => { const m = String(t || '').trim().match(/^(\d{1,2})\s*[:hH.]\s*(\d{2})?/); if (!m) return null; const h = +m[1], mi = +(m[2] || 0); return h > 30 || mi > 59 ? null : h * 60 + mi; };
+const wrapOf = (d) => (d.times || []).find((t) => /wrap|arruma|fim de rodagem|fim do dia/i.test(t.label || '') && toMin(t.value) != null)?.value || (toMin(d.more?.wrap_est) != null ? d.more.wrap_est : null);
+export function dayLength(d) {
+  const a = toMin(d.call), w = wrapOf(d); const b = toMin(w); if (a == null || b == null) return null;
+  let m = b - a; if (m <= 0) m += 24 * 60; // wrap depois da meia-noite
+  return { min: m, call: d.call, wrap: w, text: `${Math.floor(m / 60)}h${m % 60 ? String(m % 60).padStart(2, '0') : ''}` };
+}
+const dayLenHtml = (d) => { const L = dayLength(d); return L ? `<span class="cst-len ${L.min > 12 * 60 ? 'long' : ''}" title="Da call (${esc(L.call)}) ao wrap (${esc(L.wrap)})"><b>${L.text}</b> de dia para a equipa${L.min > 12 * 60 ? ' · mais de 12 horas' : ''}</span>` : `<span class="cst-len none">Põe a hora do wrap nos horários para saber a duração do dia</span>`; };
 const shortDay = (iso) => { if (!iso) return ''; const d = new Date(iso + 'T00:00:00'); return d.toLocaleDateString('pt-PT', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, ''); };
 
 // Escolher a pessoa num menu, como os planos: ao clicar no campo "Nome - telefone" de um contacto aparece a
-// equipa e o elenco do projeto; ao escolher entra o nome com o telefone (e a função, se estiver vazia).
+// equipa do projeto (o elenco tem a sua própria tabela); ao escolher entra o nome com o telefone (e a função, se estiver vazia).
 let peopleCache = null;
 function peoplePicker(main, p, d, save) {
   if (!main.dataset.ppFresh) { main.dataset.ppFresh = '1'; peopleCache = null; } // lista acabada de ler cada vez que se abre a folha
   const norm = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const words = (x) => norm(x).split(/[^a-z0-9]+/).filter((w) => w.length > 2 && !['de', 'da', 'do'].includes(w));
-  let box = null; let items = []; let sel = 0; let input = null; let opening = null;
+  let box = null; let items = []; let sel = 0; let input = null; let opening = null; let typed = false; // só filtra pelo que se escreve (ao abrir, mostra toda a equipa)
   const outside = (e) => { if (box && !box.contains(e.target) && e.target !== input) close(); };
   // fecha sempre tudo (também listas que tenham ficado abertas de antes)
   const close = () => { box?.remove(); box = null; input = null; opening = null; document.querySelectorAll('.cs-pp').forEach((x) => x.remove()); document.removeEventListener('mousedown', outside, true); };
@@ -234,7 +244,7 @@ function peoplePicker(main, p, d, save) {
     if (!box || !input) return;
     const i = Number(input.dataset.p.split('.')[1]);
     const role = words(d.contacts[i]?.role);
-    const q = norm(input.value).trim();
+    const q = typed ? norm(input.value).trim() : '';
     // primeiro quem tem o mesmo cargo, depois quem é do mesmo departamento, depois o resto
     const GENERIC = new Set(['diretor', 'diretora', 'director', 'directora', 'assistente', 'ass', 'chefe', 'coordenador', 'coordenadora', 'responsavel', 'adjunto', 'adjunta']);
     const key = role.filter((w) => !GENERIC.has(w));
@@ -250,15 +260,15 @@ function peoplePicker(main, p, d, save) {
       .map((c) => ({ c, s: score(c) })).sort((a, b) => b.s - a.s || a.c.name.localeCompare(b.c.name, 'pt')).map((x) => x.c);
     sel = Math.min(sel, Math.max(0, items.length - 1));
     box.innerHTML = `<div class="cs-pp-h"><span>Escolhe uma pessoa (ou escreve o nome)</span><button type="button" class="icon-btn sm" data-ppx title="Fechar a lista (Esc)" aria-label="Fechar a lista">${ICON.close}</button></div>` + (items.length ? items.map((c, k) => `<button type="button" class="cs-pp-i ${k === sel ? 'on' : ''}" data-k="${k}"><span><b>${esc(c.name)}</b><small>${esc(c.kind === 'crew' ? (c.job || c.dept || 'Equipa') : c.role ? `${c.role}${c.kind === 'extra' ? ' · figurante' : ''}` : 'Elenco')}</small></span><span class="cs-pp-ph">${esc(c.phone || 'sem telefone')}</span></button>`).join('')
-      : `<p class="muted small">Ninguém com esse nome na equipa nem no elenco. Junta as pessoas em Equipa e convites.</p>`);
+      : `<p class="muted small">Ninguém com esse nome na equipa. Junta as pessoas em Equipa e convites.</p>`);
     box.querySelector('[data-ppx]').addEventListener('mousedown', (e) => { e.preventDefault(); close(); });
     box.querySelectorAll('[data-k]').forEach((b) => b.addEventListener('mousedown', (e) => { e.preventDefault(); pick(items[+b.dataset.k]); }));
   };
   const open = async (el) => {
     // focar e clicar chamam isto duas vezes seguidas: só abre uma lista
     if (input === el && (box || opening)) return;
-    close(); input = el; const tok = {}; opening = tok;
-    if (peopleCache?.pid !== p.id) peopleCache = { pid: p.id, list: await projectContacts(p) };
+    close(); input = el; typed = false; const tok = {}; opening = tok;
+    if (peopleCache?.pid !== p.id) peopleCache = { pid: p.id, list: (await projectContacts(p)).filter((c) => c.kind === 'crew') };
     if (input !== el || opening !== tok) return;
     opening = null;
     box = document.createElement('div'); box.className = 'cs-pp'; box.setAttribute('role', 'listbox');
@@ -271,7 +281,7 @@ function peoplePicker(main, p, d, save) {
     el.setAttribute('autocomplete', 'off');
     el.addEventListener('focus', () => open(el));
     el.addEventListener('click', () => open(el));
-    el.addEventListener('input', () => { if (box && input === el) { sel = 0; render(); } });
+    el.addEventListener('input', () => { if (box && input === el) { typed = true; sel = 0; render(); } });
     el.addEventListener('blur', () => setTimeout(() => { if (input === el) close(); }, 120));
     el.addEventListener('keydown', (e) => {
       if (!box || input !== el) return;
@@ -389,6 +399,7 @@ export function callsheetTool(main, p, tool, { edit = false } = {}) {
     // todas de uma vez (ler e escrever alturas alternadamente obrigava o browser a refazer a página por cada campo)
     { const tas = [...main.querySelectorAll('.cst textarea')]; tas.forEach((t) => (t.style.height = 'auto')); const hs = tas.map((t) => t.scrollHeight); tas.forEach((t, i) => (t.style.height = hs[i] + 'px')); }
     main.querySelectorAll('[data-p]').forEach((el) => el.addEventListener('input', () => { set(d, el.dataset.p, el.value); auto(el); save(); if (el.dataset.p === 'weather.text') { const ic = main.querySelector('[data-wxic]'); if (ic) ic.textContent = wxIcon(el.value); } if (el.dataset.p === 'date') { const pd = main.querySelector('[data-prettydate]'); if (pd) pd.textContent = fmtDay(d.date) || 'Escolher a data'; }
+      if (/^(call|times\.|more\.wrap_est)/.test(el.dataset.p)) { const dl = main.querySelector('[data-daylen]'); if (dl) dl.innerHTML = dayLenHtml(d); }
       if (['date', 'day'].includes(el.dataset.p)) { const t = main.querySelector(`[data-day="${cur}"]`); if (t) t.innerHTML = `<b>Dia ${esc(d.day || cur + 1)}</b>${d.date ? `<small>${esc(shortDay(d.date))}</small>` : ''}<small class="muted">${d.rows.filter((r) => r.kind === 'shot').length} pl.</small>`; } }));
     main.querySelector('[data-acc]').addEventListener('input', (e) => { d.accent = e.target.value; main.querySelector('.cst').style.setProperty('--acc', d.accent); save(); });
     main.querySelectorAll('[data-day]').forEach((b) => b.addEventListener('click', () => go(Number(b.dataset.day))));
@@ -401,11 +412,11 @@ export function callsheetTool(main, p, tool, { edit = false } = {}) {
     });
     const on = (sel, fn) => main.querySelectorAll(sel).forEach((b) => b.addEventListener('click', () => { fn(b); save(); draw(); }));
     on('[data-addc]', () => d.contacts.push({ id: uid(), role: '', value: '' }));
-    // contactos da equipa e do elenco: escolhe-se a pessoa e entra "Nome - telefone" com a função
+    // contactos da equipa: escolhe-se a pessoa e entra "Nome - telefone" com a função (o elenco vai na tabela do elenco)
     main.querySelectorAll('[data-pickc]').forEach((b) => b.addEventListener('click', async () => {
-      const list = await projectContacts(p);
-      if (!list.length) return toast('Ainda não há pessoas com contacto no projeto. Junta-as em Equipa e convites ou em Atores e figurantes.');
-      const m = modal(`<h2>Juntar contactos</h2><p class="muted small">Quem já tem telefone na equipa ou no elenco. Para mudar um número, muda-o na pessoa e volta a juntar.</p>
+      const list = (await projectContacts(p)).filter((c) => c.kind === 'crew');
+      if (!list.length) return toast('Ainda não há pessoas da equipa no projeto. Junta-as em Equipa e convites.');
+      const m = modal(`<h2>Juntar contactos da equipa</h2><p class="muted small">As pessoas da equipa do projeto. Para mudar um número, muda-o na pessoa e volta a juntar.</p>
         <div class="cs-cpick">${list.map((c, i) => `<label class="cs-cpi"><input type="checkbox" value="${i}" ${d.contacts.some((x) => x.value === nameWithPhone(c)) ? 'checked disabled' : ''}><span><b>${esc(c.name)}</b><small class="muted">${esc([c.job, c.phone || 'sem telefone'].filter(Boolean).join(' · '))}</small></span></label>`).join('')}</div>
         <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button type="button" class="btn primary" data-ok>Juntar</button></div>`, { wide: true });
       m.el.querySelector('[data-ok]').addEventListener('click', () => {

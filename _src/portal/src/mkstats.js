@@ -1,8 +1,8 @@
 import { sb, esc, toast, modal, confirmBox, ICON, fmtDate, callFn, isStaff } from './lib.js';
 
 // Estatísticas do marketing (Studio): o link de cada publicação e as redes do artista, com os números ao longo do
-// tempo. YouTube (e Instagram, quando houver a ligação da Meta) atualizam-se sozinhos todos os dias; TikTok e Spotify
-// metem-se à mão (não dão números públicos sem o artista autorizar). Links próprios contam os clicks.
+// tempo. YouTube, TikTok e Spotify: os números públicos são lidos sozinhos (ao juntar, todos os dias e em "Atualizar"),
+// sem chaves nem contas. Instagram: à mão, ou sozinho com a ligação (opcional) da Meta. Links próprios contam os clicks.
 // Tabelas: mk_accounts, mk_posts, mk_stats, mk_links, mk_clicks (função studio.mk_overview junta tudo num pedido).
 
 export const PL = { youtube: ['YouTube', '#E5484D'], tiktok: ['TikTok', '#2AA8C9'], instagram: ['Instagram', '#E5579B'], spotify: ['Spotify', '#2FB67C'], facebook: ['Facebook', '#5B7CFF'], x: ['X', '#8A8A99'], outro: ['Outro', '#8A8A99'] };
@@ -18,7 +18,13 @@ const today = () => isoD(new Date());
 const daysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return isoD(d); };
 const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const slugify = (s) => norm(s).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 36) || 'link';
-const auto = (pl, st) => (pl === 'youtube' && st.youtube) || (pl === 'instagram' && st.instagram);
+// lê-se sozinho? (YouTube, TikTok e Spotify sempre; Instagram só com a ligação da Meta; no Spotify, faixas e artistas)
+const auto = (pl, st, url = '') => ['youtube', 'tiktok'].includes(pl) || (pl === 'spotify' && !/\/(album|playlist|episode)\//.test(url)) || (pl === 'instagram' && !!st.instagram);
+// número principal de uma rede: seguidores (no Spotify, os ouvintes mensais, que é o que se vê na página)
+const mainCol = (a) => (a.platform === 'spotify' && (a.series || []).some((r) => r[2] != null) ? 2 : 1);
+const mainLabel = (a) => (a.platform === 'youtube' ? 'subscritores' : mainCol(a) === 2 ? 'ouvintes mensais' : 'seguidores');
+// pede ao servidor os números de agora (só destas publicações / redes, se forem dadas)
+const readNow = (ids, only = {}) => callFn('mk-stats', { action: 'refresh', project_ids: ids, force: true, ...only });
 // último valor (não vazio) de uma coluna da série, e o valor de há N dias (para a diferença)
 const lastOf = (series, col) => { for (let i = series.length - 1; i >= 0; i--) if (series[i][col] != null) return series[i]; return null; };
 const before = (series, col, day) => { for (let i = series.length - 1; i >= 0; i--) if (series[i][0] <= day && series[i][col] != null) return series[i][col]; return null; };
@@ -33,7 +39,7 @@ async function load(ids) {
   return data || { accounts: [], posts: [], links: [] };
 }
 let stCache = null;
-async function status() { if (stCache) return stCache; try { stCache = await callFn('mk-stats', { action: 'status' }); } catch { stCache = { youtube: false, instagram: false }; } return stCache; }
+async function status() { if (stCache) return stCache; try { stCache = await callFn('mk-stats', { action: 'status' }); } catch { stCache = { public: true, youtube: false, instagram: false }; } return stCache; }
 
 // ---------- gráficos (SVG, uma escala só; passar o rato mostra o dia e o valor) ----------
 function spark(series, col, color) {
@@ -45,7 +51,7 @@ function spark(series, col, color) {
 }
 function lineChart(el, { series, col, color, label, markers = [] }) {
   const pts = series.filter((r) => r[col] != null).map((r) => ({ d: r[0], v: r[col] }));
-  if (!pts.length) { el.innerHTML = '<p class="muted small">Ainda não há números. Junta o primeiro (à mão) ou espera pela leitura automática de amanhã.</p>'; return; }
+  if (!pts.length) { el.innerHTML = '<p class="muted small">Ainda não há números. Carrega em Atualizar (ou mete-os à mão).</p>'; return; }
   const W = Math.max(320, el.clientWidth || 640), H = 220, L = 52, R = 12, T = 14, B = 26;
   const t = (d) => new Date(d + 'T12:00:00').getTime();
   let t0 = t(pts[0].d), t1 = t(pts[pts.length - 1].d); if (t1 - t0 < 86400e3 * 6) { t0 -= 86400e3 * 3; t1 += 86400e3 * 3; }
@@ -87,8 +93,8 @@ export async function statsView(box, p, D, base) {
   const itemOf = (id) => D.items.find((x) => x.id === id);
   const markers = D.items.filter((i) => i.date).map((i) => ({ date: i.date, label: i.title, color: { lancamento: '#E5484D', videoclipe: '#7C5CFF', visualizer: '#9B6CFF', teaser: '#F08A24' }[i.kind] || '#8A8A99' }));
   const reload = async () => { S = await load(ids); draw(); };
-  // leitura automática ao abrir (no máximo uma vez a cada 3 horas, o servidor decide)
-  if (st.youtube || st.instagram) callFn('mk-stats', { action: 'refresh', project_ids: ids }).then((r) => { if (r?.updated) reload(); }).catch(() => {});
+  // leitura ao abrir (no máximo uma vez a cada 3 horas por publicação, o servidor decide)
+  callFn('mk-stats', { action: 'refresh', project_ids: ids }).then((r) => { if (r?.updated) reload(); }).catch(() => {});
 
   const draw = () => {
     const staff = isStaff();
@@ -103,8 +109,8 @@ export async function statsView(box, p, D, base) {
     const acc = S.accounts.find((a) => a.id === ui.acc);
     box.innerHTML = `<div class="mks">
       ${staff ? `<form class="mks-paste" data-paste><span class="mks-pi">${ICON.link || ICON.plus}</span><input name="u" type="url" placeholder="Cola o link de uma publicação ou de uma rede do artista (YouTube, TikTok, Instagram, Spotify)" aria-label="Link" required><button class="btn primary">Juntar</button></form>` : ''}
-      <div class="mks-bar"><span class="muted small">${st.youtube ? 'YouTube atualiza sozinho todos os dias.' : 'YouTube ainda não ligado.'} ${st.instagram ? 'Instagram também.' : ''} TikTok e Spotify: números à mão.</span>
-        <span class="row">${staff ? `<button type="button" class="btn ghost sm" data-cfg>${ICON.settings || ICON.dots} Ligações</button>` : ''}${st.youtube || st.instagram ? `<button type="button" class="btn ghost sm" data-now>${ICON.refresh || '↻'} Atualizar agora</button>` : ''}</span></div>
+      <div class="mks-bar"><span class="muted small">YouTube, TikTok e Spotify: números públicos, lidos sozinhos todos os dias e sempre que carregas em Atualizar. Instagram: ${st.instagram ? 'também, pela ligação da Meta.' : 'à mão em "Números" (o Instagram não deixa ler sem conta).'}</span>
+        <span class="row">${staff ? `<button type="button" class="btn ghost sm" data-cfg>${ICON.settings || ICON.dots} Ligações</button>` : ''}<button type="button" class="btn primary sm" data-now>${ICON.refresh || '↻'} Atualizar</button></span></div>
       <div class="mks-kpis">
         <div class="mks-kpi"><span>Views</span><strong>${big(tot(1))}</strong><small>todas as publicações</small></div>
         <div class="mks-kpi"><span>Likes</span><strong>${big(tot(2))}</strong><small>${big(tot(3))} comentários</small></div>
@@ -112,12 +118,12 @@ export async function statsView(box, p, D, base) {
         <div class="mks-kpi"><span>Publicações</span><strong>${S.posts.length}</strong><small>${plats.map(plName).join(' · ') || 'nenhuma ainda'}</small></div>
       </div>
       <section class="panel mks-sec"><div class="row between wrap-gap"><h2 class="h3">Redes do artista</h2>${staff ? `<button type="button" class="link-btn small" data-addacc>${ICON.plus} Juntar rede</button>` : ''}</div>
-        ${S.accounts.length ? `<div class="mks-accs">${S.accounts.map((a) => { const l = lastOf(a.series, 1); const d7 = delta(a.series, 1, 7), d30 = delta(a.series, 1, 30); return `<button type="button" class="mks-acc ${a.id === ui.acc ? 'on' : ''}" data-acc="${a.id}" style="--pl:${plColor(a.platform)}">
+        ${S.accounts.length ? `<div class="mks-accs">${S.accounts.map((a) => { const c = mainCol(a); const l = lastOf(a.series, c); const d7 = delta(a.series, c, 7), d30 = delta(a.series, c, 30); return `<button type="button" class="mks-acc ${a.id === ui.acc ? 'on' : ''}" data-acc="${a.id}" style="--pl:${plColor(a.platform)}">
             <span class="mks-plb">${esc(plName(a.platform))}</span><span class="mks-h">${esc(a.title || a.handle)}</span>
-            <strong>${l ? big(l[1]) : '—'}</strong><small>${a.platform === 'youtube' ? 'subscritores' : 'seguidores'}${l ? ` · ${fmtDate(l[0])}` : ''}</small>
-            <span class="mks-dd">${d7 != null ? `${sign(d7)} 7 dias` : ''}${d30 != null ? ` ${sign(d30)} 30 dias` : ''}</span>${spark(a.series, 1, plColor(a.platform))}</button>`; }).join('')}</div>
+            <strong>${l ? big(l[c]) : '—'}</strong><small>${mainLabel(a)}${l ? ` · ${fmtDate(l[0])}` : ''}</small>
+            <span class="mks-dd">${d7 != null ? `${sign(d7)} 7 dias` : ''}${d30 != null ? ` ${sign(d30)} 30 dias` : ''}</span>${spark(a.series, c, plColor(a.platform))}</button>`; }).join('')}</div>
           ${acc ? `<div class="mks-accd"><div class="row between wrap-gap"><strong>${esc(acc.title || acc.handle)} <span class="muted small">${esc(plName(acc.platform))}${acc.url ? ` · <a href="${esc(acc.url)}" target="_blank" rel="noopener">abrir</a>` : ''}</span></strong>
-            <span class="row">${staff ? `<button type="button" class="btn ghost sm" data-accnum="${acc.id}">${auto(acc.platform, st) ? 'Meter à mão' : 'Atualizar números'}</button><button type="button" class="icon-btn sm" data-accrm="${acc.id}" title="Tirar esta rede" aria-label="Tirar esta rede">${ICON.trash}</button>` : ''}</span></div>
+            <span class="row">${staff ? `${auto(acc.platform, st, acc.url) ? `<button type="button" class="btn ghost sm" data-accnow="${acc.id}">${ICON.refresh || '↻'} Atualizar</button><button type="button" class="link-btn small" data-accnum="${acc.id}">Meter à mão</button>` : `<button type="button" class="btn ghost sm" data-accnum="${acc.id}">Meter números</button>`}<button type="button" class="icon-btn sm" data-accrm="${acc.id}" title="Tirar esta rede" aria-label="Tirar esta rede">${ICON.trash}</button>` : ''}</span></div>
             <div data-chart></div><p class="muted small mks-leg">As linhas verticais são os lançamentos do calendário (passa o rato para ver).</p></div>` : ''}`
           : '<p class="muted small">Junta as redes do artista (cola o link do canal de YouTube, do TikTok, do Instagram ou do Spotify) para ver como crescem.</p>'}
       </section>
@@ -140,16 +146,21 @@ export async function statsView(box, p, D, base) {
             <span class="mks-lc"><b>${big(l.clicks || 0)}</b><small class="muted">${d7 ? `+${d7} esta semana` : 'clicks'}</small></span>
             <span class="row"><button type="button" class="btn ghost sm" data-lcopy="${esc(l.slug)}">${ICON.copy} Copiar</button>${staff ? `<button type="button" class="icon-btn sm" data-lrm="${l.id}" aria-label="Apagar o link">${ICON.trash}</button>` : ''}</span></li>`; }).join('')}</ul>` : ''}
       </section></div>`;
-    if (acc) lineChart(box.querySelector('[data-chart]'), { series: acc.series, col: 1, color: plColor(acc.platform), label: acc.platform === 'youtube' ? 'Subscritores' : 'Seguidores', markers });
+    if (acc) { const lb = mainLabel(acc); lineChart(box.querySelector('[data-chart]'), { series: acc.series, col: mainCol(acc), color: plColor(acc.platform), label: lb.charAt(0).toUpperCase() + lb.slice(1), markers }); }
     bind();
   };
 
   const bind = () => {
     box.querySelector('[data-paste]')?.addEventListener('submit', async (e) => { e.preventDefault(); const inp = e.target.u; const ok = await addLink(p, D, inp.value, null, st); if (ok) { inp.value = ''; reload(); } });
-    box.querySelector('[data-cfg]')?.addEventListener('click', () => connections(async (s2) => { st = s2; stCache = s2; if (s2.youtube || s2.instagram) { await callFn('mk-stats', { action: 'refresh', project_ids: ids, force: true }).catch(() => {}); } reload(); }));
+    box.querySelector('[data-cfg]')?.addEventListener('click', () => connections(async (s2) => { st = s2; stCache = s2; await readNow(ids).catch(() => {}); reload(); }));
     box.querySelector('[data-now]')?.addEventListener('click', async (e) => {
-      e.currentTarget.disabled = true; toast('A ler os números…');
-      try { const r = await callFn('mk-stats', { action: 'refresh', project_ids: ids, force: true }); toast(r.errors?.length ? r.errors.join(' · ') : `${r.updated} atualizados.`); } catch (er) { toast(er.message || String(er)); }
+      const b = e.currentTarget; b.disabled = true; b.classList.add('busy'); toast('A ler os números de agora…', 8000);
+      try { const r = await readNow(ids); toast(readMsg(r), 6000); } catch (er) { toast(er.message || String(er)); }
+      reload();
+    });
+    box.querySelector('[data-accnow]')?.addEventListener('click', async (e) => {
+      const b = e.currentTarget; b.disabled = true; b.classList.add('busy');
+      try { const r = await readNow(ids, { account_ids: [b.dataset.accnow], post_ids: [] }); toast(readMsg(r), 6000); } catch (er) { toast(er.message || String(er)); }
       reload();
     });
     box.querySelectorAll('[data-acc]').forEach((b) => b.addEventListener('click', () => { ui.acc = b.dataset.acc; draw(); }));
@@ -186,19 +197,27 @@ export async function itemStats(box, p, it, base) {
 }
 
 // ---------- juntar um link (publicação ou rede) ----------
+// resumo de uma leitura, para o aviso
+function readMsg(r) {
+  if (!r) return 'Sem resposta.';
+  const parts = [r.updated ? `${r.updated} ${r.updated === 1 ? 'número atualizado' : 'números atualizados'}` : 'Nada para atualizar'];
+  if (r.missed) parts.push(`${r.missed} não ${r.missed === 1 ? 'deixou' : 'deixaram'} ler agora (tenta daqui a pouco ou mete à mão)`);
+  if (r.errors?.length) parts.push(r.errors.join(' · '));
+  return parts.join(' · ') + '.';
+}
 async function addLink(p, D, raw, itemId, st) {
   const url = String(raw || '').trim(); if (!url) return false;
   let m;
   try { m = await callFn('mk-stats', { action: 'meta', url }); } catch (e) { toast(e.message || String(e)); return false; }
   if (m.kind === 'account') return addAccountRow(p, m);
   return new Promise((resolve) => {
-    const isAuto = auto(m.platform, st);
+    const isAuto = auto(m.platform, st, m.url);
     const dlg = modal(`<h2>Juntar publicação</h2>
       <div class="mks-prev">${m.thumb ? `<img src="${esc(m.thumb)}" alt="" referrerpolicy="no-referrer">` : ''}<div><span class="mks-plb" style="--pl:${plColor(m.platform)}">${esc(plName(m.platform))}</span><b>${esc(m.title || m.url)}</b>${m.author ? `<small class="muted">${esc(m.author)}</small>` : ''}</div></div>
       <form class="stack" data-f>
         <div class="grid2"><div class="field"><label for="mkp-i">Peça do calendário</label><select id="mkp-i" name="item"><option value="">— nenhuma —</option>${D.items.map((i) => `<option value="${i.id}" ${i.id === itemId ? 'selected' : ''}>${esc(i.title)}${i.date ? ` · ${fmtDate(i.date)}` : ''}</option>`).join('')}</select></div>
           <div class="field"><label for="mkp-d">Publicado a</label><input id="mkp-d" type="date" name="pub" value="${esc(m.published_on || today())}"></div></div>
-        ${isAuto ? '<p class="muted small">Os números desta publicação atualizam-se sozinhos todos os dias.</p>' : `<fieldset class="mks-nums"><legend>Números de hoje (opcional)</legend>${[['views', 'Views'], ['likes', 'Likes'], ['comments', 'Comentários'], ['shares', 'Partilhas']].map(([k, l]) => `<label class="field"><span class="label">${l}</span><input type="number" min="0" inputmode="numeric" name="${k}"></label>`).join('')}</fieldset><p class="muted small">${esc(plName(m.platform))} não dá números públicos sem o artista autorizar: vai-os metendo aqui (por exemplo, uma vez por semana).</p>`}
+        ${isAuto ? '<p class="muted small">Os números públicos desta publicação são lidos já ao juntar, e depois todos os dias e sempre que carregas em Atualizar.</p>' : `<fieldset class="mks-nums"><legend>Números de hoje (opcional)</legend>${[['views', 'Views'], ['likes', 'Likes'], ['comments', 'Comentários'], ['shares', 'Partilhas']].map(([k, l]) => `<label class="field"><span class="label">${l}</span><input type="number" min="0" inputmode="numeric" name="${k}"></label>`).join('')}</fieldset><p class="muted small">${m.platform === 'instagram' ? 'O Instagram não deixa ler os números sem conta: copia-os da app' : `${esc(plName(m.platform))} não mostra estes números publicamente: vai-os metendo aqui`} (por exemplo, uma vez por semana).</p>`}
         <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Juntar</button></div></form>`, { onClose: () => resolve(done) });
     let done = false;
     dlg.el.querySelector('[data-f]').addEventListener('submit', async (e) => {
@@ -208,17 +227,28 @@ async function addLink(p, D, raw, itemId, st) {
       if (error) return toast(error.message);
       const nums = Object.fromEntries(['views', 'likes', 'comments', 'shares'].map((k) => [k, f.get(k) === '' || f.get(k) == null ? null : Number(f.get(k))]));
       if (Object.values(nums).some((v) => v != null)) await sb.from('mk_stats').insert({ project_id: post.project_id, post_id: post.id, ...nums, source: 'manual' });
-      if (isAuto) await callFn('mk-stats', { action: 'refresh', project_ids: [post.project_id], force: true }).catch(() => {});
-      done = true; toast('Publicação juntada.'); dlg.close();
+      let msg = 'Publicação juntada.';
+      if (isAuto) {
+        e.submitter && (e.submitter.disabled = true); toast('A ler os números…', 8000);
+        const r = await readNow([post.project_id], { post_ids: [post.id], account_ids: [] }).catch(() => null);
+        const g = r?.got?.[post.id];
+        msg = g ? `Publicação juntada: ${g.views != null ? `${big(g.views)} views` : ''}${g.views != null && g.likes != null ? ' · ' : ''}${g.likes != null ? `${big(g.likes)} likes` : ''}.` : 'Publicação juntada. Os números não vieram agora: tenta Atualizar daqui a pouco.';
+      }
+      done = true; toast(msg, 6000); dlg.close();
     });
   });
 }
 async function addAccountRow(p, m) {
-  const { error } = await sb.from('mk_accounts').insert({ project_id: p.id, platform: m.platform, handle: m.handle || m.ext_id || m.url, url: m.url, ext_id: m.platform === 'youtube' && /^UC/.test(m.ext_id || '') ? m.ext_id : null });
+  const { data: acc, error } = await sb.from('mk_accounts').insert({ project_id: p.id, platform: m.platform, handle: m.handle || m.ext_id || m.url, url: m.url, ext_id: (m.platform === 'youtube' && /^UC/.test(m.ext_id || '')) || m.platform === 'spotify' ? m.ext_id || null : null }).select().single();
   if (error) { toast(error.message); return false; }
   const st = await status();
-  if (auto(m.platform, st)) await callFn('mk-stats', { action: 'refresh', project_ids: [p.id], force: true }).catch(() => {});
-  toast(`${plName(m.platform)} do artista juntado.${auto(m.platform, st) ? '' : ' Mete os seguidores de hoje em "Atualizar números".'}`, 5000);
+  if (!auto(m.platform, st, m.url)) { toast(`${plName(m.platform)} do artista juntado. ${m.platform === 'instagram' ? 'O Instagram não deixa ler sem conta: mete' : 'Mete'} os seguidores de hoje em "Meter números".`, 6000); return true; }
+  // lê já os números de hoje, para aparecerem logo
+  toast(`A ler os números de ${plName(m.platform)}…`, 8000);
+  const r = await readNow([p.id], { account_ids: [acc.id], post_ids: [] }).catch(() => null);
+  const g = r?.got?.[acc.id];
+  const v = g ? (m.platform === 'spotify' && g.views != null ? `${big(g.views)} ouvintes mensais` : g.followers != null ? `${big(g.followers)} ${m.platform === 'youtube' ? 'subscritores' : 'seguidores'}` : null) : null;
+  toast(v ? `${plName(m.platform)} do artista juntado: ${v}.` : `${plName(m.platform)} do artista juntado. Os números não vieram agora: tenta Atualizar daqui a pouco.`, 6000);
   return true;
 }
 function addAccount(p, after) {
@@ -282,26 +312,23 @@ function newLink(p, D, itemId, after) {
   });
 }
 
-// ---------- ligações (YouTube, Instagram) ----------
+// ---------- ligações (opcionais) ----------
 function connections(after) {
   status().then((s) => {
     const dlg = modal(`<h2>Ligações</h2>
-      <section class="mks-con"><div class="row between"><h3 class="h3">YouTube</h3><span class="tag ${s.youtube ? 'ok' : ''}">${s.youtube ? 'Ligado' : 'Por ligar'}</span></div>
-        <p class="muted small">Views, likes e comentários de cada vídeo e os subscritores do canal (dados públicos). Precisa de uma chave gratuita da Google:</p>
-        <ol class="small mks-steps"><li>Abre <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">console.cloud.google.com</a> e cria um projeto (ex.: "PØRTAL").</li>
-          <li>Em "APIs e serviços → Biblioteca", procura <b>YouTube Data API v3</b> e carrega em Ativar.</li>
-          <li>Em "APIs e serviços → Credenciais", carrega em "Criar credenciais → Chave de API".</li>
-          <li>Em "Restringir chave", escolhe só a YouTube Data API v3 e guarda.</li><li>Cola a chave aqui em baixo.</li></ol>
-        <form class="row" data-yt><input name="k" type="password" autocomplete="off" placeholder="${s.youtube ? 'Chave guardada (cola outra para trocar)' : 'Chave da API'}" aria-label="Chave da API do YouTube"><button class="btn primary">Guardar</button></form>
-        ${s.youtube ? '<button type="button" class="link-btn small danger-text" data-ytoff>Desligar o YouTube</button>' : ''}</section>
-      <section class="mks-con"><div class="row between"><h3 class="h3">Instagram</h3><span class="tag ${s.instagram ? 'ok' : ''}">${s.instagram ? 'Ligado' : 'Por ligar'}</span></div>
-        <p class="muted small">Seguidores e likes, comentários e views dos posts e reels de contas profissionais (como os artistas costumam ter). Precisa de uma app da Meta ligada à conta profissional da equipa. Quando quiseres tratar disto, pede-me e eu guio-te passo a passo.</p>
+      <section class="mks-con"><div class="row between"><h3 class="h3">YouTube, TikTok e Spotify</h3><span class="tag ok">Sozinho</span></div>
+        <p class="muted small">Não é preciso nada: os números públicos (subscritores e seguidores, views, likes, comentários, partilhas, ouvintes mensais, reproduções das faixas) são lidos das próprias páginas, como qualquer pessoa os vê. As plataformas arredondam alguns (ex.: 46,5 mil subscritores).</p></section>
+      <section class="mks-con"><div class="row between"><h3 class="h3">Instagram</h3><span class="tag ${s.instagram ? 'ok' : ''}">${s.instagram ? 'Ligado' : 'À mão'}</span></div>
+        <p class="muted small">O Instagram não deixa ler nada sem uma conta com sessão iniciada, por isso os números vão à mão ("Números" em cada publicação, "Meter números" na rede). Se quiseres que também seja automático, dá para ligar uma conta profissional <b>da vossa equipa</b> (não é preciso nada do artista): a Meta deixa essa conta ver os números públicos de outras contas profissionais. Quando quiseres, pede-me e eu guio-te.</p>
         <details><summary class="small">Já tenho os dados da app da Meta</summary><form class="stack" data-ig><input name="uid" placeholder="ID da conta de Instagram da equipa" aria-label="ID da conta de Instagram"><input name="tok" type="password" autocomplete="off" placeholder="Chave de acesso (token)" aria-label="Chave de acesso"><button class="btn ghost sm">Guardar</button></form></details></section>
-      <section class="mks-con"><h3 class="h3">TikTok e Spotify</h3><p class="muted small">Não dão números públicos sem o artista autorizar. Por agora, vão-se metendo à mão em cada publicação ("Números").</p></section>
+      <details class="mks-con"><summary class="small">YouTube pela API oficial (opcional)</summary>
+        <p class="muted small">Só se as leituras do YouTube começarem a falhar. É uma chave gratuita da própria ferramenta (feita uma vez, numa conta Google vossa), não do artista. Em <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">console.cloud.google.com</a>: cria um projeto, ativa a "YouTube Data API v3" e cria uma "Chave de API".</p>
+        <form class="row" data-yt><input name="k" type="password" autocomplete="off" placeholder="${s.youtube ? 'Chave guardada (cola outra para trocar)' : 'Chave da API'}" aria-label="Chave da API do YouTube"><button class="btn ghost sm">Guardar</button></form>
+        ${s.youtube ? '<button type="button" class="link-btn small danger-text" data-ytoff>Tirar a chave</button>' : ''}</details>
       <div class="row end"><button type="button" class="btn ghost" data-close>Fechar</button></div>`, { wide: true });
-    const save = async (body) => { try { const r = await callFn('mk-stats', { action: 'config', ...body }); toast('Guardado.'); dlg.close(); after({ youtube: r.youtube, instagram: r.instagram }); } catch (e) { toast(e.message || String(e), 7000); } };
+    const save = async (body) => { try { const r = await callFn('mk-stats', { action: 'config', ...body }); toast('Guardado.'); dlg.close(); after({ public: true, youtube: r.youtube, instagram: r.instagram }); } catch (e) { toast(e.message || String(e), 7000); } };
     dlg.el.querySelector('[data-yt]').addEventListener('submit', (e) => { e.preventDefault(); const k = e.target.k.value.trim(); if (!k) return toast('Cola a chave.'); save({ youtube_key: k }); });
-    dlg.el.querySelector('[data-ytoff]')?.addEventListener('click', async () => { if (await confirmBox('Desligar o YouTube? Os números já guardados ficam; deixam só de se atualizar sozinhos.', 'Desligar')) save({ youtube_key: '' }); });
+    dlg.el.querySelector('[data-ytoff]')?.addEventListener('click', async () => { if (await confirmBox('Tirar a chave? O YouTube continua a ser lido pela página pública.', 'Tirar')) save({ youtube_key: '' }); });
     dlg.el.querySelector('[data-ig]').addEventListener('submit', (e) => { e.preventDefault(); save({ ig_user_id: e.target.uid.value, ig_token: e.target.tok.value }); });
   });
 }

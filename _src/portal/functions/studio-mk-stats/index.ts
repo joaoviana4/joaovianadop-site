@@ -1,13 +1,15 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { PUBLIC, ytChannel, ytVideo, ttProfile, ttVideo, spArtist, spTrack } from './public.ts';
 
 // PØRTAL Studio — estatísticas do marketing.
 // · meta    {url}               → plataforma, id, título, imagem e autor de um link (YouTube, TikTok, Instagram, Spotify)
-// · refresh {project_ids, force} → lê já os números automáticos destes projetos (quem tem acesso a eles)
+// · refresh {project_ids, force, post_ids?, account_ids?} → lê já os números destes projetos (quem tem acesso a eles)
 // · cron                        → todos os dias, pelo relógio da base de dados (cabeçalho x-cron-key)
-// · status                      → que ligações estão feitas (YouTube / Instagram)
-// · config  {youtube_key, ig_user_id, ig_token} → guarda as chaves (só administradores de uma comunidade)
-// Números automáticos: YouTube (chave da Google, dados públicos) e Instagram (Business Discovery, com a conta
-// profissional da equipa). TikTok e Spotify não dão números públicos sem o artista autorizar: metem-se à mão.
+// · status                      → que ligações extra estão feitas (YouTube / Instagram)
+// · config  {youtube_key, ig_user_id, ig_token} → guarda as chaves (só administradores)
+// Os números são os públicos, lidos das próprias páginas (public.ts): YouTube, TikTok e Spotify, sem chaves nem
+// contas. O Instagram não deixa ler a partir de servidores: precisa da ligação da Meta (opcional) ou vai à mão.
+// A chave da Google é opcional (se existir, o YouTube lê-se pela API oficial).
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-cron-key',
@@ -29,6 +31,7 @@ export function parseUrl(raw: string) {
     const m = u.pathname.match(/^\/(shorts|live|embed)\/([\w-]{6,})/); if (m) return { platform: 'youtube', kind: 'post', ext_id: m[2] };
     const c = u.pathname.match(/^\/channel\/(UC[\w-]+)/); if (c) return { platform: 'youtube', kind: 'account', ext_id: c[1], handle: c[1] };
     const at = u.pathname.match(/^\/(@[\w.-]+)/); if (at) return { platform: 'youtube', kind: 'account', handle: at[1] };
+    const cu = u.pathname.match(/^\/(c|user)\/([\w.-]+)/); if (cu) return { platform: 'youtube', kind: 'account', handle: `${cu[1]}/${cu[2]}` };
     return { platform: 'youtube', kind: 'account', handle: u.pathname.split('/').filter(Boolean).pop() || '' };
   }
   if (h.endsWith('tiktok.com')) {
@@ -142,22 +145,63 @@ async function instagram(admin: any, cfg: Row, posts: Row[], accounts: Row[]) {
 }
 const num = (v: unknown) => (v == null || v === '' ? null : Number(v));
 
-async function refresh(admin: any, projectIds: string[] | null, force = false) {
+// leituras públicas, poucas de cada vez (para não parecer um ataque às plataformas)
+async function pool<T>(list: T[], k: number, fn: (x: T) => Promise<void>) {
+  let i = 0; await Promise.all(Array.from({ length: Math.min(k, list.length) }, async () => { while (i < list.length) { const x = list[i++]; try { await fn(x); } catch { /* fica para a próxima */ } } }));
+}
+async function publicRead(admin: any, posts: Row[], accounts: Row[], done: Set<string>) {
+  const rows: Row[] = []; const got: Row = {}; const missed: Row[] = [];
+  const patchOf = (x: Row, r: Row, keys: string[]) => { const p: Row = {}; for (const k of keys) if (!x[k] && r[k]) p[k] = r[k]; return p; };
+  await pool(accounts.filter((a) => PUBLIC.has(a.platform) && !done.has(a.id)), 3, async (a) => {
+    let r: Row | null = null;
+    if (a.platform === 'youtube') r = await ytChannel(a);
+    else if (a.platform === 'tiktok') r = await ttProfile(a.handle);
+    else if (a.platform === 'spotify') r = await spArtist(a.ext_id || a.handle);
+    if (!r || (r.followers == null && r.views == null)) { missed.push({ id: a.id, platform: a.platform }); return; }
+    rows.push({ project_id: a.project_id, account_id: a.id, followers: r.followers ?? null, views: r.views ?? null, extra: r.extra || null, source: 'auto' });
+    got[a.id] = { followers: r.followers ?? null, views: r.views ?? null };
+    const patch = patchOf(a, r, ['title', 'thumb', 'ext_id']);
+    if (Object.keys(patch).length) await admin.from('mk_accounts').update(patch).eq('id', a.id);
+  });
+  await pool(posts.filter((x) => PUBLIC.has(x.platform) && !done.has(x.id)), 3, async (x) => {
+    let r: Row | null = null;
+    if (x.platform === 'youtube' && x.ext_id) r = await ytVideo(x.ext_id);
+    else if (x.platform === 'tiktok') r = await ttVideo(x.url);
+    else if (x.platform === 'spotify' && x.ext_id && /\/track\//.test(x.url || '')) r = await spTrack(x.ext_id);
+    if (!r || ['views', 'likes', 'comments', 'shares', 'saves'].every((k) => r![k] == null)) { missed.push({ id: x.id, platform: x.platform }); return; }
+    rows.push({ project_id: x.project_id, post_id: x.id, views: r.views ?? null, likes: r.likes ?? null, comments: r.comments ?? null, shares: r.shares ?? null, saves: r.saves ?? null, source: 'auto' });
+    got[x.id] = { views: r.views ?? null, likes: r.likes ?? null };
+    const patch = patchOf(x, r, ['title', 'thumb', 'published_on', 'author']);
+    if (Object.keys(patch).length) await admin.from('mk_posts').update(patch).eq('id', x.id);
+  });
+  return { rows, got, missed };
+}
+
+async function refresh(admin: any, projectIds: string[] | null, force = false, only: { posts?: string[]; accounts?: string[] } | null = null) {
   const cfg = await config(admin);
-  const pq = admin.from('mk_posts').select('*'); const aq = admin.from('mk_accounts').select('*');
-  const [{ data: posts0 }, { data: accounts0 }] = await Promise.all(projectIds ? [pq.in('project_id', projectIds), aq.in('project_id', projectIds)] : [pq, aq]);
+  let pq = admin.from('mk_posts').select('*'), aq = admin.from('mk_accounts').select('*');
+  if (projectIds) { pq = pq.in('project_id', projectIds); aq = aq.in('project_id', projectIds); }
+  const [{ data: posts0 }, { data: accounts0 }] = await Promise.all([pq, aq]);
   let posts = posts0 || [], accounts = accounts0 || [];
-  // não repetir leituras automáticas com menos de 3 horas (poupa a quota do YouTube)
+  if (only) { posts = posts.filter((x: Row) => only.posts?.includes(x.id)); accounts = accounts.filter((x: Row) => only.accounts?.includes(x.id)); }
+  // ao abrir a página não se repetem leituras com menos de 3 horas; "Atualizar" (force) lê sempre
   if (!force) {
     const since = new Date(Date.now() - 3 * 3600e3).toISOString();
     const { data: recent } = await admin.from('mk_stats').select('post_id, account_id').eq('source', 'auto').gte('taken_at', since);
-    const done = new Set((recent || []).map((r: Row) => r.post_id || r.account_id));
-    posts = posts.filter((x: Row) => !done.has(x.id)); accounts = accounts.filter((x: Row) => !done.has(x.id));
+    const skip = new Set((recent || []).map((r: Row) => r.post_id || r.account_id));
+    posts = posts.filter((x: Row) => !skip.has(x.id)); accounts = accounts.filter((x: Row) => !skip.has(x.id));
   }
-  const out = { youtube: !!cfg.youtube_key, instagram: !!(cfg.ig_user_id && cfg.ig_token), updated: 0, errors: [] as string[] };
-  const rows: Row[] = [];
-  if (cfg.youtube_key) { try { const r = await youtube(admin, cfg.youtube_key, posts, accounts); rows.push(...r.rows); out.updated += r.n; } catch (e) { out.errors.push('YouTube: ' + (e as Error).message); } }
-  if (out.instagram) { try { const r = await instagram(admin, cfg, posts, accounts); rows.push(...r.rows); out.updated += r.n; } catch (e) { out.errors.push('Instagram: ' + (e as Error).message); } }
+  const out = { youtube: !!cfg.youtube_key, instagram: !!(cfg.ig_user_id && cfg.ig_token), updated: 0, missed: 0, got: {} as Row, errors: [] as string[] };
+  const rows: Row[] = []; const done = new Set<string>();
+  const mark = (r: Row[]) => r.forEach((x) => done.add(x.post_id || x.account_id));
+  // com as ligações opcionais (mais completas), quando existem
+  if (cfg.youtube_key) { try { const r = await youtube(admin, cfg.youtube_key, posts, accounts); rows.push(...r.rows); mark(r.rows); } catch (e) { out.errors.push('YouTube: ' + (e as Error).message); } }
+  if (out.instagram) { try { const r = await instagram(admin, cfg, posts, accounts); rows.push(...r.rows); mark(r.rows); } catch (e) { out.errors.push('Instagram: ' + (e as Error).message); } }
+  rows.forEach((x) => { out.got[x.post_id || x.account_id] = { followers: x.followers ?? null, views: x.views ?? null, likes: x.likes ?? null }; });
+  // o resto: números públicos das páginas
+  const pr = await publicRead(admin, posts, accounts, done);
+  rows.push(...pr.rows); Object.assign(out.got, pr.got); out.missed = pr.missed.length;
+  out.updated = rows.length;
   if (rows.length) { const { error } = await admin.from('mk_stats').insert(rows); if (error) out.errors.push(error.message); }
   return out;
 }
@@ -184,7 +228,7 @@ Deno.serve(async (req) => {
 
     if (body.action === 'meta') return json(await meta(String(body.url || '')));
 
-    if (body.action === 'status') { const cfg = await config(admin); return json({ youtube: !!cfg.youtube_key, instagram: !!(cfg.ig_user_id && cfg.ig_token) }); }
+    if (body.action === 'status') { const cfg = await config(admin); return json({ public: true, youtube: !!cfg.youtube_key, instagram: !!(cfg.ig_user_id && cfg.ig_token) }); }
 
     if (body.action === 'refresh') {
       const ids = (Array.isArray(body.project_ids) ? body.project_ids : []).filter((x: unknown) => typeof x === 'string').slice(0, 50);
@@ -192,7 +236,8 @@ Deno.serve(async (req) => {
       const { data: ok } = await asUser.from('projects').select('id').in('id', ids);
       const allowed = (ok || []).map((r: Row) => r.id);
       if (!allowed.length) return json({ error: 'Sem acesso a estes projetos.' }, 403);
-      return json(await refresh(admin, allowed, !!body.force));
+      const only = Array.isArray(body.post_ids) || Array.isArray(body.account_ids) ? { posts: (body.post_ids || []).map(String), accounts: (body.account_ids || []).map(String) } : null;
+      return json(await refresh(admin, allowed, !!body.force, only));
     }
 
     if (body.action === 'config') {
@@ -212,7 +257,7 @@ Deno.serve(async (req) => {
       if (typeof body.ig_token === 'string') set.push({ key: 'ig_token', value: body.ig_token.trim() || null });
       for (const r of set) await admin.from('mk_config').upsert({ ...r, updated_at: new Date().toISOString() });
       const cfg = await config(admin);
-      return json({ ok: true, youtube: !!cfg.youtube_key, instagram: !!(cfg.ig_user_id && cfg.ig_token) });
+      return json({ ok: true, public: true, youtube: !!cfg.youtube_key, instagram: !!(cfg.ig_user_id && cfg.ig_token) });
     }
 
     return json({ error: 'Ação desconhecida.' }, 400);

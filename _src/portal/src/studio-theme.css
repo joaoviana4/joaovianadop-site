@@ -85,7 +85,8 @@ a:hover { color: var(--blue-d); }
 .plogo .pmark { width: 1.15em; height: 1.15em; stroke: none; }
 .plogo-name { font-stretch: 125%; font-weight: 700; letter-spacing: .02em; font-size: .62em; white-space: nowrap; }
 .plogo-name span { font-weight: 500; color: var(--muted); }
-.brand { font-size: 24px; color: var(--text); }
+.brand { font-size: 24px; color: var(--text); display: inline-flex; align-items: center; min-height: 44px; line-height: 1; }
+.brand .plogo-name { line-height: normal; }
 .auth-logo { font-size: 46px !important; }
 .m-head .logo { font-size: 30px; }
 .pv-mark { color: var(--text); text-shadow: none; }

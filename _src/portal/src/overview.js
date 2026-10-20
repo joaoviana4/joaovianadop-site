@@ -150,11 +150,14 @@ export async function mountSituation(box, p, base, { onChange, onBlocks } = {}) 
               return `<li style="--g:${esc(d.color)}"><div class="row between small"><span><i class="dot"></i>${esc(d.name)}</span><span class="muted">${dt.length ? `${done}/${dt.length}` : '—'}${q ? ` · ${plural(q, 'questão', 'questões')}` : ''}</span></div><div class="bar"><i style="width:${dt.length ? Math.round((done / dt.length) * 100) : 0}%"></i></div></li>`; }).join('')}</ul></section></div>` : ''}
 
 
-        ${true ? `<div data-blk="props"><section class="panel ov-props">
-          <div class="row between"><h2 class="h3">Adereços em falta</h2><a class="small" href="${base}/aderecos">Todos os adereços</a></div>
+        ${true ? `<div data-blk="props"><section class="panel ov-props" data-gscroll data-ovprops>
+          <a class="ovp-mini ${missing.length ? 'ovp-late' : ''}" href="${base}/aderecos"><strong>${missing.length}</strong><span class="ovp-ml"><span>${missing.length === 1 ? 'adereço em falta' : 'adereços em falta'}</span>${P.length ? `<em>${P.length - missing.length} de ${P.length} prontos</em>` : '<em>sem lista ainda</em>'}</span></a>
+          <div class="ovp-full">
+          <div class="row between"><span class="ovp-t"><h2 class="h3">Adereços em falta</h2>${missing.length ? `<span class="ovp-n">${missing.length}</span>` : ''}</span><a class="small" href="${base}/aderecos">Todos os adereços</a></div>
           ${P.length ? `<div class="bar ok"><i style="width:${Math.round(((P.length - missing.length) / P.length) * 100)}%"></i></div>
-            ${missing.length ? `<ul class="ov-pl">${missing.slice(0, 8).map((x) => { const s = PROP_STATUS.find((y) => y[0] === x.status) || PROP_STATUS[0]; return `<li><a href="${base}/aderecos/${x.id}"><span>${esc(x.name)}</span><span class="pstat" style="--c:${s[2]}">${esc(s[1])}</span></a></li>`; }).join('')}${missing.length > 8 ? `<li class="muted small">e mais ${missing.length - 8}…</li>` : ''}</ul>` : '<p class="muted small">Está tudo pronto.</p>'}`
+            ${missing.length ? `<ul class="ov-pl">${missing.map((x) => { const s = PROP_STATUS.find((y) => y[0] === x.status) || PROP_STATUS[0]; return `<li><a href="${base}/aderecos/${x.id}"><span>${esc(x.name)}</span><span class="pstat" style="--c:${s[2]}">${esc(s[1])}</span></a></li>`; }).join('')}</ul>` : '<p class="muted small">Está tudo pronto.</p>'}`
           : `<p class="muted small">Ainda não há adereços.</p><a class="btn ghost" href="${base}/aderecos">${ICON.plus} Juntar adereços</a>`}
+          </div>
         </section></div>` : ''}
       </div>`;
     // blocos da visão geral: no Studio cada um é um elemento da grelha (onBlocks); fora disso, arrumação por colunas
@@ -165,6 +168,11 @@ export async function mountSituation(box, p, base, { onChange, onBlocks } = {}) 
       { id: 'props', label: 'Adereços em falta', w: 5, x: 7, icon: ICON.prop, off: !withProps },
     ];
     const root = box.querySelector('[data-lay]');
+    // adereços em falta: pequeno mostra só o número; maior mostra a lista (com scroll quando não cabe)
+    root.querySelectorAll('[data-ovprops]').forEach((sec) => {
+      const fit = () => { const mini = sec.clientWidth < 230 || (sec.style.height && sec.clientHeight < 150); sec.classList.toggle('is-mini', !!mini); };
+      fit(); new ResizeObserver(fit).observe(sec);
+    });
     if (onBlocks) {
       const els = new Map([...root.querySelectorAll(':scope > [data-blk]')].map((e) => [e.dataset.blk, e]));
       onBlocks(defsStd.filter((d) => els.has(d.id)).map((d) => ({ ...d, el: els.get(d.id) })));

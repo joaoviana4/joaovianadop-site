@@ -569,27 +569,42 @@ async function newProject(opts = {}) {
 }
 
 // ---------- detalhes do projeto ----------
+// Compacto: capa, nome e artista em cima; tipo, estado, fase e datas numa linha; líderes e departamentos em
+// "pílulas"; o resto (pasta, orçamento, tirar da lista, apagar) fica em "Mais opções".
 function detailsForm(p) {
-  return `<form class="stack" data-details>
-    <div class="field"><label for="dn">Nome</label><input id="dn" name="name" value="${esc(p.name)}" required ${p.is_central ? 'readonly' : ''}></div>
-    ${p.is_central ? '' : `<div class="field"><label for="dc">Artista ou marca</label><input id="dc" name="client" value="${esc(p.client)}"></div>
-    <div class="grid2">
-      <div class="field"><label for="dk">Tipo</label><select id="dk" name="kind">${Object.entries(KINDS).filter(([k]) => k !== 'central').map(([k, v]) => `<option value="${k}" ${p.kind === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
-      <div class="field"><label for="dst">Estado</label><select id="dst" name="status"><option value="active" ${p.status === 'active' ? 'selected' : ''}>Em curso</option><option value="done" ${p.status === 'done' ? 'selected' : ''}>Finalizado</option><option value="archived" ${p.status === 'archived' ? 'selected' : ''}>Arquivo</option></select></div>
-      <div class="field"><label for="dsg">Fase</label><select id="dsg" name="stage"><option value="">Pelas datas</option>${stageOptions(p.kind).map(([k, l]) => `<option value="${k}" ${p.stage === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
-      <div class="field"><label for="ds">Começa</label><input id="ds" name="starts_on" type="date" value="${esc(p.starts_on || '')}"></div>
-      <div class="field"><label for="de">Entrega</label><input id="de" name="ends_on" type="date" value="${esc(p.ends_on || '')}"></div>
-      <div class="field" style="grid-column:1/-1"><label>Líderes do projeto</label><div class="pm-leads in-form" data-leadsform></div></div>
-      ${p._folders && p._folders.length ? `<div class="field"><label for="dpar">Dentro da pasta</label><select id="dpar" name="parent_id"><option value="">— nenhuma —</option>${p._folders.map((f) => `<option value="${f.id}" ${f.id === p.parent_id ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select></div>` : ''}
-      ${p.canBudget ? `<div class="field"><label for="dv">Orçamento (€) <span class="muted small">${ICON.lock} privado</span></label><input id="dv" name="value" type="number" step="0.01" min="0" inputmode="decimal" value="${esc(p.value ?? '')}"></div>` : ''}
+  const cover = p.cover_path ? knownUrl(p.cover_path) : null;
+  const sel = (name, label, opts, cur) => `<label class="pd-pill"><span>${label}</span><select name="${name}">${opts.map(([k, l]) => `<option value="${esc(k)}" ${(cur || '') === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>`;
+  const more = !p.is_central && ((p._folders && p._folders.length) || p.canBudget);
+  return `<form class="pd" data-details>
+    <div class="pd-head">
+      ${p.is_central ? '' : `<button type="button" class="pd-cover ${p.cover_path ? 'has' : ''}" data-cover title="${p.cover_path ? 'Mudar a capa' : 'Pôr uma capa'}" aria-label="${p.cover_path ? 'Mudar a capa' : 'Pôr uma capa'}" ${cover ? `style="background-image:url('${esc(cover)}')"` : ''}>${p.cover_path ? '' : ICON.image}</button>`}
+      <div class="pd-id">
+        <input class="pd-name" name="name" value="${esc(p.name)}" placeholder="Nome do projeto" aria-label="Nome" required ${p.is_central ? 'readonly' : ''}>
+        ${p.is_central ? '' : `<input class="pd-client" name="client" value="${esc(p.client)}" placeholder="Artista ou marca" aria-label="Artista ou marca">`}
+        ${p.cover_path && !p.is_central ? '<button type="button" class="link-btn small" data-nocover>Tirar a capa</button>' : ''}
+      </div>
     </div>
-    <div class="field"><span class="label">Capa</span><div class="row"><button type="button" class="btn ghost" data-cover>${ICON.image} Escolher imagem</button>${p.cover_path ? '<button type="button" class="btn ghost" data-nocover>Tirar capa</button>' : ''}</div></div>`}
-    <fieldset class="depts"><legend>Departamentos e cores</legend>
-      ${(p.departments || []).map((d, i) => `<div class="dept-row"><input type="color" value="${esc(d.color)}" data-dcolor="${i}" aria-label="Cor de ${esc(d.name)}"><input value="${esc(d.name)}" data-dname="${i}" aria-label="Nome do departamento"><button type="button" class="icon-btn" data-drm="${i}" aria-label="Tirar ${esc(d.name)}">${ICON.close}</button></div>`).join('')}
-      <button type="button" class="link-btn" data-dadd>${ICON.plus} Departamento</button>
-    </fieldset>
-    <div class="row between">
-      <span class="row wrap-gap">${!p.is_central ? `<button type="button" class="btn ghost" data-hidep title="Os outros continuam a vê-lo">${ICON.hide} Tirar da minha lista</button>` : ''}${isAdmin() && !p.is_central ? `<button type="button" class="btn ghost danger-text" data-delp title="Vai para a reciclagem para toda a gente">${ICON.trash} Apagar para todos</button>` : ''}</span>
+    ${p.is_central ? '' : `<div class="pd-row">
+      ${sel('kind', 'Tipo', Object.entries(KINDS).filter(([k]) => k !== 'central'), p.kind)}
+      ${sel('status', 'Estado', [['active', 'Em curso'], ['done', 'Finalizado'], ['archived', 'Arquivo']], p.status)}
+      ${sel('stage', 'Fase', [['', 'Pelas datas'], ...stageOptions(p.kind)], p.stage)}
+    </div>
+    <div class="pd-row">
+      <label class="pd-pill"><span>Começa</span><input name="starts_on" type="date" value="${esc(p.starts_on || '')}"></label>
+      <span class="pd-arrow" aria-hidden="true">→</span>
+      <label class="pd-pill"><span>Entrega</span><input name="ends_on" type="date" value="${esc(p.ends_on || '')}"></label>
+    </div>
+    <div class="pd-sec"><span class="pd-lab">Líderes</span><div class="pm-leads in-form" data-leadsform></div></div>`}
+    <div class="pd-sec"><span class="pd-lab">Departamentos</span>
+      <div class="pd-depts">${(p.departments || []).map((d, i) => `<span class="pd-dept" style="--c:${esc(d.color)}"><label class="pd-dc" title="Mudar a cor"><input type="color" value="${esc(d.color)}" data-dcolor="${i}" aria-label="Cor de ${esc(d.name)}"></label><input class="pd-dn" value="${esc(d.name)}" size="${Math.max(3, (d.name || '').length + 1)}" data-dname="${i}" aria-label="Nome do departamento"><button type="button" class="pd-dx" data-drm="${i}" aria-label="Tirar ${esc(d.name)}" title="Tirar">${ICON.close}</button></span>`).join('')}
+        <button type="button" class="pd-dadd" data-dadd>${ICON.plus} Departamento</button></div>
+    </div>
+    ${more ? `<details class="pd-more"><summary>Mais opções</summary><div class="pd-row">
+      ${p._folders && p._folders.length ? sel('parent_id', 'Pasta', [['', '— nenhuma —'], ...p._folders.map((f) => [f.id, f.name])], p.parent_id) : ''}
+      ${p.canBudget ? `<label class="pd-pill"><span>Orçamento (€) ${ICON.lock}</span><input name="value" type="number" step="0.01" min="0" inputmode="decimal" value="${esc(p.value ?? '')}" placeholder="privado"></label>` : ''}
+    </div></details>` : ''}
+    <div class="row between pd-foot">
+      <span class="row wrap-gap">${!p.is_central ? `<button type="button" class="link-btn small" data-hidep title="Os outros continuam a vê-lo">${ICON.hide} Tirar da minha lista</button>` : ''}${isAdmin() && !p.is_central ? `<button type="button" class="link-btn small danger-text" data-delp title="Vai para a reciclagem para toda a gente">${ICON.trash} Apagar para todos</button>` : ''}</span>
       <button class="btn primary">Guardar</button>
     </div>
   </form>`;
@@ -602,7 +617,9 @@ function bindDetails(root, p, after) {
   const depts = JSON.parse(JSON.stringify(p.departments || []));
   const redraw = () => { root.innerHTML = detailsForm({ ...p, departments: depts }); bindDetails(root, { ...p, departments: depts }, after); };
   form.querySelectorAll('[data-dcolor]').forEach((i) => i.addEventListener('input', () => (depts[+i.dataset.dcolor].color = i.value)));
-  form.querySelectorAll('[data-dname]').forEach((i) => i.addEventListener('input', () => (depts[+i.dataset.dname].name = i.value)));
+  form.querySelectorAll('[data-dname]').forEach((i) => i.addEventListener('input', () => { depts[+i.dataset.dname].name = i.value; i.size = Math.max(3, i.value.length + 1); }));
+  form.querySelectorAll('[data-dcolor]').forEach((i) => i.addEventListener('input', () => i.closest('.pd-dept')?.style.setProperty('--c', i.value)));
+  { const cv = form.querySelector('.pd-cover.has'); if (cv && !cv.style.backgroundImage && p.cover_path) signedUrls([p.cover_path]).then((m) => { if (m[p.cover_path]) cv.style.backgroundImage = `url('${m[p.cover_path]}')`; }).catch(() => {}); }
   form.querySelectorAll('[data-drm]').forEach((b) => b.addEventListener('click', () => { depts.splice(+b.dataset.drm, 1); p.departments = depts; redraw(); }));
   form.querySelector('[data-dadd]').addEventListener('click', () => { depts.push({ id: 'd' + Date.now().toString(36), name: 'Novo', color: '#8A8A99' }); p.departments = depts; redraw(); });
   form.querySelector('[data-cover]')?.addEventListener('click', () => {

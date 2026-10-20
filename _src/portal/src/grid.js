@@ -121,8 +121,16 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
     g.style.left = leftCss(it.x); g.style.width = widthCss(it.w); g.style.top = `${it.y * ROW}px`; g.style.zIndex = String(it.z || 1);
     if (it.lockRatio) it.h = 0; // imagens: a altura segue sempre a largura (proporção da imagem)
     g.classList.toggle('fixed', !!it.h);
-    // a altura escolhida é mínima: o elemento nunca fica mais baixo do que o seu conteúdo (nada cortado)
-    const c = g.querySelector('.gi-c'); c.style.height = ''; c.style.minHeight = it.h ? `${it.h * ROW - GAP}px` : '';
+    // a altura escolhida é mínima: o elemento nunca fica mais baixo do que o seu conteúdo (nada cortado).
+    // Exceção: listas marcadas com data-gscroll (ex.: adereços em falta) podem ficar mais baixas e ganham scroll.
+    const c = g.querySelector('.gi-c');
+    const sc = it.el?.matches?.('[data-gscroll]') ? it.el : it.el?.querySelector?.('[data-gscroll]');
+    g.classList.toggle('gi-scroll', !!(sc && it.h));
+    if (sc && it.h) {
+      const H = it.h * ROW - GAP; c.style.minHeight = ''; c.style.height = `${H}px`;
+      sc.style.height = ''; const off = sc.getBoundingClientRect().top - c.getBoundingClientRect().top;
+      sc.style.height = `${Math.max(40, H - off)}px`;
+    } else { c.style.height = ''; c.style.minHeight = it.h ? `${it.h * ROW - GAP}px` : ''; if (sc) sc.style.height = ''; }
   }
   // a página tem a altura do elemento que vai mais abaixo
   function fitHeight(extra = 0) {
