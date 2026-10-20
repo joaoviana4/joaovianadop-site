@@ -44,7 +44,8 @@ export async function moodboardView(el, p, { row, base, table = 'locations', aft
   const bid = row.info?.moodboard_id;
   if (!bid) { el.hidden = true; el.innerHTML = ''; return null; }
   el.hidden = false;
-  const { boardPreview } = await import('./boardview.js');
+  let boardPreview;
+  try { ({ boardPreview } = await import('./boardview.js')); } catch { el.innerHTML = `<p class="muted small">Não foi possível mostrar o moodboard aqui. <a href="${base}/b/${bid}">Abrir o moodboard</a></p>`; return null; }
   let h = null;
   const onRemove = async () => {
     if (!(await confirmBox('Apagar o moodboard? As imagens e notas que tem também se apagam.', 'Apagar'))) return;
@@ -53,6 +54,9 @@ export async function moodboardView(el, p, { row, base, table = 'locations', aft
     const { error: e2 } = await sb.from(table).update({ info: row.info }).eq('id', row.id); if (e2) toast('Não foi possível guardar: ' + e2.message);
     h?.destroy(); el.hidden = true; el.innerHTML = ''; toast('Moodboard apagado.'); after && after();
   };
-  h = boardPreview(el, p, { boardId: bid, title: 'Moodboard', href: `${base}/b/${bid}`, base, onRemove });
+  // o nome mostrado é o do board (por defeito "Moodboard"; muda-se no ✎ ou com duplo clique)
+  const { data: bd } = await sb.from('boards').select('title').eq('id', bid).maybeSingle();
+  const shown = !bd?.title || /^Moodboard \(.*\)$/.test(bd.title) ? 'Moodboard' : bd.title;
+  h = boardPreview(el, p, { boardId: bid, title: shown, href: `${base}/b/${bid}`, base, onRemove, renamable: true });
   return h;
 }

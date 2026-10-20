@@ -69,6 +69,16 @@ window.addEventListener('beforeunload', (e) => {
 const leaveFns = new Set();
 export const onLeave = (f) => { leaveFns.add(f); return f; };
 export function runLeave() { const fs = [...leaveFns]; leaveFns.clear(); fs.forEach((f) => { try { f(); } catch { /* nada */ } }); }
+// Depois de uma atualização do Studio, uma janela que já estava aberta pede peças de código que deixaram de existir
+// (ficava uma caixa vazia, ex.: o moodboard). Nesse caso a página recarrega sozinha, uma vez, com a versão nova.
+function reloadForUpdate() {
+  try { const t = Number(sessionStorage.getItem('portal-reload') || 0); if (Date.now() - t < 30000) return false; sessionStorage.setItem('portal-reload', String(Date.now())); } catch { /* nada */ }
+  Promise.race([settleSaves(4000), new Promise((r) => setTimeout(r, 4000))]).finally(() => location.reload());
+  return true;
+}
+const STALE = /dynamically imported module|Importing a module script failed|Failed to fetch dynamically|error loading dynamically/i;
+window.addEventListener('vite:preloadError', (e) => { if (reloadForUpdate()) e.preventDefault(); });
+window.addEventListener('unhandledrejection', (e) => { if (STALE.test(String(e.reason?.message || e.reason || ''))) reloadForUpdate(); });
 // ficheiros: sb.storage.from(BUCKET)
 export const BUCKET = FLAVOR.bucket;
 

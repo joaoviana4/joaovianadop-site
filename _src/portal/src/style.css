@@ -3007,3 +3007,14 @@ body:has(.pv-zoom) .mp { bottom: 70px; }
 .tc-hpop { width: min(520px, calc(100vw - 24px)); }
 .tc-hpop .tc-hlist { display: grid; gap: 4px; }
 .tc-hpop input[type=search] { width: 100%; }
+
+/* board dentro de uma página (moodboard…): nome editável e altura ajustável */
+.bp { position: relative; }
+.bp-title { display: flex; align-items: center; gap: 6px; }
+.bp-title [data-bptitle] { cursor: text; }
+.bp-ren { opacity: 0; transition: opacity .15s; }
+.bp-h:hover .bp-ren, .bp-ren:focus-visible { opacity: 1; }
+.bp-tin { font: inherit; font-size: inherit; padding: 2px 8px; border-radius: 8px; border: 1px solid var(--line2); background: var(--panel2); color: var(--text); min-width: 220px; }
+.bp-rs { display: block; height: 12px; margin: 2px auto -6px; width: 64px; cursor: ns-resize; position: relative; }
+.bp-rs::after { content: ''; position: absolute; left: 16px; right: 16px; top: 4px; height: 4px; border-radius: 4px; background: var(--line2); }
+.bp-rs:hover::after { background: var(--muted); }
