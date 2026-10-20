@@ -1,8 +1,10 @@
 import { sb, esc, toast, ICON, saveLater, onLeave } from './lib.js';
 
 // Página livre (Studio), como um board do Milanote: cada elemento fica exatamente onde é largado e pode ficar por
-// cima de outro. Nada se mexe sozinho. O que fica por cima decide-se nas camadas (botões do elemento ou "Camadas"
-// na barra da direita). Ao arrastar, cola às arestas e ao centro dos outros elementos, com guias (Alt: sem encaixe).
+// cima de outro. Nada se mexe sozinho. Arrasta-se pela parte de fora de cada elemento (a moldura que aparece ao passar
+// o rato, as margens e o título). Sem barra de botões: só o caixote no canto; o resto (nome, camadas, copiar) está no
+// menu do botão direito e em "Camadas" na barra da direita. Ctrl+C / Ctrl+V copiam e colam.
+// Ao arrastar, cola às arestas e ao centro dos outros elementos, com guias (Alt: sem encaixe).
 // Enquanto ninguém mexeu na página, ela arruma-se sozinha (cada bloco por baixo do anterior); ao primeiro arrastar
 // fica tudo fixo. "Arrumar" (barra da direita) volta a encostar tudo de uma vez.
 // Altura: automática (segue o conteúdo) até alguém a esticar; duplo clique na pega do canto volta a automática.
@@ -17,6 +19,8 @@ const MOBILE = 900;
 const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.span && b.y < a.y + a.span;
 const FRONT = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2" fill="currentColor" stroke="none"/><path d="M4 15V5a1 1 0 0 1 1-1h10"/></svg>';
 const BACK = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="12" height="12" rx="2"/><path d="M20 9v10a1 1 0 0 1-1 1H9"/></svg>';
+// onde carregar não arrasta o elemento (botões, campos, links, pegas…)
+const NODRAG = 'button, a, input, textarea, select, label, option, [contenteditable="true"], [draggable="true"], [role="button"], [role="slider"], [data-nodrag], .gi-rs, .gi-del, .crs-h';
 
 export function mountGrid(root, { project, key, items, onRemove, onChange }) {
   const saved = project.layouts?.[key] || {};
@@ -27,9 +31,10 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
   // nomes dados pela equipa a cada elemento (layouts[key].titles)
   const titles = { ...(saved.titles || {}) };
   const nameOf = (it) => titles[it.id] || it.label || '';
+  // o título do elemento (o primeiro h2/h3 que não seja um botão ou link): mostra o nome dado pela equipa
+  const headOf = (it) => [...it.el.querySelectorAll('h2, h3')].find((x) => !x.closest('button, a, [contenteditable="true"]')) || null;
   const applyTitle = (it) => {
-    const l = it.g?.querySelector('.gi-l'); if (l) l.textContent = nameOf(it);
-    const h = [...it.el.querySelectorAll('h2, h3')].find((x) => !x.closest('.gi-bar')); if (!h) return;
+    const h = headOf(it); if (!h) return;
     if (!h.dataset.orig) h.dataset.orig = h.textContent;
     h.textContent = titles[it.id] || h.dataset.orig;
   };
@@ -39,13 +44,15 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
     const { error } = await sb.from('projects').update({ layouts }).eq('id', project.id);
     if (error) toast('Não foi possível guardar o nome: ' + error.message);
   }, 300);
+  // mudar o nome: no próprio título (duplo clique) ou, se o elemento não tiver título, numa caixinha no canto
   function rename(it) {
-    const l = it.g.querySelector('.gi-l'); const inp = document.createElement('input');
-    inp.className = 'gi-in'; inp.value = nameOf(it); inp.setAttribute('aria-label', 'Nome do elemento');
-    l.replaceWith(inp); inp.focus(); inp.select();
+    const h = headOf(it); const inp = document.createElement('input');
+    inp.className = h ? 'gi-in' : 'gi-in gi-in-float'; inp.value = nameOf(it); inp.setAttribute('aria-label', 'Nome do elemento');
+    if (h) { h.hidden = true; h.after(inp); } else it.g.append(inp);
+    inp.focus(); inp.select();
     let done = false;
     const finish = (ok) => {
-      if (done) return; done = true; inp.replaceWith(l);
+      if (done) return; done = true; inp.remove(); if (h) h.hidden = false;
       if (ok) { const v = inp.value.trim(); if (!v || v === it.label) delete titles[it.id]; else titles[it.id] = v; saveTitles(); }
       applyTitle(it); onChange?.();
     };
@@ -73,23 +80,31 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
   function wrap(it) {
     const g = document.createElement('div');
     g.className = 'gi'; g.dataset.gi = it.id;
-    g.innerHTML = `<div class="gi-bar" role="toolbar" aria-label="${esc(it.label || 'Elemento')}" title="Arrasta por aqui para mudar de sítio">
-        <span class="gi-grip" aria-hidden="true">⠿</span><span class="gi-l" title="Duplo clique para mudar o nome">${esc(nameOf(it))}</span><button type="button" class="gi-b" data-gname title="Mudar o nome" aria-label="Mudar o nome de ${esc(nameOf(it))}">✎</button>
-        <button type="button" class="gi-b" data-gz="front" title="Trazer para a frente" aria-label="Trazer ${esc(it.label || '')} para a frente">${FRONT}</button>
-        <button type="button" class="gi-b" data-gz="back" title="Enviar para trás" aria-label="Enviar ${esc(it.label || '')} para trás">${BACK}</button>
-        ${it.copy ? `<button type="button" class="gi-b" data-gcopy title="Copiar (depois cola noutra página com Ctrl+V)" aria-label="Copiar ${esc(it.label || '')}">${ICON.copy}</button>` : ''}
-        ${it.removable !== false ? `<button type="button" class="gi-b" data-grm title="${it.id.startsWith('x:') ? 'Apagar desta página' : 'Tirar desta página (volta pela barra da direita)'}" aria-label="Tirar ${esc(it.label || '')} desta página">${ICON.trash}</button>` : ''}
-      </div><div class="gi-c"></div><span class="gi-rs" title="Arrasta para redimensionar · duplo clique: altura automática" aria-hidden="true"></span>`;
+    const rmTitle = it.id.startsWith('x:') ? 'Apagar desta página' : 'Tirar desta página (volta pela barra da direita)';
+    g.innerHTML = `<span class="gi-edge" aria-hidden="true" title="Arrasta para mudar de sítio · botão direito: mais opções"></span><div class="gi-c"></div>
+      ${it.removable !== false ? `<button type="button" class="gi-del" data-grm title="${rmTitle}" aria-label="${it.id.startsWith('x:') ? 'Apagar' : 'Tirar'} ${esc(nameOf(it))}">${ICON.trash}</button>` : ''}
+      <span class="gi-rs" title="Arrasta para redimensionar · duplo clique: altura automática" aria-hidden="true"></span>`;
     g.querySelector('.gi-c').append(it.el);
     it.g = g;
-    g.querySelector('[data-gname]').addEventListener('click', () => rename(it));
-    g.querySelector('.gi-l').addEventListener('dblclick', () => rename(it));
     applyTitle(it);
-    g.querySelectorAll('[data-gz]').forEach((b) => b.addEventListener('click', () => restack(it.id, b.dataset.gz)));
-    g.querySelector('[data-gcopy]')?.addEventListener('click', () => it.copy());
     g.querySelector('[data-grm]')?.addEventListener('click', () => remove(it.id));
-    // arrasta-se pela barra inteira (não só pela pega)
-    g.querySelector('.gi-bar').addEventListener('pointerdown', (e) => startDrag(e, it));
+    // arrastar: pela moldura de fora (logo), ou pelas margens, pelo título e pelas zonas marcadas com data-gdrag
+    // (depois de mexer 4 px, para um clique continuar a ser um clique)
+    g.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || mobile()) return;
+      const t = e.target;
+      if (t.classList.contains('gi-edge')) return startDrag(e, it, true);
+      if (t.closest(NODRAG)) return;
+      const h = headOf(it);
+      if (t === g || t.classList.contains('gi-c') || t === it.el || (t.parentElement === it.el && !t.closest('input, textarea')) || (h && h.contains(t)) || t.closest('[data-gdrag]')) startDrag(e, it, false);
+    });
+    g.addEventListener('dblclick', (e) => { const h = headOf(it); if (h && h.contains(e.target) && !e.target.closest(NODRAG)) rename(it); });
+    g.addEventListener('contextmenu', (e) => {
+      if (mobile() || e.target.closest('input, textarea, select, [contenteditable="true"], a')) return;
+      e.preventDefault(); menu(it, e.clientX, e.clientY);
+    });
+    // recorte das imagens: a caixa do elemento acompanha o recorte (ver imgcrop.js)
+    g.addEventListener('gi-box', (e) => { e.stopPropagation(); cropBox(it, e.detail); });
     g.querySelector('.gi-rs').addEventListener('pointerdown', (e) => startResize(e, it));
     g.querySelector('.gi-rs').addEventListener('dblclick', () => { it.h = 0; place(it); fitHeight(); save(); });
     // altura automática: acompanha o conteúdo (só mexe nos outros enquanto a página se arruma sozinha)
@@ -103,7 +118,8 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
     g.style.left = leftCss(it.x); g.style.width = widthCss(it.w); g.style.top = `${it.y * ROW}px`; g.style.zIndex = String(it.z || 1);
     if (it.lockRatio) it.h = 0; // imagens: a altura segue sempre a largura (proporção da imagem)
     g.classList.toggle('fixed', !!it.h);
-    g.querySelector('.gi-c').style.height = it.h ? `${it.h * ROW - GAP}px` : '';
+    // a altura escolhida é mínima: o elemento nunca fica mais baixo do que o seu conteúdo (nada cortado)
+    const c = g.querySelector('.gi-c'); c.style.height = ''; c.style.minHeight = it.h ? `${it.h * ROW - GAP}px` : '';
   }
   // a página tem a altura do elemento que vai mais abaixo
   function fitHeight(extra = 0) {
@@ -174,15 +190,21 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
   // ---------- arrastar ----------
   let busy = null;
   const autoScroll = (y) => { if (y < 70) window.scrollBy(0, -14); else if (y > window.innerHeight - 50) window.scrollBy(0, 14); };
-  function startDrag(e, it) {
-    if (mobile() || e.button !== 0 || e.target.closest('button, input, a')) return;
-    e.preventDefault();
-    if (!free) { layout(); freeze(); }
-    const cw = colW(); const R0 = root.getBoundingClientRect();
-    const sx = e.clientX, sy = e.clientY, left0 = it.x * (cw + GAP), top0 = it.y * ROW;
-    const W = it.g.offsetWidth, H = it.g.offsetHeight; const T = targets(it);
-    let nl = left0, nt = top0, ev = e, rf = 0;
-    busy = it; root.classList.add('cg-show'); it.g.classList.add('dragging'); it.g.style.zIndex = '100000';
+  function startDrag(e, it, now) {
+    if (mobile() || e.button !== 0) return;
+    if (now) e.preventDefault();
+    const sx = e.clientX, sy = e.clientY;
+    let on = false, cw, R0, left0, top0, W, H, T, nl, nt, ev = e, rf = 0;
+    const begin = () => {
+      on = true;
+      if (!free) { layout(); freeze(); }
+      cw = colW(); R0 = root.getBoundingClientRect(); left0 = it.x * (cw + GAP); top0 = it.y * ROW;
+      W = it.g.offsetWidth; H = it.g.offsetHeight; T = targets(it); nl = left0; nt = top0;
+      busy = it; root.classList.add('cg-show'); it.g.classList.add('dragging'); it.g.style.zIndex = '100000';
+      document.body.classList.add('cg-nosel'); try { window.getSelection()?.removeAllRanges(); } catch { /* nada */ }
+      document.activeElement?.blur?.();
+    };
+    if (now) begin();
     const step = () => {
       rf = 0;
       const R = root.getBoundingClientRect();
@@ -199,12 +221,17 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
       if (nt + H + 48 > root.offsetHeight) fitHeight(nt + H);
       autoScroll(ev.clientY);
     };
-    const move = (m) => { ev = m; if (!rf) rf = requestAnimationFrame(step); };
+    const move = (m) => {
+      ev = m;
+      if (!on) { if (Math.hypot(m.clientX - sx, m.clientY - sy) < 4) return; begin(); }
+      if (!rf) rf = requestAnimationFrame(step);
+    };
     const up = () => {
       window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+      if (!on) return;
       cancelAnimationFrame(rf); if (ev !== e) step();
       it.x = r3(nl / (cw + GAP)); it.y = r3(nt / ROW); it.g.style.transform = '';
-      it.g.classList.remove('dragging'); root.classList.remove('cg-show'); showGuides(null, null); busy = null;
+      it.g.classList.remove('dragging'); root.classList.remove('cg-show'); document.body.classList.remove('cg-nosel'); showGuides(null, null); busy = null;
       place(it); fitHeight(); save(); onChange?.();
     };
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
@@ -242,6 +269,57 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
     };
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
   }
+
+  // ---------- recorte de imagem: a caixa muda com o recorte ----------
+  let box0 = null;
+  function cropBox(it, d) {
+    const g = it.g;
+    if (d.phase === 'start') {
+      if (mobile()) { d.room = null; return; }
+      if (!free) { layout(); freeze(); }
+      const cw = colW(); box0 = { L: it.x * (cw + GAP), T: it.y * ROW, W: g.offsetWidth, cw };
+      d.room = { left: box0.L, right: root.clientWidth - box0.L - box0.W, top: box0.T };
+      busy = it; g.classList.add('cropping'); g.style.zIndex = '100000'; return;
+    }
+    if (!box0) return;
+    if (d.phase === 'move') {
+      g.style.left = `${box0.L + d.dl}px`; g.style.top = `${box0.T + d.dt}px`; g.style.width = `${box0.W + d.dw}px`;
+      if (box0.T + d.dt + g.offsetHeight + 48 > root.offsetHeight) fitHeight(box0.T + d.dt + g.offsetHeight);
+      return;
+    }
+    if (d.phase === 'end') {
+      it.x = r3(Math.max(0, box0.L + d.dl) / (box0.cw + GAP)); it.y = r3(Math.max(0, box0.T + d.dt) / ROW); it.w = r3(Math.min(COLS, (box0.W + d.dw + GAP) / (box0.cw + GAP)));
+    }
+    box0 = null; busy = null; g.classList.remove('cropping'); place(it); fitHeight();
+    if (d.phase === 'end') { save(); onChange?.(); }
+  }
+
+  // ---------- menu do botão direito ----------
+  let menuEl = null;
+  const closeMenu = () => { menuEl?.remove(); menuEl = null; document.removeEventListener('pointerdown', outMenu, true); document.removeEventListener('keydown', keyMenu, true); window.removeEventListener('scroll', closeMenu, true); };
+  const outMenu = (e) => { if (menuEl && !menuEl.contains(e.target)) closeMenu(); };
+  const keyMenu = (e) => { if (e.key === 'Escape') { e.preventDefault(); closeMenu(); } };
+  function menu(it, x, y) {
+    closeMenu();
+    const ex = (it.menu?.() || []).filter(Boolean);
+    const opts = [
+      ...(it.copy ? [['copy', `${ICON.copy}<span>Copiar</span><kbd>Ctrl+C</kbd>`, () => it.copy()]] : []),
+      ['name', '<i class="gi-mi">✎</i><span>Mudar o nome</span>', () => rename(it)],
+      ['front', `${FRONT}<span>Trazer para a frente</span>`, () => restack(it.id, 'front')],
+      ['back', `${BACK}<span>Enviar para trás</span>`, () => restack(it.id, 'back')],
+      ...ex.map((o, i) => [`x${i}`, `${o.icon || '<i class="gi-mi"></i>'}<span>${esc(o.label)}</span>`, o.run]),
+      ...(it.removable !== false ? [['rm', `${ICON.trash}<span>${it.id.startsWith('x:') ? 'Apagar desta página' : 'Tirar desta página'}</span>`, () => remove(it.id), 'danger']] : []),
+    ];
+    menuEl = document.createElement('div'); menuEl.className = 'gi-menu'; menuEl.setAttribute('role', 'menu'); menuEl.setAttribute('aria-label', nameOf(it) || 'Elemento');
+    menuEl.innerHTML = `<div class="gi-mt">${esc(nameOf(it) || 'Elemento')}</div>${opts.map(([k, h, , cls]) => `${k === 'front' || k === 'rm' || k === 'x0' ? '<hr>' : ''}<button type="button" role="menuitem" class="${cls || ''}" data-mk="${k}">${h}</button>`).join('')}`;
+    document.body.append(menuEl);
+    const w = menuEl.offsetWidth, h = menuEl.offsetHeight;
+    menuEl.style.left = `${Math.max(8, Math.min(window.innerWidth - w - 8, x))}px`; menuEl.style.top = `${Math.max(8, Math.min(window.innerHeight - h - 8, y))}px`;
+    menuEl.querySelectorAll('[data-mk]').forEach((b) => b.addEventListener('click', () => { const o = opts.find((q) => q[0] === b.dataset.mk); closeMenu(); o?.[2](); }));
+    menuEl.querySelector('button')?.focus();
+    setTimeout(() => { document.addEventListener('pointerdown', outMenu, true); document.addEventListener('keydown', keyMenu, true); window.addEventListener('scroll', closeMenu, true); });
+  }
+  onLeave(closeMenu);
 
   function remove(id) {
     const it = list.find((x) => x.id === id); if (!it) return;

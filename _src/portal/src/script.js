@@ -15,6 +15,9 @@ const isUpper = (s) => /[A-ZÀ-Ý]/.test(s) && s === s.toUpperCase();
 //    e o momento do dia antes ou depois do décor
 const IE_RE = /^(?:(\d+[A-Z]?)[.)]?\s+)?(INT\.?\s*\/\s*EXT|EXT\.?\s*\/\s*INT|I\/E|INT|EXT|INTERIOR|EXTERIOR)\b\s*[.:\-–—]\s*(.+?)(?:\s+(\d+[A-Z]?))?$/i;
 const MARK_RE = /^(?:(\d+[A-Z]?)[.)]?\s+)?(?:CENA|SCENE|SC\.)\s*(?:N\.?\s*[ºo°]\s*)?(\d+[A-Z]?)\b\s*[:.\-–—)]?\s*(.*?)\s*$/i;
+// nomes iguais = mesmo décor/personagem, mesmo com acentos, hífenes ou pontuação diferentes ("STAND-UP" = "Stand up")
+export const nameKey = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+const sameName = (a, b) => nameKey(a) === nameKey(b);
 const plain = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
 const isTime = (seg) => { const u = plain(seg).replace(/[()]/g, '').trim(); return !!u && TIMES.some((t) => { const tt = plain(t); return u === tt || u.startsWith(tt + ' '); }); };
 const isIE = (line) => { const t = line.trim(); return t.length <= 90 && IE_RE.test(t) && !/[!?]$/.test(t); };
@@ -98,7 +101,7 @@ export function parseScript(raw) {
       n += 1;
       cur = { number: h.number, heading: h.heading, int_ext: h.int_ext, time_of_day: h.time, location: h.location, characters: [], lines: [] };
       scenes.push(cur);
-      if (h.location && !locOrder.includes(h.location.toUpperCase())) locOrder.push(h.location.toUpperCase());
+      if (h.location && !locOrder.some((x) => sameName(x, h.location))) locOrder.push(h.location.toUpperCase());
       i = h.last; inDlg = false;
       continue;
     }
@@ -124,8 +127,8 @@ export function parseScript(raw) {
     if (isCue) {
       const name = line.replace(/^@/, '').replace(/\^$/, '').replace(CUE_STRIP, ' ').replace(/\(.*?\)/g, '').replace(/[:\s]+$/, '').trim();
       if (name && name.length >= 2 && !/^(INT|EXT|CORTA|FADE|CUT|SUPER|TÍTULO|LEGENDA|INSERT|INSERIR|FLASHBACK|MONTAGEM|FIM|CENA|SCENE|CÂMERA|CAMERA)\b/.test(name)) {
-        if (!cur.characters.includes(name)) cur.characters.push(name);
-        if (!charOrder.includes(name)) charOrder.push(name);
+        if (!cur.characters.some((x) => sameName(x, name))) cur.characters.push(charOrder.find((x) => sameName(x, name)) || name);
+        if (!charOrder.some((x) => sameName(x, name))) charOrder.push(name);
       }
     }
   }

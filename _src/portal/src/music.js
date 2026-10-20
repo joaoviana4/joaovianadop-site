@@ -5,6 +5,7 @@ import { offerActions } from './canvas.js';
 import { placeProps } from './sceneinfo.js';
 import { geoPanel } from './placegeo.js';
 import { saveLater, sb, BUCKET, esc, toast, confirmBox, modal, ICON, signedUrls, signedUrl, uploadImage, onLeave } from './lib.js';
+import { locGroupBar, groupOf, groupedOrder } from './locgroup.js';
 import { entMode, entUrls, modeToggle, bindMode, entItems, photoField, bindPhoto, bindEdits, placePhotos, bindPlacePhotos } from './entview.js';
 import { shotCard, bindShots, shotViewer } from './fiction.js';
 import { mountLayout, fullscreenButton } from './layout.js';
@@ -400,9 +401,9 @@ async function entityList(main, p, f, kind, base) {
   const path = isPlace ? 'decors' : 'elenco';
   const mk = isPlace ? 'places' : 'people'; const mode = entMode(mk);
   const urls = await entUrls([isPlace ? f.locations : f.characters]);
-  const item = (e) => { const n = sectionsWith(f, kind, e.id).length; return { e, href: `${base}/${path}/${e.id}`, title: e.name, sub: isPlace ? esc(e.info?.address || 'Sem morada') : esc(e.actor || (e.info?.extra ? 'Figurante' : 'Sem nome real')), meta: n ? `${n} ${n === 1 ? 'secção' : 'secções'}` : '<span class="muted">Ainda em nenhuma secção</span>' }; };
+  const item = (e, child = false) => { const n = sectionsWith(f, kind, e.id).length; return { e, child, href: `${base}/${path}/${e.id}`, title: e.name, sub: isPlace ? (child ? esc(`Em ${groupOf(e, f.locations)?.name || ''}${e.info?.address ? ` · ${e.info.address}` : ''}`) : esc(e.info?.address || 'Sem morada')) : esc(e.actor || (e.info?.extra ? 'Figurante' : 'Sem nome real')), meta: n ? `${n} ${n === 1 ? 'secção' : 'secções'}` : '<span class="muted">Ainda em nenhuma secção</span>' }; };
   const all = [];
-  const view = (list) => { const its = list.map(item).map((x) => ({ ...x, edit: isPlace ? { table: 'locations', field: 'info.address', placeholder: 'Morada ou link do Google Maps', label: 'Morada' } : { table: 'characters', field: 'actor', placeholder: x.e.info?.extra ? 'Nome real (opcional)' : 'Nome real', label: 'Nome real' } })); all.push(...its); return entItems(its, { mode, urls, place: isPlace }); };
+  const view = (list) => { const its = (isPlace ? groupedOrder(list) : list.map((l) => ({ l, child: false }))).map(({ l, child }) => item(l, child)).map((x) => ({ ...x, edit: isPlace ? { table: 'locations', field: 'info.address', placeholder: 'Morada ou link do Google Maps', label: 'Morada' } : { table: 'characters', field: 'actor', placeholder: x.e.info?.extra ? 'Nome real (opcional)' : 'Nome real', label: 'Nome real' } })); all.push(...its); return entItems(its, { mode, urls, place: isPlace }); };
   const people = f.characters.filter((c) => !c.info?.extra), extras = f.characters.filter((c) => c.info?.extra);
   const any = isPlace ? f.locations.length : f.characters.length;
   main.innerHTML = `<div class="row between wrap-gap"><h1 class="h1 pm-title">${isPlace ? 'Décors' : 'Atores e figurantes'}</h1>
@@ -447,6 +448,7 @@ async function entityPage(main, p, f, kind, id, base, cleanup) {
         <div data-qi></div>${sceneNums(sl, { what: 'Secções' })}<div data-acts></div></div>
     </header>
     ${!isPlace && !info.extra ? '<section class="panel" data-wsum></section>' : ''}
+    ${isPlace ? '<div data-lgrp></div>' : ''}
     ${isPlace ? await placePhotos(e) : ''}
     ${isPlace ? '<section class="panel bp-wrap" data-mb hidden></section>' : ''}
     ${isPlace ? `<section class="panel" data-lmsec hidden><div class="row between"><h2 class="h3">Mapas de luz</h2><button type="button" class="btn ghost sm" data-newlm>${ICON.plus} Mapa de luz</button></div><div data-lms></div></section>` : ''}
@@ -456,6 +458,8 @@ async function entityPage(main, p, f, kind, id, base, cleanup) {
   pageButtons(main.querySelector('[data-pp]'), p, { type: isPlace ? 'location' : 'character', id: e.id, label: e.name,
     legacy: { get: () => info.notes, save: async (v) => { info.notes = v; e.info = { ...(e.info || {}), notes: v }; const { error } = await sb.from(table).update({ info: e.info }).eq('id', e.id); if (error) toast('Não foi possível guardar: ' + error.message); } } });
   if (isPlace) {
+    e._parent = groupOf(e, f.locations);
+    locGroupBar(main.querySelector('[data-lgrp]'), p, e, f.locations, base, 'decors');
     const offer = () => offerActions(main, main.querySelector('[data-acts]'), [
       ...(!(e.photos || []).length ? [{ label: 'Fotos', icon: ICON.image, title: 'Juntar fotos do décor', run: () => main.querySelector('[data-addph]').click() }] : []),
       ...(!e.info?.moodboard_id ? [{ label: 'Moodboard', icon: ICON.board, title: 'Criar o moodboard deste décor (aparece aqui na página)', run: async () => { const bid = await createMoodboard(p, { table: 'locations', row: e, key: 'location_id' }); if (!bid) return; Object.assign(info, { moodboard_id: bid }); await moodboardView(main.querySelector('[data-mb]'), p, { row: e, base, after: () => offer() }); main.querySelector('[data-mb]').scrollIntoView({ behavior: 'smooth', block: 'center' }); offer(); } }] : []),

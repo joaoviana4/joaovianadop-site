@@ -130,6 +130,10 @@ export function fullscreenButton(el, key, label = 'Ecrã inteiro') {
     const on = fsOn.has(key);
     el.classList.toggle('fs-on', on); document.body.classList.toggle('fs-lock', fsOn.size > 0);
     b.classList.toggle('fs-float', on);
+    // dentro de uma página livre, cada elemento tem a sua camada (z-index): sem isto o ecrã inteiro e o botão de sair
+    // ficavam por baixo da barra de cima. Os "pais" deixam de ter camada própria enquanto está em ecrã inteiro.
+    document.querySelectorAll('.fs-anc').forEach((x) => x.classList.remove('fs-anc'));
+    document.querySelectorAll('.fs-on, .fs-btn.fs-float').forEach((n) => { for (let x = n.parentElement; x && x !== document.body; x = x.parentElement) if (!x.classList.contains('fs-on')) x.classList.add('fs-anc'); });
     b.innerHTML = `${on ? ICON.close : ICON.fit}<span>${on ? 'Sair do ecrã inteiro' : label}</span>`;
   };
   b.addEventListener('click', () => { if (fsOn.has(key)) fsOn.delete(key); else fsOn.add(key); apply(); });
@@ -139,4 +143,4 @@ export function fullscreenButton(el, key, label = 'Ecrã inteiro') {
   apply();
   return b;
 }
-export function clearFullscreen() { fsOn.clear(); document.body.classList.remove('fs-lock'); }
+export function clearFullscreen() { fsOn.clear(); document.body.classList.remove('fs-lock'); document.querySelectorAll('.fs-anc').forEach((x) => x.classList.remove('fs-anc')); }

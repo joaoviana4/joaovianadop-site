@@ -23,11 +23,48 @@ const SLOW_MS = 700;
 export const clearReadCache = () => { readCache.clear(); lastGood.clear(); };
 let staleT = 0;
 const notifyStale = () => { clearTimeout(staleT); staleT = setTimeout(() => window.dispatchEvent(new Event('portal-stale')), 250); };
-// leitura com limite de tempo: se o servidor ficar pendurado, tenta outra vez em vez de deixar a página "A carregar…"
+// ao recarregar a página (F5) no mesmo separador, as últimas respostas boas continuam disponíveis (sessionStorage):
+// a página aparece logo e atualiza-se sozinha quando chegar o que é novo
+const LG_KEY = 'portal-lastgood';
+try {
+  const j = JSON.parse(sessionStorage.getItem(LG_KEY) || 'null'); sessionStorage.removeItem(LG_KEY);
+  if (Array.isArray(j)) j.forEach(([k, v]) => { if (v && Date.now() - v.at < STALE_MS) lastGood.set(k, v); });
+} catch { /* sem armazenamento */ }
+window.addEventListener('pagehide', () => {
+  try {
+    let tot = 0; const out = [];
+    for (const [k, v] of [...lastGood].reverse()) {
+      const n = (v.body?.length || 0) + k.length; if (n > 200000) continue; if (tot + n > 1500000) break;
+      tot += n; out.push([k, { body: v.body, status: v.status, ct: v.ct, cr: v.cr, at: v.at }]);
+    }
+    sessionStorage.setItem(LG_KEY, JSON.stringify(out.reverse()));
+  } catch { /* sem espaço: não faz mal */ }
+});
+// leitura que não fica pendurada: às vezes um pedido fica parado no caminho e nem chega ao servidor. Se ao fim de
+// 2 s ainda não respondeu, faz-se o mesmo pedido outra vez, ao lado, e fica-se com o que chegar primeiro (o outro é
+// cancelado). Cada tentativa desiste aos 15 s.
+const HEDGE_MS = 2000;
 function readFetch(input, init) {
   if (init.signal) return fetch(input, init);
-  const attempt = (ms) => { const ac = new AbortController(); const t = setTimeout(() => ac.abort(), ms); return fetch(input, { ...init, signal: ac.signal }).finally(() => clearTimeout(t)); };
-  return attempt(6000).catch((e) => { if (e?.name === 'AbortError') return attempt(15000); throw e; });
+  return new Promise((resolve, reject) => {
+    const acs = []; let done = false, n = 0, fails = 0, lastErr = null, hedge = 0;
+    const go = () => {
+      const ac = new AbortController(); acs.push(ac); n++;
+      const t = setTimeout(() => ac.abort(), 15000);
+      fetch(input, { ...init, signal: ac.signal }).then((r) => {
+        clearTimeout(t); if (done) return;
+        done = true; clearTimeout(hedge); acs.forEach((a) => { if (a !== ac) a.abort(); }); resolve(r);
+      }, (e) => {
+        clearTimeout(t); if (done) return;
+        fails++; lastErr = e;
+        // falhou já (sem rede, etc.) antes de haver segunda tentativa: tenta logo outra vez, uma só
+        if (n === 1) { clearTimeout(hedge); if (e?.name === 'AbortError') { done = true; reject(e); } else go(); return; }
+        if (fails >= n) { done = true; reject(lastErr); }
+      });
+    };
+    go();
+    hedge = setTimeout(() => { if (!done && n === 1) go(); }, HEDGE_MS);
+  });
 }
 function cachedFetch(input, init = {}) {
   const url = typeof input === 'string' ? input : input.url;
@@ -271,6 +308,8 @@ const saveUrls = () => { clearTimeout(urlSaveT); urlSaveT = setTimeout(() => { t
 const isWeb = (p) => /^https?:\/\//.test(p || '');
 // 'vf:<caminho>' = fotografia do Viewfinder (balde photos do BlackCat); o resto = ficheiros do projeto
 const bucketOf = (path) => (String(path).startsWith('vf:') ? ['photos', path.slice(3)] : [BUCKET, path]);
+// endereço já conhecido (sem pedir nada ao servidor), ou null
+export const knownUrl = (path) => { if (!path) return null; if (isWeb(path)) return path; const c = urlCache.get(path); return c && c.exp > Date.now() ? c.url : null; };
 export async function signedUrl(path) {
   if (!path) return null;
   if (isWeb(path)) return path;

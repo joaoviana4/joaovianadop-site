@@ -1,7 +1,8 @@
 import { onWrite } from './undo.js';
 import { saveLater, sb, BUCKET, esc, toast, modal, confirmBox, ICON, signedUrl, signedUrls, uploadImage, fmtDate, onLeave } from './lib.js';
+import { locGroupBar, groupOf, groupedOrder } from './locgroup.js';
 import { entMode, entUrls, modeToggle, bindMode, entItems, photoField, bindPhoto, bindEdits } from './entview.js';
-import { parseScript, fileToText, eighthsLabel } from './script.js';
+import { parseScript, fileToText, eighthsLabel, nameKey } from './script.js';
 import { mountReader } from './scriptview.js';
 import { sceneInfo, placeProps } from './sceneinfo.js';
 import { createMoodboard, moodboardView } from './moodboard.js';
@@ -170,9 +171,9 @@ function guiao(main, p, f, _sub, base) {
 }
 
 async function applyScript(p, f, r) {
-  const key = (s) => s.trim().toUpperCase();
+  const key = (s) => nameKey(s);
   const locs = new Map(f.locations.map((l) => [key(l.name), l]));
-  const newLocs = r.locations.filter((n) => !locs.has(n)).map((name, i) => ({ project_id: p.id, name, position: f.locations.length + i }));
+  const newLocs = r.locations.filter((n) => !locs.has(key(n))).map((name, i) => ({ project_id: p.id, name, position: f.locations.length + i }));
   if (newLocs.length) { const { data } = await sb.from('locations').insert(newLocs).select(); (data || []).forEach((l) => locs.set(key(l.name), l)); }
   const chars = new Map(f.characters.map((c) => [key(c.name), c]));
   const newChars = r.characters.filter((n) => !chars.has(key(n))).map((name, i) => ({ project_id: p.id, name, position: f.characters.length + i }));
@@ -466,7 +467,7 @@ async function decors(main, p, f, sub, base, cleanup) {
   const count = (id) => f.scenes.filter((s) => s.location_id === id).length;
   const urls = await entUrls([f.locations]);
   const mode = entMode('places');
-  const items = f.locations.map((l) => ({ e: l, href: `${base}/decors/${l.id}`, title: l.name, sub: esc(l.info?.morada || 'Sem morada'), meta: `${ieOf(l.id, f) ? `<span class="ie-tag">${ieOf(l.id, f)}</span> ` : ''}${count(l.id)} ${count(l.id) === 1 ? 'cena' : 'cenas'}`, edit: { table: 'locations', field: 'info.morada', placeholder: 'Morada ou link do Google Maps', label: 'Morada' } }));
+  const items = groupedOrder(f.locations).map(({ l, child }) => ({ e: l, child, href: `${base}/decors/${l.id}`, title: l.name, sub: child ? esc(`Em ${groupOf(l, f.locations)?.name || ''}${l.info?.morada ? ` · ${l.info.morada}` : ''}`) : esc(l.info?.morada || 'Sem morada'), meta: `${ieOf(l.id, f) ? `<span class="ie-tag">${ieOf(l.id, f)}</span> ` : ''}${count(l.id)} ${count(l.id) === 1 ? 'cena' : 'cenas'}`, edit: { table: 'locations', field: 'info.morada', placeholder: 'Morada ou link do Google Maps', label: 'Morada' } }));
   main.innerHTML = `<div class="row between wrap-gap"><h1 class="h1 pm-title">Décors</h1><div class="row">${f.locations.length ? modeToggle('places') : ''}<button type="button" class="btn ghost" data-add>${ICON.plus} Décor</button></div></div>
     ${f.locations.length ? entItems(items, { mode, urls, place: true }) : '<p class="empty-note">Ainda não há décors. Aparecem ao importar o guião.</p>'}`;
   bindMode(main, 'places', () => decors(main, p, f, sub, base, cleanup));
@@ -483,6 +484,7 @@ async function decor(main, p, f, id, base, cleanup) {
   const sl = sceneList(scenes, f, base);
   main.innerHTML = `<nav class="row between"><a href="${base}/decors" class="link-btn">${ICON.back} Décors</a><span class="row"><span data-pp></span><button type="button" class="icon-btn" data-delent title="Apagar décor" aria-label="Apagar décor">${ICON.trash}</button></span></nav>
     <header class="qi-hero no-photo"><div class="qi-main"><span class="small muted">Décor</span><input class="title-in h1" data-ename value="${esc(l.name)}" aria-label="Nome do décor"><div class="ent-tags">${ieOf(l.id, f) ? `<span class="ie-tag lg" title="Pelas cenas do guião">${IE_LABEL[ieOf(l.id, f)]}</span>` : ''}${(() => { const tods = [...new Set(scenes.map((x) => x.time_of_day).filter(Boolean))]; return tods.length ? `<span class="muted small">${esc(tods.join(' · '))}</span>` : ''; })()}</div><div data-qi></div>${sceneNums(sl, { what: 'Cenas aqui', empty: 'Ainda não há cenas neste décor.' })}<div data-acts></div></div></header>
+    <div data-lgrp></div>
     <section class="panel" ${photos.length ? '' : 'hidden'} data-phsec><div class="row between"><h2 class="h3">Fotos de repérage</h2><button type="button" class="btn ghost sm" data-addph>${ICON.plus} Fotos</button></div>
       <div class="photo-grid" data-photos>${photos.map((ph, i) => `<figure><img src="${esc(urls[ph.path] || '')}" alt=""><button type="button" class="icon-btn sm" data-rmph="${i}" aria-label="Tirar foto">${ICON.close}</button></figure>`).join('') || '<p class="muted small">Ainda sem fotos. Também podes largá-las aqui ou colar com Ctrl+V.</p>'}</div></section>
     <section class="panel bp-wrap" data-mb hidden></section>
@@ -513,6 +515,8 @@ async function decor(main, p, f, id, base, cleanup) {
     save: async (patch) => { l.info = { ...(l.info || {}), ...patch }; const { error } = await sb.from('locations').update({ info: l.info }).eq('id', l.id); if (error) toast('Não foi possível guardar: ' + error.message); },
   });
   placeProps(main.querySelector('[data-dprops]'), p, l, scenes.map((s) => s.id), base).then((n) => { const el = main.querySelector('[data-dprops]'); if (el) el.hidden = !n; });
+  l._parent = groupOf(l, f.locations);
+  locGroupBar(main.querySelector('[data-lgrp]'), p, l, f.locations, base, 'decors');
   if (!main.querySelector('[data-geo]').hidden) geoPanel(main.querySelector('[data-geo]'), p, l);
   { const sv = debounce((v) => sb.from('locations').update({ name: v }).eq('id', l.id).then(({ error }) => error && toast('Não foi possível guardar: ' + error.message))); main.querySelector('[data-ename]').addEventListener('input', (e) => { l.name = e.target.value; if (l.name.trim()) sv(l.name.trim()); }); }
   sb.from('boards').select('id, title').eq('project_id', p.id).eq('kind', 'lightmap').eq('data->>location_id', l.id).then(({ data }) => {

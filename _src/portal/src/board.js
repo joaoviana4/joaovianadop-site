@@ -1,7 +1,6 @@
 import { trackWrite, DB_SCHEMA, sb, BUCKET, esc, signedUrl, signedUrls, uploadImage, toast, modal, confirmBox, ICON, onLeave } from './lib.js';
 import { ytId } from './music.js';
-import { cropDialog, cropAspect, cropImgStyle, naturalSize, isFull } from './imgcrop.js';
-const CROP_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg>';
+import { cropSliders, cropAspect, cropImgStyle } from './imgcrop.js';
 const DECOMP_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 17.5h7M17.5 14v7"/></svg>';
 
 // Board infinito à maneira do Milanote: cada cartão é uma linha própria na base de dados,
@@ -243,7 +242,8 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     switch (it.kind) {
       case 'note': return `<div class="txt note-txt" data-field="text" style="${fmtStyle('note', d.fmt)}">${d.html ? cleanHtml(d.html) : esc(d.text || '')}</div>`;
       case 'title': return `<div class="txt title-txt" data-field="text" style="${fmtStyle('title', d.fmt)}">${d.html ? cleanHtml(d.html) : esc(d.text || 'Título')}</div>`;
-      case 'image': return `${urls[d.path] ? (d.crop ? `<div class="img-crop"><img src="${esc(urls[d.path])}" alt="${esc(d.caption || '')}" draggable="false" style="${cropImgStyle(d.crop)}"></div>` : `<img src="${esc(urls[d.path])}" alt="${esc(d.caption || '')}" draggable="false">`) : '<div class="img-wait">A carregar…</div>'}${d.caption ? `<div class="caption">${esc(d.caption)}</div>` : ''}${urls[d.path] ? `<button type="button" class="cov-btn" data-ui="crop" title="Recortar" aria-label="Recortar a imagem">${CROP_ICON}</button>` : ''}`;
+      // recorte: pegas a meio de cada lado da imagem (cropSliders, em cardEl)
+      case 'image': return `${urls[d.path] ? `<div class="img-crop"><img src="${esc(urls[d.path])}" alt="${esc(d.caption || '')}" draggable="false" style="${d.crop ? cropImgStyle(d.crop) : 'width:100%;height:100%;object-fit:cover'}"></div>` : '<div class="img-wait">A carregar…</div>'}${d.caption ? `<div class="caption">${esc(d.caption)}</div>` : ''}`;
       case 'palette': return `<div class="txt card-h" data-field="title">${esc(d.title || 'Paleta')}</div>
         <div class="swatches">${(d.colors || []).map((c, i) => `<div class="sw"><button type="button" data-ui="color" data-i="${i}" style="background:${esc(c)}" aria-label="Mudar cor ${esc(c)}"></button><span>${esc(c.toUpperCase())}</span><button type="button" class="x" data-ui="rmcolor" data-i="${i}" aria-label="Tirar cor">${ICON.close}</button></div>`).join('')}
         <button type="button" class="sw-add" data-ui="addcolor" aria-label="Juntar cor">${ICON.plus}</button></div>`;
@@ -269,6 +269,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     if (it.kind === 'palette') it.w = Math.max(it.w, 28 + (it.data?.colors || []).length * 70 + 40);
     el.style.cssText = `left:${it.x}px;top:${it.y}px;width:${it.w}px;height:${it.h}px;z-index:${it.z}`;
     el.innerHTML = `${inner(it)}<div class="rs" data-rs aria-hidden="true"></div>`;
+    if (it.kind === 'image') imageCrop(it, el);
     const bg = it.data?.bg;
     el.classList.toggle('dark-bg', !!bg && isDark(bg) && it.kind !== 'title');
     el.classList.toggle('light-tile', it.kind === 'board' && !!bg && !isDark(bg));
@@ -281,6 +282,33 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     el.classList.toggle('card-locked', !!lk);
     if (lk) { el.style.setProperty('--lk', lk.color || '#F08A24'); el.dataset.lockName = lk.name; } else delete el.dataset.lockName;
     return el;
+  }
+  // recortar na própria imagem: a imagem não muda de escala, o cartão acompanha o recorte (igual às páginas)
+  function imageCrop(it, el) {
+    const fr = el.querySelector('.img-crop'); if (!fr) return;
+    const img = fr.querySelector('img');
+    // imagens antigas sem tamanho guardado: lê-se quando a imagem carregar
+    if (!it.data?.w || !it.data?.h) { img?.addEventListener('load', () => { if (!img.naturalWidth) return; it.data = { ...(it.data || {}), w: img.naturalWidth, h: img.naturalHeight }; imageCrop(it, el); }, { once: true }); return; }
+    let s0 = null, cc = null;
+    const nat = () => ({ w: it.data.w, h: it.data.h });
+    cropSliders(fr, {
+      nat, get: () => it.data?.crop, zoom: () => st.view.k,
+      apply: (c) => { cc = c; fr.querySelector('img').style.cssText = cropImgStyle(c); },
+      box: {
+        start: () => { mark(it, 'crop'); s0 = { x: it.x, y: it.y, w: it.w, h: it.h }; return { left: Infinity, right: Infinity, top: Infinity }; },
+        move: (dl, dt, dw) => {
+          it.x = Math.round(s0.x + dl); it.y = Math.round(s0.y + dt); it.w = Math.round(s0.w + dw);
+          it.h = Math.round(it.w / (cropAspect(cc, it.data.w, it.data.h) || 1));
+          Object.assign(el.style, { left: `${it.x}px`, top: `${it.y}px`, width: `${it.w}px`, height: `${it.h}px` }); placeBar();
+        },
+        end: () => {},
+        cancel: () => { Object.assign(it, s0); cardEl(it); placeBar(); },
+      },
+      commit: (c) => {
+        const d = { ...(it.data || {}) }; if (c) d.crop = c; else delete d.crop;
+        it.data = d; cardEl(it); placeBar(); save(it, ['data', 'x', 'y', 'w', 'h']);
+      },
+    });
   }
   function renderAll() { world.innerHTML = ''; [...items.values()].sort((a, b) => a.z - b.z).forEach(cardEl); }
   function select(id) {
@@ -599,7 +627,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
 
   // ---------- botões dentro dos cartões ----------
   async function onUi(btn, it) {
-    if (!['link', 'media', 'play', 'openboard', 'decomp', 'cover', 'crop'].includes(btn.dataset.ui)) mark(it, 'ui-' + btn.dataset.ui);
+    if (!['link', 'media', 'play', 'openboard', 'decomp', 'cover'].includes(btn.dataset.ui)) mark(it, 'ui-' + btn.dataset.ui);
     const d = { ...(it.data || {}) }; const i = +btn.dataset.i;
     switch (btn.dataset.ui) {
       case 'toggle': d.items = d.items.map((x, j) => (j === i ? { ...x, done: !x.done } : x)); break;
@@ -627,16 +655,6 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
       case 'openboard': return d.board_id && onOpenBoard(d.board_id);
       case 'cover': return coverMenu(it);
       case 'decomp': return d.board_id && decompose(d.board_id, it);
-      case 'crop': {
-        // modo de recorte; depois o cartão fica com a proporção da parte recortada (mesma largura)
-        const url = urls[d.path]; if (!url) return;
-        if (!d.w) { const n = await naturalSize(url); if (!n) return; d.w = n.w; d.h = n.h; }
-        const c = await cropDialog(url, d.crop, { w: d.w, h: d.h }); if (!c) return;
-        mark(it, 'crop');
-        if (isFull(c)) delete d.crop; else d.crop = c;
-        it.data = d; it.h = Math.round(it.w / (cropAspect(d.crop, d.w, d.h) || 1));
-        cardEl(it); save(it, ['data', 'h']); return;
-      }
       case 'link': case 'media': return;
       case 'play': st.playing = it.id; cardEl(it); return;
       default: return;

@@ -24,12 +24,12 @@ export function entItems(items, { mode, urls, place = false }) {
   const ed = (it) => `<input class="ent-ed" data-ented="${esc(it.e.id)}" value="${esc(editValue(it))}" placeholder="${esc(it.edit.placeholder || '')}" aria-label="${esc(it.edit.label || it.edit.placeholder || '')} de ${esc(it.title)}">`;
   if (mode === 'list') {
     return `<div class="ent-list">${items.map((it, i) => { const { e, href, title, sub, meta } = it; return it.edit
-      ? `<div class="ent-row ed"><a href="${href}" class="ent-ra" tabindex="-1" aria-hidden="true">${pic(e, title, 'ent-th')}</a><a href="${href}" class="ent-rt"><strong>${esc(title)}</strong></a>${ed(it)}<span class="small">${meta}</span><a href="${href}" class="ent-rc" aria-label="Abrir ${esc(title)}">${ICON.chev}</a></div>`
-      : `<a class="ent-row" href="${href}">${pic(e, title, 'ent-th')}<strong>${esc(title)}</strong><span class="muted small">${sub}</span><span class="small">${meta}</span>${ICON.chev}</a>`; }).join('')}</div>`;
+      ? `<div class="ent-row ed${it.child ? ' ent-child' : ''}"><a href="${href}" class="ent-ra" tabindex="-1" aria-hidden="true">${pic(e, title, 'ent-th')}</a><a href="${href}" class="ent-rt"><strong>${esc(title)}</strong></a>${ed(it)}<span class="small">${meta}</span><a href="${href}" class="ent-rc" aria-label="Abrir ${esc(title)}">${ICON.chev}</a></div>`
+      : `<a class="ent-row${it.child ? ' ent-child' : ''}" href="${href}">${pic(e, title, 'ent-th')}<strong>${esc(title)}</strong><span class="muted small">${sub}</span><span class="small">${meta}</span>${ICON.chev}</a>`; }).join('')}</div>`;
   }
   return `<div class="ent-tiles">${items.map((it, i) => { const { e, href, title, sub, meta } = it; return it.edit
-    ? `<div class="ent-tile ed"><a href="${href}" class="ent-ta">${pic(e, title, 'ent-ph')}<span class="ent-tb"><strong>${esc(title)}</strong></span></a><span class="ent-tb ent-tb2">${ed(it)}<span class="small">${meta}</span></span></div>`
-    : `<a class="ent-tile" href="${href}">${pic(e, title, 'ent-ph')}<span class="ent-tb"><strong>${esc(title)}</strong><span class="muted small">${sub}</span><span class="small">${meta}</span></span></a>`; }).join('')}</div>`;
+    ? `<div class="ent-tile ed${it.child ? ' ent-child' : ''}"><a href="${href}" class="ent-ta">${pic(e, title, 'ent-ph')}<span class="ent-tb"><strong>${esc(title)}</strong></span></a><span class="ent-tb ent-tb2">${ed(it)}<span class="small">${meta}</span></span></div>`
+    : `<a class="ent-tile${it.child ? ' ent-child' : ''}" href="${href}">${pic(e, title, 'ent-ph')}<span class="ent-tb"><strong>${esc(title)}</strong><span class="muted small">${sub}</span><span class="small">${meta}</span></span></a>`; }).join('')}</div>`;
 }
 const editValue = (it) => { const f = it.edit.field; return f.startsWith('info.') ? it.e.info?.[f.slice(5)] || '' : it.e[f] || ''; };
 // grava o que se escreve nos campos da lista (cada linha à sua vez)

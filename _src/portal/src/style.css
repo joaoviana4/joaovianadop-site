@@ -3108,3 +3108,62 @@ body:has(.pv-zoom) .mp { bottom: 70px; }
 .crp-h.n { left: calc(50% - 7px); top: -7px; cursor: ns-resize; } .crp-h.s { left: calc(50% - 7px); bottom: -7px; cursor: ns-resize; }
 .crp-h.w { top: calc(50% - 7px); left: -7px; cursor: ew-resize; } .crp-h.e { top: calc(50% - 7px); right: -7px; cursor: ew-resize; }
 .crp-ratios button[aria-checked="true"] { background: var(--cream); color: var(--ink); font-weight: 600; }
+
+/* décors no mesmo local (agrupados): recuados por baixo do décor principal */
+.ent-row.ent-child { margin-left: 28px; border-left: 2px solid var(--line2); }
+.ent-tile.ent-child { box-shadow: inset 3px 0 0 var(--line2); }
+.loc-grp { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: -4px 0 14px; }
+.loc-grp-sel { display: inline-flex; align-items: center; gap: 8px; }
+.loc-grp select { font: inherit; font-size: 14px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line2); background: var(--panel); color: var(--text); }
+.cg.cg-free .gi.fixed .gi-c { overflow: visible; }
+.cg.cg-free .gi.fixed .gi-c { display: flex; flex-direction: column; } .cg.cg-free .gi.fixed .gi-c > * { flex: 1 1 auto; }
+.sr-fsout { width: auto !important; padding: 0 10px !important; gap: 6px; display: inline-flex; align-items: center; } .sr-fsout svg { width: 14px; height: 14px; }
+
+/* ===== páginas: elementos sem barra de botões (20 out) =====
+   arrasta-se pela moldura de fora, pelas margens e pelo título; caixote no canto; o resto no botão direito */
+.cg.cg-free > .gi > .gi-edge { position: absolute; inset: -10px; border-radius: 20px; cursor: grab; z-index: 0; touch-action: none; transition: box-shadow .12s, background-color .12s; }
+.cg.cg-free > .gi > .gi-c { position: relative; z-index: 1; }
+.cg.cg-free > .gi:hover > .gi-edge { box-shadow: inset 0 0 0 1px var(--line2); background-color: rgba(127, 127, 127, .06); }
+.cg.cg-free > .gi.dragging > .gi-edge { cursor: grabbing; }
+.cg.cg-free [data-gdrag] { cursor: grab; }
+.cg.cg-free [data-gdrag] :is(button, a, input, textarea, select) { cursor: pointer; }
+.cg.cg-free [data-gdrag] :is(input, textarea) { cursor: text; }
+.cg.cg-stack > .gi > .gi-edge { display: none; }
+.gi-del { position: absolute; top: -12px; right: -12px; z-index: 7; width: 26px; height: 26px; padding: 0; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--line2); background: var(--panel2); color: var(--muted); opacity: 0; pointer-events: none; transition: opacity .12s, background-color .12s, color .12s; cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, .25); }
+.gi:hover > .gi-del, .gi-del:focus-visible { opacity: 1; pointer-events: auto; }
+.gi-del:hover { color: #fff; background: #d64545; border-color: #d64545; }
+.gi-del svg { width: 13px; height: 13px; }
+.cg.cg-stack > .gi > .gi-del { top: 6px; right: 6px; }
+.gi.dragging > .gi-del, .gi.cropping > .gi-del, .gi.dragging > .gi-rs, .gi.cropping > .gi-rs { opacity: 0 !important; pointer-events: none !important; }
+.gi.cropping { z-index: 100000 !important; }
+body.cg-nosel, body.cg-nosel * { user-select: none !important; -webkit-user-select: none !important; cursor: grabbing !important; }
+.gi-in { font: inherit; font-size: inherit; font-weight: 600; padding: 2px 8px; width: min(100%, 320px); }
+.gi-in.gi-in-float { position: absolute; top: 8px; left: 8px; z-index: 8; font-size: 13px; font-weight: 500; box-shadow: 0 6px 18px rgba(0, 0, 0, .3); }
+/* menu do botão direito */
+.gi-menu { position: fixed; z-index: 3000; min-width: 220px; max-width: 300px; padding: 6px; border-radius: 12px; background: var(--panel2); border: 1px solid var(--line2); box-shadow: 0 14px 40px rgba(0, 0, 0, .35); display: flex; flex-direction: column; }
+.gi-menu .gi-mt { padding: 4px 10px 6px; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gi-menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 2px; }
+.gi-menu button { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border: 0; background: none; color: var(--text); border-radius: 8px; font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; }
+.gi-menu button:hover, .gi-menu button:focus-visible { background: rgba(127, 127, 127, .16); outline: none; }
+.gi-menu button svg, .gi-menu .gi-mi { width: 15px; height: 15px; flex: none; font-style: normal; display: grid; place-items: center; font-size: 13px; }
+.gi-menu kbd { margin-left: auto; font: inherit; font-size: 11px; color: var(--muted); }
+.gi-menu .danger { color: #e05555; }
+/* recorte na própria imagem: uma pega a meio de cada lado */
+.crs-h { position: absolute; z-index: 3; display: grid; place-items: center; opacity: 0; transition: opacity .12s; touch-action: none; }
+.crs-h i { display: block; background: #fff; border-radius: 4px; box-shadow: 0 0 0 1px rgba(0, 0, 0, .35), 0 2px 6px rgba(0, 0, 0, .45); }
+.crs-h.n, .crs-h.s { left: 50%; width: 64px; height: 20px; margin-left: -32px; cursor: ns-resize; }
+.crs-h.n { top: 0; } .crs-h.s { bottom: 0; }
+.crs-h.n i, .crs-h.s i { width: 40px; height: 5px; }
+.crs-h.e, .crs-h.w { top: 50%; width: 20px; height: 64px; margin-top: -32px; cursor: ew-resize; }
+.crs-h.w { left: 0; } .crs-h.e { right: 0; }
+.crs-h.e i, .crs-h.w i { width: 5px; height: 40px; }
+:hover > .crs-h, .crs-on > .crs-h { opacity: 1; }
+.crs-on { outline: 2px solid var(--blue, #0071e3); outline-offset: 0; }
+img.crs-ghost { position: absolute; z-index: 0; opacity: .3; pointer-events: none; max-width: none !important; border-radius: 0 !important; }
+body.crs-busy, body.crs-busy * { user-select: none !important; -webkit-user-select: none !important; }
+.cg.cg-stack .crs-h { display: none; }
+.cv-img-cap { position: absolute; left: 10px; top: 10px; z-index: 4; padding: 4px 10px; border-radius: 999px; border: 0; background: rgba(12, 12, 18, .72); color: #fff; font: inherit; font-size: 12px; opacity: 0; transition: opacity .12s; cursor: pointer; }
+.cv-img:hover .cv-img-cap, .cv-img-cap:focus-visible { opacity: 1; }
+.k-image:has(> .crs-on), .card:has(> .crs-on) { overflow: visible !important; }
+main > .cv-headblk + .ov { margin-top: 18px; }
+.fs-anc { z-index: auto !important; isolation: auto !important; transform: none !important; contain: none !important; filter: none !important; will-change: auto !important; }

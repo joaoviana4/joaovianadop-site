@@ -1,13 +1,13 @@
 import { sb, esc, toast, ICON, saveLater, uploadImage, signedUrls, onLeave } from './lib.js';
 import { mountGrid, COLS } from './grid.js';
-import { cropDialog, cropAspect, cropImgStyle, naturalSize, isFull } from './imgcrop.js';
+import { cropSliders, cropAspect, cropImgStyle, naturalSize } from './imgcrop.js';
 export const CROP = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg>';
 
 // Páginas como boards (Studio). Cada página tem os seus elementos (a página em si, ou os blocos da visão geral)
 // e pode receber elementos copiados de outras páginas. Uma cópia é o mesmo elemento visto noutro sítio:
 // mudas num lado, muda no outro. Notas: blocos de texto livres, guardados no projeto (layouts.notes).
 //
-// Copiar: botão de copiar no canto de cada elemento (ou Ctrl+C com o rato por cima). Colar: Ctrl+V ou "Colar" na barra.
+// Copiar: Ctrl+C com o rato por cima do elemento (ou botão direito → Copiar). Colar: Ctrl+V ou "Colar" na barra.
 // Tudo o que se cola fica em layouts[key].extra = [{ id, ref, title }]; ref = { kind: 'page'|'block'|'tool'|'note', ... }.
 
 const CLIP = 'portal-clip2';
@@ -64,12 +64,15 @@ function textEl(p, id) {
   ta.addEventListener('input', () => { fit(); save(); }); requestAnimationFrame(fit);
   return el;
 }
-// imagem: mantém sempre a proporção ao redimensionar; "Recortar" escolhe a parte que se vê; legenda só se a juntarem
+// imagem: mantém sempre a proporção ao redimensionar; recorta-se com as pegas dos lados da própria imagem;
+// legenda só se a juntarem. Mudar a imagem: largar outra por cima, ou botão direito → Mudar imagem.
+const gridBox = (el, phase, d = {}) => { const detail = { phase, dl: 0, dt: 0, dw: 0, ...d }; el.dispatchEvent(new CustomEvent('gi-box', { bubbles: true, detail })); return detail.room || null; };
 function imageEl(p, id) {
   const v = p.layouts?.items?.[id] || {};
   const el = document.createElement('figure'); el.className = 'cv-img';
+  let url = null;
   const draw = async () => {
-    const url = v.path ? (await signedUrls([v.path]))[v.path] : null;
+    url = v.path ? (await signedUrls([v.path]))[v.path] : null;
     if (!url) {
       el.innerHTML = `<button type="button" class="cv-img-empty" data-pick>${ICON.image}<span>Escolher imagem</span><small>ou larga-a aqui</small></button>`;
       el.querySelector('[data-pick]').addEventListener('click', pick); return;
@@ -77,16 +80,19 @@ function imageEl(p, id) {
     if (!v.w) { const n = await naturalSize(url); if (n) { v.w = n.w; v.h = n.h; saveItem(p, id, v); } }
     const ar = cropAspect(v.crop, v.w, v.h) || 1.5;
     const hasCap = typeof v.caption === 'string';
-    el.innerHTML = `<div class="cv-img-f" style="aspect-ratio:${ar.toFixed(5)}"><img src="${esc(url)}" alt="${esc(v.caption || '')}" draggable="false" style="${cropImgStyle(v.crop)}"></div>
-      ${hasCap ? `<figcaption><input value="${esc(v.caption)}" placeholder="Legenda" aria-label="Legenda"></figcaption>` : ''}
-      <div class="cv-img-tools"><button type="button" data-crop>${CROP} Recortar</button>${hasCap ? '' : `<button type="button" data-cap>${ICON.title || ''} Legenda</button>`}<button type="button" data-pick>${ICON.image} Mudar</button></div>`;
-    el.querySelector('[data-pick]').addEventListener('click', pick);
-    el.querySelector('[data-crop]').addEventListener('click', async () => {
-      const c = await cropDialog(url, v.crop, { w: v.w, h: v.h }); if (!c) return;
-      if (isFull(c)) delete v.crop; else v.crop = c;
-      await saveItem(p, id, v); draw();
-    });
-    el.querySelector('[data-cap]')?.addEventListener('click', () => { v.caption = ''; draw().then(() => el.querySelector('figcaption input')?.focus()); });
+    el.innerHTML = `<div class="cv-img-f" data-gdrag style="aspect-ratio:${ar.toFixed(5)}"><img src="${esc(url)}" alt="${esc(v.caption || '')}" draggable="false" style="${cropImgStyle(v.crop)}"></div>
+      ${hasCap ? `<figcaption><input value="${esc(v.caption)}" placeholder="Legenda" aria-label="Legenda"></figcaption>` : '<button type="button" class="cv-img-cap" data-cap title="Juntar uma legenda">+ Legenda</button>'}`;
+    const frame = el.querySelector('.cv-img-f'); const img = frame.querySelector('img');
+    if (v.w && v.h) {
+      cropSliders(frame, {
+        nat: () => ({ w: v.w, h: v.h }),
+        get: () => v.crop,
+        apply: (c) => { frame.style.aspectRatio = String(cropAspect(c, v.w, v.h)); img.style.cssText = cropImgStyle(c); },
+        box: { start: () => gridBox(el, 'start'), move: (dl, dt, dw) => gridBox(el, 'move', { dl, dt, dw }), end: (dl, dt, dw) => gridBox(el, 'end', { dl, dt, dw }), cancel: () => gridBox(el, 'cancel') },
+        commit: (c) => { if (c) v.crop = c; else delete v.crop; saveItem(p, id, v); },
+      });
+    }
+    el.querySelector('[data-cap]')?.addEventListener('click', addCaption);
     const cap = el.querySelector('figcaption input');
     if (cap) {
       const keep = saveLater(() => { v.caption = cap.value; saveItem(p, id, v); }, 600);
@@ -95,12 +101,19 @@ function imageEl(p, id) {
       cap.addEventListener('blur', () => { if (!cap.value.trim()) { delete v.caption; saveItem(p, id, v); draw(); } });
     }
   };
+  const addCaption = () => { if (typeof v.caption === 'string') return el.querySelector('figcaption input')?.focus(); v.caption = ''; draw().then(() => el.querySelector('figcaption input')?.focus()); };
   const up = async (file) => {
     if (!file || !/^image\//.test(file.type)) return toast('Escolhe uma imagem.');
     toast('A carregar a imagem…', 6000);
     try { const r = await uploadImage(p.id, 'paginas', file); v.path = r.path; v.w = r.w; v.h = r.h; delete v.crop; await saveItem(p, id, v); draw(); } catch (e) { toast('Não foi possível carregar: ' + (e.message || e)); }
   };
   const pick = () => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.onchange = () => up(i.files[0]); i.click(); };
+  // opções do botão direito (a grelha junta-as ao menu do elemento)
+  el._menu = () => (url ? [
+    { label: 'Mudar imagem…', icon: ICON.image, run: pick },
+    typeof v.caption === 'string' ? null : { label: 'Juntar legenda', icon: ICON.title || '', run: addCaption },
+    v.crop ? { label: 'Mostrar a imagem inteira', icon: CROP, run: () => { delete v.crop; saveItem(p, id, v); draw(); } } : null,
+  ] : []);
   el.addEventListener('dragover', (e) => { e.preventDefault(); el.classList.add('over'); });
   el.addEventListener('dragleave', () => el.classList.remove('over'));
   el.addEventListener('drop', (e) => { e.preventDefault(); el.classList.remove('over'); up(e.dataTransfer.files[0]); });
@@ -154,7 +167,7 @@ export function mountCanvas(main, p, { key, native, render, here, pageLabel = 'p
     else if (GENERAL[x.ref.kind]) el.append(GENERAL[x.ref.kind][1](p, x.ref.id));
     else if (here && same(x.ref, here)) el.innerHTML = '<p class="muted small">Esta é a própria página.</p>';
     else { el.innerHTML = '<p class="muted small">A carregar…</p>'; Promise.resolve(render(el, x.ref)).catch((e) => { el.innerHTML = `<p class="muted small">Não foi possível mostrar: ${esc(e.message || '')}</p>`; }); }
-    return { id: `x:${x.id}`, label: x.title || (x.ref.kind === 'note' ? 'Nota' : GENERAL[x.ref.kind]?.[0] || 'Elemento'), el, w: x.w || COLS, copy: () => copyRef(p, x.ref, x.title || 'Elemento'), ref: x.ref, lockRatio: x.ref.kind === 'image' };
+    return { id: `x:${x.id}`, label: x.title || (x.ref.kind === 'note' ? 'Nota' : GENERAL[x.ref.kind]?.[0] || 'Elemento'), el, w: x.w || COLS, copy: () => copyRef(p, x.ref, x.title || 'Elemento'), ref: x.ref, lockRatio: x.ref.kind === 'image', menu: () => el.firstElementChild?._menu?.() || [] };
   };
   const nativeItems = native.map((n) => ({ ...n, copy: n.ref ? () => copyRef(p, n.ref, n.label) : null, removable: n.removable }));
   // escondidos por defeito: os sugeridos que ainda não estão guardados na página
@@ -216,7 +229,7 @@ export function mountCanvas(main, p, { key, native, render, here, pageLabel = 'p
       <button type="button" data-gen="table" title="Juntar uma tabela a esta ${esc(pageLabel)}">${ICON.table || ICON.list}<span>Tabela</span></button>
       <button type="button" data-layers title="Camadas: escolhe o que fica por cima quando os elementos se sobrepõem" aria-haspopup="dialog">${LAYERS}<span>Camadas</span></button>
       <button type="button" data-pack title="Arrumar: encosta todos os elementos para cima, sem sobreposições">${PACK}<span>Arrumar</span></button>
-      <button type="button" class="${clip ? '' : 'off'}" data-paste ${clip ? '' : 'disabled'} title="${clip ? `Colar «${esc(clip.title)}» aqui (Ctrl+V)` : 'Para colar: copia um elemento noutra página (botão de copiar no canto dele)'}">${ICON.copy}<span>Colar</span></button>
+      <button type="button" class="${clip ? '' : 'off'}" data-paste ${clip ? '' : 'disabled'} title="${clip ? `Colar «${esc(clip.title)}» aqui (Ctrl+V)` : 'Para colar: noutra página, passa o rato por cima de um elemento e carrega Ctrl+C (ou botão direito → Copiar)'}">${ICON.copy}<span>Colar</span></button>
       ${gone.length ? `<hr>${gone.map((n) => `<button type="button" data-own="${esc(n.id)}" title="Voltar a pôr ${esc(n.label)} na página">${n.icon || ICON.board}<span>${esc(n.label)}</span></button>`).join('')}` : ''}
       <hr><div class="cv-ur"><button type="button" data-undo title="Desfazer (Ctrl+Z)" aria-label="Desfazer">${UNDO}</button><button type="button" data-redo title="Refazer (Ctrl+Shift+Z)" aria-label="Refazer">${REDO}</button></div>`;
     // desfazer/refazer: o mesmo que Ctrl+Z. Primeiro tenta o da tabela ou do board desta página, senão o geral.

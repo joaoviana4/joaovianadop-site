@@ -332,7 +332,7 @@ export function callsheetTool(main, p, tool, { edit = false } = {}) {
     const n = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
     let changed = false;
     all.sheets.forEach((sh) => {
-      const l = (locs || []).find((x) => sh.place && n(x.name) === n(sh.place)); const a = placeAddr(p, l);
+      const l = (locs || []).find((x) => sh.place && n(x.name) === n(sh.place)); const a = placeAddr(p, l, locs);
       if (l && a && a !== (sh.address || '').trim()) { sh.address = a; if (sh.hospital) sh.hospital = { name: '', url: '' }; changed = true; }
     });
     if (changed) { saveAuto(); draw(); toast('Morada atualizada a partir do décor.'); }
@@ -345,7 +345,7 @@ export function callsheetTool(main, p, tool, { edit = false } = {}) {
       const { data: locs } = await sb.from('locations').select('id, name, info').eq('project_id', p.id);
       const n = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
       let loc = (locs || []).find((l) => n(l.name) === n(d.place)) || (locs || []).find((l) => d.place && (n(l.name).includes(n(d.place)) || n(d.place).includes(n(l.name))));
-      if (loc && !placeAddr(p, loc) && d.address) loc = null;
+      if (loc && !placeAddr(p, loc, locs) && d.address) loc = null; if (loc && !loc._parent && loc.info?.grupo) loc._parent = (locs || []).find((x) => x.id === loc.info.grupo) || null;
       const { placeInfo } = await import('./placegeo.js');
       const { geocode, nearby, weatherFor, weatherLine, pinUrl } = await import('./geo.js');
       let info = loc ? await placeInfo(p, loc) : null;
@@ -512,7 +512,7 @@ async function pickShots(p, d, after, elsewhere = new Map()) {
     const same = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
     if (loc && !d.place) d.place = loc.name;
     // a morada vem sempre do décor (a que está escrita na página do décor), se o local da folha for esse décor
-    if (loc && placeAddr(p, loc) && same(d.place, loc.name)) d.address = placeAddr(p, loc);
+    if (loc && placeAddr(p, loc, locs) && same(d.place, loc.name)) d.address = placeAddr(p, loc, locs);
     const castIds = [...dayPeople];
     castIds.forEach((cid) => {
       const c = (chars || []).find((y) => y.id === cid); if (!c || d.cast.some((y) => y.char_id === cid)) return;

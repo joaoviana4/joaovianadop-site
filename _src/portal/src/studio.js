@@ -3,7 +3,7 @@ import { settleSaves, daysUntil, runLeave } from './lib.js';
 import { loadHidden, hideProject, unhideProject } from './lib.js';
 import { loadComms, commById, setCtx, CID, isPlatformAdmin, PERMS } from './lib.js';
 import { activityButton, bindActivity, activityPage } from './activity.js';
-import { IS_STUDIO, sb, BUCKET, state, esc, $, loadProfile, isStaff, isAdmin, toast, modal, confirmBox, ICON, LOGO, KINDS, ROLES, phaseOf, greeting, initials, signedUrls, uploadImage, callFn, authPw, MIN_PW, fmtDate, dueInfo, todayISO, registerSW, isInstalled, installApp, BASE, PROJECT_COLS, hasPerm, leadsOf } from './lib.js';
+import { IS_STUDIO, sb, BUCKET, state, esc, $, loadProfile, isStaff, isAdmin, toast, modal, confirmBox, ICON, LOGO, KINDS, ROLES, phaseOf, greeting, initials, signedUrls, knownUrl, uploadImage, callFn, authPw, MIN_PW, fmtDate, dueInfo, todayISO, registerSW, isInstalled, installApp, BASE, PROJECT_COLS, hasPerm, leadsOf } from './lib.js';
 import { renderAuth } from './auth.js';
 import { visField, bindVis, readVis } from './vis.js';
 import { onWrite, setWriteGuard } from './undo.js';
@@ -1222,6 +1222,14 @@ function budgetUsed(p) {
 
 async function projectOverview(main, p, { plain = false } = {}) {
   const base = projBase(p);
+  // o banner aparece logo, enquanto o resto carrega (a página não fica em branco)
+  if (!p.is_central && !main.querySelector('.pm-head')) {
+    const cu = knownUrl(p.cover_path);
+    main.innerHTML = `<section class="pm-head" style="${cu ? `background-image:linear-gradient(rgba(12,12,18,.15),rgba(12,12,18,.75)),url('${esc(cu)}')` : ''}"><div class="grain-layer moving" aria-hidden="true"></div>
+      <div class="pm-head-in"><span class="tag dark">${esc(KINDS[p.kind] || p.kind)}</span><h1 class="pm-name">${esc(p.name)}</h1>
+      <p class="pm-sub">${[p.client, p.starts_on && p.ends_on ? `${fmtDate(p.starts_on)} – ${fmtDate(p.ends_on)}` : ''].filter(Boolean).map(esc).join(' · ')}</p></div></section>
+      <p class="muted cv-wait">A carregar…</p>`;
+  }
   // tudo ao mesmo tempo (antes eram 4 ou 5 esperas seguidas)
   // (um pedido do Supabase só corre quando se espera por ele, e corre de novo a cada espera: Promise.resolve faz um só)
   const allTasksP = Promise.resolve(sb.from('tasks').select('*').eq('project_id', p.id));
@@ -1333,7 +1341,10 @@ async function projectOverview(main, p, { plain = false } = {}) {
     const sit = main.querySelector('[data-situation]');
     const head = document.createElement('div'); head.className = 'cv-headblk';
     [...main.children].forEach((c) => { if (c !== sit && !c.matches('.pm-grid[hidden]')) head.append(c); });
-    sit.innerHTML = '<p class="muted">A preparar a visão geral…</p>';
+    // o banner fica à vista enquanto os blocos carregam (a página não fica em branco); depois passa para a grelha
+    main.insertBefore(head, sit);
+    head.querySelector('.pm-head')?.setAttribute('data-gdrag', ''); // o banner arrasta-se por qualquer sítio que não seja um botão
+    sit.innerHTML = '<p class="muted cv-wait">A preparar a visão geral…</p>';
     // projetos novos: a visão geral começa só com o que é das tarefas; o resto junta-se pela barra da direita
     const fresh = !p.layouts?.['pg:geral']?.grid && String(p.created_at || '') >= '2026-10-19';
     const TASKY = new Set(['who', 'depts']);
