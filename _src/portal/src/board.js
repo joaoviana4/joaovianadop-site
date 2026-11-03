@@ -539,6 +539,17 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
     inp.onchange = () => addImages([...inp.files]);
     inp.click();
   }
+  // copia um ficheiro de outro projeto para a pasta deste; devolve o caminho novo (ou null, e fica o original)
+  async function adoptFile(path) {
+    const np = `${projectId}/board/${crypto.randomUUID()}.${String(path).match(/\.(\w{2,5})$/)?.[1] || 'webp'}`;
+    try { const { error } = await sb.storage.from(BUCKET).copy(path, np); if (!error) return np; } catch { /* tenta de outra maneira */ }
+    try {
+      const blob = await (await fetch(await signedUrl(path))).blob();
+      const { error } = await sb.storage.from(BUCKET).upload(np, blob, { contentType: blob.type || undefined, upsert: false });
+      if (!error) return np;
+    } catch { /* fica o original */ }
+    return null;
+  }
   async function addImages(files, at) {
     at = at || dropAt; dropAt = null;
     const imgs = files.filter((f) => f.type.startsWith('image/'));
@@ -734,7 +745,20 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
       e.preventDefault(); CLIP.n = (CLIP.n || 0) + 1;
       const same = CLIP.board === boardId; const off = same ? 30 * CLIP.n : 0;
       const r = stage.getBoundingClientRect(); const c = toWorld(r.left + r.width / 2, r.top + r.height / 2);
-      const it = CLIP.item; create(it.kind, same ? { x: it.x + it.w / 2 + off, y: it.y + it.h / 2 + off } : c, JSON.parse(JSON.stringify(it.data)), [it.w, it.h]);
+      const it = CLIP.item; const data = JSON.parse(JSON.stringify(it.data || {}));
+      const at = same ? { x: it.x + it.w / 2 + off, y: it.y + it.h / 2 + off } : c;
+      (async () => {
+        if ((it.kind === 'image' || it.kind === 'audio') && data.path) {
+          // de outro projeto: o ficheiro é copiado para este (quem só vê este projeto também o vê, e não desaparece
+          // se o original for apagado no outro)
+          if (CLIP.project && CLIP.project !== projectId && !/^(vf:|https?:)/.test(String(data.path))) {
+            const np = await adoptFile(data.path); if (np) { data.path = np; delete data.shared; }
+          }
+          // o endereço da imagem tem de ser pedido aqui: este board ainda não a conhecia (ficava "A carregar…")
+          if (!urls[data.path]) urls = { ...urls, ...(await signedUrls([data.path]).catch(() => ({}))) };
+        }
+        create(it.kind, at, data, [it.w, it.h]);
+      })();
       return;
     }
     const files = [...(e.clipboardData?.files || [])];
@@ -765,7 +789,7 @@ export function mountBoard(root, { projectId, boardId, onOpenBoard, onUp, onZoom
       // para a área de transferência do computador, para a colares num plano, noutra app, etc.
       const it = items.get(st.sel); if (!it || it.kind === 'board') return;
       e.preventDefault();
-      CLIP = { mark: `portal-card:${Date.now().toString(36)}`, item: JSON.parse(JSON.stringify({ kind: it.kind, data: it.data, x: it.x, y: it.y, w: it.w, h: it.h })), board: boardId, n: 0 };
+      CLIP = { mark: `portal-card:${Date.now().toString(36)}`, item: JSON.parse(JSON.stringify({ kind: it.kind, data: it.data, x: it.x, y: it.y, w: it.w, h: it.h })), board: boardId, project: projectId, n: 0 };
       copyToSystem(it).then(() => toast(it.kind === 'image' ? 'Imagem copiada.' : 'Copiado. Cola com Ctrl+V.'));
     } else if (mod && e.key.toLowerCase() === 'd' && st.sel) {
       e.preventDefault(); const it = items.get(st.sel); if (!it || it.kind === 'board') return;
