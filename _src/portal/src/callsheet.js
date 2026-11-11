@@ -1,10 +1,10 @@
 import { selPhase } from './phases.js';
-import { saveLater, sb, esc, toast, modal, confirmBox, ICON, signedUrl } from './lib.js';
+import { saveLater, sb, esc, toast, modal, confirmBox, ICON, signedUrl, signedUrls } from './lib.js';
 import { projectContacts, nameWithPhone } from './contacts.js';
 import { placeAddr } from './placegeo.js';
 import { bindTimes } from './timepick.js';
 const TIME_P = /^(call|more\.(ready|wrap_est|sunrise|sunset)|depts\.\d+\.time|times\.\d+\.value|cast\.\d+\.(call|out)|vehicles\.\d+\.call)$/;
-import { CS_MODELS } from './csmodels.js';
+import { CS_MODELS, cellHtml } from './csmodels.js';
 
 // Folha de serviço (call sheet) de um dia de rodagem, no estilo do modelo "A Forma e o Silêncio":
 // cabeçalho com dia, contactos, call e morada, meteorologia, notas, hospital e estacionamento, horários,
@@ -80,7 +80,7 @@ function sheetHtml(d, edit) {
     <table class="cs-box cs-shots"><thead><tr>${d.cols.map((c, i) => `<th>${edit ? `<input class="cs-in" data-p="cols.${i}.label" value="${esc(c.label)}">${x(`data-rmcol="${c.id}"`)}` : esc(c.label)}</th>`).join('')}${edit ? `<th class="cs-ctl">${add('data-addcol', '')}</th>` : ''}</tr></thead>
       <tbody>${d.rows.map((r, i) => (r.kind === 'band'
         ? `<tr class="cs-band ${r.tone || 'grey'}" data-row="${r.id}"><td colspan="${d.cols.length}">${f(`rows.${i}.text`, 'ex: ALMOÇO 13:00 - 14:00', 'b')}</td>${edit ? `<td class="cs-ctl"><button type="button" class="cs-tone" data-tone="${r.id}" title="Mudar cor">◐</button><button type="button" class="cs-mv" data-mv="${r.id}:-1">↑</button><button type="button" class="cs-mv" data-mv="${r.id}:1">↓</button>${x(`data-rm="rows:${r.id}"`)}</td>` : ''}</tr>`
-        : `<tr data-row="${r.id}">${d.cols.map((c) => `<td>${edit ? `<textarea class="cs-in" rows="1" data-p="rows.${i}.cells.${c.id}">${esc(r.cells?.[c.id] ?? '')}</textarea>` : `<span class="pre">${esc(r.cells?.[c.id] ?? '')}</span>`}</td>`).join('')}${edit ? `<td class="cs-ctl"><button type="button" class="cs-mv" data-mv="${r.id}:-1">↑</button><button type="button" class="cs-mv" data-mv="${r.id}:1">↓</button>${x(`data-rm="rows:${r.id}"`)}</td>` : ''}</tr>`)).join('')}</tbody></table>
+        : `<tr data-row="${r.id}">${d.cols.map((c) => `<td>${edit ? `<textarea class="cs-in" rows="1" data-p="rows.${i}.cells.${c.id}">${esc(r.cells?.[c.id] ?? '')}</textarea>` : (c.ref ? cellHtml(r, c) : `<span class="pre">${esc(r.cells?.[c.id] ?? '')}</span>`)}</td>`).join('')}${edit ? `<td class="cs-ctl"><button type="button" class="cs-mv" data-mv="${r.id}:-1">↑</button><button type="button" class="cs-mv" data-mv="${r.id}:1">↓</button>${x(`data-rm="rows:${r.id}"`)}</td>` : ''}</tr>`)).join('')}</tbody></table>
     ${edit ? `<div class="cs-actions"><button type="button" class="cs-add" data-pick>+ Planos da shotlist</button><button type="button" class="cs-add" data-addrow>+ Linha</button><button type="button" class="cs-add" data-addband>+ Faixa (ex: almoço, slider in)</button></div>` : ''}
     <div class="cs-foot">${f('footer', 'WRAP', 'b')}</div>
   </div></div>`;
@@ -475,7 +475,7 @@ export function callsheetTool(main, p, tool, { edit = false } = {}) {
     }));
     main.querySelector('[data-pick]').addEventListener('click', () => { const before = `${d.place}|${d.address}`; pickShots(p, d, () => { save(); draw(); if (`${d.place}|${d.address}` !== before) geoFill({ hosp: true }); }, used()); });
     main.querySelector('[data-export]').addEventListener('click', () => {
-      const go2 = () => exportDialog(all, cur, () => { save(); draw(); });
+      const go2 = () => exportDialog(all, cur, () => { save(); draw(); }, p);
       const miss = missing(d); if (!miss.length) return go2();
       const m = modal(`<h2>Falta preencher</h2><p class="muted">Na folha do dia ${esc(d.day || cur + 1)}:</p><ul class="cs-miss">${miss.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
         <div class="row end"><button type="button" class="btn ghost" data-close>Voltar e preencher</button><button type="button" class="btn primary" data-anyway>Exportar na mesma</button></div>`);
@@ -635,6 +635,44 @@ async function importXlsx(d, done) {
   inp.click();
 }
 
+// ---------- fotos de referência ----------
+// Para exportar com as fotos: copia as folhas (não mexe no que está guardado), junta uma coluna "Referência" à frente
+// e põe em cada plano a imagem dele (do storyboard / página do plano), já reduzida, para o PDF e o Excel.
+// Planos importados do Excel (sem ligação) são reconhecidos pelo número do plano numa das células.
+const thumbCache = new Map();
+async function thumbOf(path) {
+  if (thumbCache.has(path)) return thumbCache.get(path);
+  const job = (async () => {
+    const url = (await signedUrls([path]))[path]; if (!url) return null;
+    try {
+      const blob = await (await fetch(url)).blob();
+      const bmp = await createImageBitmap(blob);
+      const k = Math.min(1, 520 / bmp.width); const w = Math.round(bmp.width * k), h = Math.round(bmp.height * k);
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h; cv.getContext('2d').drawImage(bmp, 0, 0, w, h);
+      return { src: cv.toDataURL('image/jpeg', 0.82), w, h };
+    } catch { return { src: url, w: 16, h: 9, remote: true }; } // sem poder reduzir: fica o endereço (serve para o PDF)
+  })();
+  thumbCache.set(path, job); return job;
+}
+async function withRefs(list, p) {
+  const copy = list.map((sh) => JSON.parse(JSON.stringify(sh)));
+  const { data: shots } = await sb.from('shots').select('id, code, image_path').eq('project_id', p.id);
+  const byId = new Map((shots || []).map((x) => [x.id, x]));
+  const byCode = new Map((shots || []).filter((x) => x.code).map((x) => [String(x.code).trim().toLowerCase(), x]));
+  let n = 0;
+  await Promise.all(copy.map(async (sh) => {
+    sh.cols = [{ id: '_ref', label: 'Referência', ref: true }, ...(sh.cols || [])];
+    await Promise.all((sh.rows || []).map(async (r) => {
+      if (r.kind !== 'shot') return;
+      const x = (r.shot_id && byId.get(r.shot_id)) || Object.values(r.cells || {}).map((v) => byCode.get(String(v || '').trim().toLowerCase())).find(Boolean) || (r.num != null ? byCode.get(String(r.num).trim().toLowerCase()) : null);
+      if (!x?.image_path) return;
+      const t = await thumbOf(x.image_path).catch(() => null);
+      if (t) { r._img = t.src; r._iw = t.w; r._ih = t.h; r._remote = !!t.remote; n++; }
+    }));
+  }));
+  return { list: copy, n };
+}
+
 // documento completo (para imprimir e para a pré-visualização), no modelo escolhido
 function docHtml(list, modelId = 'classic') {
   const d = list[0];
@@ -657,10 +695,12 @@ function printSheet(list, modelId) {
   const html = docHtml(list, modelId);
   const fr = document.createElement('iframe'); fr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
   document.body.append(fr); const doc = fr.contentWindow.document; doc.open(); doc.write(html); doc.close();
-  setTimeout(() => { fr.contentWindow.focus(); fr.contentWindow.print(); setTimeout(() => fr.remove(), 60000); }, 300);
+  // espera pelas imagens (fotos de referência) antes de abrir a impressão
+  const imgs = [...doc.images].map((im) => (im.complete ? null : new Promise((r) => { im.onload = r; im.onerror = r; }))).filter(Boolean);
+  Promise.race([Promise.all(imgs), new Promise((r) => setTimeout(r, 15000))]).then(() => setTimeout(() => { fr.contentWindow.focus(); fr.contentWindow.print(); setTimeout(() => fr.remove(), 60000); }, 300));
 }
 
-function exportDialog(all, cur, changed) {
+function exportDialog(all, cur, changed, p) {
   let pref = {}; try { pref = JSON.parse(localStorage.getItem('bg-cs-export') || '{}'); } catch { /* nada */ }
   const fmt = pref.fmt || 'pdf';
   const d = all.sheets[cur];
@@ -682,6 +722,7 @@ function exportDialog(all, cur, changed) {
         </div>
         <div class="cs-prev" aria-hidden="true"><iframe data-prev title="Pré-visualização" tabindex="-1"></iframe></div>
       </div>
+      <label class="check cs-refopt"><input type="checkbox" name="refs" ${pref.refs ? 'checked' : ''}><span><b>Com as fotos de referência dos planos</b> <small class="muted" data-refn>Uma coluna com a imagem de cada plano (a do storyboard).</small></span></label>
       ${all.sheets.length > 1 ? `<fieldset class="cs-opts"><legend>Dias</legend>${radio('days', 'one', true, `Só o dia ${esc(d.day || cur + 1)}`)}${radio('days', 'all', false, `Todos os dias (${all.sheets.length})`, 'No PDF, um dia por página; no Excel, uma folha por dia')}</fieldset>` : ''}
       <div class="row end"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn primary">Exportar</button></div>
     </form>`, { wide: true });
@@ -689,9 +730,11 @@ function exportDialog(all, cur, changed) {
   const read = () => Object.fromEntries(PALETTE_KEYS.map(([k]) => [k, f.elements[`c-${k}`].value]));
   const fr = m.el.querySelector('[data-prev]');
   let prevT;
+  let prevRefs = null; // a folha deste dia já com as fotos (para a pré-visualização)
   const paint = () => {
     const cur2 = read();
-    clearTimeout(prevT); prevT = setTimeout(() => { fr.srcdoc = docHtml([{ ...d, palette: cur2, accent: cur2.frame }], model); }, 80);
+    const base = f.elements.refs?.checked && prevRefs ? prevRefs : d;
+    clearTimeout(prevT); prevT = setTimeout(() => { fr.srcdoc = docHtml([{ ...base, palette: cur2, accent: cur2.frame }], model); }, 80);
     m.el.querySelectorAll('[data-pre]').forEach((b) => b.classList.toggle('on', same(PRESETS.find(([n]) => n === b.dataset.pre)[1], cur2)));
   };
   f.querySelectorAll('input[type=color]').forEach((i) => i.addEventListener('input', paint));
@@ -702,7 +745,16 @@ function exportDialog(all, cur, changed) {
     const mm = CS_MODELS.find((x) => x.id === model); const p = mm.preset || PRESETS[0][1];
     PALETTE_KEYS.forEach(([k]) => (f.elements[`c-${k}`].value = p[k])); paint();
   }));
-  paint(); xlsxNote();
+  const refsChanged = async () => {
+    const note = m.el.querySelector('[data-refn]');
+    if (f.elements.refs.checked && !prevRefs) {
+      note.textContent = 'A juntar as fotos…';
+      try { const r = await withRefs([d], p); prevRefs = r.list[0]; note.textContent = r.n ? `${r.n} ${r.n === 1 ? 'plano tem' : 'planos têm'} foto neste dia.` : 'Nenhum plano deste dia tem foto ainda (junta-as no storyboard ou na página do plano).'; } catch (e) { note.textContent = 'Não foi possível juntar as fotos: ' + (e.message || e); }
+    }
+    paint();
+  };
+  f.elements.refs.addEventListener('change', refsChanged);
+  paint(); xlsxNote(); if (f.elements.refs.checked) refsChanged();
   m.el.querySelectorAll('[data-pre]').forEach((b) => b.addEventListener('click', () => { const p = PRESETS.find(([n]) => n === b.dataset.pre)[1]; PALETTE_KEYS.forEach(([k]) => (f.elements[`c-${k}`].value = p[k])); paint(); }));
   f.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -711,9 +763,10 @@ function exportDialog(all, cur, changed) {
     // guarda as cores em todos os dias desta folha
     all.sheets.forEach((sh) => { sh.palette = { ...np }; sh.accent = np.frame; sh.model = model; });
     changed && changed();
-    try { localStorage.setItem('bg-cs-export', JSON.stringify({ fmt: v.fmt })); } catch { /* nada */ }
-    const list = v.days === 'all' ? all.sheets : [d];
+    try { localStorage.setItem('bg-cs-export', JSON.stringify({ fmt: v.fmt, refs: !!v.refs })); } catch { /* nada */ }
+    let list = v.days === 'all' ? all.sheets : [d];
     m.close();
+    if (v.refs) { toast('A juntar as fotos de referência…', 8000); try { list = (await withRefs(list, p)).list; } catch (er) { toast('Não foi possível juntar as fotos: ' + (er.message || er)); } }
     if (v.fmt === 'xlsx') await exportXlsx(list); else printSheet(list, model);
   });
 }
@@ -733,7 +786,7 @@ async function exportXlsx(list) {
     const ws = wb.addWorksheet(wb.worksheets.some((w) => w.name === name) ? `${name} (${si + 1})` : name, { properties: { tabColor: { argb: argb(d.accent) } }, pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.3, right: 0.3, top: 0.3, bottom: 0.3, header: 0, footer: 0 } } });
     const N = Math.max(d.cols.length, 8, Math.min(d.depts.length, 12));
     // a moldura: uma coluna e uma linha de cada lado, pintadas com a cor da folha (no modelo clássico)
-    ws.columns = [{ width: 2.5 }, ...Array.from({ length: N }, (_, i) => ({ width: d.cols[i] && /resumo|t[eé]cnico|cam/i.test(d.cols[i].label) ? 26 : 13 })), { width: 2.5 }];
+    ws.columns = [{ width: 2.5 }, ...Array.from({ length: N }, (_, i) => ({ width: d.cols[i]?.ref ? 24 : d.cols[i] && /resumo|t[eé]cnico|cam/i.test(d.cols[i].label) ? 26 : 13 })), { width: 2.5 }];
     ws.getRow(1).height = 10;
     const H = Math.floor(N / 2);
     let r = 1;
@@ -791,7 +844,17 @@ async function exportXlsx(list) {
     height(r, 18); r++;
     d.rows.forEach((row) => {
       if (row.kind === 'band') span(r, 1, N, row.text, { bold: true, fill: row.tone === 'yellow' ? YEL : GRY, left: row.tone !== 'yellow' });
-      else d.cols.forEach((c, i) => span(r, ...sc(i), row.cells?.[c.id] ?? ''));
+      else {
+        d.cols.forEach((c, i) => span(r, ...sc(i), c.ref ? '' : row.cells?.[c.id] ?? ''));
+        // foto de referência: dentro da célula da primeira coluna, com a altura da linha à medida
+        const ci = d.cols.findIndex((c) => c.ref);
+        if (ci >= 0 && row._img && !row._remote) {
+          const W = 160, Hh = Math.round(W * ((row._ih || 9) / (row._iw || 16)));
+          const id = wb.addImage({ base64: row._img, extension: 'jpeg' });
+          ws.addImage(id, { tl: { col: ci + 1 + 0.06, row: r + 0.06 }, ext: { width: W, height: Hh }, editAs: 'oneCell' });
+          height(r, Math.max(18, Hh * 0.75 + 6));
+        }
+      }
       r++;
     });
     r++;

@@ -11,6 +11,8 @@ const mapUrl = (u) => (/^https?:/.test(v(u)) ? v(u) : has(u) ? `https://www.goog
 const link = (u, label) => { const h = mapUrl(u); return h ? `<a href="${esc(h)}">${esc(label || u)}</a>` : esc(label || ''); };
 const timeOf = (d, re) => (d.times || []).find((t) => re.test(v(t.label).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()))?.value || '';
 const shotRows = (d) => d.rows || [];
+// célula de um plano; a coluna das fotos de referência (só na exportação com fotos) leva a imagem do plano
+export const cellHtml = (r, c) => (c.ref ? (r._img ? `<img class="cs-ref" src="${r._img}" alt="" style="display:block;width:34mm;height:auto;max-height:26mm;object-fit:cover;margin:0 auto">` : '') : esc(r.cells?.[c.id] ?? ''));
 const more = (d) => d.more || {};
 
 // ---------- Longa-metragem: cabeçalho em três colunas com a hora de call em grande ----------
@@ -34,7 +36,7 @@ function longa(d, P, ink) {
   .lg .band { background: ${P.frame}; color: ${ink(P.frame)}; font-weight: 800; text-transform: uppercase; text-align: center; padding: 3px; margin: 6px 0 0; font-size: 9px; letter-spacing: .05em; }
   .lg .notes { border: 1px solid ${P.ln}; border-top: 0; padding: 4px 6px; text-align: center; font-weight: 700; text-transform: uppercase; font-size: 7.8px; white-space: pre-wrap; }
   .lg .pre th, .lg .pre td { text-align: center; }
-  .lg .shots td { text-align: center; } .lg .shots td.l { text-align: left; }
+  .lg .shots td { text-align: center; } .lg .shots td.l { text-align: left; } .lg .shots td.ref { padding: 1.5px; width: 35mm; vertical-align: middle; }
   .lg .shots tr.b td { background: ${P.lo}; color: ${ink(P.lo)}; font-weight: 700; text-align: left; } .lg .shots tr.b.y td { background: ${P.hi}; color: ${ink(P.hi)}; text-align: center; }
   .lg .safe td { text-align: center; width: 20%; } .lg .safe b { display: block; text-transform: uppercase; font-size: 7.6px; margin-bottom: 2px; }
   .lg .req td:first-child { font-weight: 700; width: 22%; background: ${P.lo}; color: ${ink(P.lo)}; }
@@ -52,7 +54,7 @@ function longa(d, P, ink) {
   const left = kv((d.contacts || []).map((c) => [c.role, esc(c.value)]));
   const shots = `<table class="shots"><thead><tr>${(d.cols || []).map((c) => `<th>${esc(c.label)}</th>`).join('')}</tr></thead><tbody>${shotRows(d).map((r) => (r.kind === 'band'
     ? `<tr class="b ${r.tone === 'yellow' ? 'y' : ''}"><td colspan="${(d.cols || []).length}">${esc(r.text)}</td></tr>`
-    : `<tr>${(d.cols || []).map((c) => `<td class="${/resumo|descri|acao|ação/i.test(c.label) ? 'l' : ''}">${esc(r.cells?.[c.id] ?? '')}</td>`).join('')}</tr>`)).join('')}</tbody></table>`;
+    : `<tr>${(d.cols || []).map((c) => `<td class="${/resumo|descri|acao|ação/i.test(c.label) ? 'l' : ''}${c.ref ? ' ref' : ''}">${cellHtml(r, c)}</td>`).join('')}</tr>`)).join('')}</tbody></table>`;
   const cast = (d.cast || []).length ? `<div class="band">${esc(d.castTitle || 'Elenco')}</div><table><thead><tr><th>#</th><th>Nome</th><th>Personagem</th><th>Cena</th><th>Call</th><th>Saída</th><th>Notas</th></tr></thead><tbody>${d.cast.map((c, i) => `<tr><td>${i + 1}</td><td><b>${esc(c.name)}</b></td><td>${esc(c.role)}</td><td>${esc(c.scene)}</td><td class="hl">${esc(c.call)}</td><td>${esc(c.out)}</td><td>${esc(c.obs)}</td></tr>`).join('')}</tbody></table>` : '';
   const veh = (d.vehicles || []).length ? `<div class="band">Veículos</div><table><thead><tr><th>Veículo</th><th>Condutor</th><th>Call</th><th>Notas</th></tr></thead><tbody>${d.vehicles.map((x) => `<tr><td><b>${esc(x.name)}</b></td><td>${esc(x.driver)}</td><td>${esc(x.call)}</td><td>${esc(x.obs)}</td></tr>`).join('')}</tbody></table>` : '';
   const safe = `<div class="band">Contactos de segurança</div><table class="safe"><tr>
@@ -138,7 +140,7 @@ function cartoes(d, P, ink) {
     <div class="bar">${ic.star} Planeamento da diária ${ic.star}</div>
     <table class="plan"><thead><tr><th>#</th>${cols.map((c) => `<th>${esc(c.label)}</th>`).join('')}</tr></thead><tbody>${(() => { let n = 0; return shotRows(d).map((r) => (r.kind === 'band'
       ? `<tr class="b ${r.tone === 'yellow' ? 'y' : ''}"><td colspan="${cols.length + 1}">// ${esc(r.text)} //</td></tr>`
-      : `<tr><td class="n">${esc(r.num ?? ++n)}</td>${cols.map((c) => `<td>${esc(r.cells?.[c.id] ?? '')}</td>`).join('')}</tr>`)).join(''); })()}</tbody></table>
+      : `<tr><td class="n">${esc(r.num ?? ++n)}</td>${cols.map((c) => `<td${c.ref ? ' class="ref"' : ''}>${cellHtml(r, c)}</td>`).join('')}</tr>`)).join(''); })()}</tbody></table>
     ${(d.cast || []).length ? `<div class="bar">${ic.star} ${esc(d.castTitle || 'Elenco')} ${ic.star}</div><table class="tbl"><thead><tr><th>Nome</th><th>Personagem</th><th>Cena</th><th>Call</th><th>Saída</th><th>Notas</th></tr></thead><tbody>${d.cast.map((c) => `<tr><td><b>${esc(c.name)}</b></td><td>${esc(c.role)}</td><td>${esc(c.scene)}</td><td><b>${esc(c.call)}</b></td><td>${esc(c.out)}</td><td>${esc(c.obs)}</td></tr>`).join('')}</tbody></table>` : ''}
     ${(d.vehicles || []).length ? `<div class="bar">Veículos</div><table class="tbl"><thead><tr><th>Veículo</th><th>Condutor</th><th>Call</th><th>Notas</th></tr></thead><tbody>${d.vehicles.map((x) => `<tr><td><b>${esc(x.name)}</b></td><td>${esc(x.driver)}</td><td>${esc(x.call)}</td><td>${esc(x.obs)}</td></tr>`).join('')}</tbody></table>` : ''}
     ${(d.deptNotes || []).length ? `<div class="bar">Notas</div><div class="notes4">${d.deptNotes.map((x) => `<div class="card"><h3>${esc(x.dept)}</h3><div class="tx">${esc(x.text) || '—'}</div></div>`).join('')}</div>` : ''}
