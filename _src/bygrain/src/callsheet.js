@@ -212,13 +212,19 @@ function missing(d) {
 }
 // duração do dia da equipa: da call ao wrap (o "Wrap" dos horários ou o wrap previsto)
 const toMin = (t) => { const m = String(t || '').trim().match(/^(\d{1,2})\s*[:hH.]\s*(\d{2})?/); if (!m) return null; const h = +m[1], mi = +(m[2] || 0); return h > 30 || mi > 59 ? null : h * 60 + mi; };
-const wrapOf = (d) => (d.times || []).find((t) => /wrap|arruma|fim de rodagem|fim do dia/i.test(t.label || '') && toMin(t.value) != null)?.value || (toMin(d.more?.wrap_est) != null ? d.more.wrap_est : null);
+// a hora mais tardia entre o wrap e o fim das arrumações (contada a partir da call, para dias que passam a meia-noite)
+const wrapOf = (d) => {
+  const a = toMin(d.call) ?? 0;
+  const c = (d.times || []).filter((t) => /wrap|arruma|fim de rodagem|fim do dia/i.test(t.label || '') && toMin(t.value) != null)
+    .sort((x, y) => ((toMin(y.value) - a + 1440) % 1440) - ((toMin(x.value) - a + 1440) % 1440));
+  return c[0]?.value || (toMin(d.more?.wrap_est) != null ? d.more.wrap_est : null);
+};
 export function dayLength(d) {
   const a = toMin(d.call), w = wrapOf(d); const b = toMin(w); if (a == null || b == null) return null;
   let m = b - a; if (m <= 0) m += 24 * 60; // wrap depois da meia-noite
   return { min: m, call: d.call, wrap: w, text: `${Math.floor(m / 60)}h${m % 60 ? String(m % 60).padStart(2, '0') : ''}` };
 }
-const dayLenHtml = (d) => { const L = dayLength(d); return L ? `<span class="cst-len ${L.min > 11 * 60 ? 'long' : ''}" title="Da call (${esc(L.call)}) ao wrap (${esc(L.wrap)})"><b>${L.text}</b> de dia para a equipa${L.min > 11 * 60 ? ' · mais de 11 horas' : ''}</span>` : `<span class="cst-len none">Põe a hora do wrap nos horários para saber a duração do dia</span>`; };
+const dayLenHtml = (d) => { const L = dayLength(d); return L ? `<span class="cst-len ${L.min > 11 * 60 ? 'long' : ''}" title="Da call (${esc(L.call)}) ao fim do dia (${esc(L.wrap)})"><b>${L.text}</b> de dia para a equipa${L.min > 11 * 60 ? ' · mais de 11 horas' : ''}</span>` : `<span class="cst-len none">Põe a hora do wrap nos horários para saber a duração do dia</span>`; };
 const shortDay = (iso) => { if (!iso) return ''; const d = new Date(iso + 'T00:00:00'); return d.toLocaleDateString('pt-PT', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, ''); };
 
 // Escolher a pessoa num menu, como os planos: ao clicar no campo "Nome - telefone" de um contacto aparece a
