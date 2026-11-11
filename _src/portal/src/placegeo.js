@@ -76,9 +76,11 @@ export async function placeInfo(p, loc) {
   const addr = placeAddr(p, loc);
   if (!addr) return null;
   if (!loc.info?.near || loc.info?.geo?.q !== addr) {
-    const g = await geocode(addr); if (!g) return null;
-    const near = await nearby(g);
-    loc.info = { ...(loc.info || {}), geo: { lat: g.lat, lng: g.lng, label: g.label, q: addr, approx: !!g.approx }, near: { ...near, at: new Date().toISOString() } };
+    const g = loc.info?.geo?.q === addr ? loc.info.geo : await geocode(addr); if (!g) return null;
+    const geo = { lat: g.lat, lng: g.lng, label: g.label, q: addr, approx: !!g.approx };
+    // se o serviço de mapas falhar, devolve na mesma o sítio (para o sol e o tempo) e tenta os hospitais da próxima vez
+    let near = null; try { near = await nearby(g); } catch (e) { return { geo, err: e.message || 'O serviço de mapas não respondeu.' }; }
+    loc.info = { ...(loc.info || {}), geo, near: { ...near, at: new Date().toISOString() } };
     await sb.from('locations').update({ info: loc.info }).eq('id', loc.id);
   }
   const n = loc.info.near; const h = n.hospitals?.[loc.info.hospital_pick ?? 0] || n.hospitals?.[0];

@@ -3,7 +3,9 @@
 // O resultado fica guardado no décor (locations.info.geo e info.near) para não perguntar sempre.
 
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
-const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
+// pedidos com tempo limite (os serviços públicos de mapas às vezes ficam pendurados sem responder)
+const tfetch = (u, opts = {}, ms = 12000) => fetch(u, { ...opts, signal: AbortSignal.timeout ? AbortSignal.timeout(ms) : undefined });
 const OSRM = 'https://router.project-osrm.org/table/v1/driving/';
 
 const R = (d) => (d * Math.PI) / 180;
@@ -23,8 +25,8 @@ export async function geocode(q) {
   const tries = [q, String(q).split(',').slice(-2).join(',')];
   for (const t of tries) {
     const u = `${NOMINATIM}?format=jsonv2&limit=1&accept-language=pt&q=${encodeURIComponent(t)}`;
-    const r = await fetch(u, { headers: { Accept: 'application/json' } }); if (!r.ok) continue;
-    const j = await r.json(); if (j[0]) return { lat: Number(j[0].lat), lng: Number(j[0].lon), label: j[0].display_name, approx: t !== q };
+    let j = null; try { const r = await tfetch(u, { headers: { Accept: 'application/json' } }, 10000); if (r.ok) j = await r.json(); } catch { /* tenta a próxima forma */ }
+    if (j?.[0]) return { lat: Number(j[0].lat), lng: Number(j[0].lon), label: j[0].display_name, approx: t !== q };
   }
   return null;
 }
@@ -38,9 +40,19 @@ const kindOf = (tags) => {
 
 // hospitais (com urgência primeiro), polícia e bombeiros à volta, com distância e tempo de carro
 export async function nearby(pt) {
-  const q = `[out:json][timeout:25];(nwr["amenity"="hospital"](around:40000,${pt.lat},${pt.lng});nwr["amenity"="police"](around:15000,${pt.lat},${pt.lng});nwr["amenity"="fire_station"](around:15000,${pt.lat},${pt.lng}););out center tags;`;
-  let els = null;
-  for (const u of OVERPASS) { try { const r = await fetch(u, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }); if (r.ok) { els = (await r.json()).elements; break; } } catch { /* tenta o seguinte */ } }
+  const q = `[out:json][timeout:20];(nwr["amenity"="hospital"](around:40000,${pt.lat},${pt.lng});nwr["amenity"="police"](around:15000,${pt.lat},${pt.lng});nwr["amenity"="fire_station"](around:15000,${pt.lat},${pt.lng}););out center tags;`;
+  // vários servidores: começa pelo primeiro; se falhar, ou se demorar mais de 4 s, junta o seguinte; fica a primeira resposta boa
+  const ask = (u) => tfetch(u, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }, 25000)
+    .then(async (r) => { if (!r.ok) throw new Error(String(r.status)); const j = await r.json(); if (!Array.isArray(j.elements)) throw new Error('sem dados'); return j.elements; });
+  const els = await new Promise((resolve) => {
+    let next = 0, left = OVERPASS.length, done = false, timer = null;
+    const start = () => {
+      clearTimeout(timer); if (done || next >= OVERPASS.length) return;
+      const u = OVERPASS[next++]; timer = setTimeout(start, 4000);
+      ask(u).then((e) => { if (!done) { done = true; clearTimeout(timer); resolve(e); } }).catch(() => { if (--left === 0) { if (!done) { done = true; resolve(null); } } else start(); });
+    };
+    start();
+  });
   if (!els) throw new Error('O serviço de mapas não respondeu. Tenta outra vez daqui a pouco.');
   const all = els.map((e) => ({ type: e.tags?.amenity, name: e.tags?.name || e.tags?.['name:pt'] || '', lat: e.lat ?? e.center?.lat, lng: e.lon ?? e.center?.lon, phone: e.tags?.phone || e.tags?.['contact:phone'] || '', emergency: e.tags?.emergency === 'yes', kind: kindOf(e.tags || {}), addr: [e.tags?.['addr:street'], e.tags?.['addr:housenumber'], e.tags?.['addr:city']].filter(Boolean).join(' ') }))
     .filter((x) => x.lat && x.name).map((x) => ({ ...x, km: km(pt, x) }));
@@ -54,7 +66,7 @@ export async function nearby(pt) {
   const dests = [...out.hospitals, ...out.police, ...out.fire];
   if (dests.length) {
     try {
-      const r = await fetch(`${OSRM}${[pt, ...dests].map((x) => `${x.lng.toFixed(6)},${x.lat.toFixed(6)}`).join(';')}?sources=0&annotations=duration,distance`);
+      const r = await tfetch(`${OSRM}${[pt, ...dests].map((x) => `${x.lng.toFixed(6)},${x.lat.toFixed(6)}`).join(';')}?sources=0&annotations=duration,distance`);
       if (r.ok) { const j = await r.json(); dests.forEach((d, i) => { const s = j.durations?.[0]?.[i + 1]; const m = j.distances?.[0]?.[i + 1]; if (s != null) d.min = Math.round(s / 60); if (m != null) d.km = m / 1000; }); }
     } catch { /* fica só a distância em linha reta */ }
   }
@@ -77,7 +89,7 @@ export async function weatherFor(pt, date) {
   const sun = (d) => ({ sunrise: hhmm(d.sunrise?.[0]), sunset: hhmm(d.sunset?.[0]) });
   if (days >= -60 && days <= 15) {
     const host = days < 0 ? 'https://archive-api.open-meteo.com/v1/archive' : 'https://api.open-meteo.com/v1/forecast';
-    const r = await fetch(`${host}?${base}&daily=${days < 0 ? DAILY.replace(',precipitation_probability_max', '') : DAILY}&start_date=${date}&end_date=${date}`);
+    const r = await tfetch(`${host}?${base}&daily=${days < 0 ? DAILY.replace(',precipitation_probability_max', '') : DAILY}&start_date=${date}&end_date=${date}`);
     if (!r.ok) throw new Error('Sem resposta do serviço de meteorologia.');
     const d = (await r.json()).daily || {};
     return finish({ kind: days < 0 ? 'passado' : 'previsão', code: d.weathercode?.[0], min: d.temperature_2m_min?.[0], max: d.temperature_2m_max?.[0], rainP: d.precipitation_probability_max?.[0], rain: d.precipitation_sum?.[0], wind: d.windspeed_10m_max?.[0], ...sun(d) });
@@ -85,7 +97,7 @@ export async function weatherFor(pt, date) {
   // estimativa: o mesmo dia nos 3 anos anteriores
   const y = Number(date.slice(0, 4)); const md = date.slice(4);
   const ys = [1, 2, 3].map((k) => `${Math.min(y, Number(today.slice(0, 4))) - k}${md}`);
-  const rs = await Promise.all(ys.map((dd) => fetch(`https://archive-api.open-meteo.com/v1/archive?${base}&daily=${DAILY.replace(',precipitation_probability_max', '')}&start_date=${dd}&end_date=${dd}`).then((r) => (r.ok ? r.json() : null)).catch(() => null)));
+  const rs = await Promise.all(ys.map((dd) => tfetch(`https://archive-api.open-meteo.com/v1/archive?${base}&daily=${DAILY.replace(',precipitation_probability_max', '')}&start_date=${dd}&end_date=${dd}`).then((r) => (r.ok ? r.json() : null)).catch(() => null)));
   const ds = rs.map((x) => x?.daily).filter(Boolean);
   if (!ds.length) throw new Error('Sem resposta do serviço de meteorologia.');
   const avg = (k) => { const v = ds.map((d) => d[k]?.[0]).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };

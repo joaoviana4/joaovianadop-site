@@ -3307,3 +3307,4 @@ main > .cv-headblk + .ov { margin-top: 18px; }
 .cst-len.long { color: #C8382D; }
 .cst-len.long b { color: #C8382D; }
 .cst-len.none { font-size: 12px; opacity: .8; }
+.btn.busy { opacity: .7; cursor: progress; }
