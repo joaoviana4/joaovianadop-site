@@ -11,6 +11,8 @@ const mapUrl = (u) => (/^https?:/.test(v(u)) ? v(u) : has(u) ? `https://www.goog
 const link = (u, label) => { const h = mapUrl(u); return h ? `<a href="${esc(h)}">${esc(label || u)}</a>` : esc(label || ''); };
 const timeOf = (d, re) => (d.times || []).find((t) => re.test(v(t.label).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()))?.value || '';
 const shotRows = (d) => d.rows || [];
+// a coluna # só aparece se algum plano tiver número (uma linha com o número apagado fica sem número)
+const numbered = (d) => shotRows(d).some((r) => r.kind !== 'band' && r.num !== '');
 // célula de um plano; a coluna das fotos de referência (só na exportação com fotos) leva a imagem do plano
 export const cellHtml = (r, c) => (c.ref ? (r._img ? `<img class="cs-ref" src="${r._img}" alt="" style="display:block;width:34mm;height:auto;max-height:26mm;object-fit:cover;margin:0 auto">` : '') : esc(r.cells?.[c.id] ?? ''));
 const more = (d) => d.more || {};
@@ -138,9 +140,9 @@ function cartoes(d, P, ink) {
     <div class="bar">${ic.pin} No décor</div><div class="loc"><b>${esc(d.place)}</b>${link(d.address, d.address)}${has(d.parking?.name) ? `<br>Estacionamento: ${esc(d.parking.name)}` : ''}</div>
     ${(d.depts || []).length ? `<div class="depts">${d.depts.map((t) => `<div class="dep"><span>${esc(t.name)}</span><b>${esc(t.time)}</b></div>`).join('')}</div>` : ''}
     <div class="bar">${ic.star} Planeamento da diária ${ic.star}</div>
-    <table class="plan"><thead><tr><th>#</th>${cols.map((c) => `<th>${esc(c.label)}</th>`).join('')}</tr></thead><tbody>${(() => { let n = 0; return shotRows(d).map((r) => (r.kind === 'band'
-      ? `<tr class="b ${r.tone === 'yellow' ? 'y' : ''}"><td colspan="${cols.length + 1}">// ${esc(r.text)} //</td></tr>`
-      : `<tr><td class="n">${esc(r.num ?? ++n)}</td>${cols.map((c) => `<td${c.ref ? ' class="ref"' : ''}>${cellHtml(r, c)}</td>`).join('')}</tr>`)).join(''); })()}</tbody></table>
+    <table class="plan"><thead><tr>${numbered(d) ? '<th>#</th>' : ''}${cols.map((c) => `<th>${esc(c.label)}</th>`).join('')}</tr></thead><tbody>${(() => { let n = 0; const nb = numbered(d); return shotRows(d).map((r) => (r.kind === 'band'
+      ? `<tr class="b ${r.tone === 'yellow' ? 'y' : ''}"><td colspan="${cols.length + (nb ? 1 : 0)}">// ${esc(r.text)} //</td></tr>`
+      : `<tr>${nb ? `<td class="n">${esc(r.num ?? ++n)}</td>` : ''}${cols.map((c) => `<td${c.ref ? ' class="ref"' : ''}>${cellHtml(r, c)}</td>`).join('')}</tr>`)).join(''); })()}</tbody></table>
     ${(d.cast || []).length ? `<div class="bar">${ic.star} ${esc(d.castTitle || 'Elenco')} ${ic.star}</div><table class="tbl"><thead><tr><th>Nome</th><th>Personagem</th><th>Cena</th><th>Call</th><th>Saída</th><th>Notas</th></tr></thead><tbody>${d.cast.map((c) => `<tr><td><b>${esc(c.name)}</b></td><td>${esc(c.role)}</td><td>${esc(c.scene)}</td><td><b>${esc(c.call)}</b></td><td>${esc(c.out)}</td><td>${esc(c.obs)}</td></tr>`).join('')}</tbody></table>` : ''}
     ${(d.vehicles || []).length ? `<div class="bar">Veículos</div><table class="tbl"><thead><tr><th>Veículo</th><th>Condutor</th><th>Call</th><th>Notas</th></tr></thead><tbody>${d.vehicles.map((x) => `<tr><td><b>${esc(x.name)}</b></td><td>${esc(x.driver)}</td><td>${esc(x.call)}</td><td>${esc(x.obs)}</td></tr>`).join('')}</tbody></table>` : ''}
     ${(d.deptNotes || []).length ? `<div class="bar">Notas</div><div class="notes4">${d.deptNotes.map((x) => `<div class="card"><h3>${esc(x.dept)}</h3><div class="tx">${esc(x.text) || '—'}</div></div>`).join('')}</div>` : ''}

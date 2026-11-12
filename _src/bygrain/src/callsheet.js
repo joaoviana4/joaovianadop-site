@@ -667,7 +667,9 @@ async function withRefs(list, p) {
   const byCode = new Map((shots || []).filter((x) => x.code).map((x) => [String(x.code).trim().toLowerCase(), x]));
   let n = 0;
   await Promise.all(copy.map(async (sh) => {
-    sh.cols = [{ id: '_ref', label: 'Referência', ref: true }, ...(sh.cols || [])];
+    // a coluna da foto entra à esquerda; se a primeira coluna for a hora (PAF), fica logo a seguir a ela
+    const cols = sh.cols || []; const at = /^(paf|pronto|hora)/i.test(String(cols[0]?.label || '').trim()) ? 1 : 0;
+    sh.cols = [...cols.slice(0, at), { id: '_ref', label: 'Referência', ref: true }, ...cols.slice(at)];
     await Promise.all((sh.rows || []).map(async (r) => {
       if (r.kind !== 'shot') return;
       const x = (r.shot_id && byId.get(r.shot_id)) || Object.values(r.cells || {}).map((v) => byCode.get(String(v || '').trim().toLowerCase())).find(Boolean) || (r.num != null ? byCode.get(String(r.num).trim().toLowerCase()) : null);
@@ -693,9 +695,12 @@ function docHtml(list, modelId = 'classic') {
     pages = list.map((x) => sheetHtml(x, false));
   }
   return `<!doctype html><html lang="pt"><head><meta charset="utf-8"><title>${esc(d.title)} — Folha de serviço ${list.length > 1 ? 'todos os dias' : 'dia ' + esc(d.day)}</title><style>
-    @page { size: A4 portrait; margin: 8mm; } * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    @page { size: A4 portrait; margin: 0; } * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     body { margin: 0; background: #fff; } ${css}
-  </style></head><body>${pages.map((b, i) => `<div style="${i ? 'break-before: page;' : ''}">${b}</div>`).join('')}</body></html>`;
+    table.pp-wrap { width: 100%; border-collapse: collapse; border: 0 !important; margin: 0 !important; background: transparent !important; }
+    table.pp-wrap > thead > tr > td, table.pp-wrap > tfoot > tr > td, table.pp-wrap > tbody > tr > td.pp-c { border: 0 !important; padding: 0 !important; background: transparent !important; text-align: left !important; width: auto !important; vertical-align: top !important; }
+    @media print { table.pp-wrap > tbody > tr > td.pp-c { padding: 0 8mm !important; } table.pp-wrap > thead > tr > td, table.pp-wrap > tfoot > tr > td { height: 8mm !important; } }
+  </style></head><body>${pages.map((b, i) => `<div style="${i ? 'break-before: page;' : ''}"><table class="pp-wrap"><thead><tr><td></td></tr></thead><tbody><tr><td class="pp-c">${b}</td></tr></tbody><tfoot><tr><td></td></tr></tfoot></table></div>`).join('')}</body></html>`;
 }
 function printSheet(list, modelId) {
   const html = docHtml(list, modelId);
