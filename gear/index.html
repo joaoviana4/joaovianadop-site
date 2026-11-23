@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Gear — João Viana</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500&family=Instrument+Serif:ital@0;1&family=Unbounded:wght@800&family=IBM+Plex+Mono:wght@400;500&family=Reenie+Beanie&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #000; --fg: #fff; --accent: #AFC2A2;
+    --name: color-mix(in srgb, var(--accent) 74%, #fff);
+    --muted: #c9c9c9; --faint: #5a5a5a; --line: rgba(255,255,255,.14);
+    --pad: clamp(16px, 4vw, 56px); --ease: cubic-bezier(.2,.7,.1,1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { background: var(--bg); }
+  body { background: var(--bg); color: var(--fg); font-family: "Inter Tight", system-ui, sans-serif; font-weight: 400; -webkit-font-smoothing: antialiased; }
+  a { color: inherit; text-decoration: none; }
+
+  /* film grain over the whole page, same feel as the portfolio */
+  .grain { position: fixed; inset: -50%; z-index: 60; pointer-events: none; opacity: .08;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    animation: hgrain .5s steps(6) infinite; }
+  @keyframes hgrain { 0%{transform:translate(0,0)} 17%{transform:translate(-7%,4%)} 33%{transform:translate(5%,-8%)} 50%{transform:translate(-3%,9%)} 67%{transform:translate(8%,2%)} 83%{transform:translate(-9%,-5%)} }
+
+  header { position: sticky; top: 0; z-index: 50; background: var(--bg); display: flex; justify-content: space-between; align-items: center; padding: 24px var(--pad); }
+  .mini { font-size: 15px; letter-spacing: .01em; }
+  .tag { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+  main { padding: 24px var(--pad) 0; }
+  .p-title { font-weight: 300; font-size: clamp(56px, 11vw, 170px); line-height: .9; letter-spacing: -.04em; }
+  .p-title em { font-family: "Instrument Serif", serif; font-style: italic; font-weight: 400; }
+  .intro { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); column-gap: clamp(28px, 5vw, 96px); margin-top: clamp(28px, 5vh, 56px); align-items: end; }
+  .lead { font-family: "Instrument Serif", serif; font-size: clamp(24px, 2.4vw, 36px); line-height: 1.2; max-width: 32ch; }
+  .hand { font-family: "Reenie Beanie", cursive; font-size: 24px; line-height: 1; color: var(--accent); transform: rotate(-4deg); display: inline-block; }
+
+  .words { display: flex; flex-wrap: wrap; gap: 0 .45em; font-family: "Unbounded", sans-serif; font-weight: 800; text-transform: uppercase;
+    font-size: clamp(30px, 5.6vw, 92px); line-height: 1.02; color: var(--name); margin: clamp(56px, 10vh, 110px) 0 0; }
+  .words span:not(:last-child)::after { content: "."; color: var(--muted); }
+
+  .chs { display: grid; gap: clamp(56px, 9vh, 110px); margin-top: clamp(56px, 10vh, 120px); }
+  .ch { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); column-gap: clamp(28px, 5vw, 96px); row-gap: 20px; border-top: 1px solid var(--line); padding-top: clamp(20px, 3vh, 30px); }
+  .ch-head { display: flex; gap: 14px; align-items: baseline; }
+  .ch-n { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; color: var(--muted); }
+  .ch-t { font-family: "Instrument Serif", serif; font-weight: 400; font-size: clamp(28px, 3vw, 46px); line-height: 1; letter-spacing: -.01em; }
+
+  .item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 24px; padding: 18px 0; border-bottom: 1px solid var(--line); }
+  .item:first-child { padding-top: 0; }
+  .item h4 { font-family: "Instrument Serif", serif; font-weight: 400; font-size: clamp(22px, 2vw, 30px); line-height: 1.1; }
+  .item .rate { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; letter-spacing: .04em; color: var(--accent); white-space: nowrap; align-self: baseline; }
+  .item .rate small { color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; margin-left: 4px; }
+  .item p { grid-column: 1 / -1; font-size: 15px; line-height: 1.6; opacity: .82; max-width: 62ch; }
+  .spec { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 4px; }
+  .spec span { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .kit { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+  .lens { border: 1px solid var(--line); padding: 14px 12px 12px; display: grid; gap: 4px; }
+  .lens b { font-family: "Unbounded", sans-serif; font-weight: 800; font-size: clamp(22px, 2.4vw, 34px); color: var(--name); line-height: 1; }
+  .lens span { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+  .end { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 20px; border-top: 1px solid var(--line); padding: 28px 0 clamp(56px, 10vh, 120px); margin-top: clamp(56px, 10vh, 110px); }
+  .end p { font-family: "Instrument Serif", serif; font-style: italic; font-size: clamp(22px, 2.4vw, 32px); }
+  .btn { display: inline-flex; align-items: center; gap: 10px; border: 1px solid var(--fg); border-radius: 999px; padding: 12px 22px; font-size: 14px; letter-spacing: .02em; transition: background .4s var(--ease), color .4s var(--ease), border-color .4s var(--ease); }
+  .btn:hover { background: var(--accent); border-color: var(--accent); color: #000; }
+  .note { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); margin-top: 18px; }
+
+  @media (max-width: 900px) { .intro, .ch { grid-template-columns: 1fr; } .kit { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+</style>
+</head>
+<body>
+<div class="grain" aria-hidden="true"></div>
+<header>
+  <a class="mini" href="/">João Viana</a>
+  <span class="tag">Gear list</span>
+</header>
+
+<main>
+  <h1 class="p-title">My <em>gear</em></h1>
+  <div class="intro">
+    <span class="hand">available with me or for rent ↘</span>
+    <p class="lead">The kit I own and bring to set. Day rates in euros, excluding VAT.</p>
+  </div>
+
+  <div class="words" aria-hidden="true"><span>Camera</span><span>Lenses</span><span>Support</span><span>Light</span></div>
+
+  <div class="chs">
+    <section class="ch">
+      <div class="ch-head"><span class="ch-n">01</span><h2 class="ch-t">Camera</h2></div>
+      <div>
+        <article class="item">
+          <h4>Sony FX30</h4><span class="rate">100 €<small>/ day</small></span>
+          <div class="spec"><span>Super 35</span><span>4K up to 120p</span><span>S-Log3 · dual base ISO</span><span>E-mount</span></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="ch">
+      <div class="ch-head"><span class="ch-n">02</span><h2 class="ch-t">Lenses</h2></div>
+      <div>
+        <article class="item">
+          <h4>DZOFilm Arcana</h4><span class="rate">50 €<small>/ day · lens</small></span>
+          <div class="spec"><span>Cine primes</span><span>Vintage character</span></div>
+        </article>
+        <article class="item">
+          <h4>Soviet vintage kit</h4><span class="rate">40 €<small>/ day · kit</small></span>
+          <p>Four Soviet primes with soft contrast, swirling bokeh and warm flares.</p>
+          <div class="kit">
+            <div class="lens"><b>20</b><span>Mir-20M</span></div>
+            <div class="lens"><b>37</b><span>Mir-1B</span></div>
+            <div class="lens"><b>58</b><span>Helios 44-2</span></div>
+            <div class="lens"><b>85</b><span>Jupiter-9</span></div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="ch">
+      <div class="ch-head"><span class="ch-n">03</span><h2 class="ch-t">Support &amp; optics</h2></div>
+      <div>
+        <article class="item">
+          <h4>Benro BV8 tripod</h4><span class="rate">25 €<small>/ day</small></span>
+          <div class="spec"><span>Video tripod</span><span>Fluid head</span></div>
+        </article>
+        <article class="item">
+          <h4>Tilta Mirage matte box</h4><span class="rate">30 €<small>/ day</small></span>
+          <div class="spec"><span>Matte box</span><span>95 mm</span></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="ch">
+      <div class="ch-head"><span class="ch-n">04</span><h2 class="ch-t">Monitoring</h2></div>
+      <div>
+        <article class="item">
+          <h4>DJI SDR Transmission</h4><span class="rate">60 €<small>/ day</small></span>
+          <div class="spec"><span>Wireless video</span><span>Transmitter + receiver</span></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="ch">
+      <div class="ch-head"><span class="ch-n">05</span><h2 class="ch-t">Light</h2></div>
+      <div>
+        <article class="item">
+          <h4>Aputure Storm 400x</h4><span class="rate">70 €<small>/ day</small></span>
+          <div class="spec"><span>Bi-colour LED</span><span>Bowens mount</span></div>
+        </article>
+      </div>
+    </section>
+  </div>
+
+  <div class="end">
+    <p>Need something for your shoot?</p>
+    <a class="btn" href="/#/about">Get in touch →</a>
+  </div>
+</main>
+</body>
+</html>

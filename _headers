@@ -38,3 +38,10 @@
 /g/index.html
   Cache-Control: no-cache
   X-Robots-Tag: noindex, nofollow
+
+/gear/
+  Cache-Control: no-cache
+  X-Robots-Tag: noindex, nofollow
+/gear/index.html
+  Cache-Control: no-cache
+  X-Robots-Tag: noindex, nofollow
