@@ -65,7 +65,7 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
   root.classList.add('cg', 'cg-free');
 
   const save = saveLater(async () => {
-    const grid = Object.fromEntries(list.map((it) => [it.id, { x: it.x, y: it.y, w: it.w, h: it.h, z: it.z }]));
+    const grid = Object.fromEntries(list.map((it) => [it.id, { x: it.x, y: it.y, w: it.w, h: it.h, z: it.z, ...(it.lastSpan ? { s: it.lastSpan } : {}) }]));
     const layouts = { ...(project.layouts || {}), [key]: { ...(project.layouts?.[key] || {}), grid, hidden: [...hidden] } };
     project.layouts = layouts;
     const { error } = await sb.from('projects').update({ layouts }).eq('id', project.id);
@@ -150,7 +150,43 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
     if (mobile()) { root.classList.add('cg-stack'); root.style.height = ''; return; }
     root.classList.remove('cg-stack');
     if (!free) pack();
-    list.forEach(place); fitHeight();
+    list.forEach(place);
+    if (free && pushDown()) { list.forEach(place); save(); }
+    fitHeight();
+  }
+  // Página livre: quando um bloco de altura automática cresce (ex.: mais tarefas), o que está por baixo dele
+  // desce o que for preciso para não ficar tapado (e o que está por baixo desses também, em cadeia).
+  // Só conta o crescimento: o que foi posto por cima de propósito, sem o bloco crescer, fica onde está.
+  const hOverlap = (a, b) => a.x < b.x + b.w - 0.01 && b.x < a.x + a.w - 0.01;
+  function pushDown() {
+    const v = vis(); let moved = false;
+    const shove = (a, need, seen) => {
+      // tudo o que começa por baixo do topo de `a`, ao lado dele, e que ficaria tapado: desce até ficar livre
+      v.forEach((o) => {
+        if (o === a || seen.has(o) || !hOverlap(a, o) || o.y <= a.y + 0.5) return;
+        const bottom = a.y + need;
+        if (o.y < bottom) {
+          seen.add(o); o.y = Math.ceil(bottom); moved = true;
+          shove(o, spanOf(o), seen);
+          seen.delete(o);
+        }
+      });
+    };
+    v.forEach((a) => {
+      if (a.h) { a.lastSpan = spanOf(a); return; } // altura escolhida à mão: não cresce sozinho
+      const cur = spanOf(a); const base = a.lastSpan;
+      if (base == null || cur > base) {
+        // páginas guardadas antes disto (sem altura medida): só se resolve o que está tapado e começa bem abaixo do topo
+        const from = base == null ? 4 : 0.5;
+        v.forEach((o) => {
+          if (o === a || !hOverlap(a, o) || o.y <= a.y + from) return;
+          if (base != null && o.y < a.y + base - 1) return; // já estava por cima do bloco antes de ele crescer
+          if (o.y < a.y + cur) { o.y = Math.ceil(a.y + cur); moved = true; shove(o, spanOf(o), new Set([a, o])); }
+        });
+      }
+      a.lastSpan = cur;
+    });
+    return moved;
   }
   // a partir do primeiro arrastar, nada se mexe sozinho
   const freeze = () => { free = true; };
@@ -342,7 +378,7 @@ export function mountGrid(root, { project, key, items, onRemove, onChange }) {
     const p0 = pos[it.id];
     const bottom = list.filter((x) => !hidden.has(x.id) && x.g).reduce((m, x) => Math.max(m, x.y + spanOf(x)), 0);
     const z = p0?.z ?? list.reduce((m, x) => Math.max(m, x.z || 0), 0) + 1;
-    const obj = { ...it, x: p0?.x ?? it.x ?? 0, y: p0?.y ?? it.y ?? (at === 'end' ? bottom : 0), w: p0?.w ?? it.w ?? COLS, h: p0?.h ?? it.h ?? 0, z };
+    const obj = { ...it, x: p0?.x ?? it.x ?? 0, y: p0?.y ?? it.y ?? (at === 'end' ? bottom : 0), w: p0?.w ?? it.w ?? COLS, h: p0?.h ?? it.h ?? 0, z, lastSpan: p0?.s || null };
     list.push(obj); root.append(wrap(obj)); place(obj);
     return obj;
   }
