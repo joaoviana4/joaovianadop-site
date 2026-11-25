@@ -192,3 +192,18 @@ input[type=date], input[type=time], input[type=datetime-local], input[type=month
 .pl-cover.has { border-style: solid; }
 .pl-cover span { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
 .pl-cover svg { width: 16px; height: 16px; }
+
+/* capa com enquadramento: a imagem é uma camada por baixo do conteúdo (posição + zoom) */
+.proj-cover, .fold-cover, .pm-head, .pl-cover { overflow: hidden; isolation: isolate; }
+.cov-img { position: absolute; inset: 0; z-index: 0; background-repeat: no-repeat; background-size: cover; pointer-events: none; }
+.cov-img.shade::after { content: ''; position: absolute; inset: 0; background: linear-gradient(rgba(12,12,18,.15), rgba(12,12,18,.75)); }
+.pl-cover .cov-img.shade::after { background: linear-gradient(rgba(12,12,18,0), rgba(12,12,18,.35)); }
+.pm-head-in { z-index: 1; }
+.pl-cover { position: relative; aspect-ratio: 4 / 1; height: auto; min-height: 110px; }
+.pl-cover.has { cursor: grab; touch-action: none; }
+.pl-cover.has.dragging { cursor: grabbing; }
+.pl-cover.has:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.pl-hint { margin: 0 0 4px; }
+.pl-zoom { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.pl-zoom input { flex: 1; accent-color: var(--blue); }
+.pl-zoom b { font-size: 12px; min-width: 40px; text-align: right; font-variant-numeric: tabular-nums; }

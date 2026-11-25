@@ -1,3 +1,4 @@
+import { coverLayer } from './projlook.js';
 import { sb, esc, ICON, KINDS, PROJECT_COLS, signedUrls, phaseOf, modal, confirmBox, toast, isAdmin, hideProject, loadHidden } from './lib.js';
 
 // Projetos-pasta (ex.: um álbum): têm um orçamento geral e projetos lá dentro (ex.: os videoclipes),
@@ -65,7 +66,7 @@ export async function childrenSection(box, p, kids, { base, canBudget, onNew, ca
       ${R.hidden ? `<p class="muted small">${R.hidden} projeto${R.hidden > 1 ? 's' : ''} sem orçamento visível para ti.</p>` : ''}
     </div>` : ''}
     ${kids.length ? `<div class="fold-grid">${kids.map((k) => { const ph = phaseOf(k); return `<div class="fold-cw">${`<span class="fold-act">${canEdit ? `<button type="button" class="icon-btn sm" data-ren="${k.id}" title="Mudar o nome" aria-label="Mudar o nome de ${esc(k.name)}">${ICON.edit}</button>` : ''}<button type="button" class="icon-btn sm" data-hide="${k.id}" title="Tirar da minha lista (os outros continuam a vê-lo)" aria-label="Tirar ${esc(k.name)} da minha lista">${ICON.hide}</button>${isAdmin() ? `<button type="button" class="icon-btn sm" data-del="${k.id}" title="Mandar para a reciclagem (para toda a gente)" aria-label="Apagar ${esc(k.name)}">${ICON.trash}</button>` : ''}</span>`}<a class="fold-card" href="#/p/${k.id}">
-      <span class="fold-cover" style="${covers[k.cover_path] ? `background-image:url('${esc(covers[k.cover_path])}')` : ''}"><span class="tag dark">${esc(KINDS[k.kind] || k.kind)}</span></span>
+      <span class="fold-cover" data-covfor="${k.id}">${coverLayer(covers[k.cover_path], k.cover_frame)}<span class="tag dark">${esc(KINDS[k.kind] || k.kind)}</span></span>
       <span class="fold-b"><b>${esc(k.name)}</b><small>${esc(ph.label || 'Sem datas')} · ${k._open} tarefa${k._open === 1 ? '' : 's'} aberta${k._open === 1 ? '' : 's'}</small>
       ${canBudget && k._b ? `<small class="fold-money">${k._b.value != null ? eur.format(k._b.value) : 'sem valor'} · gasto ${eur.format(k._b.spent)}</small>` : ''}</span></a></div>`; }).join('')}</div>`
       : `<p class="empty-note">Ainda não há projetos aqui dentro.${onNew ? ' Cria o primeiro em “Novo projeto dentro”.' : ''}</p>`}`;

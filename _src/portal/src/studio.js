@@ -10,7 +10,7 @@ import { onWrite, setWriteGuard } from './undo.js';
 import { applyHero, heroEditor, heroTitle } from './herobanner.js';
 import { aheadNotice, bindAhead, aheadOf, stageOptions, projectStrip, bindStrip, phaseBar, bindPhaseBar, shows, modKey, toolKey, selPhase, setSelPhase, phaseLabel, phasesOf, setToolPhase, stagesOn } from './phases.js';
 import { projectSearch } from './psearch.js';
-import { projectLookModal } from './projlook.js';
+import { projectLookModal, coverLayer } from './projlook.js';
 import { setProjectAccent } from './appearance.js';
 import { mountTasks, loadPeople, clearPeopleCache, addTaskModal } from './tasks.js';
 import { TOOL_KINDS, tableTool, timelineTool, tableTemplate } from './tools.js';
@@ -364,7 +364,7 @@ async function homePage(comm = null) {
   };
   const drawHidden = () => {
     grid.innerHTML = list.length ? list.map((p) => `<article class="proj-card trash-card">
-        <div class="proj-cover" style="${covers[p.cover_path] ? `background-image:url('${esc(covers[p.cover_path])}')` : `background:${p.accent ? `linear-gradient(135deg, ${esc(p.accent)}, #111114 85%)` : coverColor(p.id)}`}"><div class="grain-layer soft" aria-hidden="true"></div><span class="tag dark">${esc(KINDS[p.kind] || p.kind)}</span></div>
+        <div class="proj-cover" data-covfor="${p.id}" style="${covers[p.cover_path] ? '' : `background:${p.accent ? `linear-gradient(135deg, ${esc(p.accent)}, #111114 85%)` : coverColor(p.id)}`}">${coverLayer(covers[p.cover_path], p.cover_frame)}<div class="grain-layer soft" aria-hidden="true"></div><span class="tag dark">${esc(KINDS[p.kind] || p.kind)}</span></div>
         <div class="proj-body">
           <div><div class="proj-name">${esc(p.name)}</div><div class="muted small">${esc(p.client || '—')} · tiraste da tua lista a ${fmtDate(hidden.get(p.id))}</div></div>
           <div class="row wrap-gap"><button type="button" class="btn primary" data-unhide="${p.id}">${ICON.eye} Voltar a mostrar</button><a class="btn ghost" href="#/p/${p.id}">Abrir</a></div>
@@ -379,7 +379,7 @@ async function homePage(comm = null) {
     const par = p.parent_id && byId.get(p.parent_id);
     return `<article class="proj-card ${p.kind === 'album' ? 'is-folder' : ''}">
       <a href="#/p/${p.id}" class="proj-link" aria-label="Abrir ${esc(p.name)}"></a>
-      <div class="proj-cover" style="${covers[p.cover_path] ? `background-image:url('${esc(covers[p.cover_path])}')` : `background:${p.accent ? `linear-gradient(135deg, ${esc(p.accent)}, #111114 85%)` : coverColor(p.id)}`}">
+      <div class="proj-cover" data-covfor="${p.id}" style="${covers[p.cover_path] ? '' : `background:${p.accent ? `linear-gradient(135deg, ${esc(p.accent)}, #111114 85%)` : coverColor(p.id)}`}">${coverLayer(covers[p.cover_path], p.cover_frame)}
         <div class="grain-layer soft" aria-hidden="true"></div>
         <span class="tag dark">${esc(KINDS[p.kind] || p.kind)}</span>
         <span class="on-cover-acts">${p.community_id && pinned.has(p.id) ? `<span class="icon-btn on-cover on pin-mark" title="Fixado no teu início">${ICON.pin}</span>` : ''}<button type="button" class="icon-btn on-cover" data-more="${p.id}" aria-haspopup="menu" aria-label="Opções de ${esc(p.name)}">${ICON.dots}</button></span>
@@ -1304,7 +1304,7 @@ async function projectOverview(main, p, { plain = false } = {}) {
   // o banner aparece logo, enquanto o resto carrega (a página não fica em branco)
   if (!p.is_central && !main.querySelector('.pm-head')) {
     const cu = knownUrl(p.cover_path);
-    main.innerHTML = `<section class="pm-head" style="${cu ? `background-image:linear-gradient(rgba(12,12,18,.15),rgba(12,12,18,.75)),url('${esc(cu)}')` : ''}"><div class="grain-layer moving" aria-hidden="true"></div>
+    main.innerHTML = `<section class="pm-head" data-covfor="${p.id}" style="${cu ? 'background-image:none' : ''}">${coverLayer(cu, p.cover_frame, true)}<div class="grain-layer moving" aria-hidden="true"></div>
       <div class="pm-head-in"><span class="tag dark">${esc(KINDS[p.kind] || p.kind)}</span><h1 class="pm-name">${esc(p.name)}</h1>
       <p class="pm-sub">${[p.client, p.starts_on && p.ends_on ? `${fmtDate(p.starts_on)} – ${fmtDate(p.ends_on)}` : ''].filter(Boolean).map(esc).join(' · ')}</p></div></section>
       <p class="muted cv-wait">A carregar…</p>`;
@@ -1335,7 +1335,7 @@ async function projectOverview(main, p, { plain = false } = {}) {
   const deptMap = new Map((p.departments || []).map((d) => [d.id, d]));
   const next = (tasks || []).sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999')).slice(0, 6);
   main.innerHTML = `
-    <section class="pm-head" style="${cover ? `background-image:linear-gradient(rgba(12,12,18,.15),rgba(12,12,18,.75)),url('${esc(cover)}')` : ''}">
+    <section class="pm-head" data-covfor="${p.id}" style="${cover ? 'background-image:none' : ''}">${coverLayer(cover, p.cover_frame, true)}
       <div class="grain-layer moving" aria-hidden="true"></div>
       ${!p.is_central && p.canEdit !== false && isStaff() ? `<button type="button" class="pm-look" data-pmlook title="Mudar a capa e a cor do projeto">${ICON.image}<span>Capa e cor</span></button>` : ''}
       <div class="pm-head-in">
