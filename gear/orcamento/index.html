@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Orçamento de imagem — João Viana</title>
+<style>
+  :root{--bg:#F3EFE6;--ink:#2A2724;--ink2:#6F675C;--head:#E8E2D6;--line:#D6CFC2;--hi:#F6E7A8;--note:#FBF3D2;--gold:#C9A227}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#d9d3c7;color:var(--ink);font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:1.45}
+  .bar{position:sticky;top:0;z-index:10;display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 16px;background:var(--ink);color:var(--bg)}
+  .bar b{margin-right:auto;font-weight:500;letter-spacing:.02em}
+  .bar button{background:transparent;color:var(--bg);border:1px solid var(--bg);border-radius:999px;padding:6px 14px;font:inherit;cursor:pointer}
+  .bar button.main{background:var(--bg);color:var(--ink)}
+  .page{width:210mm;min-height:297mm;margin:18px auto;background:var(--bg);padding:16mm 15mm;box-shadow:0 2px 14px rgba(0,0,0,.15)}
+  h1{font-size:24px;font-weight:700;margin-bottom:6px}
+  h2{font-size:15px;font-weight:700;margin:22px 0 8px}
+  .meta{color:var(--ink2);margin-bottom:4px}
+  .meta b{color:var(--ink)}
+  input,select{font:inherit;color:inherit;background:transparent;border:0;border-bottom:1px dashed transparent;padding:1px 2px;width:100%}
+  input:hover,input:focus{border-bottom-color:var(--ink2);outline:none}
+  input.num{text-align:right}
+  input.inline{width:auto;min-width:6ch}
+  table{width:100%;border-collapse:collapse}
+  th{background:var(--head);text-align:left;font-weight:700;padding:6px 8px;border-bottom:1px solid var(--line)}
+  td{padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  th.r,td.r{text-align:right;white-space:nowrap}
+  tr.sub td{background:var(--head);font-weight:700}
+  tr.hi td.v,td.hi{background:var(--hi)}
+  .pname{font-weight:700}
+  s{color:var(--ink2)}
+  .small{font-size:11px;color:var(--ink2);font-style:italic}
+  .ctl{display:inline-flex;gap:8px;margin-top:3px;font-size:11px;color:var(--ink2)}
+  .ctl label{display:inline-flex;gap:3px;align-items:center;cursor:pointer}
+  .x{border:0;background:none;color:#a0503c;cursor:pointer;font-size:14px;line-height:1}
+  .add{margin-top:6px;border:1px dashed var(--ink2);background:none;border-radius:4px;padding:4px 10px;font:inherit;font-size:12px;color:var(--ink2);cursor:pointer}
+  .notes{background:var(--note);border-left:4px solid var(--gold);padding:12px 14px;margin:20px 0}
+  .notes h3{font-size:14px;margin-bottom:6px}
+  .notes [contenteditable]{outline:none}
+  .notes p{margin:6px 0}
+  .totals{width:60%;margin-left:auto}
+  .totals tr:last-child td{font-weight:700;font-size:15px;background:var(--head)}
+  .break{break-before:page}
+  input.rep{color:transparent}
+  input.rep:focus,input.rep:hover{color:var(--ink2)}
+  input.inline{min-width:0}
+  @media print{
+    html,body{background:var(--bg);font-size:11.5px}
+    h2{margin:14px 0 6px}
+    td,th{padding:4px 7px}
+    .notes{margin:12px 0;padding:9px 12px}
+    .notes p{margin:4px 0}
+    .bar,.no-print,.ctl,.x,.add{display:none!important}
+    .page{margin:0;box-shadow:none;width:auto;min-height:0;padding:0}
+    input{border:0}
+    @page{size:A4;margin:14mm 13mm}
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  }
+</style>
+</head>
+<body>
+<div class="bar">
+  <b>Modelo de orçamento — João Viana</b>
+  <button onclick="novo()">Novo orçamento</button>
+  <button onclick="exportar()">Guardar ficheiro</button>
+  <button onclick="document.getElementById('imp').click()">Abrir ficheiro</button>
+  <input id="imp" type="file" accept=".json" hidden onchange="importar(this)">
+  <button class="main" onclick="window.print()">Imprimir / PDF</button>
+</div>
+
+<div class="page" id="p1"></div>
+<div class="page break" id="p2"></div>
+
+<script>
+const KEY = 'jv-orcamento-v1';
+const eur = n => (Number(n)||0).toLocaleString('pt-PT',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €';
+const num = v => parseFloat(String(v).replace(',', '.')) || 0;
+
+const MODELO = () => ({
+  projeto: 'Nome do projeto', cliente: 'Artista / Cliente',
+  rodagem: '[datas]', deslocacao: '[datas]', levantamento: '[data]', entrega: '[data]', dias: 2,
+  pessoas: [
+    { nome: 'João Viana', iva: 23, itens: [
+      { f: 'Direção de fotografia (DoP)', d: 0, q: 2, of: false, hi: false },
+      { f: 'Color grading', d: 0, q: 1, of: true, hi: false },
+      { f: 'Equipamento (ver lista)', d: 0, q: 1, of: true, hi: false, eq: true },
+      { f: 'Reperage *', d: 0, q: 1, of: true, hi: true } ] },
+    { nome: '[Nome]', iva: 0, itens: [
+      { f: '[Função 1]', d: 0, q: 2, of: false, hi: false },
+      { f: '[Função 2]', d: 0, q: 1, of: false, hi: false } ] }
+  ],
+  despesas: [
+    { i: 'Carrinhas [datas] *', v: 0, hi: true },
+    { i: 'Equipamento *', v: 0, hi: true },
+    { i: 'Combustíveis + Portagens', v: 0, hi: false },
+    { i: 'Combustíveis + Portagens — Reperage', v: 0, hi: false } ],
+  notas: `<p><b>* Carrinhas e equipamento</b> — Valor de carrinha e valor de equipamento a ser estudado. Pode vir a ser inferior ao mencionado: a tabela prevê este valor, no entanto, vamos tentar que seja menos.</p>
+<p><b>* Reperage</b> — O valor de reperage está anulado e incluído no pacote de direção de fotografia. As despesas da reperage (combustíveis + portagens) estão apresentadas nas despesas. Caso o orçamento não venha a ser aprovado, a reperage, caso aconteça, terá de ser cobrada e não estará incluída no valor de direção de fotografia.</p>
+<p><b>Pagamento no levantamento</b> — Os valores das carrinhas e do equipamento têm de ser pagos na altura do levantamento, com data provisória a [data]. A carrinha poderá também incluir uma caução, devolvida após a entrega.</p>
+<p><b>IVA</b> — Apenas os honorários de João Viana estão sujeitos a IVA à taxa de 23%, a liquidar no pagamento e posteriormente dedutível pela produção. Os restantes honorários não têm IVA. Os valores das despesas também já incluem IVA, que poderá igualmente ser dedutível — o custo real sem IVA será, por isso, inferior ao total apresentado.</p>`,
+  equip: [
+    { c: 'Imagem', i: 'FX30', n: 'Inclui cartões, leitor de cartões e baterias', d: 65, of: true },
+    { c: 'Imagem', i: 'Tripé Benro BV8', n: '', d: 25, of: true },
+    { c: 'Imagem', i: 'Lente B4', n: '', d: 30, of: true },
+    { c: 'Imagem', i: 'Tilta Mirage (matte box)', n: '', d: 30, of: true },
+    { c: 'Imagem', i: 'Acessórios de câmara', n: '', d: 10, of: true },
+    { c: 'Iluminação', i: 'Aputure Storm 400x c/ Fresnel', n: '', d: 70, of: true },
+    { c: 'Iluminação', i: 'SmallRig 60W', n: '', d: 20, of: true },
+    { c: 'Iluminação', i: 'Nanlite 150W', n: '', d: 20, of: true },
+    { c: 'Iluminação', i: 'Snoot', n: '', d: 10, of: true },
+    { c: 'Iluminação', i: 'Softbox Neewer 120cm', n: '', d: 10, of: true },
+    { c: 'Iluminação', i: 'Ceferino', n: '', d: 8, of: true } ],
+  outra: { nome: '[Outra entidade]', itens: [ { c: 'Imagem', i: '[Equipamento]', n: '' } ] }
+});
+
+let S;
+try { S = JSON.parse(localStorage.getItem(KEY)) || MODELO(); } catch (e) { S = MODELO(); }
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+
+function equipTotal(onlyCharged) {
+  return S.equip.reduce((t, e) => t + ((onlyCharged && e.of) ? 0 : num(e.d) * num(S.dias)), 0);
+}
+function itemVal(it) { return it.eq ? equipTotal(false) : num(it.d) * num(it.q); }
+function personTotal(p) { return p.itens.reduce((t, it) => t + (it.of ? 0 : itemVal(it)), 0); }
+
+const inp = (path, val, cls = '') => `<input class="${cls}" data-p="${path}" ${cls.includes('inline') ? `size="${Math.max(4, String(val ?? '').length + 1)}"` : ''} value="${String(val ?? '').replace(/"/g, '&quot;')}">`;
+const chk = (path, on, label) => `<label><input type="checkbox" data-p="${path}" ${on ? 'checked' : ''} style="width:auto">${label}</label>`;
+
+function render() {
+  const hon = S.pessoas.reduce((t, p) => t + personTotal(p), 0);
+  const ivaT = S.pessoas.reduce((t, p) => t + personTotal(p) * num(p.iva) / 100, 0);
+  const desp = S.despesas.reduce((t, d) => t + num(d.v), 0);
+
+  let rows = '';
+  S.pessoas.forEach((p, pi) => {
+    p.itens.forEach((it, ii) => {
+      const v = itemVal(it);
+      const val = it.of ? `<s>${eur(v)}</s> — 0,00 €` : eur(v);
+      const diaria = it.eq ? '—' : inp(`pessoas.${pi}.itens.${ii}.d`, it.d, 'num');
+      const qtd = it.eq ? `${S.dias} d` : inp(`pessoas.${pi}.itens.${ii}.q`, it.q, 'num');
+      rows += `<tr class="${it.hi ? 'hi' : ''}">
+        <td class="pname">${ii === 0 ? inp(`pessoas.${pi}.nome`, p.nome) + `<div class="ctl">IVA ${inp(`pessoas.${pi}.iva`, p.iva, 'num inline')}% <button class="x" onclick="rm('pessoas',${pi})" title="Remover pessoa">✕</button></div>` : ''}</td>
+        <td>${inp(`pessoas.${pi}.itens.${ii}.f`, it.f)}<div class="ctl">${chk(`pessoas.${pi}.itens.${ii}.of`, it.of, 'oferta')}${chk(`pessoas.${pi}.itens.${ii}.hi`, it.hi, 'destaque')}<button class="x" onclick="rm('pessoas.${pi}.itens',${ii})">✕</button></div></td>
+        <td class="r">${diaria}</td><td class="r">${qtd}</td><td class="r v">${val}</td></tr>`;
+    });
+    const t = personTotal(p);
+    rows += `<tr class="no-print"><td></td><td colspan="4"><button class="add" onclick="addItem(${pi})">+ função</button></td></tr>
+      <tr class="sub"><td></td><td>Total ${p.nome}</td><td></td><td></td><td class="r">${eur(t)}${num(p.iva) ? ' + IVA' : ''}<div class="small">(IVA ${num(p.iva)}%${num(p.iva) ? ': ' + eur(t * num(p.iva) / 100) : ''})</div></td></tr>`;
+  });
+
+  const dRows = S.despesas.map((d, i) => `<tr class="${d.hi ? 'hi' : ''}"><td>${inp(`despesas.${i}.i`, d.i)}<div class="ctl">${chk(`despesas.${i}.hi`, d.hi, 'destaque')}<button class="x" onclick="rm('despesas',${i})">✕</button></div></td><td class="r v">${inp(`despesas.${i}.v`, d.v, 'num')}</td></tr>`).join('');
+
+  document.getElementById('p1').innerHTML = `
+    <h1>Orçamento de imagem — “${inp('projeto', S.projeto, 'inline')}”</h1>
+    <div class="meta"><b>${inp('cliente', S.cliente, 'inline')}</b></div>
+    <div class="meta"><b>Rodagem:</b> ${inp('rodagem', S.rodagem, 'inline')} · <b>Possíveis datas de deslocação:</b> ${inp('deslocacao', S.deslocacao, 'inline')}</div>
+    <h2>Pessoas — honorários</h2>
+    <table><tr><th style="width:22%">Nome</th><th>Função</th><th class="r" style="width:13%">Diária</th><th class="r" style="width:9%">Dias</th><th class="r" style="width:20%">Valor</th></tr>
+    ${rows}
+    <tr class="sub"><td></td><td>Subtotal honorários (sem IVA)</td><td></td><td></td><td class="r">${eur(hon)}</td></tr></table>
+    <button class="add" onclick="addPessoa()">+ pessoa</button>
+    <h2>Despesas (IVA incluído)</h2>
+    <table><tr><th>Item</th><th class="r" style="width:20%">Valor (€)</th></tr>${dRows}
+    <tr class="sub"><td>Subtotal despesas (IVA incluído)</td><td class="r">${eur(desp)}</td></tr></table>
+    <button class="add" onclick="S.despesas.push({i:'Nova despesa',v:0,hi:false});upd()">+ despesa</button>
+    <div class="notes"><h3>⚠️ NOTAS IMPORTANTES</h3><div contenteditable="true" id="notas">${S.notas}</div></div>
+    <table class="totals">
+      <tr><td>Total s/ IVA</td><td class="r">${eur(hon + desp)}</td></tr>
+      <tr><td class="hi">IVA — honorários</td><td class="r hi">${eur(ivaT)}</td></tr>
+      <tr><td>TOTAL C/ IVA</td><td class="r">${eur(hon + desp + ivaT)}</td></tr></table>`;
+
+  let cat = '';
+  const eRows = S.equip.map((e, i) => {
+    const t = num(e.d) * num(S.dias);
+    const showCat = e.c !== cat; cat = e.c;
+    return `<tr><td>${showCat ? `<b>${inp(`equip.${i}.c`, e.c)}</b>` : inp(`equip.${i}.c`, e.c, 'rep')}</td>
+      <td>${inp(`equip.${i}.i`, e.i)}${e.n ? `<div class="small">${e.n}</div>` : ''}<div class="ctl">nota ${inp(`equip.${i}.n`, e.n, 'inline')} ${chk(`equip.${i}.of`, e.of, 'não cobrado')}<button class="x" onclick="rm('equip',${i})">✕</button></div></td>
+      <td class="r">${inp(`equip.${i}.d`, e.d, 'num')}</td>
+      <td class="r">${e.of ? `<s>${eur(t)}</s> — <b>0,00 €</b>` : eur(t)}</td></tr>`;
+  }).join('');
+  const oRows = S.outra.itens.map((e, i) => `<tr><td><b>${inp(`outra.itens.${i}.c`, e.c)}</b></td><td>${inp(`outra.itens.${i}.i`, e.i)}<div class="ctl">nota ${inp(`outra.itens.${i}.n`, e.n, 'inline')}<button class="x" onclick="rm('outra.itens',${i})">✕</button></div>${e.n ? `<div class="small">${e.n}</div>` : ''}</td></tr>`).join('');
+  const allOf = S.equip.every(e => e.of);
+
+  document.getElementById('p2').innerHTML = `
+    <h1>Lista de equipamento</h1>
+    <div class="meta"><b>Cotação para ${inp('dias', S.dias, 'inline num')} dias</b></div>
+    <div class="meta"><b>Rodagem:</b> ${S.rodagem} · <b>Possíveis datas de deslocação:</b> ${S.deslocacao}</div>
+    <div class="meta"><b>Levantamento do equipamento:</b> ${inp('levantamento', S.levantamento, 'inline')} · <b>Entrega:</b> ${inp('entrega', S.entrega, 'inline')}</div>
+    <h2>João Viana</h2>
+    <table><tr><th style="width:16%">Categoria</th><th>Equipamento</th><th class="r" style="width:13%">Diária (€)</th><th class="r" style="width:24%">Total (${S.dias} dias)</th></tr>
+    ${eRows}
+    <tr class="sub"><td></td><td>Total equipamento João Viana</td><td></td><td class="r">${allOf ? `<s>${eur(equipTotal(false))}</s> — 0,00 €` : eur(equipTotal(true))}</td></tr></table>
+    <button class="add" onclick="S.equip.push({c:'Imagem',i:'Novo equipamento',n:'',d:0,of:true});upd()">+ equipamento</button>
+    ${allOf ? '<p class="small" style="margin-top:8px">O equipamento de João Viana não é cobrado: os valores de aluguer são indicados apenas como referência.</p>' : ''}
+    <h2>${inp('outra.nome', S.outra.nome, 'inline')}</h2>
+    <table><tr><th style="width:16%">Categoria</th><th>Equipamento</th></tr>${oRows}</table>
+    <button class="add" onclick="S.outra.itens.push({c:'Imagem',i:'Equipamento',n:''});upd()">+ equipamento</button>`;
+
+  document.getElementById('notas').addEventListener('input', e => { S.notas = e.target.innerHTML; save(); });
+}
+
+function setPath(path, v) {
+  const k = path.split('.'); let o = S;
+  for (let i = 0; i < k.length - 1; i++) o = o[k[i]];
+  o[k[k.length - 1]] = v;
+}
+function getPath(path) { return path.split('.').reduce((o, k) => o[k], S); }
+function upd() { save(); const a = document.activeElement?.dataset?.p; render(); if (a) { const el = document.querySelector(`[data-p="${a}"]`); if (el && el.type !== 'checkbox') { el.focus(); const L = el.value.length; try { el.setSelectionRange(L, L); } catch (e) {} } } }
+function rm(path, i) { getPath(path).splice(i, 1); upd(); }
+function addItem(pi) { S.pessoas[pi].itens.push({ f: 'Nova função', d: 0, q: 1, of: false, hi: false }); upd(); }
+function addPessoa() { S.pessoas.push({ nome: '[Nome]', iva: 0, itens: [{ f: '[Função]', d: 0, q: 1, of: false, hi: false }] }); upd(); }
+function novo() { if (confirm('Começar um orçamento novo a partir do modelo? O atual é apagado deste browser (guarda o ficheiro antes, se quiseres).')) { S = MODELO(); upd(); } }
+function exportar() {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(S, null, 1)], { type: 'application/json' }));
+  a.download = 'orcamento-' + (S.projeto || 'projeto').toLowerCase().replace(/[^a-z0-9]+/gi, '-') + '.json'; a.click();
+}
+function importar(el) { const f = el.files[0]; if (!f) return; f.text().then(t => { S = JSON.parse(t); upd(); }); el.value = ''; }
+
+document.addEventListener('change', e => {
+  const p = e.target.dataset?.p; if (!p) return;
+  if (e.target.type === 'checkbox') setPath(p, e.target.checked);
+  else setPath(p, /\.(d|q|v|iva)$|^dias$/.test(p) ? num(e.target.value) : e.target.value);
+  upd();
+});
+render();
+</script>
+</body>
+</html>

@@ -45,3 +45,9 @@
 /gear/index.html
   Cache-Control: no-cache
   X-Robots-Tag: noindex, nofollow
+/gear/orcamento/
+  Cache-Control: no-cache
+  X-Robots-Tag: noindex, nofollow
+/gear/orcamento/index.html
+  Cache-Control: no-cache
+  X-Robots-Tag: noindex, nofollow
