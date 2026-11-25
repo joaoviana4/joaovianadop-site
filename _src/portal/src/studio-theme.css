@@ -179,3 +179,16 @@ input[type=date], input[type=time], input[type=datetime-local], input[type=month
 .pm-head:not([style*="background-image"]) .pm-tasks.late span { color: var(--late); }
 .pm-head:not([style*="background-image"]) .pm-q.has { border-color: var(--soon); }
 .pm-head:not([style*="background-image"]) .pm-q.has span, .pm-head:not([style*="background-image"]) .pm-q.has .pm-qi { color: var(--soon); }
+
+/* capa e cor do projeto: botão no topo da visão geral e a janela */
+.pm-head { position: relative; }
+.pm-look { position: absolute; top: 12px; right: 12px; z-index: 2; display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: 999px; border: 1px solid rgba(255,255,255,.28); background: rgba(12,12,18,.45); color: #fff; font: inherit; font-size: 12.5px; cursor: pointer; opacity: .0; transition: opacity .15s, background .15s; backdrop-filter: blur(6px); }
+.pm-look svg { width: 15px; height: 15px; }
+.pm-head:hover .pm-look, .pm-look:focus-visible { opacity: 1; }
+.pm-look:hover { background: rgba(12,12,18,.7); }
+.pm-head:not([style*="background-image"]) .pm-look { background: var(--panel2); color: var(--text); border-color: var(--line); }
+@media (hover: none) { .pm-look { opacity: 1; } }
+.pl-cover { height: 140px; border-radius: 12px; border: 1px dashed var(--line2); background: var(--panel2) center / cover no-repeat; display: flex; align-items: center; justify-content: center; color: var(--muted); margin-bottom: 8px; }
+.pl-cover.has { border-style: solid; }
+.pl-cover span { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.pl-cover svg { width: 16px; height: 16px; }

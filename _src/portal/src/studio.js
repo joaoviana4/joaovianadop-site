@@ -10,6 +10,8 @@ import { onWrite, setWriteGuard } from './undo.js';
 import { applyHero, heroEditor, heroTitle } from './herobanner.js';
 import { aheadNotice, bindAhead, aheadOf, stageOptions, projectStrip, bindStrip, phaseBar, bindPhaseBar, shows, modKey, toolKey, selPhase, setSelPhase, phaseLabel, phasesOf, setToolPhase, stagesOn } from './phases.js';
 import { projectSearch } from './psearch.js';
+import { projectLookModal } from './projlook.js';
+import { setProjectAccent } from './appearance.js';
 import { mountTasks, loadPeople, clearPeopleCache, addTaskModal } from './tasks.js';
 import { TOOL_KINDS, tableTool, timelineTool, tableTemplate } from './tools.js';
 import { isFolder, loadChildren, rollup, childrenSection, budgetChildrenPanel } from './folders.js';
@@ -127,13 +129,13 @@ async function route() {
       if (!data) { toast('A Central desta comunidade ainda não existe.'); return go(`#/c/${c.id}`); }
       return parts[3] === 'b' ? boardView(data.id, parts[4]) : parts[3] === 'f' ? toolPage(data.id, parts[4]) : projectPage(data.id, parts[3] || 'geral', parts[4]);
     }
-    leaveProject();
+    leaveProject(); setProjectAccent(null);
     if (parts[2] === 'pessoas') return isAdmin() ? communityTeamPage(c) : go(`#/c/${c.id}`);
     if (parts[2] === 'tarefas') return tasksPage(c);
     return homePage(c);
   }
   setCtx();
-  leaveProject();
+  leaveProject(); setProjectAccent(null);
   if (parts[0] === 'central') return go(state.comms.find((c) => c.business) ? `#/c/${state.comms.find((c) => c.business).id}/central` : '#/');
   if (parts[0] === 'tarefas') return tasksPage();
   if (parts[0] === 'equipamento') return gearDbPage();
@@ -362,7 +364,7 @@ async function homePage(comm = null) {
   };
   const drawHidden = () => {
     grid.innerHTML = list.length ? list.map((p) => `<article class="proj-card trash-card">
-        <div class="proj-cover" style="${covers[p.cover_path] ? `background-image:url('${esc(covers[p.cover_path])}')` : `background:${coverColor(p.id)}`}"><div class="grain-layer soft" aria-hidden="true"></div><span class="tag dark">${esc(KINDS[p.kind] || p.kind)}</span></div>
+        <div class="proj-cover" style="${covers[p.cover_path] ? `background-image:url('${esc(covers[p.cover_path])}')` : `background:${p.accent ? `linear-gradient(135deg, ${esc(p.accent)}, #111114 85%)` : coverColor(p.id)}`}"><div class="grain-layer soft" aria-hidden="true"></div><span class="tag dark">${esc(KINDS[p.kind] || p.kind)}</span></div>
         <div class="proj-body">
           <div><div class="proj-name">${esc(p.name)}</div><div class="muted small">${esc(p.client || '—')} · tiraste da tua lista a ${fmtDate(hidden.get(p.id))}</div></div>
           <div class="row wrap-gap"><button type="button" class="btn primary" data-unhide="${p.id}">${ICON.eye} Voltar a mostrar</button><a class="btn ghost" href="#/p/${p.id}">Abrir</a></div>
@@ -377,7 +379,7 @@ async function homePage(comm = null) {
     const par = p.parent_id && byId.get(p.parent_id);
     return `<article class="proj-card ${p.kind === 'album' ? 'is-folder' : ''}">
       <a href="#/p/${p.id}" class="proj-link" aria-label="Abrir ${esc(p.name)}"></a>
-      <div class="proj-cover" style="${covers[p.cover_path] ? `background-image:url('${esc(covers[p.cover_path])}')` : `background:${coverColor(p.id)}`}">
+      <div class="proj-cover" style="${covers[p.cover_path] ? `background-image:url('${esc(covers[p.cover_path])}')` : `background:${p.accent ? `linear-gradient(135deg, ${esc(p.accent)}, #111114 85%)` : coverColor(p.id)}`}">
         <div class="grain-layer soft" aria-hidden="true"></div>
         <span class="tag dark">${esc(KINDS[p.kind] || p.kind)}</span>
         <span class="on-cover-acts">${p.community_id && pinned.has(p.id) ? `<span class="icon-btn on-cover on pin-mark" title="Fixado no teu início">${ICON.pin}</span>` : ''}<button type="button" class="icon-btn on-cover" data-more="${p.id}" aria-haspopup="menu" aria-label="Opções de ${esc(p.name)}">${ICON.dots}</button></span>
@@ -423,12 +425,10 @@ async function homePage(comm = null) {
     e.preventDefault(); e.stopPropagation(); const p = list.find((x) => x.id === b.dataset.more); if (!p) return;
     const card = b.closest('.proj-card');
     const setStatus = async (v) => { const { error } = await sb.from('projects').update({ status: v }).eq('id', p.id); if (error) return toast(error.message); p.status = v; projCache.delete(p.id); toast({ active: 'Está em curso.', done: 'Marcado como finalizado.', archived: 'Foi para o arquivo.' }[v]); drawGrid(); };
-    const pickCover = () => { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.onchange = async () => { try { toast('A enviar a capa…'); const up = await uploadImage(p.id, 'cover', inp.files[0]); const { error } = await sb.from('projects').update({ cover_path: up.path }).eq('id', p.id); if (error) throw error; projCache.delete(p.id); toast('Capa mudada.'); homePage(comm); } catch (er) { toast(er.message || String(er)); } }; inp.click(); };
     popMenu(b, p.name, [
       { label: 'Abrir', icon: ICON.open, run: () => go(`#/p/${p.id}`) },
       staff && { label: 'Mudar o nome', icon: ICON.title, run: () => card.querySelector('[data-rename]')?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })) },
-      staff && { label: p.cover_path ? 'Mudar a capa…' : 'Pôr uma capa…', icon: ICON.image, run: pickCover },
-      staff && p.cover_path && { label: 'Tirar a capa', icon: ICON.close, run: async () => { await sb.from('projects').update({ cover_path: null }).eq('id', p.id); projCache.delete(p.id); toast('Capa tirada.'); homePage(comm); } },
+      staff && { label: 'Capa e cor…', icon: ICON.image, run: () => projectLookModal(p, () => { projCache.delete(p.id); homePage(comm); }) },
       '-',
       ...(staff ? [['active', 'Em curso'], ['done', 'Finalizado'], ['archived', 'Arquivado']].map(([k, l]) => ({ label: l, check: p.status === k, run: () => p.status !== k && setStatus(k) })) : []),
       '-',
@@ -622,12 +622,8 @@ function bindDetails(root, p, after) {
   { const cv = form.querySelector('.pd-cover.has'); if (cv && !cv.style.backgroundImage && p.cover_path) signedUrls([p.cover_path]).then((m) => { if (m[p.cover_path]) cv.style.backgroundImage = `url('${m[p.cover_path]}')`; }).catch(() => {}); }
   form.querySelectorAll('[data-drm]').forEach((b) => b.addEventListener('click', () => { depts.splice(+b.dataset.drm, 1); p.departments = depts; redraw(); }));
   form.querySelector('[data-dadd]').addEventListener('click', () => { depts.push({ id: 'd' + Date.now().toString(36), name: 'Novo', color: '#8A8A99' }); p.departments = depts; redraw(); });
-  form.querySelector('[data-cover]')?.addEventListener('click', () => {
-    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
-    inp.onchange = async () => { try { toast('A enviar a capa…'); const up = await uploadImage(p.id, 'cover', inp.files[0]); await sb.from('projects').update({ cover_path: up.path }).eq('id', p.id); p.cover_path = up.path; toast('Capa mudada.'); after && after(); } catch (e) { toast(e.message); } };
-    inp.click();
-  });
-  form.querySelector('[data-nocover]')?.addEventListener('click', async () => { await sb.from('projects').update({ cover_path: null }).eq('id', p.id); p.cover_path = null; toast('Capa tirada.'); after && after(); });
+  form.querySelector('[data-cover]')?.addEventListener('click', () => projectLookModal(p, () => { projCache.delete(p.id); after && after(); }, { live: true }));
+  form.querySelector('[data-nocover]')?.addEventListener('click', async () => { const { error } = await sb.from('projects').update({ cover_path: null }).eq('id', p.id); if (error) return toast(error.message); p.cover_path = null; projCache.delete(p.id); toast('Capa tirada.'); after && after(); });
   form.querySelector('[data-hidep]')?.addEventListener('click', async () => {
     if (!(await hideProject(p.id))) return;
     document.querySelector('#modal')?.replaceChildren();
@@ -832,12 +828,12 @@ async function loadProject(id, { fresh = false } = {}) {
   if (!fresh && c && Date.now() - c.t < 60000) {
     const p = c.p;
     setCtx({ comm: p.community_id ? commById(p.community_id) : null, project: p });
-    setReadOnly(p);
+    setReadOnly(p); setProjectAccent(p.accent);
     return p;
   }
   const p = await loadProjectNow(id);
   if (p) projCache.set(id, { t: Date.now(), p }); else projCache.delete(id);
-  setReadOnly(p);
+  setReadOnly(p); setProjectAccent(p?.accent);
   return p;
 }
 // tudo o que o projeto precisa num só pedido (project_boot, na base de dados); se falhar, os pedidos de antes
@@ -1341,6 +1337,7 @@ async function projectOverview(main, p, { plain = false } = {}) {
   main.innerHTML = `
     <section class="pm-head" style="${cover ? `background-image:linear-gradient(rgba(12,12,18,.15),rgba(12,12,18,.75)),url('${esc(cover)}')` : ''}">
       <div class="grain-layer moving" aria-hidden="true"></div>
+      ${!p.is_central && p.canEdit !== false && isStaff() ? `<button type="button" class="pm-look" data-pmlook title="Mudar a capa e a cor do projeto">${ICON.image}<span>Capa e cor</span></button>` : ''}
       <div class="pm-head-in">
         <span class="tag dark">${esc(KINDS[p.kind] || p.kind)}</span>
         <h1 class="pm-name">${esc(p.name)}</h1>
@@ -1393,6 +1390,7 @@ async function projectOverview(main, p, { plain = false } = {}) {
   const mkup = main.querySelector('[data-mkup]'); if (mkup) lazy.marketing().then((m) => m.upcomingBox(mkup, p, base));
   if (kids) childrenSection(main.querySelector('[data-kids]'), p, kids, { base, canBudget: p.canBudget, onNew: isStaff() ? () => newProject({ parent: p }) : null, canEdit: isStaff(), after: () => projectPage(p.id, 'geral') });
   // tarefas do projeto: um botão no banner; ao carregar mostra as que estão por fazer
+  main.querySelector('[data-pmlook]')?.addEventListener('click', () => projectLookModal(p, () => { projCache.delete(p.id); projectOverview(main, p, { plain }); }, { live: true }));
   main.querySelector('[data-pmtasks]')?.addEventListener('click', (e) => {
     const btn = e.currentTarget; const open = document.querySelector('.pm-tpop'); if (open) { open.remove(); btn.setAttribute('aria-expanded', 'false'); return; }
     const deptMap2 = new Map((p.departments || []).map((d) => [d.id, d]));

@@ -11,6 +11,8 @@ export const BGS = [['liso', 'Liso'], ['quente', 'Papel quente'], ['frio', 'Frio
 const DEF = { theme: 'light', accent: '#0071e3', bg: 'liso' };
 
 let look = { ...DEF };
+// cor do projeto aberto (projects.accent): troca a cor de destaque de cada pessoa enquanto se está nele
+let projAcc = null;
 try { look = { ...DEF, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch { /* nada */ }
 const mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
 
@@ -20,11 +22,18 @@ export function applyLook(l = look) {
   r.dataset.theme = theme;
   r.dataset.bg = l.bg || 'liso';
   // grafite no escuro seria invisível: passa a quase branco
-  const acc = l.accent === '#1d1d1f' && theme === 'dark' ? '#e5e5ea' : l.accent || DEF.accent;
+  const base = projAcc || l.accent || DEF.accent;
+  const acc = base === '#1d1d1f' && theme === 'dark' ? '#e5e5ea' : base;
   r.style.setProperty('--blue', acc);
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#131315' : '#f5f5f7');
 }
 mq?.addEventListener?.('change', () => look.theme === 'auto' && applyLook());
+// ao entrar num projeto com cor própria (ou ao sair: null)
+export function setProjectAccent(c) {
+  const v = /^#[0-9a-f]{6}$/i.test(c || '') ? c.toLowerCase() : null;
+  if (v === projAcc) return;
+  projAcc = v; applyLook();
+}
 applyLook();
 
 function store(l, remote = true) {
@@ -46,7 +55,7 @@ export function syncLookFromProfile() {
 export const lookButton = () => `<button type="button" class="icon-btn look-btn" data-look aria-label="Aparência" title="Aparência">${ICON.palette}</button>`;
 
 export function appearanceMenu() {
-  const m = modal(`<h2>Aparência</h2><p class="muted small">Só muda o teu Studio. Fica guardado na tua conta.</p>
+  const m = modal(`<h2>Aparência</h2><p class="muted small">Só muda o teu Studio. Fica guardado na tua conta. Nos projetos com cor própria (Capa e cor), vale a cor do projeto.</p>
     <div class="stack look-form">
       <div class="field"><span class="label">Tema</span><div class="seg dark" role="radiogroup" aria-label="Tema">${THEMES.map(([k, l]) => `<button type="button" role="radio" aria-checked="${look.theme === k}" aria-selected="${look.theme === k}" data-theme-set="${k}">${l}</button>`).join('')}</div></div>
       <div class="field"><span class="label">Cor de destaque</span><div class="look-sw">${ACCENTS.map(([c, l]) => `<button type="button" class="look-c ${look.accent.toLowerCase() === c ? 'on' : ''}" style="--c:${c}" data-acc="${c}" aria-label="${esc(l)}" title="${esc(l)}"></button>`).join('')}
